@@ -71,7 +71,8 @@ local function ReadString(str,index,quote,linestate)
         r = "\r", t = "\t", v = "\v", ["\\"] = "\\",
         ['"'] = '"', ["'"] = "'", ["\r"] = "\r", ["\n"] = "\n"
       })
-      :gsub("\\z%s*",""):gsub("\\(%d%d?%d?)",function(digits)
+      :gsub("\\z%s*","")
+      :gsub("\\(%d%d?%d?)",function(digits)
         return string.char(tonumber(digits,10))
       end)
       :gsub("\\x(%x%x)",function(digits)
@@ -259,7 +260,7 @@ function Tokenize(str)
       end
 
       -- try to match keywords/identifiers
-      local matchstart,matchend,ident = str:find("^([%w_]+)",index)
+      local matchstart,matchend,ident = str:find("^([_%a][_%w]*)",index)
       if matchstart == index then
         local token = Token(
           keywords[ident] and ident or "ident",
@@ -289,7 +290,8 @@ local function str_checkname()
   if token.token ~= "ident" then
     syntaxerror("<name> expected")
   end
-  local name = token.value
+  local name = token
+  name.token = "name"
   nexttoken()
   return name
 end
@@ -426,7 +428,7 @@ local function body(line)
 end
 
 local function explist()
-  local el = {expr()}
+  local el = {(expr())}
   while testnext(",") do
     el[#el+1] = expr()
   end
@@ -451,7 +453,7 @@ local function funcargs(line)
       return el
     end,
     ["{"] = function()
-      return {constructor()}
+      return {(constructor())}
     end,
   })[token.token] or function()
     syntaxerror("Function arguments expected")
@@ -468,7 +470,7 @@ local function primaryexp()
   elseif token.token == "ident" then
     local t = token
     nexttoken()
-    return {token="primaryexp", name = t}
+    return t
   else
     syntaxerror("Unexpected symbol '" .. token.token .. "'")
   end
@@ -492,19 +494,19 @@ local suffixedtab = {
   end,
   ["("] = function(ex)
     local line = token.line
-    return {token="suffixed", type="(", ex = ex,
+    return {token="suffixed", type="call", ex = ex,
       args = funcargs(line),
     }
   end,
   ["string"] = function(ex)
     local line = token.line
-    return {token="suffixed", type="string", ex = ex,
+    return {token="suffixed", type="call", ex = ex,
       args = funcargs(line),
     }
   end,
   ["{"] = function(ex)
     local line = token.line
-    return {token="suffixed", type="{", ex = ex,
+    return {token="suffixed", type="call", ex = ex,
       args = funcargs(line),
     }
   end,
@@ -570,7 +572,7 @@ local function subexpr(limit)
     if uprio then
       nexttoken() -- consume unop
       local sub = subexpr(uprio)
-      ex = {token="unop", op = unop}
+      ex = {token="unop", op = unop, ex = sub}
     else
       ex = simpleexp()
     end
@@ -613,18 +615,18 @@ local function whilestat(line)
   nexttoken() -- skip WHILE
   local cond = expr()
   checknext("do")
-  local body = statlist()
+  local b = statlist()
   check_match("end","while",line)
-  return {token = "whilestat", body = body, cond = cond}
+  return {token = "whilestat", body = b, cond = cond}
 end
 
 local function repeatstat(line)
   -- repeatstat -> REPEAT block UNTIL cond
   nexttoken() -- skip REPEAT
-  local body = statlist()
+  local b = statlist()
   check_match("until","repeat",line)
   local cond = expr()
-  return {token = "repeatstat", body = body, cond = cond}
+  return {token = "repeatstat", body = b, cond = cond}
 end
 
 
@@ -662,7 +664,7 @@ local function forlist(firstname)
   local line = token.line
   local el = explist()
   return {
-    token = "fornum",
+    token = "forlist",
     namelist = nl, explist = el,
     body = forbody()
   }
@@ -848,8 +850,11 @@ function statement()
 end
 
 
-local function mainfunc()
-  return statlist()
+local function mainfunc(chunkname)
+  return {
+    chunkname = chunkname,
+    body = statlist(),
+  }
 end
 
 
@@ -882,7 +887,7 @@ end
 
 nexttoken()
 
-local main = mainfunc()
+local main = mainfunc("@phobos.lua")
 
 print(serpent.block(main,{sparse = true, sortkeys = false}))
 
