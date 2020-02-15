@@ -12,7 +12,7 @@ local keywords = invert{
   "and", "break", "do", "else", "elseif", "end", "false",
   "for", "function", "if", "in", "local", "nil", "not",
   "or", "repeat", "return", "then", "true", "until",
-  "while",
+  "while", "goto"
 }
 
 ---@class Token
@@ -487,7 +487,7 @@ local suffixedtab = {
   [":"] = function(ex)
     local line = token.line
     nexttoken() -- skip ':'
-    return {token="suffixed", type=":", ex = ex,
+    return {token="suffixed", type="selfcall", ex = ex,
       suffix = checkname(),
       args = funcargs(line),
     }
@@ -583,7 +583,16 @@ local function subexpr(limit)
     nexttoken()
     local newright
     newright,nextop = subexpr(bprio.right)
-    ex = {token="binop", op = binop, left = ex, right = newright}
+    if binop == ".." then
+      if newright.token == "concat" then
+        table.insert(newright.explist,1,ex)
+        ex = newright
+      else
+        ex = {token="concat", explist = {ex,newright}}
+      end
+    else
+      ex = {token="binop", op = binop, left = ex, right = newright}
+    end
     binop = nextop
     bprio = binopprio[binop]
   end
@@ -769,8 +778,11 @@ local function exprstat()
     return assignment({firstexp})
   else
     -- stat -> func
-    --TODO: check that firstexp is a function call, else error
-    return firstexp
+    if firstexp.token == "suffixed" and (firstexp.type == "call" or firstexp.type == "selfcall") then
+      return firstexp
+    else
+      syntaxerror("Unexpected <exp>")
+    end
   end
 end
 
@@ -845,7 +857,7 @@ local statementtab = {
   end,
 }
 function statement()
-  return ((statementtab)[token.token] or exprstat)() --stat -> func | assignment
+  return (statementtab[token.token] or exprstat)() --stat -> func | assignment
 end
 
 
@@ -888,6 +900,6 @@ nexttoken()
 
 local main = mainfunc("@phobos.lua")
 
-print(serpent.block(main,{sparse = true, sortkeys = false}))
+print("return " .. serpent.block(main,{sparse = true, sortkeys = false}))
 
 --foo
