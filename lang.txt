@@ -1,0 +1,101 @@
+--[[
+    chunk ::= block
+
+	block ::= {stat} [retstat]
+
+	stat ::=  ‘;’ | 
+		 varlist ‘=’ explist | 
+		 functioncall | 
+		 label | 
+		 break | 
+		 goto Name | 
+		 do block end | 
+		 while exp do block end | 
+		 repeat block until exp | 
+		 if exp then block {elseif exp then block} [else block] end | 
+		 for Name ‘=’ exp ‘,’ exp [‘,’ exp] do block end | 
+		 for namelist in explist do block end | 
+		 function funcname funcbody | 
+		 local function Name funcbody | 
+		 local namelist [‘=’ explist] 
+
+	retstat ::= return [explist] [‘;’]
+
+	label ::= ‘::’ Name ‘::’
+
+	funcname ::= Name {‘.’ Name} [‘:’ Name]
+
+	varlist ::= var {‘,’ var}
+
+	var ::=  Name | prefixexp ‘[’ exp ‘]’ | prefixexp ‘.’ Name 
+
+	namelist ::= Name {‘,’ Name}
+
+	explist ::= exp {‘,’ exp}
+
+	exp ::=  nil | false | true | Number | String | ‘...’ | functiondef | 
+		 prefixexp | tableconstructor | exp binop exp | unop exp 
+
+	prefixexp ::= var | functioncall | ‘(’ exp ‘)’
+
+	functioncall ::=  prefixexp args | prefixexp ‘:’ Name args 
+
+	args ::=  ‘(’ [explist] ‘)’ | tableconstructor | String 
+
+	functiondef ::= function funcbody
+
+	funcbody ::= ‘(’ [parlist] ‘)’ block end
+
+	parlist ::= namelist [‘,’ ‘...’] | ‘...’
+
+	tableconstructor ::= ‘{’ [fieldlist] ‘}’
+
+	fieldlist ::= field {fieldsep field} [fieldsep]
+
+	field ::= ‘[’ exp ‘]’ ‘=’ exp | Name ‘=’ exp | exp
+
+	fieldsep ::= ‘,’ | ‘;’
+
+	binop ::= ‘+’ | ‘-’ | ‘*’ | ‘/’ | ‘^’ | ‘%’ | ‘..’ | 
+		 ‘<’ | ‘<=’ | ‘>’ | ‘>=’ | ‘==’ | ‘~=’ | 
+		 and | or
+
+  unop ::= ‘-’ | not | ‘#’
+    
+]]
+--[[
+  to add:
+    `!` for `not`
+      `&` for `and`, `|` for `or`
+    `!=` for `~=`
+    `+=` `-=` `*=` `/=` `%=` `^=` composite assignment ops
+      evaluate RHS into a temp and then `LHS = LHS (op) (RHStemp)`
+      `..=` can compose with a line of `..`
+      `&=` `|=` maybe
+    `i++`
+    `?.` `?[]` `?()` for safe-chaining
+      `?:()` for SELF, all in one parent and child not nil then call
+    `?:` ternary op
+    `??` nil-coalescing (differs from `or` in keeping false)
+    `(namelist)=>explist` for `function(namelist) return explist end`
+    `if namelist = explist then`, `while namelist = explist do` use first var as condition
+        `if namelist = explist; cond then`
+        `while namelist = explist; cond do`
+    switch/case?
+        implement as `(({})[case] or default)()` ?
+        allow `return switch`?
+    `const namelist ‘=’ explist`, compile-time constant folding? prevent re-assignment, allow reuse of common subexpressions
+    `inline function` declared at file scope, not assignable?
+    string interpolation?
+      evaluate it all then do one big concat
+    branch annotations for coverage testing?
+
+    type annotations, somehow? steal a bunch from TypeScript?
+      compile time warning on assignment of incompatible types
+      `expr!` to assert not-nil
+      `<T>expr` to assert `expr` is `T`
+      `Name:T`
+      `T|T`, `T&T`, `any`
+      `interface T [extends U] { }`
+
+]]
