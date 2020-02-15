@@ -286,7 +286,7 @@ local function syntaxerror(mesg)
         "' at line " .. (token.line or "(?)") .. ":" .. (token.column or "(?)"))
 end
 
-local function str_checkname()
+local function checkname()
   if token.token ~= "ident" then
     syntaxerror("<name> expected")
   end
@@ -312,7 +312,7 @@ local function checknext(tok)
   syntaxerror("'" .. tok .. "' expected")
 end
 
-local function check_match(close,open,line)
+local function checkmatch(close,open,line)
   if not testnext(close) then
     syntaxerror("'"..close.."' expected (to close '"..open.."' at line " .. line .. ")")
   end
@@ -394,7 +394,7 @@ local function constructor()
     if token.token == "}" then break end
     fields[#fields+1] = field()
   until not (testnext(",") or testnext(";"))
-  check_match("}","{",line)
+  checkmatch("}","{",line)
   return {token="constructor",fields = fields}
 end
 
@@ -423,7 +423,7 @@ local function body(line)
   local pl = parlist()
   checknext(")")
   local b = statlist()
-  check_match("end","function",line)
+  checkmatch("end","function",line)
   return {token="functiondef", parlist = pl, body = b}
 end
 
@@ -444,7 +444,7 @@ local function funcargs(line)
         return {}
       end
       local el = explist()
-      check_match(")","(",line)
+      checkmatch(")","(",line)
       return el
     end,
     ["string"] = function()
@@ -465,7 +465,7 @@ local function primaryexp()
     local line = token.line
     nexttoken() -- skip '('
     local ex = expr()
-    check_match(")","(",line)
+    checkmatch(")","(",line)
     return ex
   elseif token.token == "ident" then
     local t = token
@@ -479,7 +479,7 @@ end
 local suffixedtab = {
   ["."] = function(ex)
     nexttoken() -- skip '.'
-    return {token="suffixed", type=".", ex = ex, suffix = str_checkname()}
+    return {token="suffixed", type=".", ex = ex, suffix = checkname()}
   end,
   ["["] = function(ex)
     return {token="suffixed", type="[", ex = ex, suffix = yindex()}
@@ -488,7 +488,7 @@ local suffixedtab = {
     local line = token.line
     nexttoken() -- skip ':'
     return {token="suffixed", type=":", ex = ex,
-      suffix = str_checkname(),
+      suffix = checkname(),
       args = funcargs(line),
     }
   end,
@@ -616,7 +616,7 @@ local function whilestat(line)
   local cond = expr()
   checknext("do")
   local b = statlist()
-  check_match("end","while",line)
+  checkmatch("end","while",line)
   return {token = "whilestat", body = b, cond = cond}
 end
 
@@ -624,7 +624,7 @@ local function repeatstat(line)
   -- repeatstat -> REPEAT block UNTIL cond
   nexttoken() -- skip REPEAT
   local b = statlist()
-  check_match("until","repeat",line)
+  checkmatch("until","repeat",line)
   local cond = expr()
   return {token = "repeatstat", body = b, cond = cond}
 end
@@ -658,7 +658,7 @@ local function forlist(firstname)
   -- forlist -> NAME {,NAME} IN explist forbody
   local nl = {firstname}
   while testnext(",") do
-    nl[#nl+1] = str_checkname()
+    nl[#nl+1] = checkname()
   end
   checknext("in")
   local line = token.line
@@ -673,7 +673,7 @@ end
 local function forstat(line)
   -- forstat -> FOR (fornum | forlist) END
   nexttoken() -- skip FOR
-  local firstname = str_checkname()
+  local firstname = checkname()
   local t= token.token
   local fortok
   if t == "=" then
@@ -683,7 +683,7 @@ local function forstat(line)
   else
     syntaxerror("'=', ',' or 'in' expected")
   end
-  check_match("end","for",line)
+  checkmatch("end","for",line)
   return fortok
 end
 
@@ -706,12 +706,12 @@ local function ifstat(line)
   if testnext("else") then
     elseblock = statlist()
   end
-  check_match("end","if",line)
+  checkmatch("end","if",line)
   return {token = "ifstat", ifs = ifs, elseblock = elseblock}
 end
 
 local function localfunc()
-  local name = str_checkname()
+  local name = checkname()
   local b = body(token.line)
   b.token = "localfunc"
   b.name = name
@@ -722,7 +722,7 @@ local function localstat()
   -- stat -> LOCAL NAME {`,' NAME} [`=' explist]
   local nl = {}
   repeat
-    nl[#nl+1] = str_checkname()
+    nl[#nl+1] = checkname()
   until not testnext(",")
   if testnext("=") then
     return {token="localstat", namelist = nl, explist = explist()}
@@ -734,16 +734,16 @@ end
 local function funcname()
   -- funcname -> NAME {fieldsel} [`:' NAME]
 
-  local dotpath = { str_checkname() }
+  local dotpath = { checkname() }
 
   while token.token == "." do
     nexttoken() -- skip '.'
-    dotpath[#dotpath+1] = str_checkname()
+    dotpath[#dotpath+1] = checkname()
   end
 
   if token.token == ":" then
     nexttoken() -- skip ':'
-    dotpath[#dotpath+1] = str_checkname()
+    dotpath[#dotpath+1] = checkname()
     return true,dotpath
   end
 
@@ -803,7 +803,7 @@ local statementtab = {
     local line = token.line;
     nexttoken() -- skip "do"
     local b = statlist()
-    check_match("end","do",line)
+    checkmatch("end","do",line)
     return {token = "dostat", body = b}
   end,
   ["for"] = function() -- stat -> forstat
@@ -827,9 +827,8 @@ local statementtab = {
     end
   end,
   ["::"] = function() -- stat -> label
-    local line = token.line;
     nexttoken() -- skip "::"
-    return labelstat(str_checkname(), line)
+    return labelstat(checkname())
   end,
   ["return"] = function() -- stat -> retstat
     nexttoken() -- skip "return"
@@ -842,7 +841,7 @@ local statementtab = {
   end,
   ["goto"] = function() -- stat -> 'goto' NAME
     nexttoken() -- skip GOTO
-    return {token = "gotostat", target = str_checkname()}
+    return {token = "gotostat", target = checkname()}
   end,
 }
 function statement()
