@@ -170,7 +170,7 @@ function Tokenize(str)
 
     if nextchar == "" then
       return -- EOF
-    elseif nextchar:match("[+*/%^#;,(){}%]]") then
+    elseif nextchar:match("[+*/%%^#;,(){}%]]") then
       return index+1,Token(nextchar,index,linestate.line,index - linestate.lineoffset)
     elseif nextchar:match("[=<>]") then
       return PeekEquals(str,index,nextchar,linestate.line,index - linestate.lineoffset)
@@ -464,6 +464,13 @@ local function primaryexp()
   if token.token == "(" then
     local line = token.line
     nexttoken() -- skip '('
+    --TODO: compact lambda here:
+    -- next token is ')', empty args expect `'=>' expr` next
+    -- next token is 'ident'
+    --  followed by `,` is multiple args, finish list then `=> expr`
+    --  followed by `) =>` is single arg, expect `expr`
+    --  followed by `)` is expr of inner name token
+    -- then in suffixedexp, lambda should only take funcargs suffix
     local ex = expr()
     checkmatch(")","(",line)
     return ex
@@ -514,6 +521,7 @@ local suffixedtab = {
 local function suffixedexp()
   -- suffixedexp ->
   --   primaryexp { '.' NAME | '[' exp ']' | ':' NAME funcargs | funcargs }
+  --TODO: safe chaining adds optional '?' in front of each suffix
   local ex = primaryexp()
   local shouldbreak = false
   repeat
@@ -699,6 +707,9 @@ end
 
 local function test_then_block()
   -- test_then_block -> [IF | ELSEIF] cond THEN block
+  --TODO: [IF | ELSEIF] ( cond | namelist '=' explist  [';' cond] ) THEN block
+  -- if first token is ident, and second is ',' or '=', use if-init, else original parse
+  -- if no cond in if-init, first name/expr is used
   nexttoken() -- skip IF or ELSEIF
   local cond = expr()
   checknext("then")
@@ -873,7 +884,8 @@ end
 
 
 ----------------------------------------------------------------------
-local file = io.open("phobos.lua","r")
+local filename = ... or "phobos.lua"
+local file = io.open(filename,"r")
 
 local tokeniter,str,index = Tokenize(file:read("*a"))
 
@@ -898,7 +910,7 @@ end
 
 nexttoken()
 
-local main = mainfunc("@phobos.lua")
+local main = mainfunc("@" .. filename)
 
 print("return " .. serpent.block(main,{sparse = true, sortkeys = false}))
 
