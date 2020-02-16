@@ -75,6 +75,8 @@
     `i++`
     `?.` `?[]` `?()` for safe-chaining
       `?:()` for SELF, all in one parent and child not nil then call
+    `^.` for `getmetatable()?.`
+    something for getraw()
     `?:` ternary op
     `??` nil-coalescing (differs from `or` in keeping false)
     `(namelist)=>explist` for `function(namelist) return explist end`
