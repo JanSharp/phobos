@@ -410,6 +410,7 @@ local function parlist()
       nexttoken()
     elseif token.token == "..." then
       pl.isvararg = true
+      nexttoken()
       return pl
     else
       syntaxerror("<name> or '...' expected")
@@ -418,7 +419,7 @@ local function parlist()
 end
 
 local function body(line)
-  -- body ->  `(' parlist `)' block END
+  -- body -> `(' parlist `)' block END
   checknext("(")
   local pl = parlist()
   checknext(")")
@@ -485,36 +486,43 @@ end
 
 local suffixedtab = {
   ["."] = function(ex)
+    local op = token
     nexttoken() -- skip '.'
-    return {token="suffixed", type=".", ex = ex, suffix = checkname()}
+    local name = checkname()
+    name.token = "string"
+    return {token="index", line = op.line, column = op.column,
+            ex = ex, suffix = name}
   end,
   ["["] = function(ex)
-    return {token="suffixed", type="[", ex = ex, suffix = yindex()}
+    return {token="index",
+            line = token.line, column = token.column,
+            ex = ex, suffix = yindex()}
   end,
   [":"] = function(ex)
-    local line = token.line
+    local op = token
     nexttoken() -- skip ':'
-    return {token="suffixed", type="selfcall", ex = ex,
+    return {token="selfcall", ex = ex,
+      line = op.line, column = op.column,
       suffix = checkname(),
-      args = funcargs(line),
+      args = funcargs(op.line),
     }
   end,
   ["("] = function(ex)
-    local line = token.line
-    return {token="suffixed", type="call", ex = ex,
-      args = funcargs(line),
+    return {token="call", ex = ex,
+      line = token.line, column = token.column,
+      args = funcargs(token.line),
     }
   end,
   ["string"] = function(ex)
-    local line = token.line
-    return {token="suffixed", type="call", ex = ex,
-      args = funcargs(line),
+    return {token="call", ex = ex,
+      line = token.line, column = token.column,
+      args = funcargs(token.line),
     }
   end,
   ["{"] = function(ex)
-    local line = token.line
-    return {token="suffixed", type="call", ex = ex,
-      args = funcargs(line),
+    return {token="call", ex = ex,
+      line = token.line, column = token.column,
+      args = funcargs(token.line),
     }
   end,
 }
@@ -646,44 +654,38 @@ local function repeatstat(line)
   return {token = "repeatstat", body = b, cond = cond}
 end
 
-
-local function forbody()
-  -- forbody -> DO block
-  checknext("do")
-  return statlist()
-end
-
 local function fornum(firstname)
-  -- fornum -> NAME = exp1,exp1[,exp1] forbody
+  -- fornum -> NAME = exp1,exp1[,exp1] DO block
   checknext("=")
   local start = expr()
   checknext(",")
   local stop = expr()
-  local step = 1 --TODO: build a const expr out of this
+  local step = {token="number", value=1}
   if testnext(",") then
     step = expr()
   end
+  checknext("do")
   return {
     token = "fornum",
     var = firstname,
     start = start, stop = stop, step = step,
-    body = forbody()
+    body = statlist()
   }
 end
 
 local function forlist(firstname)
-  -- forlist -> NAME {,NAME} IN explist forbody
+  -- forlist -> NAME {,NAME} IN explist DO block
   local nl = {firstname}
   while testnext(",") do
     nl[#nl+1] = checkname()
   end
   checknext("in")
-  local line = token.line
   local el = explist()
+  checknext("do")
   return {
     token = "forlist",
     namelist = nl, explist = el,
-    body = forbody()
+    body = statlist()
   }
 end
 
@@ -713,7 +715,7 @@ local function test_then_block()
   nexttoken() -- skip IF or ELSEIF
   local cond = expr()
   checknext("then")
-  return {cond = cond, body = statlist()}
+  return {token = "testblock", cond = cond, body = statlist()}
 end
 
 local function ifstat(line)
@@ -724,7 +726,7 @@ local function ifstat(line)
   until token.token ~= "elseif"
   local elseblock
   if testnext("else") then
-    elseblock = statlist()
+    elseblock = {token="elseblock", body = statlist()}
   end
   checkmatch("end","if",line)
   return {token = "ifstat", ifs = ifs, elseblock = elseblock}
@@ -745,9 +747,9 @@ local function localstat()
     nl[#nl+1] = checkname()
   until not testnext(",")
   if testnext("=") then
-    return {token="localstat", namelist = nl, explist = explist()}
+    return {token="localstat", lhs = nl, rhs = explist()}
   else
-    return {token="localstat", namelist = nl}
+    return {token="localstat", lhs = nl}
   end
 end
 
@@ -789,7 +791,7 @@ local function exprstat()
     return assignment({firstexp})
   else
     -- stat -> func
-    if firstexp.token == "suffixed" and (firstexp.type == "call" or firstexp.type == "selfcall") then
+    if firstexp.token == "call" or firstexp.token == "selfcall" then
       return firstexp
     else
       syntaxerror("Unexpected <exp>")
@@ -878,7 +880,33 @@ local function mainfunc(chunkname)
     body = statlist(),
   }
 end
+----------------------------------------------------------------------
 
+local function walk_block(ast,resolve)
+  if ast.token == "ifstat" then
+    for _,ifblock in ipairs(ast.ifs) do
+      walk_block(ifblock,resolve)
+    end
+    if ast.elseblock then
+      walk_block(ast.elseblock,resolve)
+    end
+  else
+    if not ast.body then return end
+    for _,stat in ipairs(ast.body) do
+      walk_block(stat,resolve)
+      resolve(ast,stat)
+    end
+  end
+  resolve(ast)
+end
+
+local function parlist_to_locals(main)
+  walk_block(main,function(token,stat)
+    if token.token == "functiondef" then
+
+    end
+  end)
+end
 
 
 
@@ -911,6 +939,7 @@ end
 nexttoken()
 
 local main = mainfunc("@" .. filename)
+parlist_to_locals(main)
 
 print("return " .. serpent.block(main,{sparse = true, sortkeys = false}))
 

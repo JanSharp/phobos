@@ -63,6 +63,24 @@
   unop ::= ‘-’ | not | ‘#’
     
 ]]
+
+from AST:
+  resolve `ident`
+    `local`, `upval`
+    global -> `upval(_ENV)` `.` `ident`
+    bind labels and gotos
+      error if unmatched gotos
+      warn if unmatched labels
+  turn `localstat` into local declarations
+    and `assignment` with `local` on LHS
+  fold constants in expressions
+  collapse constant ifs??
+  replace control structures with bound goto/label sets
+
+
+
+  
+
 --[[
   to add:
     `!` for `not`
