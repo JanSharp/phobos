@@ -146,7 +146,7 @@ local function ReadBlockString(str,index,linestate)
 end
 
 ---@param str string
-function Tokenize(str)
+local function Tokenize(str)
   local linestate = {
     line = 1,
     lineoffset = 1
@@ -155,7 +155,7 @@ function Tokenize(str)
   ---@param index number
   ---@return number
   ---@return Token
-  function ReadToken(str,index)
+  local function ReadToken(str,index)
     if not index then index = 1 end
     local nextchar = str:sub(index,index)
     while nextchar:match("%s") do
@@ -296,6 +296,31 @@ local function checkname()
   return name
 end
 
+local function checkref(parent)
+  local tok = checkname()
+  local isupval = false
+  while parent do
+    for i,loc in pairs(parent.locals) do
+      if tok.value == loc.name.value then
+        tok.token = isupval and "upval" or "local"
+        tok.ref = loc
+        return tok
+      end
+    end
+    if parent.parent then
+      if parent.parent.type == "upval" then
+        isupval = true
+      end
+      parent = parent.parent.parent
+    else
+      parent = nil
+    end
+  end
+
+  tok.token = "global"
+  return tok
+end
+
 local function testnext(tok)
   if token.token == tok then
     nexttoken()
@@ -330,61 +355,61 @@ local function block_follow(withuntil)
   end
 end
 
-local function statlist()
+local function statlist(parent)
   -- statlist -> { stat [`;'] }
   local sl = {}
   while not block_follow(true) do
     if token.token == "eof" then
       return sl
     elseif token.token == "return" then
-      sl[#sl+1] = statement()
+      sl[#sl+1] = statement(parent)
       return sl
     end
-    sl[#sl+1] = statement()
+    sl[#sl+1] = statement(parent)
   end
   return sl
 end
 
-local function yindex()
+local function yindex(parent)
   -- index -> '[' expr ']'
   nexttoken()
-  local e = expr()
+  local e = expr(parent)
   checknext("]")
   return e
 end
 
-local function recfield()
+local function recfield(parent)
   local k
   if token.token == "ident" then
     k = token.value
     nexttoken()
   else
-    k = yindex()
+    k = yindex(parent)
   end
   checknext("=")
-  return {type="rec",key=k,value=expr()}
+  return {type="rec",key=k,value=expr(parent)}
 end
 
-local function listfield()
-  return {type="list",value=expr()}
+local function listfield(parent)
+  return {type="list",value=expr(parent)}
 end
 
-local function field()
+local function field(parent)
   -- field -> listfield | recfield
   return (({
-    ["ident"] = function()
+    ["ident"] = function(parent)
       local peektok = peektoken()
       if peektok.token ~= "=" then
-        return listfield()
+        return listfield(parent)
       else
-        return recfield()
+        return recfield(parent)
       end
     end,
     ["["] = recfield,
-  })[token.token] or listfield)()
+  })[token.token] or listfield)(parent)
 end
 
-local function constructor()
+local function constructor(parent)
   --  constructor -> '{' [ field { sep field } [sep] ] '}'
   --    sep -> ',' | ';' */
   local line = token.line
@@ -392,76 +417,83 @@ local function constructor()
   local fields = {}
   repeat
     if token.token == "}" then break end
-    fields[#fields+1] = field()
+    fields[#fields+1] = field(parent)
   until not (testnext(",") or testnext(";"))
   checkmatch("}","{",line)
   return {token="constructor",fields = fields}
 end
 
-local function parlist()
+local function parlist(parent)
   -- parlist -> [ param { `,' param } ]
-  local pl = {}
   if token.token == ")" then
-    return pl
+    return 0
   end
   repeat
     if token.token == "ident" then
-      pl[#pl+1] = token
+      token.token = "local"
+      parent.locals[#parent.locals+1] = {name = token, wholeblock = true}
       nexttoken()
     elseif token.token == "..." then
-      pl.isvararg = true
+      parent.isvararg = true
       nexttoken()
-      return pl
+      return #parent.locals
     else
       syntaxerror("<name> or '...' expected")
     end
   until not testnext(",")
+  return #parent.locals
 end
 
-local function body(line)
+local function body(line,parent)
   -- body -> `(' parlist `)' block END
+  local thistok = {
+    token="functiondef",
+    body = true, -- list body first
+    locals = {}, labels = {},
+    parent = {type = "upval", parent = parent},
+  }
   checknext("(")
-  local pl = parlist()
+  thistok.nparams = parlist(thistok)
   checknext(")")
-  local b = statlist()
+  thistok.body = statlist(thistok)
   checkmatch("end","function",line)
-  return {token="functiondef", parlist = pl, body = b}
+  return thistok
 end
 
-local function explist()
-  local el = {(expr())}
+local function explist(parent)
+  local el = {(expr(parent))}
   while testnext(",") do
-    el[#el+1] = expr()
+    el[#el+1] = expr(parent)
   end
   return el
 end
 
-local function funcargs(line)
+local function funcargs(line,parent)
   return (({
-    ["("] = function()
+    ["("] = function(parent)
       nexttoken()
       if token.token == ")" then
         nexttoken()
         return {}
       end
-      local el = explist()
+      local el = explist(parent)
       checkmatch(")","(",line)
       return el
     end,
-    ["string"] = function()
+    ["string"] = function(parent)
       local el = {token}
       nexttoken()
       return el
     end,
-    ["{"] = function()
-      return {(constructor())}
+    ["{"] = function(parent)
+      return {(constructor(parent))}
     end,
   })[token.token] or function()
     syntaxerror("Function arguments expected")
-  end)()
+  end)(parent)
 end
 
-local function primaryexp()
+local function primaryexp(parent)
   if token.token == "(" then
     local line = token.line
     nexttoken() -- skip '('
@@ -472,13 +504,11 @@ local function primaryexp()
     --  followed by `) =>` is single arg, expect `expr`
     --  followed by `)` is expr of inner name token
     -- then in suffixedexp, lambda should only take funcargs suffix
-    local ex = expr()
+    local ex = expr(parent)
     checkmatch(")","(",line)
     return ex
   elseif token.token == "ident" then
-    local t = token
-    nexttoken()
-    return t
+    return checkref(parent)
   else
     syntaxerror("Unexpected symbol '" .. token.token .. "'")
   end
@@ -493,56 +523,56 @@ local suffixedtab = {
     return {token="index", line = op.line, column = op.column,
             ex = ex, suffix = name}
   end,
-  ["["] = function(ex)
+  ["["] = function(ex,parent)
     return {token="index",
             line = token.line, column = token.column,
-            ex = ex, suffix = yindex()}
+            ex = ex, suffix = yindex(parent)}
   end,
-  [":"] = function(ex)
+  [":"] = function(ex,parent)
     local op = token
     nexttoken() -- skip ':'
     return {token="selfcall", ex = ex,
       line = op.line, column = op.column,
       suffix = checkname(),
-      args = funcargs(op.line),
+      args = funcargs(op.line,parent),
     }
   end,
-  ["("] = function(ex)
+  ["("] = function(ex,parent)
     return {token="call", ex = ex,
       line = token.line, column = token.column,
-      args = funcargs(token.line),
+      args = funcargs(token.line,parent),
     }
   end,
-  ["string"] = function(ex)
+  ["string"] = function(ex,parent)
     return {token="call", ex = ex,
       line = token.line, column = token.column,
-      args = funcargs(token.line),
+      args = funcargs(token.line,parent),
     }
   end,
-  ["{"] = function(ex)
+  ["{"] = function(ex,parent)
     return {token="call", ex = ex,
       line = token.line, column = token.column,
-      args = funcargs(token.line),
+      args = funcargs(token.line,parent),
     }
   end,
 }
-local function suffixedexp()
+local function suffixedexp(parent)
   -- suffixedexp ->
   --   primaryexp { '.' NAME | '[' exp ']' | ':' NAME funcargs | funcargs }
   --TODO: safe chaining adds optional '?' in front of each suffix
-  local ex = primaryexp()
+  local ex = primaryexp(parent)
   local shouldbreak = false
   repeat
     ex = ((suffixedtab)[token.token] or function(ex)
       shouldbreak = true
       return ex
-    end)(ex)
+    end)(ex,parent)
   until shouldbreak
   return ex
 end
 
 local simpletoks = invert{"number","string","nil","true","false","..."}
-local function simpleexp()
+local function simpleexp(parent)
   -- simpleexp -> NUMBER | STRING | NIL | TRUE | FALSE | ... |
   --              constructor | FUNCTION body | suffixedexp
   if simpletoks[token.token] then
@@ -552,12 +582,12 @@ local function simpleexp()
   end
 
   if token.token == "{" then
-    return constructor()
+    return constructor(parent)
   elseif token.token == "function" then
     nexttoken() -- skip FUNCTION
-    return body(token.line)
+    return body(token.line,parent)
   else
-    return suffixedexp()
+    return suffixedexp(parent)
   end
 end
 
@@ -580,25 +610,24 @@ local binopprio = {
 
 -- subexpr -> (simpleexp | unop subexpr) { binop subexpr }
 -- where `binop' is any binary operator with a priority higher than `limit'
-local function subexpr(limit)
+local function subexpr(limit,parent)
   local ex
   do
     local unop = token.token
     local uprio = unopprio[unop]
     if uprio then
       nexttoken() -- consume unop
-      local sub = subexpr(uprio)
+      local sub = subexpr(uprio,parent)
       ex = {token="unop", op = unop, ex = sub}
     else
-      ex = simpleexp()
+      ex = simpleexp(parent)
     end
   end
   local binop = token.token
   local bprio = binopprio[binop]
   while bprio and bprio.left > limit do
     nexttoken()
-    local newright
-    newright,nextop = subexpr(bprio.right)
+    local newright,nextop = subexpr(bprio.right,parent)
     if binop == ".." then
       if newright.token == "concat" then
         table.insert(newright.explist,1,ex)
@@ -615,90 +644,132 @@ local function subexpr(limit)
   return ex,binop
 end
 
-function expr()
-  return subexpr(0)
+function expr(parent)
+  return subexpr(0,parent)
 end
 
-local function assignment(lhs)
+local function assignment(lhs,parent)
   if testnext(",") then
-    lhs[#lhs+1] = suffixedexp()
-    return assignment(lhs)
+    lhs[#lhs+1] = suffixedexp(parent)
+    return assignment(lhs,parent)
   else
+    local thistok = {token = "assignment", lhs = lhs,}
+    local assign = token
     checknext("=")
-    local rhs = explist()
-    return {token = "assignment", lhs = lhs, rhs = rhs}
+    thistok.line = assign.line
+    thistok.column = assign.column
+    thistok.rhs = explist(parent)
+    return thistok
   end
 end
 
-local function labelstat(label)
+local function labelstat(label,parent)
   checknext("::")
-  return {token="labelstat", label=label}
+  label.token = "label"
+  local prevlabel = parent.labels[label.value]
+  if prevlabel then
+    error("Duplicate label '" .. label.value .. "' at line "
+      .. label.line .. ":" .. label.column ..
+      " previously defined at line "
+      .. prevlabel.line .. ":" .. prevlabel.column)
+  else
+    parent.labels[label.value] = label
+  end
+  return label
 end
 
-local function whilestat(line)
+local function whilestat(line,parent)
   -- whilestat -> WHILE cond DO block END
   nexttoken() -- skip WHILE
-  local cond = expr()
+  local thistok = {
+    token = "whilestat",
+    body = true, -- list body first
+    locals = {}, labels = {},
+    parent = {type = "local", parent = parent},
+  }
+  thistok.cond = expr(thistok)
   checknext("do")
-  local b = statlist()
+
+  thistok.body = statlist(thistok)
   checkmatch("end","while",line)
-  return {token = "whilestat", body = b, cond = cond}
+  return thistok
 end
 
-local function repeatstat(line)
+local function repeatstat(line,parent)
   -- repeatstat -> REPEAT block UNTIL cond
+  local thistok = {
+    token = "repeatstat",
+    body = true, -- list body first
+    locals = {}, labels = {},
+    parent = {type = "local", parent = parent},
+  }
   nexttoken() -- skip REPEAT
-  local b = statlist()
+  thistok.body = statlist(thistok)
   checkmatch("until","repeat",line)
-  local cond = expr()
-  return {token = "repeatstat", body = b, cond = cond}
+  thistok.cond = expr(thistok)
+  return thistok
 end
 
-local function fornum(firstname)
+local function fornum(firstname,parent)
   -- fornum -> NAME = exp1,exp1[,exp1] DO block
   checknext("=")
-  local start = expr()
+  local start = expr(parent)
   checknext(",")
-  local stop = expr()
+  local stop = expr(parent)
   local step = {token="number", value=1}
   if testnext(",") then
-    step = expr()
+    step = expr(parent)
   end
   checknext("do")
-  return {
+  local thistok = {
     token = "fornum",
     var = firstname,
     start = start, stop = stop, step = step,
-    body = statlist()
+    locals = {}, labels = {},
+    parent = {type = "local", parent = parent},
   }
+  thistok.body = statlist(thistok)
+  return thistok
 end
 
-local function forlist(firstname)
+local function forlist(firstname,parent)
   -- forlist -> NAME {,NAME} IN explist DO block
+  local thistok = {
+    token = "forlist",
+    body = true, -- list body first
+    locals = {
+      {name = firstname, wholeblock = true},
+    }, labels = {},
+    parent = {type = "local", parent = parent},
+  }
   local nl = {firstname}
   while testnext(",") do
-    nl[#nl+1] = checkname()
+    local name = checkname()
+    name.token = "local"
+    thistok.locals[#thistok.locals+1] =
+      {name = name, wholeblock = true}
+    nl[#nl+1] = name
   end
   checknext("in")
-  local el = explist()
+  local el = explist(parent)
   checknext("do")
-  return {
-    token = "forlist",
-    namelist = nl, explist = el,
-    body = statlist()
-  }
+  thistok.namelist = nl
+  thistok.explist = el
+  thistok.body = statlist(thistok)
+  return thistok
 end
 
-local function forstat(line)
+local function forstat(line,parent)
   -- forstat -> FOR (fornum | forlist) END
   nexttoken() -- skip FOR
   local firstname = checkname()
+  firstname.token = "local"
   local t= token.token
   local fortok
   if t == "=" then
-    fortok = fornum(firstname)
+    fortok = fornum(firstname,parent)
   elseif t == "," or t == "in" then
-    fortok = forlist(firstname)
+    fortok = forlist(firstname,parent)
   else
     syntaxerror("'=', ',' or 'in' expected")
   end
@@ -707,56 +778,85 @@ local function forstat(line)
 end
 
 
-local function test_then_block()
+local function test_then_block(parent)
   -- test_then_block -> [IF | ELSEIF] cond THEN block
   --TODO: [IF | ELSEIF] ( cond | namelist '=' explist  [';' cond] ) THEN block
   -- if first token is ident, and second is ',' or '=', use if-init, else original parse
   -- if no cond in if-init, first name/expr is used
   nexttoken() -- skip IF or ELSEIF
-  local cond = expr()
+  local thistok = {token = "testblock",
+    body = true, -- list body first
+    locals = {}, labels = {},
+    parent = {type = "local", parent = parent},
+  }
+  thistok.cond = expr(thistok)
   checknext("then")
-  return {token = "testblock", cond = cond, body = statlist()}
+  
+  thistok.body = statlist(thistok)
+  return thistok
 end
 
-local function ifstat(line)
+local function ifstat(line,parent)
   -- ifstat -> IF cond THEN block {ELSEIF cond THEN block} [ELSE block] END
   local ifs = {}
   repeat
-    ifs[#ifs+1] = test_then_block()
+    ifs[#ifs+1] = test_then_block(parent)
   until token.token ~= "elseif"
   local elseblock
   if testnext("else") then
-    elseblock = {token="elseblock", body = statlist()}
+    elseblock = {token="elseblock",
+      body = true, -- list body first
+      locals = {}, labels = {},
+      parent = {type = "local", parent = parent},
+    }
+    elseblock.body = statlist(elseblock)
   end
   checkmatch("end","if",line)
   return {token = "ifstat", ifs = ifs, elseblock = elseblock}
 end
 
-local function localfunc()
+local function localfunc(parent)
   local name = checkname()
-  local b = body(token.line)
+  name.token = "local"
+  local thislocal = {name = name}
+  parent.locals[#parent.locals+1] = thislocal
+  local b = body(token.line,parent)
   b.token = "localfunc"
   b.name = name
+  thislocal.startbefore = b
   return b
 end
 
-local function localstat()
+local function localstat(parent)
   -- stat -> LOCAL NAME {`,' NAME} [`=' explist]
-  local nl = {}
+  local lhs = {}
+  local thistok = {token="localstat", lhs = lhs}
   repeat
-    nl[#nl+1] = checkname()
+    local name = checkname()
+    name.token = "local"
+    lhs[#lhs+1] = name
   until not testnext(",")
+  local assign = token
   if testnext("=") then
-    return {token="localstat", lhs = nl, rhs = explist()}
+    thistok.line = assign.line
+    thistok.column = assign.column
+    thistok.rhs = explist(parent)
+    for _,name in pairs(thistok.lhs) do
+      parent.locals[#parent.locals+1] = {name = name, startafter = thistok}
+    end
+    return thistok
   else
-    return {token="localstat", lhs = nl}
+    for _,name in pairs(thistok.lhs) do
+      parent.locals[#parent.locals+1] = {name = name, startafter = thistok}
+    end
+    return thistok
   end
 end
 
-local function funcname()
+local function funcname(parent)
   -- funcname -> NAME {fieldsel} [`:' NAME]
 
-  local dotpath = { checkname() }
+  local dotpath = { checkref(parent) }
 
   while token.token == "." do
     nexttoken() -- skip '.'
@@ -772,23 +872,23 @@ local function funcname()
   return false,dotpath
 end
 
-local function funcstat(line)
+local function funcstat(line,parent)
   -- funcstat -> FUNCTION funcname body
   nexttoken() -- skip FUNCTION
-  local ismethod,names = funcname()
-  local b = body(line)
+  local ismethod,names = funcname(parent)
+  local b = body(line,parent)
   b.token = "funcstat"
   b.names = names
   b.ismethod = ismethod
   return b
 end
 
-local function exprstat()
+local function exprstat(parent)
   -- stat -> func | assignment
-  local firstexp = suffixedexp()
+  local firstexp = suffixedexp(parent)
   if token.token == "=" or token.token == "," then
     -- stat -> assignment
-    return assignment({firstexp})
+    return assignment({firstexp},parent)
   else
     -- stat -> func
     if firstexp.token == "call" or firstexp.token == "selfcall" then
@@ -799,112 +899,137 @@ local function exprstat()
   end
 end
 
-local function retstat()
+local function retstat(parent)
   -- stat -> RETURN [explist] [';']
   local el
   if block_follow(true) or token.token == ";" then
     -- return no values
   else
-    el = explist()
+    el = explist(parent)
   end
   testnext(";")
   return {token="retstat", explist = el}
 end
 
 local statementtab = {
-  [";"] = function() -- stat -> ';' (empty statement)
+  [";"] = function(parent) -- stat -> ';' (empty statement)
     nexttoken() -- skip
     return {token = "comment", }
   end,
-  ["if"] = function() -- stat -> ifstat
+  ["if"] = function(parent) -- stat -> ifstat
     local line = token.line;
-    return ifstat(line)
+    return ifstat(line,parent)
   end,
-  ["while"] = function() -- stat -> whilestat
+  ["while"] = function(parent) -- stat -> whilestat
     local line = token.line;
-    return whilestat(line)
+    return whilestat(line,parent)
   end,
-  ["do"] = function() -- stat -> DO block END
+  ["do"] = function(parent) -- stat -> DO block END
     local line = token.line;
     nexttoken() -- skip "do"
-    local b = statlist()
+    local dostat = {
+      token = "dostat",
+      locals = {}, labels = {},
+      parent = {type = "local", parent = parent}
+    }
+    dostat.body = statlist(dostat)
     checkmatch("end","do",line)
-    return {token = "dostat", body = b}
+    return dostat
   end,
-  ["for"] = function() -- stat -> forstat
+  ["for"] = function(parent) -- stat -> forstat
     local line = token.line;
-    return forstat(line)
+    return forstat(line,parent)
   end,
-  ["repeat"] = function() -- stat -> repeatstat
+  ["repeat"] = function(parent) -- stat -> repeatstat
     local line = token.line;
-    return repeatstat(line)
+    return repeatstat(line, parent)
   end,
-  ["function"] = function() -- stat -> funcstat
+  ["function"] = function(parent) -- stat -> funcstat
     local line = token.line;
-    return funcstat(line)
+    return funcstat(line, parent)
   end,
-  ["local"] = function() -- stat -> localstat
+  ["local"] = function(parent) -- stat -> localstat
     nexttoken() -- skip "local"
     if testnext("function") then
-      return localfunc()
+      return localfunc(parent)
     else
-      return localstat()
+      return localstat(parent)
     end
   end,
-  ["::"] = function() -- stat -> label
+  ["::"] = function(parent) -- stat -> label
     nexttoken() -- skip "::"
-    return labelstat(checkname())
+    return labelstat(checkname(),parent)
   end,
-  ["return"] = function() -- stat -> retstat
+  ["return"] = function(parent) -- stat -> retstat
     nexttoken() -- skip "return"
-    return retstat()
+    return retstat(parent)
   end,
   
-  ["break"] = function() -- stat -> breakstat
+  ["break"] = function(parent) -- stat -> breakstat
     nexttoken() -- skip BREAK
     return {token = "breakstat"}
   end,
-  ["goto"] = function() -- stat -> 'goto' NAME
+  ["goto"] = function(parent) -- stat -> 'goto' NAME
     nexttoken() -- skip GOTO
     return {token = "gotostat", target = checkname()}
   end,
 }
-function statement()
-  return (statementtab[token.token] or exprstat)() --stat -> func | assignment
+function statement(parent)
+  return (statementtab[token.token] or exprstat)(parent) --stat -> func | assignment
 end
 
 
 local function mainfunc(chunkname)
-  return {
+  local main = {
     chunkname = chunkname,
-    body = statlist(),
+    body = true, -- list body first
+    locals = {},
+    labels = {},
   }
+  main.body = statlist(main)
+  return main
 end
 ----------------------------------------------------------------------
 
-local function walk_block(ast,resolve)
+local function walk_block(ast,open,close,each_before,each_after)
+  if open then open(ast) end
   if ast.token == "ifstat" then
     for _,ifblock in ipairs(ast.ifs) do
-      walk_block(ifblock,resolve)
+      walk_block(ifblock,open,close,each_after)
     end
     if ast.elseblock then
-      walk_block(ast.elseblock,resolve)
+      walk_block(ast.elseblock,open,close,each_after)
     end
   else
     if not ast.body then return end
     for _,stat in ipairs(ast.body) do
-      walk_block(stat,resolve)
-      resolve(ast,stat)
+      if each_before then each_before(ast,stat) end
+      walk_block(stat,open,close,each_after)
+      if each_after then each_after(ast,stat) end
     end
   end
-  resolve(ast)
+  if close then close(ast) end
 end
 
-local function parlist_to_locals(main)
-  walk_block(main,function(token,stat)
-    if token.token == "functiondef" then
+local function resolve_ident(main)
 
+  walk_block(main,
+  function(token)
+    -- open
+  end,
+  function(token)
+    -- close
+  end,
+  function(token,stat)
+    -- each_before
+    if stat.token == "ifstat" then
+
+    elseif stat.body then
+      
     end
+  end,
+  function(token)
+    -- each_after
   end)
 end
 
@@ -939,8 +1064,8 @@ end
 nexttoken()
 
 local main = mainfunc("@" .. filename)
-parlist_to_locals(main)
+resolve_ident(main)
 
-print("return " .. serpent.block(main,{sparse = true, sortkeys = false}))
+print(serpent.dump(main,{indent = '  ', sparse = true, sortkeys = false, comment=true}))
 
 --foo
