@@ -26,7 +26,7 @@ local function s(t, opts)
   local function safestr(s) return type(s) == "number" and tostring(huge and snum[tostring(s)] or numformat:format(s))
     or type(s) ~= "string" and tostring(s) -- escape NEWLINE/010 and EOF/026
     or ("%q"):format(s):gsub("\010","n"):gsub("\026","\\026") end
-  local function comment(s,l) return comm and (l or 0) < comm and ' --[['..select(2, pcall(tostring, s))..']]' or '' end
+  local function comment(s,l) return comm and (l or 0) < comm and ' --[=[ '..select(2, pcall(tostring, s))..' ]=]' or '' end
   local function globerr(s,l) return globals[s] and globals[s]..comment(s,l) or not fatal
     and safestr(select(2, pcall(tostring, s))) or error("Can't serialize "..tostring(s)) end
   local function safename(path, name) -- generates foo.bar, foo[3], or foo['b a r']
@@ -49,7 +49,7 @@ local function s(t, opts)
       (name ~= nil and sname..space..'='..space or '')
     if seen[t] then -- already seen this element
       sref[#sref+1] = spath..space..'='..space..seen[t]
-      return tag..'nil'..comment('ref', level) end
+      return tag..'nil'..comment('ref ' .. seen[t], level) end
     -- protect from those cases where __tostring may fail
     if type(mt) == 'table' and metatostring ~= false then
       local to, tr = pcall(function() return mt.__tostring(t) end)
@@ -100,7 +100,7 @@ local function s(t, opts)
       local head = indent and '{\n'..prefix..indent or '{'
       local body = table.concat(out, ','..(indent and '\n'..prefix..indent or space))
       local tail = indent and "\n"..prefix..'}' or '}'
-      return (custom and custom(tag,head,body,tail,level) or tag..head..body..tail)..comment(t, level)
+      return (custom and custom(tag,head,body,tail,level) or tag..head..body..tail)..comment(tostring(t) .. ' ' .. spath, level)
     elseif badtype[ttype] then
       seen[t] = insref or spath
       return tag..globerr(t, level)
