@@ -301,12 +301,18 @@ local function checkref(parent,tok)
   local origparent = parent
   local isupval = false
   while parent do
-    for i,loc in pairs(parent.locals) do
+    local found
+    for _,loc in pairs(parent.locals) do
       if tok.value == loc.name.value then
-        tok.token = isupval and "upval" or "local"
-        tok.ref = loc
-        return tok
+        -- keep looking to find the most recently defined one,
+        -- in case some nut redefines the same name repeatedly in the same scope
+        found = loc
       end
+    end
+    if found then
+      tok.token = isupval and "upval" or "local"
+      tok.ref = found
+      return tok
     end
     if parent.parent then
       if parent.parent.type == "upval" then
@@ -995,9 +1001,12 @@ end
 
 local function mainfunc(chunkname)
   local main = {
+    token = "main",
     chunkname = chunkname,
+    -- fake parent of main to provide _ENV upval
     parent = {
       type = "upval", parent = {
+        token = "env",
         locals = {
           {name = {token="_ENV",value="_ENV"}, wholeblock = true}
         }
@@ -1005,6 +1014,7 @@ local function mainfunc(chunkname)
     },
     funcprotos = {},
     body = false, -- list body before locals
+    isvararg = true,
     locals = {},
     labels = {},
   }

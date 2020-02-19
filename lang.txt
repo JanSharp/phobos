@@ -108,9 +108,12 @@ from AST:
 
     type annotations, somehow? steal a bunch from TypeScript?
       compile time warning on assignment of incompatible types
-      `expr!` to assert not-nil
-      `<T>expr` to assert `expr` is `T`
-      `Name:T`
+      `expr!` to override deduction with assertion that T is not-nil
+      `<T>expr` to override deduction with assertion that `expr` is `T`
+      `Name:T` - this works fine in `local`, and in/after param lists.
+      some way to declare type of a global? `global name:T`?
+      or generally to declare a typed field into an existing table?
+      `_ENV = <T>_ENV` with an interface?
       `T|T`, `T&T`, `any`
       `interface T [extends U] { }`
 
