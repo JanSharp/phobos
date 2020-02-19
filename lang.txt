@@ -65,14 +65,9 @@
 ]]
 
 from AST:
-  resolve `ident`
-    `local`, `upval`
-    global -> `upval(_ENV)` `.` `ident`
-    bind labels and gotos
-      error if unmatched gotos
-      warn if unmatched labels
-  turn `localstat` into local declarations
-    and `assignment` with `local` on LHS
+  bind labels and gotos
+    error if unmatched gotos
+    warn if unmatched labels
   fold constants in expressions
   collapse constant ifs??
   replace control structures with bound goto/label sets
@@ -87,7 +82,8 @@ from AST:
       `&` for `and`, `|` for `or`
     `!=` for `~=`
     `+=` `-=` `*=` `/=` `%=` `^=` composite assignment ops
-      evaluate RHS into a temp and then `LHS = LHS (op) (RHStemp)`
+      no multiple-assignment with these
+      parse to tree equivalent of LHS = LHS op ( RHS )
       `..=` can compose with a line of `..`
       `&=` `|=` maybe
     `i++`

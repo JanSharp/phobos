@@ -296,8 +296,9 @@ local function checkname()
   return name
 end
 
-local function checkref(parent)
-  local tok = checkname()
+local function checkref(parent,tok)
+  if not tok then tok = checkname() end
+  local origparent = parent
   local isupval = false
   while parent do
     for i,loc in pairs(parent.locals) do
@@ -317,7 +318,10 @@ local function checkref(parent)
     end
   end
 
-  tok.token = "global"
+  tok.token = "string"
+  tok = {token="index",
+  line = tok.line, column = tok.column,
+  ex = checkref(origparent,{value = "_ENV"}), suffix = tok}
   return tok
 end
 
@@ -444,20 +448,31 @@ local function parlist(parent)
   return #parent.locals
 end
 
-local function body(line,parent)
+local function body(line,parent,ismethod)
   -- body -> `(' parlist `)' block END
   local thistok = {
     token="functiondef",
-    body = true, -- list body first
+    body = false, -- list body before locals
+    ismethod = ismethod,
     locals = {}, labels = {},
+    line = token.line, column = token.column,
     parent = {type = "upval", parent = parent},
   }
+  if ismethod then
+    thistok.locals[1] = {name = {token="self",value="self"}, wholeblock = true}
+  end
   checknext("(")
   thistok.nparams = parlist(thistok)
   checknext(")")
   thistok.body = statlist(thistok)
+  thistok.endline = token.line
+  thistok.endcolumn = token.column + 3
   checkmatch("end","function",line)
-  return thistok
+  while not parent.funcprotos do
+    parent = parent.parent.parent
+  end
+  parent.funcprotos[#parent.funcprotos+1] = thistok
+  return {token="funcproto",ref=thistok}
 end
 
 local function explist(parent)
@@ -501,7 +516,7 @@ local function primaryexp(parent)
     -- next token is ')', empty args expect `'=>' expr` next
     -- next token is 'ident'
     --  followed by `,` is multiple args, finish list then `=> expr`
-    --  followed by `) =>` is single arg, expect `expr`
+    --  followed by `)` `=>` is single arg, expect `expr`
     --  followed by `)` is expr of inner name token
     -- then in suffixedexp, lambda should only take funcargs suffix
     local ex = expr(parent)
@@ -683,7 +698,7 @@ local function whilestat(line,parent)
   nexttoken() -- skip WHILE
   local thistok = {
     token = "whilestat",
-    body = true, -- list body first
+    body = false, -- list body before locals
     locals = {}, labels = {},
     parent = {type = "local", parent = parent},
   }
@@ -699,7 +714,7 @@ local function repeatstat(line,parent)
   -- repeatstat -> REPEAT block UNTIL cond
   local thistok = {
     token = "repeatstat",
-    body = true, -- list body first
+    body = false, -- list body before locals
     locals = {}, labels = {},
     parent = {type = "local", parent = parent},
   }
@@ -736,7 +751,7 @@ local function forlist(firstname,parent)
   -- forlist -> NAME {,NAME} IN explist DO block
   local thistok = {
     token = "forlist",
-    body = true, -- list body first
+    body = false, -- list body before locals
     locals = {
       {name = firstname, wholeblock = true},
     }, labels = {},
@@ -785,7 +800,7 @@ local function test_then_block(parent)
   -- if no cond in if-init, first name/expr is used
   nexttoken() -- skip IF or ELSEIF
   local thistok = {token = "testblock",
-    body = true, -- list body first
+    body = false, -- list body before locals
     locals = {}, labels = {},
     parent = {type = "local", parent = parent},
   }
@@ -805,7 +820,7 @@ local function ifstat(line,parent)
   local elseblock
   if testnext("else") then
     elseblock = {token="elseblock",
-      body = true, -- list body first
+      body = false, -- list body before locals
       locals = {}, labels = {},
       parent = {type = "local", parent = parent},
     }
@@ -876,10 +891,9 @@ local function funcstat(line,parent)
   -- funcstat -> FUNCTION funcname body
   nexttoken() -- skip FUNCTION
   local ismethod,names = funcname(parent)
-  local b = body(line,parent)
+  local b = body(line,parent,ismethod)
   b.token = "funcstat"
   b.names = names
-  b.ismethod = ismethod
   return b
 end
 
@@ -982,7 +996,15 @@ end
 local function mainfunc(chunkname)
   local main = {
     chunkname = chunkname,
-    body = true, -- list body first
+    parent = {
+      type = "upval", parent = {
+        locals = {
+          {name = {token="_ENV",value="_ENV"}, wholeblock = true}
+        }
+      }
+    },
+    funcprotos = {},
+    body = false, -- list body before locals
     locals = {},
     labels = {},
   }
