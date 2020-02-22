@@ -74,15 +74,13 @@ from AST:
 
 
 
-  
-
 --[[
   to add:
     `!` for `not`
       `&` for `and`, `|` for `or`
     `!=` for `~=`
     `+=` `-=` `*=` `/=` `%=` `^=` composite assignment ops
-      no multiple-assignment with these
+      no multiple-assignment with these?
       parse to tree equivalent of LHS = LHS op ( RHS )
       `..=` can compose with a line of `..`
       `&=` `|=` maybe
@@ -91,19 +89,21 @@ from AST:
       `?:()` for SELF, all in one parent and child not nil then call
     `^.` for `getmetatable()?.`
     something for getraw()
-    `?:` ternary op
-    `??` nil-coalescing (differs from `or` in keeping false)
+    `? :` ternary op
     `(namelist)=>explist` for `function(namelist) return explist end`
-    `if namelist = explist then`, `while namelist = explist do` use first var as condition
-        `if namelist = explist; cond then`
-        `while namelist = explist; cond do`
+    `if namelist = explist then` use first var as condition
+        `if namelist = explist; cond then` explicit cond
+        `while namelist = explist; cond do` while too?
     switch/case?
         implement as `(({})[case] or default)()` ?
         allow `return switch`?
     `const namelist ‘=’ explist`, compile-time constant folding? prevent re-assignment, allow reuse of common subexpressions
-    `inline function` declared at file scope, not assignable?
+    `inline function` or `macro` declared at file scope, not assignable
     string interpolation?
       evaluate it all then do one big concat
+      $"" or $[[]] like a function call of $
+      turn into concat series, expressions in {} break out as code
+      tostring() sub expressions? or just let it error on non-string?
     branch annotations for coverage testing?
 
     type annotations, somehow? steal a bunch from TypeScript?
@@ -114,7 +114,7 @@ from AST:
       some way to declare type of a global? `global name:T`?
       or generally to declare a typed field into an existing table?
       `_ENV = <T>_ENV` with an interface?
-      `T|T`, `T&T`, `any`
+      `T?`, `T|T`, `T&T`, `any`
       `interface T [extends U] { }`
 
 ]]
