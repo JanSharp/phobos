@@ -633,15 +633,17 @@ do
     ["#"] = 8,
   }
   local binopprio = {
-    ["+"]   = {left=6,right=6}, ["-"]  = {left=6,right=6},
-    ["*"]   = {left=7,right=7}, ["/"]  = {left=7,right=7},
-    ["%"]   = {left=7,right=7},
-    ["^"]   = {left=10,right=9}, [".."] = {left=5,right=4}, -- right associative
-    ["=="]  = {left=3,right=3},
-    ["<"]   = {left=3,right=3}, ["<="] = {left=3,right=3},
-    ["~="]  = {left=3,right=3},
-    [">"]   = {left=3,right=3}, [">="] = {left=3,right=3},
-    ["and"] = {left=2,right=2}, ["or"] = {left=1,right=1},
+    ["^"]   = {left=10,right=9}, -- right associative
+    ["*"]   = {left=7 ,right=7}, ["/"]  = {left=7,right=7},
+    ["%"]   = {left=7 ,right=7},
+    ["+"]   = {left=6 ,right=6}, ["-"]  = {left=6,right=6},
+    [".."]  = {left=5 ,right=4}, -- right associative
+    ["=="]  = {left=3 ,right=3},
+    ["<"]   = {left=3 ,right=3}, ["<="] = {left=3,right=3},
+    ["~="]  = {left=3 ,right=3},
+    [">"]   = {left=3 ,right=3}, [">="] = {left=3,right=3},
+    ["and"] = {left=2 ,right=2},
+    ["or"]  = {left=1 ,right=1},
   }
 
   -- subexpr -> (simpleexp | unop subexpr) { binop subexpr }
