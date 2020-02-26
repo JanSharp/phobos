@@ -228,22 +228,6 @@ do
       elseif nextchar == "'" then
         return ReadString(str,index,nextchar,linestate)
       else
-        -- decimal numbers: "%d+" followed by "%.%d+" followed by "[eE][+-]?%d+"
-        local numstart,numend = str:find("^%d+",index)
-        if numstart then
-          local fstart,fend = str:find("^%.%d+",numend+1)
-          if fstart then
-            numend = fend
-          end
-          local estart,eend = str:find("^[eE]%d+",numend+1)
-          if estart then
-            numend = eend
-          end
-          local token = Token("number",index,linestate.line,index - linestate.lineoffset)
-          token.value = tonumber(str:sub(numstart,numend))
-          return numend+1,token
-        end
-
         -- hex numbers: "0x%x+" followed by "%.%x+" followed by "[pP][+-]?%x+"
         local hexstart,hexend = str:find("^0x%x+",index)
         if hexstart then
@@ -260,6 +244,22 @@ do
           return hexend+1,token
         end
 
+        -- decimal numbers: "%d+" followed by "%.%d+" followed by "[eE][+-]?%d+"
+        local numstart,numend = str:find("^%d+",index)
+        if numstart then
+          local fstart,fend = str:find("^%.%d+",numend+1)
+          if fstart then
+            numend = fend
+          end
+          local estart,eend = str:find("^[eE]%d+",numend+1)
+          if estart then
+            numend = eend
+          end
+          local token = Token("number",index,linestate.line,index - linestate.lineoffset)
+          token.value = tonumber(str:sub(numstart,numend))
+          return numend+1,token
+        end
+        
         -- try to match keywords/identifiers
         local matchstart,matchend,ident = str:find("^([_%a][_%w]*)",index)
         if matchstart == index then
