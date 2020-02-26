@@ -1263,7 +1263,11 @@ do
             end
             combining[#combining+1] = sub.value
           else
-            if #combining > 0 then
+            if #combining == 1 then
+              newexplist[#newexplist+1] = combining[1]
+              combining = {}
+              combiningpos = nil
+            elseif #combining > 1 then
               newexplist[#newexplist+1] = {
                 token = "string",
                 line = combiningpos.line, column = combiningpos.column,
@@ -1272,21 +1276,24 @@ do
               }
               combining = {}
               combiningpos = nil
+              exp.folded = true
             end
             newexplist[#newexplist+1] = sub
           end
         end
-        if #combining > 0 then
+        if #combining == 1 then
+          newexplist[#newexplist+1] = combining[1]
+        elseif #combining > 1 then
           newexplist[#newexplist+1] = {
             token = "string",
             line = combiningpos.line, column = combiningpos.column,
             value = table.concat(combining),
             folded = true
           }
+          exp.folded = true
         end
-        
+
         exp.explist = newexplist
-        exp.folded = true
 
         if #exp.explist == 1 then
           -- fold a single string away entirely, if possible
