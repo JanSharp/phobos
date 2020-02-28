@@ -259,7 +259,7 @@ do
           token.value = tonumber(str:sub(numstart,numend))
           return numend+1,token
         end
-        
+
         -- try to match keywords/identifiers
         local matchstart,matchend,ident = str:find("^([_%a][_%w]*)",index)
         if matchstart == index then
@@ -310,15 +310,33 @@ do
     local upvalparent = {}
     while parent do
       local found
-      for _,loc in pairs(parent.locals) do
+      for _,loc in ipairs(parent.locals) do
         if tok.value == loc.name.value then
           -- keep looking to find the most recently defined one,
           -- in case some nut redefines the same name repeatedly in the same scope
           found = loc
         end
       end
+      if not found and parent.upvals then
+        for _,loc in ipairs(parent.upvals) do
+          if tok.value == loc.name.value then
+            found = loc
+          end
+        end
+      end
       if found then
-        if isupval>0 then 
+        if isupval>0 then
+          for i = 1,isupval do
+            local uppar = upvalparent[i].upvals
+            local newup = {name=tok,ref=found}
+            if tok.value == "_ENV" then
+              -- always put _ENV first
+              table.insert(uppar,1,newup)
+            else
+              uppar[#uppar+1] = newup
+            end
+            found = newup
+          end
           tok.upvalparent = upvalparent
           tok.token = "upval"
         else
@@ -475,7 +493,7 @@ do
       body = false, -- list body before locals
       ismethod = ismethod,
       funcprotos = {},
-      locals = {}, labels = {},
+      locals = {}, upvals = {}, labels = {},
       line = token.line, column = token.column,
       parent = {type = "upval", parent = parent},
     }
@@ -537,7 +555,7 @@ do
       -- next token is ')', empty args expect `'=>' expr` next
       -- next token is 'ident'
       --  followed by `,` is multiple args, finish list then `=> expr`
-      --  followed by `)` `=>` is single arg, expect `expr`
+      --  followed by `)` `=>` is single arg, expect `exprlist`
       --  followed by `)` is expr of inner name token
       -- then in suffixedexp, lambda should only take funcargs suffix
       local ex = expr(parent)
@@ -879,12 +897,12 @@ do
       thistok.line = assign.line
       thistok.column = assign.column
       thistok.rhs = explist(parent)
-      for _,name in pairs(thistok.lhs) do
+      for _,name in ipairs(thistok.lhs) do
         parent.locals[#parent.locals+1] = {name = name, startafter = thistok}
       end
       return thistok
     else
-      for _,name in pairs(thistok.lhs) do
+      for _,name in ipairs(thistok.lhs) do
         parent.locals[#parent.locals+1] = {name = name, startafter = thistok}
       end
       return thistok
@@ -1033,6 +1051,7 @@ do
       body = false, -- list body before locals
       isvararg = true, -- main is always vararg
       locals = {},
+      upvals = {},
       labels = {},
     }
     main.body = statlist(main)
@@ -1341,34 +1360,103 @@ do
         end
       end
 
-      -- now collapse if/while/repeat? or as part of lowering those to do/goto?
+      -- now collapse if/while/repeat?
     end)
   end
 end
 ----------------------------------------------------------------------
 local DumpFunction
 
-function DumpFunction(func)
+local function DumpSize(s)
+  -- size_t is 8 bytes
+  return string.char(
+    bit32.band(             s    ,0xff),
+    bit32.band(bit32.rshift(s,8 ),0xff),
+    bit32.band(bit32.rshift(s,16),0xff),
+    bit32.band(bit32.rshift(s,24),0xff),
+    0,0,0,0 -- but i really only support 32bit for now, so just write four extra zeros
+    --TODO: expand this to 48bit? maybe all the way to 53?
+  )
+end
+local function DumpInt(i)
+  -- int is 4 bytes
+  return string.char(
+    bit32.band(             i    ,0xff),
+    bit32.band(bit32.rshift(i,8 ),0xff),
+    bit32.band(bit32.rshift(i,16),0xff),
+    bit32.band(bit32.rshift(i,24),0xff)
+  )
+end
+
+local DumpDouble
+do
+  local s , e = string.dump(load[[return 523123.123145345]])
+                      :find("\3\54\208\25\126\204\237\31\65")
+  if s == nil then
+    error("Unable to set up double to bytes conversion")
+  end
+  local double_cache = {
+    -- these two don't print %a correctly, so preload the cache with them
+    [1/0] = "\3\x7f\xf0\0\0\0\0\0\0",
+    [-1/0] = "\3\xff\xf0\0\0\0\0\0\0",
+  }
+  function DumpDouble(d)
+    if d ~= d then
+      -- nan
+      return "\3\x7f\xff\xff\xff\xff\xff\xff\xff"
+    elseif double_cache[d] then
+      return double_cache[d]
+    else
+      local dstr = string.dump(load(([[return %a]]):format(d))):sub(s,e)
+      double_cache[d] = dstr
+      return dstr
+    end
+  end
+end
+
+local function DumpString(str)
   -- typedef string:
   -- size_t length (including trailing null, 0 for empty string)
   -- char[] value (not present for empty string)
-  
+  if #str == 0 then
+    return "\0"
+  else
+    return DumpSize(#str + 1) .. str .. "\0"
+  end
+end
 
+--   byte type={nil=0,boolean=1,number=3,string=4}
+local dumpConstantByType = {
+  ["nil"] = function() return "\0" end,
+--   <boolean> byte value
+  ["boolean"] = function(val) return val and "\1\1" or "\1\0" end,
+--   <number> double value
+-- DumpDouble has the \3 type tag already
+  ["number"] = DumpDouble,
+--   <string> string value
+  ["string"] = function(val) return "\4" .. DumpString(val) end,
+}
+local function DumpConstant(val)
+  return dumpConstantByType[type(val)](val)
+end
+
+function DumpFunction(func)
+  local dump = {}
   -- int linedefined (0 for main chunk)
+  dump[#dump+1] = DumpInt(func.line)
   -- int lastlinedefined (0 for main chunk)
-  -- byte nparams
-  -- byte isvararg
-  -- byte maxstacksize
+  dump[#dump+1] = DumpInt(func.endline)
+  dump[#dump+1] = string.char(
+    func.nparams or 0,        -- byte nparams
+    func.isvararg and 1 or 0, -- byte isvararg
+    2                         -- byte maxstacksize, min of 2, reg0/1 always valid
+  )
   -- [Code]
   -- int ninstructions
   -- Instruction[] instructions
   -- [Constants]
   -- int nconsts
   -- TValue[] consts
-  --   char type={nil=0,boolean=1,number=3,string=4}
-  --   <boolean> char value
-  --   <number> double value
-  --   <string> string value
   -- [Funcprotos]
   -- int nfuncs
   -- DumpFunction[] funcs
@@ -1389,7 +1477,7 @@ function DumpFunction(func)
   -- int nups
   -- string[] ups
 
-
+  return table.concat(dump)
 end
 
 local function DumpHeader()
@@ -1398,12 +1486,16 @@ local function DumpHeader()
   -- byte format = 0 (official)
   -- byte endianness = 1
   -- byte sizeof(int) = 4
-  -- byte sizeof(size_t) = 8?
+  -- byte sizeof(size_t) = 8
   -- byte sizeof(Instruction) = 4
   -- byte sizeof(luaNumber) = 8
   -- byte lua_number is int? = 0
   -- magic "\x19\x93\r\n\x1a\n"
   return "\x1bLua\x52\0\1\4\8\4\8\0\x19\x93\r\n\x1a\n"
+end
+
+local function DumpMain(main)
+  return DumpHeader() .. DumpFunction(main)
 end
 
 ----------------------------------------------------------------------

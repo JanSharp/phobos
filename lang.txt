@@ -85,11 +85,16 @@ from AST:
       `..=` can compose with a line of `..`
       `&=` `|=` maybe
     `i++`
-    `?.` `?[]` `?()` for safe-chaining
-      `?:()` for SELF, all in one parent and child not nil then call
+    `expr?.ident` `expr?[expr]` `expr?()` for safe-chaining
+      `expr?:ident(explist)` for SELF, all in one parent and child not nil then call
     `^.` for `getmetatable()?.`
     something for getraw()
-    `? :` ternary op
+    `cond ?? explist : explist` ternary op
+      single `?` causes parsing difficulty with safe chaining ops
+      foo?(bar):baz()
+    `local {foo, bar} = exp` table unpack as name in local statement
+      unpack the named fields into locals, discard intermediate table
+      `foo as foob` to rename?
     `(namelist)=>explist` for `function(namelist) return explist end`
     `if namelist = explist then` use first var as condition
         `if namelist = explist; cond then` explicit cond
