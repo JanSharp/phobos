@@ -76,22 +76,20 @@ from AST:
 
 --[[
   to add:
-    `!` for `not`
-      `&` for `and`, `|` for `or`
-    `!=` for `~=`
     `+=` `-=` `*=` `/=` `%=` `^=` composite assignment ops
       no multiple-assignment with these?
       parse to tree equivalent of LHS = LHS op ( RHS )
       `..=` can compose with a line of `..`
-      `&=` `|=` maybe
     `i++`
+    `:[]()` operator for self-call by non-ident index
     `expr?.ident` `expr?[expr]` `expr?()` for safe-chaining
-      `expr?:ident(explist)` for SELF, all in one parent and child not nil then call
+      `expr?:ident?(explist)` for SELF
     `^.` for `getmetatable()?.`
-    something for getraw()
-    `cond ?? explist : explist` ternary op
+    `@` `@[]` for getraw()/setraw()
+    `cond ?? explist ; explist` ternary op
       single `?` causes parsing difficulty with safe chaining ops
-      foo?(bar):baz()
+      sincle `:` causes parsing difficulty with self-call op
+      foo?(bar):baz():baz()
     `local {foo, bar} = exp` table unpack as name in local statement
       unpack the named fields into locals, discard intermediate table
       `foo as foob` to rename?
@@ -103,7 +101,9 @@ from AST:
         implement as `(({})[case] or default)()` ?
         allow `return switch`?
     `const namelist ‘=’ explist`, compile-time constant folding? prevent re-assignment, allow reuse of common subexpressions
-    `inline function` or `macro` declared at file scope, not assignable
+    `inline function` or `macro` at file or smaller scope
+      not assignable
+      no upvals?
     string interpolation?
       evaluate it all then do one big concat
       $"" or $[[]] like a function call of $

@@ -318,9 +318,9 @@ do
         end
       end
       if not found and parent.upvals then
-        for _,loc in ipairs(parent.upvals) do
-          if tok.value == loc.name.value then
-            found = loc
+        for _,up in ipairs(parent.upvals) do
+          if tok.value == up.name then
+            found = up
           end
         end
       end
@@ -328,9 +328,10 @@ do
         if isupval>0 then
           for i = 1,isupval do
             local uppar = upvalparent[i].upvals
-            local newup = {name=tok,ref=found}
+            local newup = {name=tok.value,updepth=i + (found.updepth or 0),ref=found}
             if tok.value == "_ENV" then
-              -- always put _ENV first
+              -- always put _ENV first, if present,
+              -- so that `load`'s mangling will be correct
               table.insert(uppar,1,newup)
             else
               uppar[#uppar+1] = newup
@@ -490,10 +491,11 @@ do
     -- body -> `(` parlist `)`  block END
     local thistok = {
       token="functiondef",
+      source = parent.source,
       body = false, -- list body before locals
       ismethod = ismethod,
       funcprotos = {},
-      locals = {}, upvals = {}, labels = {},
+      locals = {}, upvals = {}, constants = {}, labels = {},
       line = token.line, column = token.column,
       parent = {type = "upval", parent = parent},
     }
@@ -552,12 +554,11 @@ do
       local line = token.line
       nexttoken() -- skip '('
       --TODO: compact lambda here:
-      -- next token is ')', empty args expect `'=>' expr` next
-      -- next token is 'ident'
+      -- token is ')', empty args expect `'=>' expr` next
+      -- token is 'ident'
       --  followed by `,` is multiple args, finish list then `=> expr`
       --  followed by `)` `=>` is single arg, expect `exprlist`
-      --  followed by `)` is expr of inner name token
-      -- then in suffixedexp, lambda should only take funcargs suffix
+      --  followed by `)` or anything else is expr of inner, current behavior
       local ex = expr(parent)
       checkmatch(")","(",line)
       return ex
@@ -969,7 +970,7 @@ do
   local statementtab = {
     [";"] = function(parent) -- stat -> ';' (empty statement)
       nexttoken() -- skip
-      return {token = "comment", }
+      return {token = "empty", }
     end,
     ["if"] = function(parent) -- stat -> ifstat
       local line = token.line;
@@ -1037,12 +1038,16 @@ do
   function mainfunc(chunkname)
     local main = {
       token = "main",
-      chunkname = chunkname,
+      source = chunkname,
       -- fake parent of main to provide _ENV upval
       parent = {
         type = "upval", parent = {
           token = "env",
           locals = {
+            -- Lua emits _ENV as if it's a local in the parent scope
+            -- of the file. I'll probably change this one day to be
+            -- the first upval of the parent scope, since load()
+            -- clobbers the first upval anyway to be the new _ENV value
             {name = {token="_ENV",value="_ENV"}, wholeblock = true}
           }
         }
@@ -1050,9 +1055,7 @@ do
       funcprotos = {},
       body = false, -- list body before locals
       isvararg = true, -- main is always vararg
-      locals = {},
-      upvals = {},
-      labels = {},
+      locals = {}, upvals = {}, constants = {}, labels = {},
     }
     main.body = statlist(main)
     return main
@@ -1119,265 +1122,425 @@ do
     if close then close(exp) end
   end
 
-  local function foldexp(parentexp,tok,value,childtok)
-    parentexp.token = tok
-    parentexp.value = value
-    parentexp.ex = nil        -- call, selfcall
-    parentexp.op = nil        -- binop,unop
-    parentexp.left = nil      -- binop
-    parentexp.right = nil     -- binop
-    parentexp.explist = nil   -- concat
-    if childtok then
-      parentexp.line = childtok.line
-      parentexp.column = childtok.column
-    elseif childtok == false then
-      parentexp.line = nil
-      parentexp.column = nil
+  do
+    local function foldexp(parentexp,tok,value,childtok)
+      parentexp.token = tok
+      parentexp.value = value
+      parentexp.ex = nil        -- call, selfcall
+      parentexp.op = nil        -- binop,unop
+      parentexp.left = nil      -- binop
+      parentexp.right = nil     -- binop
+      parentexp.explist = nil   -- concat
+      if childtok then
+        parentexp.line = childtok.line
+        parentexp.column = childtok.column
+      elseif childtok == false then
+        parentexp.line = nil
+        parentexp.column = nil
+      end
+      parentexp.folded = true
     end
-    parentexp.folded = true
-  end
 
-  local isconsttoken = invert{"string","number","true","false","nil"}
-  local foldunop = {
-    ["-"] = function(exp)
-      -- number
-      if exp.ex.token == "number" then
-        foldexp(exp,"number", -exp.ex.value)
-      end
-    end,
-    ["not"] = function(exp)
-      -- boolean
-      if exp.ex.token == "boolean" then
-        foldexp(exp, "boolean", not exp.ex.value)
-      end
-    end,
-    ["#"] = function(exp)
-      -- table or string
-      if exp.ex.token == "string" then
-        foldexp(exp, "string", #exp.ex.value)
-      end
-    end,
-  }
-  local foldbinop = {
-    ["+"] = function(exp)
-      if exp.left.token == "number" and exp.right.token == "number" then
-        foldexp(exp, "number", exp.left.value + exp.right.value)
-      end
-    end,
-    ["-"] = function(exp)
-      if exp.left.token == "number" and exp.right.token == "number" then
-        foldexp(exp, "number", exp.left.value - exp.right.value)
-      end
-    end,
-    ["*"] = function(exp)
-      if exp.left.token == "number" and exp.right.token == "number" then
-        foldexp(exp, "number", exp.left.value * exp.right.value)
-      end
-    end,
-    ["/"] = function(exp)
-      if exp.left.token == "number" and exp.right.token == "number" then
-        foldexp(exp, "number", exp.left.value / exp.right.value)
-      end
-    end,
-    ["%"] = function(exp)
-      if exp.left.token == "number" and exp.right.token == "number" then
-        foldexp(exp, "number", exp.left.value % exp.right.value)
-      end
-    end,
-    ["^"] = function(exp)
-      if exp.left.token == "number" and exp.right.token == "number" then
-        foldexp(exp, "number", exp.left.value ^ exp.right.value)
-      end
-    end,
-    ["<"] = function(exp)
-      -- matching types, number or string
-      if exp.left.token == exp.right.token and
-        (exp.left.token == "number" or exp.left.token == "string") then
-        local res =  exp.left.value < exp.right.value
-        foldexp(exp, tostring(res), res)
-      end
-    end,
-    ["<="] = function(exp)
-      -- matching types, number or string
-      if exp.left.token == exp.right.token and
-        (exp.left.token == "number" or exp.left.token == "string") then
-          local res =  exp.left.value <= exp.right.value
+    local isconsttoken = invert{"string","number","true","false","nil"}
+    local foldunop = {
+      ["-"] = function(exp)
+        -- number
+        if exp.ex.token == "number" then
+          foldexp(exp,"number", -exp.ex.value)
+        end
+      end,
+      ["not"] = function(exp)
+        -- boolean
+        if exp.ex.token == "boolean" then
+          foldexp(exp, "boolean", not exp.ex.value)
+        end
+      end,
+      ["#"] = function(exp)
+        -- table or string
+        if exp.ex.token == "string" then
+          foldexp(exp, "string", #exp.ex.value)
+        elseif exp.ex.token == "constructor" then
+
+        end
+      end,
+    }
+    local foldbinop = {
+      ["+"] = function(exp)
+        if exp.left.token == "number" and exp.right.token == "number" then
+          foldexp(exp, "number", exp.left.value + exp.right.value)
+        end
+      end,
+      ["-"] = function(exp)
+        if exp.left.token == "number" and exp.right.token == "number" then
+          foldexp(exp, "number", exp.left.value - exp.right.value)
+        end
+      end,
+      ["*"] = function(exp)
+        if exp.left.token == "number" and exp.right.token == "number" then
+          foldexp(exp, "number", exp.left.value * exp.right.value)
+        end
+      end,
+      ["/"] = function(exp)
+        if exp.left.token == "number" and exp.right.token == "number" then
+          foldexp(exp, "number", exp.left.value / exp.right.value)
+        end
+      end,
+      ["%"] = function(exp)
+        if exp.left.token == "number" and exp.right.token == "number" then
+          foldexp(exp, "number", exp.left.value % exp.right.value)
+        end
+      end,
+      ["^"] = function(exp)
+        if exp.left.token == "number" and exp.right.token == "number" then
+          foldexp(exp, "number", exp.left.value ^ exp.right.value)
+        end
+      end,
+      ["<"] = function(exp)
+        -- matching types, number or string
+        if exp.left.token == exp.right.token and
+          (exp.left.token == "number" or exp.left.token == "string") then
+          local res =  exp.left.value < exp.right.value
           foldexp(exp, tostring(res), res)
-      end
-    end,
-    [">"] = function(exp)
-      -- matching types, number or string
-      if exp.left.token == exp.right.token and
-        (exp.left.token == "number" or exp.left.token == "string") then
-          local res =  exp.left.value > exp.right.value
+        end
+      end,
+      ["<="] = function(exp)
+        -- matching types, number or string
+        if exp.left.token == exp.right.token and
+          (exp.left.token == "number" or exp.left.token == "string") then
+            local res =  exp.left.value <= exp.right.value
+            foldexp(exp, tostring(res), res)
+        end
+      end,
+      [">"] = function(exp)
+        -- matching types, number or string
+        if exp.left.token == exp.right.token and
+          (exp.left.token == "number" or exp.left.token == "string") then
+            local res =  exp.left.value > exp.right.value
+            foldexp(exp, tostring(res), res)
+        end
+      end,
+      [">="] = function(exp)
+        -- matching types, number or string
+        if exp.left.token == exp.right.token and
+          (exp.left.token == "number" or exp.left.token == "string") then
+            local res =  exp.left.value >= exp.right.value
+            foldexp(exp, tostring(res), res)
+        end
+      end,
+      ["=="] = function(exp)
+        -- any type
+        if exp.left.token == exp.right.token and isconsttoken[exp.left.token] then
+          local res =  exp.left.value == exp.right.value
           foldexp(exp, tostring(res), res)
-      end
-    end,
-    [">="] = function(exp)
-      -- matching types, number or string
-      if exp.left.token == exp.right.token and
-        (exp.left.token == "number" or exp.left.token == "string") then
-          local res =  exp.left.value >= exp.right.value
+        elseif isconsttoken[exp.left.token] and isconsttoken[exp.right.token] then
+          -- different types of constants
+          foldexp(exp, "false", false)
+        end
+      end,
+      ["~="] = function(exp)
+        -- any type
+        if exp.left.token == exp.right.token and isconsttoken[exp.left.token] then
+          local res =  exp.left.value ~= exp.right.value
           foldexp(exp, tostring(res), res)
-      end
-    end,
-    ["=="] = function(exp)
-      -- any type
-      if exp.left.token == exp.right.token and isconsttoken[exp.left.token] then
-        local res =  exp.left.value == exp.right.value
-        foldexp(exp, tostring(res), res)
-      elseif isconsttoken[exp.left.token] and isconsttoken[exp.right.token] then
-        -- different types of constants
-        foldexp(exp, "false", false)
-      end
-    end,
-    ["~="] = function(exp)
-      -- any type
-      if exp.left.token == exp.right.token and isconsttoken[exp.left.token] then
-        local res =  exp.left.value ~= exp.right.value
-        foldexp(exp, tostring(res), res)
-      elseif isconsttoken[exp.left.token] and isconsttoken[exp.right.token] then
-        -- different types of constants
-        foldexp(exp, "true", true)
-      end
-    end,
-    ["and"] = function(exp)
-      -- any type
-      if exp.left.token == "nil" or exp.left.token == "false" then
-        local sub = exp.left
-        foldexp(exp, sub.token, sub.value, sub)
-      elseif isconsttoken[exp.left.token] then
-        -- the constants that failed the first test are all truthy
-        local sub = exp.right
-        foldexp(exp, sub.token, sub.value, sub)
-      end
-    end,
-    ["or"] = function(exp)
-      -- any type
-      if exp.left.token == "nil" or exp.left.token == "false" then
-        local sub = exp.right
-        foldexp(exp, sub.token, sub.value, sub)
-      elseif isconsttoken[exp.left.token] then
-        -- the constants that failed the first test are all truthy
-        local sub = exp.left
-        foldexp(exp, sub.token, sub.value, sub)
-      end
-    end,
-  }
-  local function fold_const_exp(exp)
-    walk_exp(exp,nil,function(exp)
-      if exp.token == "unop" then
-        foldunop[exp.op](exp)
-      elseif exp.token == "binop" then
-        foldbinop[exp.op](exp)
-      elseif exp.token == "concat" then
-        -- combine adjacent number or string
-        local newexplist = {}
-        local combining = {}
-        local combiningpos
-        for _,sub in ipairs(exp.explist) do
-          if sub.token == "string" or sub.token == "number" then
-            if not combining[1] then
-              combiningpos = {line = sub.line, column = sub.column}
+        elseif isconsttoken[exp.left.token] and isconsttoken[exp.right.token] then
+          -- different types of constants
+          foldexp(exp, "true", true)
+        end
+      end,
+      ["and"] = function(exp)
+        -- any type
+        if exp.left.token == "nil" or exp.left.token == "false" then
+          local sub = exp.left
+          foldexp(exp, sub.token, sub.value, sub)
+        elseif isconsttoken[exp.left.token] then
+          -- the constants that failed the first test are all truthy
+          local sub = exp.right
+          foldexp(exp, sub.token, sub.value, sub)
+        end
+      end,
+      ["or"] = function(exp)
+        -- any type
+        if exp.left.token == "nil" or exp.left.token == "false" then
+          local sub = exp.right
+          foldexp(exp, sub.token, sub.value, sub)
+        elseif isconsttoken[exp.left.token] then
+          -- the constants that failed the first test are all truthy
+          local sub = exp.left
+          foldexp(exp, sub.token, sub.value, sub)
+        end
+      end,
+    }
+    local function fold_const_exp(exp)
+      walk_exp(exp,nil,function(exp)
+        if exp.token == "unop" then
+          foldunop[exp.op](exp)
+        elseif exp.token == "binop" then
+          foldbinop[exp.op](exp)
+        elseif exp.token == "concat" then
+          -- combine adjacent number or string
+          local newexplist = {}
+          local combining = {}
+          local combiningpos
+          for _,sub in ipairs(exp.explist) do
+            if sub.token == "string" or sub.token == "number" then
+              if not combining[1] then
+                combiningpos = {line = sub.line, column = sub.column}
+              end
+              combining[#combining+1] = sub.value
+            else
+              if #combining == 1 then
+                newexplist[#newexplist+1] = combining[1]
+                combining = {}
+                combiningpos = nil
+              elseif #combining > 1 then
+                newexplist[#newexplist+1] = {
+                  token = "string",
+                  line = combiningpos.line, column = combiningpos.column,
+                  value = table.concat(combining),
+                  folded = true
+                }
+                combining = {}
+                combiningpos = nil
+                exp.folded = true
+              end
+              newexplist[#newexplist+1] = sub
             end
-            combining[#combining+1] = sub.value
-          else
-            if #combining == 1 then
-              newexplist[#newexplist+1] = combining[1]
-              combining = {}
-              combiningpos = nil
-            elseif #combining > 1 then
-              newexplist[#newexplist+1] = {
-                token = "string",
-                line = combiningpos.line, column = combiningpos.column,
-                value = table.concat(combining),
-                folded = true
-              }
-              combining = {}
-              combiningpos = nil
-              exp.folded = true
-            end
-            newexplist[#newexplist+1] = sub
+          end
+          if #combining == 1 then
+            newexplist[#newexplist+1] = combining[1]
+          elseif #combining > 1 then
+            newexplist[#newexplist+1] = {
+              token = "string",
+              line = combiningpos.line, column = combiningpos.column,
+              value = table.concat(combining),
+              folded = true
+            }
+            exp.folded = true
+          end
+
+          exp.explist = newexplist
+
+          if #exp.explist == 1 then
+            -- fold a single string away entirely, if possible
+            local sub = exp.explist[1]
+            foldexp(exp,sub.token,sub.value,sub)
+          end
+        else
+          -- anything else?
+          -- indexing of known-const tables?
+          -- calling of specific known-identity, known-const functions?
+        end
+      end)
+    end
+
+    function fold_const(main)
+      walk_block(main, nil,
+      function(token)
+        if token.cond then -- if,while,repeat
+          fold_const_exp(token.cond)
+        end
+        if token.ex then -- call, selfcall
+          fold_const_exp(token.ex)
+        end
+        if token.suffix then -- selfcall
+          fold_const_exp(token.suffix)
+        end
+        if token.args then -- call, selfcall
+          for _,exp in ipairs(token.args) do
+            fold_const_exp(exp)
           end
         end
-        if #combining == 1 then
-          newexplist[#newexplist+1] = combining[1]
-        elseif #combining > 1 then
-          newexplist[#newexplist+1] = {
-            token = "string",
-            line = combiningpos.line, column = combiningpos.column,
-            value = table.concat(combining),
-            folded = true
-          }
-          exp.folded = true
+        if token.explist then -- localstat, return
+          for _,exp in ipairs(token.explist) do
+            fold_const_exp(exp)
+          end
+        end
+        if token.lhs then -- assignment
+          for _,exp in ipairs(token.lhs) do
+            fold_const_exp(exp)
+          end
+        end
+        if token.rhs then -- assignment
+          for _,exp in ipairs(token.rhs) do
+            fold_const_exp(exp)
+          end
         end
 
-        exp.explist = newexplist
-
-        if #exp.explist == 1 then
-          -- fold a single string away entirely, if possible
-          local sub = exp.explist[1]
-          foldexp(exp,sub.token,sub.value,sub)
+        -- now collapse if/while/repeat?
+        if token.token == "ifstat" then
+          -- an always-true if can delete any branches after if (and become the else)
+          -- an always-false if/elseif can be deleted or promote else to do
         end
-      else
-        -- anything else?
-        -- indexing of known-const tables?
-        -- calling of specific known-identity, known-const functions?
-      end
-    end)
+
+      end)
+    end
   end
+end
+----------------------------------------------------------------------
+local generate_code
+do
+  local function next_reg(func)
+    local n = func.nextreg
+    local ninc = n + 1
+    func.nextreg = ninc
+    if ninc > func.maxstacksize then
+      func.maxstacksize = ninc
+    end
+    return n
+  end
+  local function release_reg(func,reg)
+    if reg ~= func.nextreg - 1 then
+      error("Attempted to release register "..reg.." when top was "..func.nextreg)
+    end
+    func.nextreg = reg
+  end
+  local generate_expr_code
+  generate_expr_code = {
+  }
+  local function generate_expr(expr,inreg,func)
+    return generate_expr_code[expr.token](expr,inreg,func)
+  end
+  local generate_statement_code
+  generate_statement_code = {
+    localstat = function(stat,func)
+      -- allocate registers for LHS, eval expressions into them
+      -- declare new registers to be "live" with locals after this
+    end,
+    localfunc = function(stat,func)
+      -- allocate register for stat.name
+      -- declare new register to be "live" with local right away for upval capture
+      -- CLOSURE into that register
+    end,
+    dostat = function(stat,func)
+      for i,innerstat in ipairs(stat.body) do
+        generate_statement_code[innerstat.token](innerstat,func)
+      end
+      -- close live locals from this block
+    end,
+    funcstat = function(stat,func)
+      -- if name is not local, allocate a temporary
+      -- CLOSURE into that register
+      -- if name is not local, assign from temporary and release
+    end,
+    assignment = function(stat,func)
+      -- if LHS is locals, check for conflict with RHS and if none use them directly
+      -- else allocate temporary registers, eval RHS expressions into them
+    end,
+    ifstat = function(stat,func)
+      for i,ifblock in ipairs(stat.ifs) do
+        --generate a test for ifblock.cond
 
-  function fold_const(main)
-    walk_block(main, nil,
-    function(token)
-      if token.cond then -- if,while,repeat
-        fold_const_exp(token.cond)
-      end
-      if token.ex then -- call, selfcall
-        fold_const_exp(token.ex)
-      end
-      if token.suffix then -- selfcall
-        fold_const_exp(token.suffix)
-      end
-      if token.args then -- call, selfcall
-        for _,exp in ipairs(token.args) do
-          fold_const_exp(exp)
+        -- generate body
+        for i,innerstat in ipairs(ifblock.body) do
+          generate_statement_code[innerstat.token](innerstat,func)
         end
+        -- patch test to jump here
       end
-      if token.explist then -- localstat, return
-        for _,exp in ipairs(token.explist) do
-          fold_const_exp(exp)
+      if stat.elseblock then
+        for i,innerstat in ipairs(stat.elseblock.body) do
+          generate_statement_code[innerstat.token](innerstat,func)
         end
+        -- patch if block ends to jump here
       end
-      if token.lhs then -- assignment
-        for _,exp in ipairs(token.lhs) do
-          fold_const_exp(exp)
-        end
-      end
-      if token.rhs then -- assignment
-        for _,exp in ipairs(token.rhs) do
-          fold_const_exp(exp)
-        end
-      end
+    end,
+    call = function(stat,func)
+      -- evaluate as a call expression for zero results
 
-      -- now collapse if/while/repeat?
-    end)
+      -- fetch stat.ex into a temporary
+      -- fetch stat.args into temporaries
+      -- CALL for zero results
+    end,
+    selfcall = function(stat,func)
+      -- evaluate as a selfcall expression for zero results
+      
+      -- fetch stat.ex into a temporary
+      -- SELF temporary:suffix
+      -- fetch stat.args into temporaries
+      -- CALL for zero results
+    end,
+    forlist = function(stat,func)
+      -- alocate forlist internal vars
+      -- eval explist for three results
+      -- allocate for locals, declare them live
+      -- generate body
+      for i,innerstat in ipairs(stat.body) do
+        generate_statement_code[innerstat.token](innerstat,func)
+      end
+      -- loop
+    end,
+    fornum = function(stat,func)
+      -- alocate fornum internal vars
+      -- eval start/stop/step into internals
+      -- allocate for local, declare it live
+      -- generate body
+      for i,innerstat in ipairs(stat.body) do
+        generate_statement_code[innerstat.token](innerstat,func)
+      end
+      -- loop
+    end,
+    retstat = function(stat,func)
+      -- eval explist into temporaries
+      -- RETURN them
+    end,
+    label = function(stat,func)
+      -- record PC for label
+      -- check for pending jump and patch to jump here
+    end,
+    gotostat = function(stat,func)
+      -- match to jump-back label, or set as pending jump
+    end,
+    whilestat = function(stat,func)
+      -- jump past body to test
+      -- generate body
+      for i,innerstat in ipairs(stat.body) do
+        generate_statement_code[innerstat.token](innerstat,func)
+      end
+      -- eval stat.cond in a temporary
+      -- jump back if true
+    end,
+    repeatstat = function(stat,func)
+      -- generate body
+      for i,innerstat in ipairs(stat.body) do
+        generate_statement_code[innerstat.token](innerstat,func)
+      end
+      -- eval stat.cond in a temporary
+      -- jump back if false
+    end,
+    breakstat = function(stat,func)
+      -- jump to end of block (record for later rewrite)
+    end,
+
+    empty = function(stat,func)
+      -- empty statement
+    end,
+  }
+  function generate_code(func)
+    func.liveregs = {}
+    func.nextreg = 0 -- *ZERO BASED* index of next register to use
+    func.maxstacksize = 2 -- always at least two registers
+    func.instructions = {}
+
+    for i,fproto in ipairs(func.funcprotos) do
+      fproto.index = i - 1 -- *ZERO BASED* index
+    end
+
+    for i,upval in ipairs(func.upvals) do
+      upval.index = i - 1 -- *ZERO BASED* index
+    end
+
+    for i,stat in ipairs(func.body) do
+      generate_statement_code[stat.token](stat,func)
+    end
+
+    for i,fproto in ipairs(func.funcprotos) do
+      generate_code(fproto)
+    end
+
   end
 end
 ----------------------------------------------------------------------
 local DumpFunction
 
-local function DumpSize(s)
-  -- size_t is 8 bytes
-  return string.char(
-    bit32.band(             s    ,0xff),
-    bit32.band(bit32.rshift(s,8 ),0xff),
-    bit32.band(bit32.rshift(s,16),0xff),
-    bit32.band(bit32.rshift(s,24),0xff),
-    0,0,0,0 -- but i really only support 32bit for now, so just write four extra zeros
-    --TODO: expand this to 48bit? maybe all the way to 53?
-  )
-end
 local function DumpInt(i)
   -- int is 4 bytes
   return string.char(
@@ -1386,6 +1549,14 @@ local function DumpInt(i)
     bit32.band(bit32.rshift(i,16),0xff),
     bit32.band(bit32.rshift(i,24),0xff)
   )
+end
+
+local function DumpSize(s)
+  -- size_t is 8 bytes
+  -- but i really only support 32bit for now, so just write four extra zeros
+  -- maybe expand this one day to 48bit? maybe all the way to 53?
+  -- If i'm compiling a program with >4gb strings, somethign has gone horribly wrong anyway
+  return DumpInt(s) .. "\0\0\0\0"
 end
 
 local DumpDouble
@@ -1449,33 +1620,70 @@ function DumpFunction(func)
   dump[#dump+1] = string.char(
     func.nparams or 0,        -- byte nparams
     func.isvararg and 1 or 0, -- byte isvararg
-    2                         -- byte maxstacksize, min of 2, reg0/1 always valid
+    func.maxstacksize or 2    -- byte maxstacksize, min of 2, reg0/1 always valid
   )
+
   -- [Code]
   -- int ninstructions
+  dump[#dump+1] = DumpInt(#func.instructions)
   -- Instruction[] instructions
+  for _,instruction in ipairs(func.instructions) do
+    dump[#dump+1] = DumpInt(instruction)
+  end
+
+
   -- [Constants]
   -- int nconsts
+  dump[#dump+1] = DumpInt(#func.constants)
   -- TValue[] consts
+  for _,constant in ipairs(func.constants) do
+    dump[#dump+1] = DumpConstant(constant)
+  end
+
   -- [Funcprotos]
   -- int nfuncs
+  dump[#dump+1] = DumpInt(#func.funcprotos)
   -- DumpFunction[] funcs
+  for _,f in ipairs(func.funcprotos) do
+    dump[#dump+1] = DumpFunction(f)
+  end
+
   -- [Upvals]
   -- int nupvals
+  dump[#dump+1] = DumpInt(#func.upvals)
   -- upvals[] upvals
-  --   byte instack (is a local in parent scope, else upvalue in parent)
-  --   byte idx
+  for _,u in ipairs(func.upvals) do
+    -- byte instack (is a local in parent scope, else upvalue in parent)
+    -- byte idx
+    dump[#dump+1] = string.char(u.updepth==1, u.ref.index or 0)
+  end
+
   -- [Debug]
   -- string source
-  -- int nlines
-  -- int[] lines
+  dump[#dump+1] = DumpFunction(func.source or "(unknown source)")
+
+  -- int nlines (always same as ninstructions?)
+  -- int[] lines (line number per instruction?)
+
   -- int nlocs
   -- localdesc[] locs
   --   string name
   --   int startpc
   --   int endpc
+
   -- int nups
+  dump[#dump+1] = DumpInt(#func.upvals)
   -- string[] ups
+  for _,u in ipairs(func.upvals) do
+    dump[#dump+1] = DumpString(u.name.value)
+  end
+
+  -- lua will stop reading here
+  -- extra phobos debug sections:
+  -- Phobos signature: "\x1bPhobos"
+  -- byte version = "\x01"
+  -- [branch annotations]
+  -- int nbranches
 
   return table.concat(dump)
 end
@@ -1515,18 +1723,21 @@ function nexttoken()
   return token
 end
 
-function peektoken()
-  local _,peektok
+function peektoken(startat)
+  startat = startat or index
+  local peektok
   repeat
-    _,peektok = tokeniter(str,index)
+    startat,peektok = tokeniter(str,startat)
   until peektok.token ~= "comment"
-  return peektok
+  return peektok, startat
 end
 
 nexttoken()
 
 local main = mainfunc("@" .. filename)
 fold_const(main)
+
+generate_code(main)
 
 print(serpent.dump(main,{indent = '  ', sparse = true, sortkeys = false, comment=true}))
 
