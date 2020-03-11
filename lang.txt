@@ -73,6 +73,16 @@ from AST:
   replace control structures with bound goto/label sets
 
 
+binop => left op right
+unop => ex op
+concat => explist
+number|string|true|false|nil => value
+constructor => fields
+functiondef => index
+call => ex args
+selfcall => ex suffix args
+index => ex suffix
+
 
 --[[
   to add:
@@ -104,6 +114,7 @@ from AST:
     `inline function` or `macro` at file or smaller scope
       not assignable
       no upvals?
+    local by default?
     string interpolation?
       evaluate it all then do one big concat
       $"" or $[[]] like a function call of $

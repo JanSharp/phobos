@@ -499,7 +499,9 @@ local function fornum(firstname,parent)
     token = "fornum",
     var = firstname,
     start = start, stop = stop, step = step,
-    locals = {}, labels = {},
+    locals = {
+      {name = firstname, wholeblock = true},
+    }, labels = {},
     parent = {type = "local", parent = parent},
   }
   thistok.body = statlist(thistok)
