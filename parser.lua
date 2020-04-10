@@ -57,6 +57,8 @@ local function checkref(parent,tok)
         end
         tok.upvalparent = upvalparent
         tok.token = "upval"
+      elseif found.updepth then
+        tok.token = "upval"
       else
         tok.token = "local"
       end
@@ -141,7 +143,8 @@ end
 local function recfield(parent)
   local k
   if token.token == "ident" then
-    k = token.value
+    k = token
+    k.token = "string"
     nexttoken()
   else
     k = yindex(parent)

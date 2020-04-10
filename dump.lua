@@ -117,7 +117,7 @@ local function DumpFunction(func)
 
   -- [Debug]
   -- string source
-  dump[#dump+1] = DumpFunction(func.source or "(unknown source)")
+  dump[#dump+1] = DumpString(func.source or "(unknown phobos source)")
 
   -- int nlines (always same as ninstructions?)
   -- int[] lines (line number per instruction?)

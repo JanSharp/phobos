@@ -96,7 +96,7 @@ index => ex suffix
       `expr?:ident?(explist)` for SELF
     `^.` for `getmetatable()?.`
     `@` `@[]` for getraw()/setraw()
-    `cond ?? explist ; explist` ternary op
+    `cond ?? explist :: explist` ternary op
       single `?` causes parsing difficulty with safe chaining ops
       sincle `:` causes parsing difficulty with self-call op
       foo?(bar):baz():baz()
@@ -114,13 +114,15 @@ index => ex suffix
     `inline function` or `macro` at file or smaller scope
       not assignable
       no upvals?
-    local by default?
+    `static foo` vars for upvals only in scope for closure
+      SETNIL statics, then CLOSURE, then JMP to close them
     string interpolation?
       evaluate it all then do one big concat
       $"" or $[[]] like a function call of $
       turn into concat series, expressions in {} break out as code
       tostring() sub expressions? or just let it error on non-string?
     branch annotations for coverage testing?
+    compile time regex? builds to a function that uses patterns?
 
     type annotations, somehow? steal a bunch from TypeScript?
       compile time warning on assignment of incompatible types
