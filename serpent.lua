@@ -100,7 +100,7 @@ local function s(t, opts)
       local head = indent and '{\n'..prefix..indent or '{'
       local body = table.concat(out, ','..(indent and '\n'..prefix..indent or space))
       local tail = indent and "\n"..prefix..'}' or '}'
-      return (custom and custom(tag,head,body,tail,level) or tag..head..body..tail)..comment(tostring(t) .. ' ' .. spath, level)
+      return (custom and custom(tag,head,body,tail,level) or tag..head..body..tail)..comment(select(2,pcall(tostring,t)) .. ' ' .. spath, level)
     elseif badtype[ttype] then
       seen[t] = insref or spath
       return tag..globerr(t, level)
