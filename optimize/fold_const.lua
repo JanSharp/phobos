@@ -223,7 +223,12 @@ local function fold_const_exp(exp)
           combining[#combining+1] = sub.value
         else
           if #combining == 1 then
-            newexplist[#newexplist+1] = combining[1]
+            newexplist[#newexplist+1] = {
+              token = "string",
+              line = combiningpos.line, column = combiningpos.column,
+              value = combining[1],
+              folded = true
+            }
             combining = {}
             combiningpos = nil
           elseif #combining > 1 then
@@ -241,7 +246,12 @@ local function fold_const_exp(exp)
         end
       end
       if #combining == 1 then
-        newexplist[#newexplist+1] = combining[1]
+        newexplist[#newexplist+1] = {
+          token = "string",
+          line = combiningpos.line, column = combiningpos.column,
+          value = combining[1],
+          folded = true
+        }
       elseif #combining > 1 then
         newexplist[#newexplist+1] = {
           token = "string",

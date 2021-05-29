@@ -10,7 +10,7 @@
             "request": "launch",
             "program": {
                 "lua": "c:/Users/Thomas/bin/lua52.exe",
-                "file": "${file}"
+                "file": "./phobos.lua"
             }
         },
         {
@@ -19,7 +19,16 @@
             "request": "launch",
             "program": {
                 "lua": "${workspaceFolder}/lua-factorio.exe",
-                "file": "${file}"
+                "file": "./phobos.lua"
+            }
+        },
+        {
+            "name": "Factorio Lua (test.lua)",
+            "type": "lua-local",
+            "request": "launch",
+            "program": {
+                "lua": "${workspaceFolder}/lua-factorio.exe",
+                "file": "./test.lua"
             }
         }
     ]

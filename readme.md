@@ -7,9 +7,30 @@ Phobos is an optimizing bytecode compiler for Lua with minor language extensions
 The operators `?.`, `?:`, `?[]` and `?()` to replace the common Lua idiom
 `foo and foo.bar`. These allow more efficient re-use of intermediate results in deeply nested optional objects. `?.`, `?:` and `?[]` protect an indexing operation, while `?()` protects a function call, calling the function only if it exists.
 
-## If Initializer Clause
+## Block Initializer Clauses
 
+Modified versions of several block constructs allow defining block locals in the opening condition of the block.
 
+```lua
+if namelist = explist then ... end
+
+do
+  local namelist = explist
+  if select(1,namelist) then ... end
+end
+```
+
+```lua
+while namelist = explist do ... end
+
+do
+  local namelist = explist
+  while select(1,namelist) do
+    ...
+    namelist = explist
+  end
+end
+```
 
 ## Compact Expression-body Lambda
 

@@ -33,6 +33,9 @@ do
   } do
     opcodes[op] = i-1
   end
+  --- get the next available register in the current function
+  ---@param func Function
+  ---@return number regnum
   local function next_reg(func)
     local n = func.nextreg
     local ninc = n + 1
@@ -79,7 +82,7 @@ do
   end
 
   local generate_expr_code
-  local varargtokens = invert{"vararg","call","selfcall"}
+  local varargtokens = invert{"...","call","selfcall"}
   local function generate_expr(expr,inreg,func,numresults)
     generate_expr_code[expr.token](expr,inreg,func,numresults)
     if numresults > 1 and not varargtokens[expr.token] then
@@ -89,19 +92,51 @@ do
       }
     end
   end
+
   local function generate_explist(explist,inreg,func,numresults)
     local numexpr = #explist
     local base = inreg - 1
+    local used_temp
+    do
+      local attop = inreg >= func.nextreg - 1
+      if not attop then
+        if numresults == -1 then
+          error("Cannot generate variable-length explist except at top")
+        end
+        used_temp = true
+        base = func.nextreg - 1
+      end
+    end
     for i,expr in ipairs(explist) do
       if i == numexpr then
-        generate_expr(expr,base + i,func,(numresults - numexpr) + 1)
+        local nres = -1
+        if numresults ~= -1 then
+          nres = (numresults - numexpr) + 1
+        end
+        if used_temp then
+          func.nextreg = base + i + 1
+        end
+        generate_expr(expr,base + i,func,nres)
       elseif i > numexpr then
         break
       else
+        if used_temp then
+          func.nextreg = base + i + 1
+        end
         generate_expr(expr,base + i,func,1)
       end
     end
+    if used_temp then
+      -- move from base+i to inreg+i
+      for i = 1,numresults do
+        func.instructions[#func.instructions+1] = {
+          op = opcodes.move, a = inreg+i, b = base+i
+        }
+      end
+      release_down_to(func,base+1)
+    end
   end
+
   local function add_constant(value,func)
     for i,const in ipairs(func.constants) do
       if value == const then
@@ -163,6 +198,8 @@ do
     end
   end
   local const_tokens = invert{"true","false","nil","string","number"}
+  local false_tokens = invert{"false","nil"}
+  local logical_binops = invert{">",">=","==","~=","<=","<"}
   local function const_or_local_or_fetch(expr,inreg,func)
     if const_tokens[expr.token] then
       return bit32.bor(add_constant(expr.value,func),0x10)
@@ -224,7 +261,20 @@ do
       }
     end,
     concat = function(expr,inreg,func)
-      error()
+      local tmpreg = inreg
+      local used_temp
+      if tmpreg ~= func.nextreg - 1 then
+        tmpreg = next_reg(func)
+        used_temp = true
+      end
+      local numexpr = #expr.explist
+      generate_explist(expr.explist,tmpreg,func,numexpr)
+      func.instructions[#func.instructions+1] = {
+        op = opcodes.concat, a = inreg, b = tmpreg, c = tmpreg + numexpr
+      }
+      if used_temp then
+        release_reg(func,tmpreg)
+      end
     end,
     number = generate_const_code,
     string = generate_const_code,
@@ -301,26 +351,66 @@ do
         op = opcodes.closure, a = inreg, bx = expr.ref.index
       }
     end,
-    vararg = function(expr,inreg,func,numresults)
-      error()
+    ["..."] = function(expr,inreg,func,numresults)
+      func.instructions[#func.instructions+1] = {
+        op = opcodes.vararg, a = inreg, b = (numresults or 1)+1
+      }
     end,
     call = function(expr,inreg,func,numresults)
       local funcreg = inreg
-      if funcreg ~= func.nextreg then
+      local used_temp
+      local top = func.nextreg
+      local attop =  funcreg >= func.nextreg - 1
+      if not attop then
+        if numresults == -1 then
+          error("Can't return variable results unless top of stack")
+        end
         funcreg = next_reg(func)
+        used_temp = true
       end
       generate_expr(expr.ex,funcreg,func,1)
+      if used_temp then
+        func.nextreg = funcreg + 2
+      end
       generate_explist(expr.args,funcreg+1,func,-1)
       local argcount = #expr.args
-      if varargtokens[expr.args[argcount].token] then
+      if argcount > 0 and varargtokens[expr.args[argcount].token] then
         argcount = -1
       end
       func.instructions[#func.instructions+1] = {
-        op = opcodes.call, a = funcreg, b = argcount+1, c = numresults+1
+        op = opcodes.call, a = funcreg, b = argcount+1, c = (numresults or 1)+1
       }
+      if used_temp then
+        error()
+        -- copy from funcreg+n to inreg+n
+      end
+      release_down_to(func,top)
     end,
     selfcall = function(expr,inreg,func,numresults)
-      error()
+      local funcreg = inreg
+      local used_temp
+      if funcreg ~= func.nextreg - 1 then
+        if numresults == -1 then
+          error("Can't return variable results unless top of stack")
+        end
+        funcreg = next_reg(func)
+        used_temp = true
+      end
+      local exreg = local_or_fetch(expr.ex,funcreg,func)
+      local suffixreg = const_or_local_or_fetch(expr.suffix,funcreg+1,func)
+      func.instructions[#func.instructions+1] = {
+        op = opcodes.self, a = funcreg, b = exreg, c = suffixreg
+      }
+      generate_explist(expr.args,funcreg+2,func,-1)
+      local argcount = #expr.args
+      if argcount > 0 and varargtokens[expr.args[argcount].token] then
+        argcount = -1
+      else
+        argcount = argcount + 1
+      end
+      func.instructions[#func.instructions+1] = {
+        op = opcodes.call, a = funcreg, b = argcount+1, c = (numresults or 1)+1
+      }
     end,
     index = function(expr,inreg,func)
       local tmpreg,used_temp = inreg,false
@@ -346,6 +436,28 @@ do
       end
     end,
   }
+
+  local function generate_test_code(cond)
+    --[[
+      binop
+        eq -> eq
+        lt -> lt
+        le -> le
+        ne -> !eq
+        gt -> !le
+        ge -> !lt
+        and -> [repeat]
+        or -> [repeat]
+      * -> test
+    ]]
+    if cond.token == "binop" and logical_binops[cond.op] then
+
+    else
+
+    end
+    error()
+  end
+
   local generate_statement_code
   generate_statement_code = {
     localstat = function(stat,func)
@@ -409,7 +521,7 @@ do
         end
       end
       local numlefts = #lefts
-      local firstright = next_reg(func)
+      local firstright = func.nextreg
       local numrights = #stat.rhs
       if varargtokens[stat.rhs[numrights].token] then
         numrights = numlefts
@@ -457,14 +569,26 @@ do
       func.instructions[#func.instructions+1] = instr
     end,
     funcstat = function(stat,func)
-      error()
-      -- if name is not local, allocate a temporary
-      local a = next_reg(func)
+      local inreg,parent,parent_is_up
+      if #stat.names == 1 and stat.names[1].token=="local" then
+        -- if name is a local, we can just build the closure in place
+        inreg = find_local(stat.names[1].ref,func)
+      else
+        -- otherwise, we need its parent table and a temporary to fetch it in...
+        error()
+        inreg = next_reg(func)
+      end
+
       -- CLOSURE into that register
       func.instructions[#func.instructions+1] = {
-        op = opcodes.closure, a = a, bx = stat.ref.index,
+        op = opcodes.closure, a = inreg, bx = stat.ref.index,
       }
-      -- if name is not local, assign from temporary and release
+
+      if parent then
+        error()
+      elseif parent_is_up then
+        error()
+      end
     end,
     dostat = function(stat,func)
       local top = func.nextreg
@@ -476,16 +600,33 @@ do
     ifstat = function(stat,func)
       for i,ifblock in ipairs(stat.ifs) do
         local top = func.nextreg
-        error()
-        --generate a test for ifblock.cond
-        -- skip obviously-false, stop at obviously-true
+        local cond = ifblock.cond
+        local condtoken = cond.token
+        
+        if false_tokens[condtoken] then
+          -- always false, skip this block
+          goto nextblock
+        elseif const_tokens[condtoken] then
+          -- always true, stop after this block
+
+          -- TODO: include table constructors and closures here
+          -- maybe function calls of known truthy return types too?
+          -- but those still need to eval it if captured to a block local
+          error()
+        else
+          -- generate a value and `test` it...
+          generate_test_code(cond)
+          error()
+        end
 
         -- generate body
         for j,innerstat in ipairs(ifblock.body) do
           generate_statement_code[innerstat.token](innerstat,func)
         end
         release_down_to(func,top)
-        -- patch test to jump here
+        -- jump from end of body to end of blocks (not yet determined, build patchlist)
+        -- patch test failure to jump here for next test/else/nextblock
+        ::nextblock::
       end
       if stat.elseblock then
         local top = func.nextreg
@@ -497,21 +638,16 @@ do
       end
     end,
     call = function(stat,func)
-      error()
       -- evaluate as a call expression for zero results
-
-      -- fetch stat.ex into a temporary
-      -- fetch stat.args into temporaries
-      -- CALL for zero results
+      local funcreg = next_reg(func)
+      generate_expr(stat,funcreg,func,0)
+      release_down_to(func,funcreg)
     end,
     selfcall = function(stat,func)
-      error()
       -- evaluate as a selfcall expression for zero results
-      
-      -- fetch stat.ex into a temporary
-      -- SELF temporary:suffix
-      -- fetch stat.args into temporaries
-      -- CALL for zero results
+      local funcreg = next_reg(func)
+      generate_expr(stat,funcreg,func,0)
+      release_down_to(func,funcreg)
     end,
     forlist = function(stat,func)
       local top = func.nextreg

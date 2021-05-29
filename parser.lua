@@ -1,25 +1,35 @@
 local invert = require("invert")
 
-local token,nexttoken,peektoken
+---@type Token
+local token
+local nexttoken
+local peektoken
 ----------------------------------------------------------------------
 
 
 local statement, expr
+
+--- Throw a Syntax Error at the current location
+---@param mesg string Error message
 local function syntaxerror(mesg)
   error(mesg .. " near '" .. token.token ..
         "' at line " .. (token.line or "(?)") .. ":" .. (token.column or "(?)"))
 end
 
+--- Check that the current token is an "ident" token, and if so consume and return it.
+---@return Token
 local function checkname()
   if token.token ~= "ident" then
     syntaxerror("<name> expected")
   end
   local name = token
-  name.token = "name"
   nexttoken()
   return name
 end
 
+--- Search for a reference to a variable.
+---@param parent Scope scope within which to resolve the reference
+---@param tok Token|nil Token naming a variable to search for a reference for. Consumes the next token if not given one.
 local function checkref(parent,tok)
   if not tok then tok = checkname() end
   local origparent = parent
@@ -83,6 +93,9 @@ local function checkref(parent,tok)
   return tok
 end
 
+--- Check if the next token is a `tok` token, and if so consume it. Returns the result of the test.
+---@param tok string
+---@return boolean
 local function testnext(tok)
   if token.token == tok then
     nexttoken()
@@ -91,6 +104,8 @@ local function testnext(tok)
   return false
 end
 
+--- Check if the next token is a `tok` token, and if so consume it. Throws a syntax error if token does not match.
+---@param tok string
 local function checknext(tok)
   if token.token == tok then
     nexttoken()
@@ -99,6 +114,10 @@ local function checknext(tok)
   syntaxerror("'" .. tok .. "' expected")
 end
 
+--- Check for the matching `close` token to a given `open` token
+---@param close string
+---@param open string
+---@param line number
 local function checkmatch(close,open,line)
   if not testnext(close) then
     syntaxerror("'"..close.."' expected (to close '"..open.."' at line " .. line .. ")")
@@ -106,6 +125,10 @@ local function checkmatch(close,open,line)
 end
 
 local blockends = invert{"else", "elseif", "end", ""}
+
+--- Test if the next token closes a block
+---@param withuntil boolean if true, "until" token will count as closing a block
+---@return boolean
 local function block_follow(withuntil)
   local tok = token.token
   if blockends[tok] then
@@ -117,8 +140,11 @@ local function block_follow(withuntil)
   end
 end
 
+--- Read a list of Statements
+--- `statlist -> { stat [';'] }`
+---@param parent Scope
+---@return Statement[]
 local function statlist(parent)
-  -- statlist -> { stat [`;'] }
   local sl = {}
   while not block_follow(true) do
     if token.token == "eof" then
@@ -132,14 +158,19 @@ local function statlist(parent)
   return sl
 end
 
+--- `index -> '[' expr ']'`
+---@param parent Scope
+---@return Token
 local function yindex(parent)
-  -- index -> '[' expr ']'
   nexttoken()
   local e = expr(parent)
   checknext("]")
   return e
 end
 
+--- Table Constructor record field
+---@param parent Scope
+---@return TableField
 local function recfield(parent)
   local k
   if token.token == "ident" then
@@ -153,12 +184,22 @@ local function recfield(parent)
   return {type="rec",key=k,value=expr(parent)}
 end
 
+--- Table Constructor list field
+---@param parent Scope
+---@return TableField
 local function listfield(parent)
   return {type="list",value=expr(parent)}
 end
 
+--- Table Constructor field
+--- `field -> listfield | recfield`
+---@param parent Scope
+---@return TableField
 local function field(parent)
-  -- field -> listfield | recfield
+  ---@class TableField
+  ---@field type string "rec"|"list"
+  ---@field key Token|nil
+  ---@field value Token
   return (({
     ["ident"] = function(parent)
       local peektok = peektoken()
@@ -172,9 +213,12 @@ local function field(parent)
   })[token.token] or listfield)(parent)
 end
 
+--- Table Constructor
+--- `constructor -> '{' [ field { sep field } [sep] ] '}'`
+--- `sep -> ',' | ';'`
+---@param parent Scope
+---@return Token
 local function constructor(parent)
-  --  constructor -> '{' [ field { sep field } [sep] ] '}'
-  --    sep -> ',' | ';' */
   local line = token.line
   checknext("{")
   local fields = {}
@@ -186,6 +230,9 @@ local function constructor(parent)
   return {token="constructor",fields = fields}
 end
 
+--- Function Definition Parameter List
+---@param parent Scope
+---@return number number of parameters matched
 local function parlist(parent)
   -- parlist -> [ param { `,' param } ]
   if token.token == ")" then
@@ -207,6 +254,11 @@ local function parlist(parent)
   return #parent.locals
 end
 
+--- Function Definition
+---@param line number
+---@param parent Scope
+---@param ismethod boolean Insert the extra first parameter `self`
+---@return Token
 local function body(line,parent,ismethod)
   -- body -> `(` parlist `)`  block END
   local thistok = {
@@ -236,6 +288,9 @@ local function body(line,parent,ismethod)
   return {token="funcproto",ref=thistok}
 end
 
+--- Expression List
+---@param parent Scope
+---@return Token[]
 local function explist(parent)
   local el = {(expr(parent))}
   while testnext(",") do
@@ -244,6 +299,10 @@ local function explist(parent)
   return el
 end
 
+--- Function Arguments
+---@param line number
+---@param parent Scope
+---@return Token[]
 local function funcargs(line,parent)
   return (({
     ["("] = function(parent)
@@ -269,6 +328,9 @@ local function funcargs(line,parent)
   end)(parent)
 end
 
+--- Primary Expression
+---@param parent Scope
+---@return Token
 local function primaryexp(parent)
   if token.token == "(" then
     local line = token.line
@@ -306,9 +368,11 @@ local suffixedtab = {
   [":"] = function(ex,parent)
     local op = token
     nexttoken() -- skip ':'
+    local name = checkname()
+    name.token = "string"
     return {token="selfcall", ex = ex,
       line = op.line, column = op.column,
-      suffix = checkname(),
+      suffix = name,
       args = funcargs(op.line,parent),
     }
   end,
@@ -331,6 +395,10 @@ local suffixedtab = {
     }
   end,
 }
+
+--- Suffixed Expression
+---@param parent Scope
+---@return Token
 local function suffixedexp(parent)
   -- suffixedexp ->
   --   primaryexp { '.' NAME | '[' exp ']' | ':' NAME funcargs | funcargs }
@@ -347,6 +415,10 @@ local function suffixedexp(parent)
 end
 
 local simpletoks = invert{"number","string","nil","true","false","..."}
+
+--- Simple Expression
+---@param parent Scope
+---@return Token
 local function simpleexp(parent)
   -- simpleexp -> NUMBER | STRING | NIL | TRUE | FALSE | ... |
   --              constructor | FUNCTION body | suffixedexp
@@ -385,8 +457,13 @@ local binopprio = {
   ["or"]  = {left=1 ,right=1},
 }
 
--- subexpr -> (simpleexp | unop subexpr) { binop subexpr }
--- where `binop' is any binary operator with a priority higher than `limit'
+--- Subexpression
+--- `subexpr -> (simpleexp | unop subexpr) { binop subexpr }`
+--- where `binop' is any binary operator with a priority higher than `limit'
+---@param limit number
+---@param parent Scope
+---@return Token completed
+---@return string nextop
 local function subexpr(limit,parent)
   local ex
   do
@@ -421,10 +498,18 @@ local function subexpr(limit,parent)
   return ex,binop
 end
 
+--- Expression
+---@param parent Scope
+---@return Token completed
+---@return string nextop
 function expr(parent)
   return subexpr(0,parent)
 end
 
+--- Assignment Statement
+---@param lhs Token[]
+---@param parent Scope
+---@return Token
 local function assignment(lhs,parent)
   if testnext(",") then
     lhs[#lhs+1] = suffixedexp(parent)
@@ -440,6 +525,10 @@ local function assignment(lhs,parent)
   end
 end
 
+--- Label Statement
+---@param label Token
+---@param parent Scope
+---@return Token
 local function labelstat(label,parent)
   checknext("::")
   label.token = "label"
@@ -455,8 +544,12 @@ local function labelstat(label,parent)
   return label
 end
 
+--- While Statement
+--- `whilestat -> WHILE cond DO block END`
+---@param line number
+---@param parent Scope
+---@return Token
 local function whilestat(line,parent)
-  -- whilestat -> WHILE cond DO block END
   nexttoken() -- skip WHILE
   local thistok = {
     token = "whilestat",
@@ -472,8 +565,12 @@ local function whilestat(line,parent)
   return thistok
 end
 
+--- Repeat Statement
+--- `repeatstat -> REPEAT block UNTIL cond`
+---@param line number
+---@param parent Scope
+---@return Token
 local function repeatstat(line,parent)
-  -- repeatstat -> REPEAT block UNTIL cond
   local thistok = {
     token = "repeatstat",
     body = false, -- list body before locals
@@ -487,8 +584,12 @@ local function repeatstat(line,parent)
   return thistok
 end
 
+--- Numeric For Statement
+--- `fornum -> NAME = exp1,exp1[,exp1] DO block`
+---@param firstname Token
+---@param parent Scope
+---@return Token
 local function fornum(firstname,parent)
-  -- fornum -> NAME = exp1,exp1[,exp1] DO block
   checknext("=")
   local start = expr(parent)
   checknext(",")
@@ -511,8 +612,12 @@ local function fornum(firstname,parent)
   return thistok
 end
 
+--- Generic For Statement
+--- `forlist -> NAME {,NAME} IN explist DO block`
+---@param firstname Token
+---@param parent Scope
+---@return Token
 local function forlist(firstname,parent)
-  -- forlist -> NAME {,NAME} IN explist DO block
   local thistok = {
     token = "forlist",
     body = false, -- list body before locals
@@ -538,8 +643,12 @@ local function forlist(firstname,parent)
   return thistok
 end
 
+--- For Statement
+--- `forstat -> FOR (fornum | forlist) END`
+---@param line number
+---@param parent Scope
+---@return Token
 local function forstat(line,parent)
-  -- forstat -> FOR (fornum | forlist) END
   nexttoken() -- skip FOR
   local firstname = checkname()
   firstname.token = "local"
@@ -753,7 +862,7 @@ local statementtab = {
   end,
 }
 function statement(parent)
-  return (statementtab[token.token] or exprstat)(parent) --stat -> func | assignment
+  return (statementtab[token.token] or exprstat)(parent)
 end
 
 
@@ -789,11 +898,25 @@ local function parse(text,sourcename)
 
 
   function nexttoken()
-    repeat
+    while true do
       index,token = tokeniter(str,index)
-    until not token or token.token ~= "comment"
-    if not token then
-      token = {token="eof"}
+      if not token then
+        token = {token="eof"}
+        break
+      end
+      if token.token == "comment" then
+        -- parse doc comments, accumulate them for the next token that wants them
+        --[[ these patterns match all of the following:
+          --- Description text, three dashes, a space, and any text
+          ---@tag three dashes, at-tag, and any text
+          -- @tag two dashes, a space, at-tag, and any text
+        ]]
+        if token.value:match("^%- ") or token.value:match("^[- ]@") then
+          print("found doc comment " .. token.value)
+        end
+      else
+        break
+      end
     end
     return token
   end

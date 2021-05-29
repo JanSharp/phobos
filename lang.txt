@@ -86,6 +86,7 @@ index => ex suffix
 
 --[[
   to add:
+    `!=` for `~=`
     `+=` `-=` `*=` `/=` `%=` `^=` composite assignment ops
       no multiple-assignment with these?
       parse to tree equivalent of LHS = LHS op ( RHS )
@@ -101,6 +102,7 @@ index => ex suffix
       sincle `:` causes parsing difficulty with self-call op
       foo?(bar):baz():baz()
     `local {foo, bar} = exp` table unpack as name in local statement
+      declare extra local (unpack) for the table after all names with scope only until it's been used
       unpack the named fields into locals, discard intermediate table
       `foo as foob` to rename?
     `(namelist)=>explist` for `function(namelist) return explist end`
@@ -120,6 +122,7 @@ index => ex suffix
       evaluate it all then do one big concat
       $"" or $[[]] like a function call of $
       turn into concat series, expressions in {} break out as code
+      or `` and ${} like TS?
       tostring() sub expressions? or just let it error on non-string?
     branch annotations for coverage testing?
     compile time regex? builds to a function that uses patterns?
