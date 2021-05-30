@@ -806,8 +806,10 @@ local main = require("parser")(text,"@" .. filename)
 
 require("optimize.fold_const")(main)
 
-generate_code(main)
+-- generate_code(main)
 
-print(serpent.dump(main,{indent = '  ', sparse = true, sortkeys = false, comment=true}))
+-- print(serpent.dump(main,{indent = '  ', sparse = true, sortkeys = false, comment=true}))
+
+local b
 
 --foo
