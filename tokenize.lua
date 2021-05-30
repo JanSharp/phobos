@@ -129,10 +129,15 @@ local function ReadBlockString(str,index,linestate)
 
   local token = Token("string",index,tokenline,tokencol)
   token.value = str:sub(openend+1,bracket-1)
+  local has_newline
   for _ in token.value:gmatch("\n") do
+    has_newline = true
     linestate.line = linestate.line + 1
   end
-  --TODO: lineoffset is broken now. next newline will fix it, but should recalculate now if possible
+  if has_newline then
+    local last_line_start, last_line_finish = token.value:find("\n[^\n]*$")
+    linestate.lineoffset = bracket - (last_line_finish - last_line_start) - 1
+  end
   return bracketend+1,token
 end
 
