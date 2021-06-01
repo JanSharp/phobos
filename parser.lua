@@ -18,7 +18,7 @@ end
 
 --- Check that the current token is an "ident" token, and if so consume and return it.
 ---@return Token
-local function checkname()
+local function assertname()
   if token.token ~= "ident" then
     syntaxerror("<name> expected")
   end
@@ -31,7 +31,7 @@ end
 ---@param parent Scope scope within which to resolve the reference
 ---@param tok Token|nil Token naming a variable to search for a reference for. Consumes the next token if not given one.
 local function checkref(parent,tok)
-  if not tok then tok = checkname() end
+  if not tok then tok = assertname() end
   local origparent = parent
   local isupval = 0 -- 0 = local, 1 = upval from immediate parent, 2+ = chained upval
   local upvalparent = {}
@@ -106,7 +106,7 @@ end
 
 --- Check if the next token is a `tok` token, and if so consume it. Throws a syntax error if token does not match.
 ---@param tok string
-local function checknext(tok)
+local function assertnext(tok)
   if token.token == tok then
     nexttoken()
     return
@@ -118,13 +118,13 @@ end
 ---@param close string
 ---@param open string
 ---@param line number
-local function checkmatch(close,open,line)
+local function assertmatch(close,open,line)
   if not testnext(close) then
     syntaxerror("'"..close.."' expected (to close '"..open.."' at line " .. line .. ")")
   end
 end
 
-local blockends = invert{"else", "elseif", "end", ""}
+local blockends = invert{"else", "elseif", "end", "eof"}
 
 --- Test if the next token closes a block
 ---@param withuntil boolean if true, "until" token will count as closing a block
@@ -164,7 +164,7 @@ end
 local function yindex(parent)
   nexttoken()
   local e = expr(parent)
-  checknext("]")
+  assertnext("]")
   return e
 end
 
@@ -180,7 +180,7 @@ local function recfield(parent)
   else
     k = yindex(parent)
   end
-  checknext("=")
+  assertnext("=")
   return {type="rec",key=k,value=expr(parent)}
 end
 
@@ -220,13 +220,13 @@ end
 ---@return Token
 local function constructor(parent)
   local line = token.line
-  checknext("{")
+  assertnext("{")
   local fields = {}
   repeat
     if token.token == "}" then break end
     fields[#fields+1] = field(parent)
   until not (testnext(",") or testnext(";"))
-  checkmatch("}","{",line)
+  assertmatch("}","{",line)
   return {token="constructor",fields = fields}
 end
 
@@ -274,13 +274,13 @@ local function body(line,parent,ismethod)
   if ismethod then
     thistok.locals[1] = {name = {token="self",value="self"}, wholeblock = true}
   end
-  checknext("(")
+  assertnext("(")
   thistok.nparams = parlist(thistok)
-  checknext(")")
+  assertnext(")")
   thistok.body = statlist(thistok)
   thistok.endline = token.line
   thistok.endcolumn = token.column + 3
-  checkmatch("end","function",line)
+  assertmatch("end","function",line)
   while not parent.funcprotos do
     parent = parent.parent.parent
   end
@@ -312,7 +312,7 @@ local function funcargs(line,parent)
         return {}
       end
       local el = explist(parent)
-      checkmatch(")","(",line)
+      assertmatch(")","(",line)
       return el
     end,
     ["string"] = function(parent)
@@ -342,7 +342,7 @@ local function primaryexp(parent)
     --  followed by `)` `=>` is single arg, expect `exprlist`
     --  followed by `)` or anything else is expr of inner, current behavior
     local ex = expr(parent)
-    checkmatch(")","(",line)
+    assertmatch(")","(",line)
     return ex
   elseif token.token == "ident" then
     return checkref(parent)
@@ -355,7 +355,7 @@ local suffixedtab = {
   ["."] = function(ex)
     local op = token
     nexttoken() -- skip '.'
-    local name = checkname()
+    local name = assertname()
     name.token = "string"
     return {token="index", line = op.line, column = op.column,
             ex = ex, suffix = name}
@@ -368,7 +368,7 @@ local suffixedtab = {
   [":"] = function(ex,parent)
     local op = token
     nexttoken() -- skip ':'
-    local name = checkname()
+    local name = assertname()
     name.token = "string"
     return {token="selfcall", ex = ex,
       line = op.line, column = op.column,
@@ -517,7 +517,7 @@ local function assignment(lhs,parent)
   else
     local thistok = {token = "assignment", lhs = lhs,}
     local assign = token
-    checknext("=")
+    assertnext("=")
     thistok.line = assign.line
     thistok.column = assign.column
     thistok.rhs = explist(parent)
@@ -530,7 +530,7 @@ end
 ---@param parent Scope
 ---@return Token
 local function labelstat(label,parent)
-  checknext("::")
+  assertnext("::")
   label.token = "label"
   local prevlabel = parent.labels[label.value]
   if prevlabel then
@@ -558,10 +558,10 @@ local function whilestat(line,parent)
     parent = {type = "local", parent = parent},
   }
   thistok.cond = expr(thistok)
-  checknext("do")
+  assertnext("do")
 
   thistok.body = statlist(thistok)
-  checkmatch("end","while",line)
+  assertmatch("end","while",line)
   return thistok
 end
 
@@ -579,7 +579,7 @@ local function repeatstat(line,parent)
   }
   nexttoken() -- skip REPEAT
   thistok.body = statlist(thistok)
-  checkmatch("until","repeat",line)
+  assertmatch("until","repeat",line)
   thistok.cond = expr(thistok)
   return thistok
 end
@@ -590,15 +590,15 @@ end
 ---@param parent Scope
 ---@return Token
 local function fornum(firstname,parent)
-  checknext("=")
+  assertnext("=")
   local start = expr(parent)
-  checknext(",")
+  assertnext(",")
   local stop = expr(parent)
   local step = {token="number", value=1}
   if testnext(",") then
     step = expr(parent)
   end
-  checknext("do")
+  assertnext("do")
   local thistok = {
     token = "fornum",
     var = firstname,
@@ -628,15 +628,15 @@ local function forlist(firstname,parent)
   }
   local nl = {firstname}
   while testnext(",") do
-    local name = checkname()
+    local name = assertname()
     name.token = "local"
     thistok.locals[#thistok.locals+1] =
       {name = name, wholeblock = true}
     nl[#nl+1] = name
   end
-  checknext("in")
+  assertnext("in")
   local el = explist(parent)
-  checknext("do")
+  assertnext("do")
   thistok.namelist = nl
   thistok.explist = el
   thistok.body = statlist(thistok)
@@ -650,7 +650,7 @@ end
 ---@return Token
 local function forstat(line,parent)
   nexttoken() -- skip FOR
-  local firstname = checkname()
+  local firstname = assertname()
   firstname.token = "local"
   local t= token.token
   local fortok
@@ -661,7 +661,7 @@ local function forstat(line,parent)
   else
     syntaxerror("'=', ',' or 'in' expected")
   end
-  checkmatch("end","for",line)
+  assertmatch("end","for",line)
   return fortok
 end
 
@@ -678,7 +678,7 @@ local function test_then_block(parent)
     parent = {type = "local", parent = parent},
   }
   thistok.cond = expr(thistok)
-  checknext("then")
+  assertnext("then")
   
   thistok.body = statlist(thistok)
   return thistok
@@ -699,12 +699,12 @@ local function ifstat(line,parent)
     }
     elseblock.body = statlist(elseblock)
   end
-  checkmatch("end","if",line)
+  assertmatch("end","if",line)
   return {token = "ifstat", ifs = ifs, elseblock = elseblock}
 end
 
 local function localfunc(parent)
-  local name = checkname()
+  local name = assertname()
   name.token = "local"
   local thislocal = {name = name}
   parent.locals[#parent.locals+1] = thislocal
@@ -720,7 +720,7 @@ local function localstat(parent)
   local lhs = {}
   local thistok = {token="localstat", lhs = lhs}
   repeat
-    local name = checkname()
+    local name = assertname()
     name.token = "local"
     lhs[#lhs+1] = name
   until not testnext(",")
@@ -748,12 +748,12 @@ local function funcname(parent)
 
   while token.token == "." do
     nexttoken() -- skip '.'
-    dotpath[#dotpath+1] = checkname()
+    dotpath[#dotpath+1] = assertname()
   end
 
   if token.token == ":" then
     nexttoken() -- skip ':'
-    dotpath[#dotpath+1] = checkname()
+    dotpath[#dotpath+1] = assertname()
     return true,dotpath
   end
 
@@ -798,7 +798,7 @@ local function retstat(parent)
   return {token="retstat", explist = el}
 end
 
-local statementtab = {
+local statement_lut = {
   [";"] = function(parent) -- stat -> ';' (empty statement)
     nexttoken() -- skip
     return {token = "empty", }
@@ -820,7 +820,7 @@ local statementtab = {
       parent = {type = "local", parent = parent}
     }
     dostat.body = statlist(dostat)
-    checkmatch("end","do",line)
+    assertmatch("end","do",line)
     return dostat
   end,
   ["for"] = function(parent) -- stat -> forstat
@@ -845,24 +845,24 @@ local statementtab = {
   end,
   ["::"] = function(parent) -- stat -> label
     nexttoken() -- skip "::"
-    return labelstat(checkname(),parent)
+    return labelstat(assertname(),parent)
   end,
   ["return"] = function(parent) -- stat -> retstat
     nexttoken() -- skip "return"
     return retstat(parent)
   end,
-  
+
   ["break"] = function(parent) -- stat -> breakstat
     nexttoken() -- skip BREAK
     return {token = "breakstat"}
   end,
   ["goto"] = function(parent) -- stat -> 'goto' NAME
     nexttoken() -- skip GOTO
-    return {token = "gotostat", target = checkname()}
+    return {token = "gotostat", target = assertname()}
   end,
 }
 function statement(parent)
-  return (statementtab[token.token] or exprstat)(parent)
+  return (statement_lut[token.token] or exprstat)(parent)
 end
 
 

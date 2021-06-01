@@ -85,7 +85,30 @@ local function DumpFunction(func)
   dump[#dump+1] = DumpInt(#func.instructions)
   -- Instruction[] instructions
   for _,instruction in ipairs(func.instructions) do
-    dump[#dump+1] = DumpInt(instruction)
+    local opcode = instruction.op
+    if instruction.ax then
+      opcode = opcode + bit32.lshift(instruction.ax, 6)
+    else
+      if instruction.a then
+        opcode = opcode + bit32.lshift(instruction.a, 6)
+      end
+      if instruction.bx then
+        opcode = opcode + bit32.lshift(instruction.bx, 14)
+      elseif instruction.sbx then
+        opcode = opcode + bit32.lshift(instruction.sbx, 14) -- TODO: signed, somehow
+        error()
+      else
+        if instruction.b then
+          opcode = opcode + bit32.lshift(instruction.b, 23)
+        end
+        if instruction.c then
+          opcode = opcode + bit32.lshift(instruction.c, 14)
+        elseif instruction.ck then
+          opcode = opcode + bit32.lshift(instruction.ck, 14)
+        end
+      end
+    end
+    dump[#dump+1] = DumpInt(opcode)
   end
 
 
@@ -112,7 +135,7 @@ local function DumpFunction(func)
   for _,u in ipairs(func.upvals) do
     -- byte instack (is a local in parent scope, else upvalue in parent)
     -- byte idx
-    dump[#dump+1] = string.char(u.updepth==1, u.ref.index or 0)
+    dump[#dump+1] = string.char(u.updepth==1 and 1 or 0, u.ref.index or 0)
   end
 
   -- [Debug]
@@ -121,18 +144,28 @@ local function DumpFunction(func)
 
   -- int nlines (always same as ninstructions?)
   -- int[] lines (line number per instruction?)
+  dump[#dump+1] = DumpInt(#func.instructions)
+  for i, instruction in ipairs(func.instructions) do
+    dump[#dump+1] = DumpInt(i)
+  end
 
   -- int nlocs
   -- localdesc[] locs
   --   string name
   --   int startpc
   --   int endpc
+  dump[#dump+1] = DumpInt(#func.locals)
+  for _, loc in ipairs(func.locals) do
+    dump[#dump+1] = DumpString(loc.name)
+    dump[#dump+1] = DumpInt(0)
+    dump[#dump+1] = DumpInt(0)
+  end
 
   -- int nups
   dump[#dump+1] = DumpInt(#func.upvals)
   -- string[] ups
   for _,u in ipairs(func.upvals) do
-    dump[#dump+1] = DumpString(u.name.value)
+    dump[#dump+1] = DumpString(u.name--[[.value]])
   end
 
   -- lua will stop reading here
@@ -162,3 +195,5 @@ end
 local function DumpMain(main)
   return DumpHeader() .. DumpFunction(main)
 end
+
+return DumpMain

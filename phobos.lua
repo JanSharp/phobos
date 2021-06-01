@@ -58,7 +58,7 @@ do
         lr.stopat = lastinst
       end
     end
-    
+
     func.nextreg = reg
   end
   local function release_down_to(func,reg)
@@ -202,14 +202,14 @@ do
   local logical_binops = invert{">",">=","==","~=","<=","<"}
   local function const_or_local_or_fetch(expr,inreg,func)
     if const_tokens[expr.token] then
-      return bit32.bor(add_constant(expr.value,func),0x10)
+      return bit32.bor(add_constant(expr.value,func),0x100)
     else
       return local_or_fetch(expr,inreg,func)
     end
   end
   local function upval_or_local_or_fetch(expr,inreg,func)
     if expr.token == "upval" then
-      return expr.index,true
+      return expr.ref.index,true
     else
       return local_or_fetch(expr,inreg,func),false
     end
@@ -499,7 +499,7 @@ do
           lefts[i] = {
             type = "upval",
             upval = error()
-            
+
           }
         elseif left.token == "index" then
           -- if index and parent not local/upval, fetch parent to temporary
@@ -602,7 +602,7 @@ do
         local top = func.nextreg
         local cond = ifblock.cond
         local condtoken = cond.token
-        
+
         if false_tokens[condtoken] then
           -- always false, skip this block
           goto nextblock
@@ -694,7 +694,7 @@ do
       for i,innerstat in ipairs(stat.body) do
         generate_statement_code[innerstat.token](innerstat,func)
       end
-      
+
       release_down_to(func,innertop)
       -- loop
       local tforcall = {
@@ -747,9 +747,12 @@ do
 
       release_down_to(func,top)
     end,
-    
+
     retstat = function(stat,func)
-      error()
+      func.instructions[#func.instructions+1] = {
+        op = opcodes["return"], a = 0, b = 1
+      }
+      -- error() -- TODO
       -- eval explist into temporaries
       -- RETURN them
     end,
@@ -802,13 +805,29 @@ local file = io.open(filename,"r")
 local text = file:read("*a")
 file:close()
 
-local main = require("parser")(text,"@" .. filename)
+-- for _, token in require("tokenize")(text) do
+--   print(serpent.block(token))
+-- end
+
+local main = require("parser")(text,"=("..filename..")")
 
 require("optimize.fold_const")(main)
 
--- generate_code(main)
+generate_code(main)
 
 -- print(serpent.dump(main,{indent = '  ', sparse = true, sortkeys = false, comment=true}))
+
+main.line = 0
+main.endline = 0
+-- main.sorce = "=(test)"
+local dumped = require("dump")(main)
+
+local foo = {string.byte(dumped, 1, #dumped)}
+for i = 1, #foo do
+  foo[i] = "\\"..foo[i]
+end
+print('"'..table.concat(foo)..'"')
+-- print(string.format("%q", dumped))
 
 local b
 
