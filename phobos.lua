@@ -568,6 +568,7 @@ do
       livereg.startat = instr
       func.instructions[#func.instructions+1] = instr
     end,
+    ---@param stat AstFuncStat
     funcstat = function(stat,func)
       local inreg,parent,parent_is_up
       if #stat.names == 1 and stat.names[1].token=="local" then
@@ -793,6 +794,10 @@ do
       generate_statement_code[stat.token](stat,func)
     end
 
+    func.instructions[#func.instructions+1] = {
+      op = opcodes["return"], a = 0, b = 1,
+    }
+
     for i,fproto in ipairs(func.funcprotos) do
       generate_code(fproto)
     end
@@ -817,9 +822,6 @@ generate_code(main)
 
 -- print(serpent.dump(main,{indent = '  ', sparse = true, sortkeys = false, comment=true}))
 
-main.line = 0
-main.endline = 0
--- main.sorce = "=(test)"
 local dumped = require("dump")(main)
 
 local foo = {string.byte(dumped, 1, #dumped)}
@@ -828,6 +830,40 @@ for i = 1, #foo do
 end
 print('"'..table.concat(foo)..'"')
 -- print(string.format("%q", dumped))
+
+local opcodes = {
+  "move", "loadk", "loadkx", "loadbool", "loadnil",
+
+  "getupval", "gettabup", "gettable",
+  "settabup", "setupval", "settable",
+
+  "newtable", "self",
+
+  "add", "sub", "mul", "div", "mod", "pow",
+  "unm", "not", "len",
+
+  "concat",
+
+  "jmp", "eq", "lt", "le",
+
+  "test", "testset",
+
+  "call", "tailcall", "return",
+
+  "forloop", "forprep",
+  "tforcall", "tforloop",
+
+  "setlist",
+  "closure",
+  "vararg",
+  "extraarg",
+}
+local out = {}
+for _, instruction in ipairs(main.instructions) do
+  instruction.op = opcodes[instruction.op + 1]
+  out[#out+1] = serpent.line(instruction)
+end
+print(table.concat(out, "\n"))
 
 local b
 
