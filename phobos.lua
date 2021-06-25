@@ -270,7 +270,7 @@ do
       local numexpr = #expr.explist
       generate_explist(expr.explist,tmpreg,func,numexpr)
       func.instructions[#func.instructions+1] = {
-        op = opcodes.concat, a = inreg, b = tmpreg, c = tmpreg + numexpr
+        op = opcodes.concat, a = inreg, b = tmpreg, c = tmpreg + numexpr - 1
       }
       if used_temp then
         release_reg(func,tmpreg)
