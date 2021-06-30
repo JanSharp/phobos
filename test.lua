@@ -1,6 +1,3 @@
 
--- local foo = 100 + 100
-
-print("foo")
-
-return
+local foo = {bar = function()end}
+local bar = foo:bar()
