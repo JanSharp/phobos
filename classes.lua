@@ -50,7 +50,9 @@
 
 ---@class AstExpression : AstNode
 
----@class AstScope
+-- since every scope inherits AstBody, AstScope now does as well
+
+---@class AstScope : AstBody
 ---@field parent AstParent
 
 
@@ -59,7 +61,7 @@
 ---@field locals AstLocalDef[]
 ---@field labels AstLabel[]
 
----@class AstFunctionDef : AstBody
+---@class AstFunctionDef : AstBody, AstScope
 ---@field token '"functiondef"'
 ---@field source string
 ---@field ismethod boolean @ is it `function foo:bar() end`?

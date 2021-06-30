@@ -1,3 +1,7 @@
 
-local foo = {bar = function()end}
-local bar = foo:bar()
+local function foo()
+  do
+    local function bar()
+    end
+  end
+end

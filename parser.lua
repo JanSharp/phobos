@@ -261,6 +261,12 @@ end
 ---@return Token
 local function body(line,scope,ismethod)
   -- body -> `(` parlist `)`  block END
+  local parent = {type = "upval", scope = scope}
+  ---@narrow scope AstScope|AstFunctionDef
+  while not scope.funcprotos do
+    scope = scope.parent.scope
+  end
+  ---@narrow scope AstFunctionDef
   local thistok = {
     token="functiondef",
     source = scope.source,
@@ -269,7 +275,7 @@ local function body(line,scope,ismethod)
     funcprotos = {},
     locals = {}, upvals = {}, constants = {}, labels = {},
     line = token.line, column = token.column,
-    parent = {type = "upval", scope = scope},
+    parent = parent,
   }
   if ismethod then
     thistok.locals[1] = {name = {token="self",value="self"}, wholeblock = true}
@@ -281,9 +287,6 @@ local function body(line,scope,ismethod)
   thistok.endline = token.line
   thistok.endcolumn = token.column + 3
   assertmatch("end","function",line)
-  while not scope.funcprotos do
-    scope = scope.parent.scope
-  end
   scope.funcprotos[#scope.funcprotos+1] = thistok
   return {token="funcproto",ref=thistok}
 end
