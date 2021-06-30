@@ -1,0 +1,3 @@
+[submodule ".vscode/lua"]
+	path = .vscode/lua
+	url = https://github.com/JanSharp/FactorioSumnekoLuaPlugin.git
