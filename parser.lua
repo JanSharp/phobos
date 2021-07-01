@@ -32,7 +32,7 @@ end
 ---@param tok Token|nil Token naming a variable to search for a reference for. Consumes the next token if not given one.
 local function checkref(scope,tok)
   if not tok then tok = assertname() end
-  local origparent = scope
+  local original_scope = scope
   local isupval = 0 -- 0 = local, 1 = upval from immediate parent scope, 2+ = chained upval
   local upvalparent = {}
   while scope do
@@ -89,7 +89,7 @@ local function checkref(scope,tok)
   tok.token = "string"
   tok = {token="index",
   line = tok.line, column = tok.column,
-  ex = checkref(origparent,{value = "_ENV"}), suffix = tok}
+  ex = checkref(original_scope,{value = "_ENV"}), suffix = tok}
   return tok
 end
 
@@ -465,7 +465,7 @@ local binopprio = {
 --- where `binop' is any binary operator with a priority higher than `limit'
 ---@param limit number
 ---@param scope AstScope
----@return Token completed
+---@return AstExpression completed
 ---@return string nextop
 local function subexpr(limit,scope)
   local ex
@@ -487,6 +487,7 @@ local function subexpr(limit,scope)
     local newright,nextop = subexpr(bprio.right,scope)
     if binop == ".." then
       if newright.token == "concat" then
+        ---@narrow newright AstConcat
         table.insert(newright.explist,1,ex)
         ex = newright
       else
