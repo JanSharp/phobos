@@ -530,6 +530,8 @@ do
       if numrights < numlefts then
         -- set nil to extra lefts
         for i = numlefts,numrights+1,-1 do
+          -- justarandomgeek
+          -- not sure why i made a loop for setting nil to extras, you just need to generate a setnil for "the rest" there basically
           error()
         end
       end
@@ -547,6 +549,12 @@ do
             op = opcodes.move, a = left.reg, b = right
           }
         else
+          -- justarandomgeek:
+          -- oh i guess it would need another case there paired with handling the top one to deal with an upval
+          -- which is for if you do foo = 1 and foo is an upval rather than a local
+          -- so it doesn't need any prefetch but it needs setupval instead of move when you generate code for it
+          -- presumably some clues attached to the token which upval it was, but i don't remember
+          -- but that's some hints to attach for whenever you do get around to that
           error()
         end
       end
