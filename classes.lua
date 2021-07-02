@@ -1,4 +1,7 @@
 
+--------------------------------------------------
+-- ast stuff:
+
 ---@alias AstNoteToken
 ---special:
 ---| '"main"'
@@ -296,6 +299,9 @@
 ---@field isvararg 'true'
 ---@field nparams '0'
 ---@field locals AstLocalDef[]
+
+--------------------------------------------------
+-- generated/bytecode stuff:
 
 ---@class Instruction
 ---@field op integer

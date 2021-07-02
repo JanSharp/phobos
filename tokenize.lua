@@ -1,18 +1,82 @@
+
 local invert = require("invert")
 local keywords = invert{
   "and", "break", "do", "else", "elseif", "end", "false",
   "for", "function", "if", "in", "local", "nil", "not",
   "or", "repeat", "return", "then", "true", "until",
-  "while", "goto"
+  "while", "goto",
 }
 
+---@alias TokenToken
+---| '"blank"'
+---| '"comment"'
+---| '"string"'
+---| '"number"'
+---| '"ident"' @ identifier
+---
+---| '"+"'
+---| '"*"'
+---| '"/"'
+---| '"%"'
+---| '"^"'
+---| '"#"'
+---| '";"'
+---| '","'
+---| '"("'
+---| '")"'
+---| '"{"'
+---| '"}"'
+---| '"]"'
+---| '"["'
+---| '"-"'
+---| '"~="'
+---| '"::"'
+---| '":"'
+---| '"..."'
+---| '".."'
+---| '"."'
+---keywords:
+---| '"and"'
+---| '"break"'
+---| '"do"'
+---| '"else"'
+---| '"elseif"'
+---| '"end"'
+---| '"false"'
+---| '"for"'
+---| '"function"'
+---| '"if"'
+---| '"in"'
+---| '"local"'
+---| '"nil"'
+---| '"not"'
+---| '"or"'
+---| '"repeat"'
+---| '"return"'
+---| '"then"'
+---| '"true"'
+---| '"until"'
+---| '"while"'
+---| '"goto"'
+
 ---@class Token
----@field token string
+---@field token TokenToken
 ---@field index number
 ---@field line number
 ---@field column number
----@field value string|number
-local function Token(token,index,line,column)
+---@field value string|number @ for `blank`, `comment`, `string`, `number` and `ident` tokens
+---@field src_is_block_str boolean @ for `string` and `comment` tokens
+---@field src_quote string @ for non block `string` and `comment` tokens
+---@field src_value string @ for non block `string`, `comment` and `number` tokens
+---@field src_has_leading_newline boolean @ for block `string` and `comment` tokens
+---@field src_pad string @ the `=` chain for block `string` and `comment` tokens
+
+---@param token TokenToken
+---@param index number
+---@param line number
+---@param column number
+---@return Token
+local function new_token(token,index,line,column)
   return {
     token = token,
     index = index,
@@ -26,20 +90,20 @@ end
 ---@param nextchar string
 ---@return number
 ---@return Token
-local function PeekEquals(str,index,nextchar,line,column)
+local function peek_equals(str,index,nextchar,line,column)
   if str:sub(index+1,index+1) == "=" then
-    return index+2,Token(nextchar.."=",index,line,column)
+    return index+2,new_token(nextchar.."=",index,line,column)
   else
-    return index+1,Token(nextchar,index,line,column)
+    return index+1,new_token(nextchar,index,line,column)
   end
 end
 
-local function ReadString(str,index,quote,linestate)
+local function read_string(str,index,quote,state)
   local i = index + 1
-  local nextchar = str:sub(i,i)
-  if nextchar == quote then
+  local next_char = str:sub(i,i)
+  if next_char == quote then
     -- empty string
-    local token = Token("string",index,linestate.line,index - linestate.lineoffset)
+    local token = new_token("string",index,state.line,index - state.line_offset)
     token.value = ""
     return i+1,token
   end
@@ -50,17 +114,18 @@ local function ReadString(str,index,quote,linestate)
     i = i + 1
   end
 
-  nextchar = str:sub(i,i)
+  next_char = str:sub(i,i)
 
-  if nextchar == quote then
+  if next_char == quote then
     -- finished string
-    local token = Token("string",index,linestate.line,index - linestate.lineoffset)
-    token.value = str:sub(index+1,i-1)
+    local token = new_token("string",index,state.line,index - state.line_offset)
+    token.src_value = str:sub(index+1,i-1)
+    token.value = token.src_value
       :gsub("\\([abfnrtv\\\"'\r\n])",
       {
         a = "\a", b = "\b", f = "\f", n = "\n",
         r = "\r", t = "\t", v = "\v", ["\\"] = "\\",
-        ['"'] = '"', ["'"] = "'", ["\r"] = "\r", ["\n"] = "\n"
+        ['"'] = '"', ["'"] = "'", ["\r"] = "\r", ["\n"] = "\n",
       })
       :gsub("\\z%s*","")
       :gsub("\\(%d%d?%d?)",function(digits)
@@ -70,29 +135,32 @@ local function ReadString(str,index,quote,linestate)
         return string.char(tonumber(digits,16))
       end)
 
+    token.src_is_block_str = false
+    token.src_quote = quote
+
     return i+1,token
-  elseif nextchar == "" then
+  elseif next_char == "" then
     error("Unterminated string at EOF")
-  elseif nextchar == "\n" then
-    error("Unterminated string at end of line " .. linestate.line)
-  elseif nextchar == "\\" then
+  elseif next_char == "\n" then
+    error("Unterminated string at end of line " .. state.line)
+  elseif next_char == "\\" then
     -- advance past an escape sequence...
     i = i + 1
-    nextchar = str:sub(i,i)
-    if nextchar == "x" then
+    next_char = str:sub(i,i)
+    if next_char == "x" then
       i = i + 3 -- skip x and two hex digits
       goto matching
-    elseif nextchar == "\n" then
-      linestate.line = linestate.line + 1
-      linestate.lineoffset = i
+    elseif next_char == "\n" then
+      state.line = state.line + 1
+      state.line_offset = i
       i = i + 1
       goto matching
-    elseif nextchar == "z" then
+    elseif next_char == "z" then
       --skip z and whitespace
       local _,skip = str:find("^z%s",i)
       i = skip + 1
       goto matching
-    elseif nextchar:match("[abfnrtv\\\"']") then
+    elseif next_char:match("[abfnrtv\\\"']") then
       i = i + 1
       goto matching
     else
@@ -101,180 +169,210 @@ local function ReadString(str,index,quote,linestate)
         i = skip + 1
         goto matching
       else
-        error("Unrecognized escape '\\".. nextchar .. "'")
+        error("Unrecognized escape '\\".. next_char .. "'")
       end
     end
   end
 end
 
-local function ReadBlockString(str,index,linestate)
-  local openstart,openend,pad = str:find("^%[(=*)%[",index)
+local function read_block_string(str,index,state)
+  local _,open_end,pad = str:find("^%[(=*)%[",index)
   if not pad then
     error("Invalid string open bracket")
   end
 
-  if str:sub(openend+1,openend+1) == "\n" then
-    linestate.line = linestate.line + 1
-    openend = openend + 1
-    linestate.lineoffset = openend
+  local has_leading_newline = false
+  if str:sub(open_end+1,open_end+1) == "\n" then
+    has_leading_newline = true
+    state.line = state.line + 1
+    open_end = open_end + 1
+    state.line_offset = open_end
   end
 
-  local tokenline = linestate.line
-  local tokencol = (openend+1) - linestate.lineoffset
+  local tokenline = state.line
+  local tokencol = (open_end+1) - state.line_offset
 
   local bracket,bracketend = str:find("%]"..pad.."%]",index)
   if not bracket then
     error("Unterminated block string at EOF")
   end
 
-  local token = Token("string",index,tokenline,tokencol)
-  token.value = str:sub(openend+1,bracket-1)
+  local token = new_token("string",index,tokenline,tokencol)
+  token.value = str:sub(open_end+1,bracket-1)
   local has_newline
   for _ in token.value:gmatch("\n") do
     has_newline = true
-    linestate.line = linestate.line + 1
+    state.line = state.line + 1
   end
   if has_newline then
     local last_line_start, last_line_finish = token.value:find("\n[^\n]*$")
-    linestate.lineoffset = bracket - (last_line_finish - last_line_start) - 1
+    state.line_offset = bracket - (last_line_finish - last_line_start) - 1
   end
+
+  token.src_is_block_str = true
+  token.src_has_leading_newline = has_leading_newline
+  token.src_pad = pad
+
   return bracketend+1,token
 end
 
----@param str string
-local function Tokenize(str)
-  local linestate = {
-    line = 1,
-    lineoffset = 1
-  }
-  ---@param str string
-  ---@param index number
-  ---@return number
-  ---@return Token
-  local function ReadToken(str,index)
-    if not index then index = 1 end
-    local nextchar = str:sub(index,index)
-    while nextchar:match("%s") do
-      if nextchar == "\n" then
+---@param state TokenizeState
+---@param index number
+---@return number
+---@return Token
+local function next_token(state,index)
+  if not index then index = 1 end
+  local str = state.str
+  local next_char = str:sub(index,index)
+  do
+    local start_index, start_line, start_line_offset = index, state.line, state.line_offset
+    while next_char:match("%s") do
+      if next_char == "\n" then
         -- increment line number, stash position of line start
-        linestate.line = linestate.line + 1
-        linestate.lineoffset = index
+        state.line = state.line + 1
+        state.line_offset = index
       end
       index = index + 1
-      nextchar = str:sub(index,index)
+      next_char = str:sub(index,index)
     end
-
-    if nextchar == "" then
-      return -- EOF
-    elseif nextchar:match("[+*/%%^#;,(){}%]]") then
-      return index+1,Token(nextchar,index,linestate.line,index - linestate.lineoffset)
-    elseif nextchar:match("[>=<]") then
-      return PeekEquals(str,index,nextchar,linestate.line,index - linestate.lineoffset)
-    elseif nextchar == "[" then
-      local peek = str:sub(index+1,index+1)
-      if peek == "=" or peek == "[" then
-        return ReadBlockString(str,index,linestate)
-      else
-        return index+1,Token("[",index,linestate.line,index - linestate.lineoffset)
-      end
-    elseif nextchar == "-" then
-      if str:sub(index+1,index+1) == "-" then
-        if str:sub(index+2,index+2) == "[" then
-          --[[
-            read block string, build a token from that
-            ]]
-          local nextindex,token = ReadBlockString(str,index+2,linestate)
-          token.token = "comment"
-          token.index = index
-          return nextindex,token
-        else
-          local tokenstart,tokenend,text = str:find("^([^\n]+)",index+2)
-          local token = Token("comment",tokenstart,linestate.line,index - linestate.lineoffset)
-          token.value = text
-          return tokenend+1,token
-        end
-      else
-        return index+1,Token("-",index,linestate.line,index - linestate.lineoffset)
-      end
-    elseif nextchar == "~" then
-      if str:sub(index+1,index+1) == "=" then
-        return index+2,Token("~=",index,linestate.line,index - linestate.lineoffset)
-      else
-        error("Invalid token '~' at " .. linestate.line .. ":" .. index - linestate.lineoffset)
-      end
-    elseif nextchar == ":" then
-      if str:sub(index+1,index+1) == ":" then
-        return index+2,Token("::",index,linestate.line,index - linestate.lineoffset)
-      else
-        return index+1,Token(":",index,linestate.line,index - linestate.lineoffset)
-      end
-    elseif nextchar == "." then
-      if str:sub(index+1,index+1) == "." then
-        if str:sub(index+2,index+2) == "." then
-          return index+3,Token("...",index,linestate.line,index - linestate.lineoffset)
-        else
-          return index+2,Token("..",index,linestate.line,index - linestate.lineoffset)
-        end
-      else
-        return index+1,Token(".",index,linestate.line,index - linestate.lineoffset)
-      end
-    elseif nextchar == '"' then
-      return ReadString(str,index,nextchar,linestate)
-    elseif nextchar == "'" then
-      return ReadString(str,index,nextchar,linestate)
-    else
-      -- hex numbers: "0x%x+" followed by "%.%x+" followed by "[pP][+-]?%x+"
-      local hexstart,hexend = str:find("^0x%x+",index)
-      if hexstart then
-        local fstart,fend = str:find("^%.%x+",hexend+1)
-        if fstart then
-          hexend = fend
-        end
-        local estart,eend = str:find("^[pP]%x+",hexend+1)
-        if estart then
-          hexend = eend
-        end
-        local token = Token("number",index,linestate.line,index - linestate.lineoffset)
-        token.value = tonumber(str:sub(hexstart,hexend))
-        return hexend+1,token
-      end
-
-      -- decimal numbers: "%d+" followed by "%.%d+" followed by "[eE][+-]?%d+"
-      local numstart,numend = str:find("^%d+",index)
-      if numstart then
-        local fstart,fend = str:find("^%.%d+",numend+1)
-        if fstart then
-          numend = fend
-        end
-        local estart,eend = str:find("^[eE]%d+",numend+1)
-        if estart then
-          numend = eend
-        end
-        local token = Token("number",index,linestate.line,index - linestate.lineoffset)
-        token.value = tonumber(str:sub(numstart,numend))
-        return numend+1,token
-      end
-
-      -- try to match keywords/identifiers
-      local matchstart,matchend,ident = str:find("^([_%a][_%w]*)",index)
-      if matchstart == index then
-        local token = Token(
-          keywords[ident] and ident or "ident",
-          index,linestate.line,index - linestate.lineoffset)
-        if not keywords[ident] then
-          token.value = ident
-        elseif ident == "true" then
-          token.value = true
-        elseif ident == "false" then
-          token.value = false
-        end
-        return matchend+1,token
-      else
-        error("Invalid token at " .. linestate.line .. ":" .. index - linestate.lineoffset)
-      end
+    if index ~= start_index then
+      local token = new_token("blank", start_index, start_line, start_index - start_line_offset)
+      token.value = str:sub(start_index, index - 1)
+      return index, token
     end
   end
-  return ReadToken,str
+
+  if next_char == "" then
+    return -- EOF
+  elseif next_char:match("[+*/%%^#;,(){}%]]") then
+    return index+1,new_token(next_char,index,state.line,index - state.line_offset)
+  elseif next_char:match("[>=<]") then
+    return peek_equals(str,index,next_char,state.line,index - state.line_offset)
+  elseif next_char == "[" then
+    local peek = str:sub(index+1,index+1)
+    if peek == "=" or peek == "[" then
+      return read_block_string(str,index,state)
+    else
+      return index+1,new_token("[",index,state.line,index - state.line_offset)
+    end
+  elseif next_char == "-" then
+    if str:sub(index+1,index+1) == "-" then
+      if str:sub(index+2,index+2) == "[" then
+        --[[
+          read block string, build a token from that
+          ]]
+        local nextindex,token = read_block_string(str,index+2,state)
+        token.token = "comment"
+        token.index = index
+        return nextindex,token
+      else
+        local tokenstart,tokenend,text = str:find("^([^\n]+)",index+2)
+        local token = new_token("comment",tokenstart,state.line,index - state.line_offset)
+        token.value = text
+        return tokenend+1,token
+      end
+    else
+      return index+1,new_token("-",index,state.line,index - state.line_offset)
+    end
+  elseif next_char == "~" then
+    if str:sub(index+1,index+1) == "=" then
+      return index+2,new_token("~=",index,state.line,index - state.line_offset)
+    else
+      error("Invalid token '~' at " .. state.line .. ":" .. index - state.line_offset)
+    end
+  elseif next_char == ":" then
+    if str:sub(index+1,index+1) == ":" then
+      return index+2,new_token("::",index,state.line,index - state.line_offset)
+    else
+      return index+1,new_token(":",index,state.line,index - state.line_offset)
+    end
+  elseif next_char == "." then
+    if str:sub(index+1,index+1) == "." then
+      if str:sub(index+2,index+2) == "." then
+        return index+3,new_token("...",index,state.line,index - state.line_offset)
+      else
+        return index+2,new_token("..",index,state.line,index - state.line_offset)
+      end
+    else
+      return index+1,new_token(".",index,state.line,index - state.line_offset)
+    end
+  elseif next_char == '"' then
+    return read_string(str,index,next_char,state)
+  elseif next_char == "'" then
+    return read_string(str,index,next_char,state)
+  else
+    -- hex numbers: "0x%x+" followed by "%.%x+" followed by "[pP][+-]?%x+"
+    local hexstart,hexend = str:find("^0x%x+",index)
+    if hexstart then
+      local fstart,fend = str:find("^%.%x+",hexend+1)
+      if fstart then
+        hexend = fend
+      end
+      local estart,eend = str:find("^[pP]%x+",hexend+1)
+      if estart then
+        hexend = eend
+      end
+      local token = new_token("number",index,state.line,index - state.line_offset)
+      token.src_value = str:sub(hexstart,hexend)
+      token.value = tonumber(token.src_value)
+      return hexend+1,token
+    end
+
+    -- decimal numbers: "%d+" followed by "%.%d+" followed by "[eE][+-]?%d+"
+    local numstart,numend = str:find("^%d+",index)
+    if numstart then
+      local fstart,fend = str:find("^%.%d+",numend+1)
+      if fstart then
+        numend = fend
+      end
+      local estart,eend = str:find("^[eE]%d+",numend+1)
+      if estart then
+        numend = eend
+      end
+      local token = new_token("number",index,state.line,index - state.line_offset)
+      token.src_value = str:sub(numstart,numend)
+      token.value = tonumber(token.src_value)
+      return numend+1,token
+    end
+
+    -- try to match keywords/identifiers
+    local matchstart,matchend,ident = str:find("^([_%a][_%w]*)",index)
+    if matchstart == index then
+      local token = new_token(
+        keywords[ident] and ident or "ident",
+        index,state.line,index - state.line_offset)
+      if not keywords[ident] then
+        token.value = ident
+      elseif ident == "true" then
+        token.value = true
+      elseif ident == "false" then
+        token.value = false
+      end
+      return matchend+1,token
+    else
+      error("Invalid token at " .. state.line .. ":" .. index - state.line_offset)
+    end
+  end
 end
 
-return Tokenize
+---@class TokenizeState
+---@field str string
+---@field line integer
+---@field line_offset integer
+---@field prev_line integer|nil
+---@field prev_line_offset integer|nil
+
+---@param str string
+---@return fun(state: TokenizeState, index: integer|nil): integer|nil, Token next_token
+---@return TokenizeState state
+---@return nil index
+local function tokenize(str)
+  local state = {
+    str = str,
+    line = 1,
+    line_offset = 1,
+  }
+  return next_token,state
+end
+
+return tokenize

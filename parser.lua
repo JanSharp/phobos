@@ -1,7 +1,8 @@
 local invert = require("invert")
 
----@type Token
-local token
+---leading `blank` and `comment` tokens for the current `token`
+local leading ---@type Token[]
+local token ---@type Token
 local nexttoken
 local peektoken
 ----------------------------------------------------------------------
@@ -902,19 +903,21 @@ local function mainfunc(chunkname)
   return main
 end
 
-local Tokenize = require("tokenize")
+local tokenize = require("tokenize")
 local function parse(text,sourcename)
-  local tokeniter,str,index = Tokenize(text)
+  local token_iter,str,index = tokenize(text)
 
 
   function nexttoken()
+    leading = {}
     while true do
-      index,token = tokeniter(str,index)
+      index,token = token_iter(str,index)
       if not token then
         token = {token="eof"}
         break
       end
       if token.token == "comment" then
+        leading[#leading+1] = token
         -- parse doc comments, accumulate them for the next token that wants them
         --[[ these patterns match all of the following:
           --- Description text, three dashes, a space, and any text
@@ -924,19 +927,22 @@ local function parse(text,sourcename)
         if token.value:match("^%- ") or token.value:match("^[- ]@") then
           print("found doc comment " .. token.value)
         end
+      elseif token.token == "blank" then
+        leading[#leading+1] = token
       else
         break
       end
     end
-    return token
   end
 
   function peektoken(startat)
+    local line, line_offset = str.line, str.line_offset
     startat = startat or index
     local peektok
     repeat
-      startat,peektok = tokeniter(str,startat)
-    until peektok.token ~= "comment"
+      startat,peektok = token_iter(str,startat)
+    until peektok.token ~= "blank" and peektok.token ~= "comment"
+    str.line, str.line_offset = line, line_offset
     return peektok, startat
   end
 
