@@ -40,6 +40,7 @@ file:close()
 -- end
 
 local main = require("parser")(text,"=("..filename..")")
+print(serpent.block(main))
 
 require("optimize.fold_const")(main)
 
@@ -69,14 +70,14 @@ for _, instruction in ipairs(main.instructions) do
   out[#out+1] = serpent.line(instruction)
 end
 
-print("upvalues: "..serpent.block(main.upvals, {comment = false}))
-print()
-print("locals: "..serpent.block(main.locals, {comment = false}))
-print()
-print("constants: "..serpent.block(main.constants))
-print()
-print("instructions:")
-print(table.concat(out, "\n"))
+-- print("upvalues: "..serpent.block(main.upvals, {comment = false}))
+-- print()
+-- print("locals: "..serpent.block(main.locals, {comment = false}))
+-- print()
+-- print("constants: "..serpent.block(main.constants))
+-- print()
+-- print("instructions:")
+-- print(table.concat(out, "\n"))
 
 local b
 

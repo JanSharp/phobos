@@ -3,6 +3,10 @@ local invert = require("invert")
 ---leading `blank` and `comment` tokens for the current `token`
 local leading ---@type Token[]
 local token ---@type Token
+---set by test_next() and therefore also assert_next() and assert_match()
+local prev_leading ---@type Token[]
+---set by test_next() and therefore also assert_next() and assert_match()
+local prev_token ---@type Token
 local next_token
 local peek_token
 ----------------------------------------------------------------------
@@ -18,14 +22,36 @@ local function syntax_error(mesg)
 end
 
 --- Check that the current token is an "ident" token, and if so consume and return it.
----@return Token
+---@return AstIdent name
 local function assert_name()
   if token.token ~= "ident" then
     syntax_error("<name> expected")
   end
   local name = token
+  name.leading = leading
   next_token()
   return name
+end
+
+---create new AstNode using the current `token` and `leading`
+---@param node_token AstNodeToken
+---@param use_prev boolean @ should this node be created using `prev_token` and `prev_leading`?
+local function new_node(node_token, use_prev)
+  return {
+    token = node_token,
+    line = (use_prev and prev_token or token).line,
+    column = (use_prev and prev_token or token).column,
+    leading = (use_prev and prev_leading or leading),
+  }
+end
+
+---@param use_prev? boolean @ should this node be created using `prev_token` and `prev_leading`? Default: `false`
+---@param value? string @ Default: `(use_prev and prev_token.token or token.token)`
+---@return AstTokenNode
+local function new_token_node(use_prev, value)
+  local node = new_node("token", use_prev)
+  node.value = value or (use_prev and prev_token.token or token.token)
+  return node
 end
 
 --- Search for a reference to a variable.
@@ -95,10 +121,12 @@ local function check_ref(scope,tok)
 end
 
 --- Check if the next token is a `tok` token, and if so consume it. Returns the result of the test.
----@param tok string
+---@param tok TokenToken
 ---@return boolean
 local function test_next(tok)
   if token.token == tok then
+    prev_leading = leading
+    prev_token = token
     next_token()
     return true
   end
@@ -108,11 +136,9 @@ end
 --- Check if the next token is a `tok` token, and if so consume it. Throws a syntax error if token does not match.
 ---@param tok string
 local function assert_next(tok)
-  if token.token == tok then
-    next_token()
-    return
+  if not test_next(tok) then
+    syntax_error("'" .. tok .. "' expected")
   end
-  syntax_error("'" .. tok .. "' expected")
 end
 
 --- Check for the matching `close` token to a given `open` token
@@ -161,33 +187,40 @@ end
 
 --- `index -> '[' expr ']'`
 ---@param scope AstScope
----@return Token
+---@return AstExpression
+---@return AstTokenNode open_token @ `[` token
+---@return AstTokenNode close_token @ `]` token
 local function yindex(scope)
+  local open_token = new_token_node()
   next_token()
   local e = expr(scope)
-  assert_next("]")
-  return e
+  local close_token = new_token_node()
+  assert_match("]", "[", open_token.line)
+  return e, open_token, close_token
 end
 
 --- Table Constructor record field
 ---@param scope AstScope
----@return TableField
+---@return AstRecordField
 local function rec_field(scope)
-  local k
+  local field = {type = "rec"}
   if token.token == "ident" then
-    k = token
-    k.token = "string"
+    field.key = new_node("string")
+    field.key.value = token.value
+    field.key.src_is_ident = true
     next_token()
   else
-    k = yindex(scope)
+    field.key, field.key_open_token, field.key_close_token = yindex(scope)
   end
+  field.eq_token = new_token_node()
   assert_next("=")
-  return {type="rec",key=k,value=expr(scope)}
+  field.value = expr(scope)
+  return field
 end
 
 --- Table Constructor list field
 ---@param scope AstScope
----@return TableField
+---@return AstListField
 local function list_field(scope)
   return {type="list",value=expr(scope)}
 end
@@ -195,12 +228,8 @@ end
 --- Table Constructor field
 --- `field -> listfield | recfield`
 ---@param scope AstScope
----@return TableField
+---@return AstField
 local function field(scope)
-  ---@class TableField
-  ---@field type string "rec"|"list"
-  ---@field key Token|nil
-  ---@field value Token
   return (({
     ["ident"] = function(scope)
       local peek_tok = peek_token()
@@ -218,28 +247,36 @@ end
 --- `constructor -> '{' [ field { sep field } [sep] ] '}'`
 --- `sep -> ',' | ';'`
 ---@param scope AstScope
----@return Token
+---@return AstConstructor
 local function constructor(scope)
   local line = token.line
+  local node = new_node("constructor")
+  node.fields = {}
+  node.open_paren_token = new_token_node()
+  node.comma_tokens = {}
   assert_next("{")
-  local fields = {}
-  repeat
-    if token.token == "}" then break end
-    fields[#fields+1] = field(scope)
-  until not (test_next(",") or test_next(";"))
+  while token.token ~= "}" do
+    node.fields[#node.fields+1] = field(scope)
+    if test_next(",") or test_next(";") then
+      node.comma_tokens[#node.comma_tokens+1] = new_token_node(true)
+    else
+      break
+    end
+  end
+  node.close_paren_token = new_token_node()
   assert_match("}","{",line)
-  return {token="constructor",fields = fields}
+  return node
 end
 
 --- Function Definition Parameter List
----@param scope AstScope
+---@param scope AstFunctionDef
 ---@return number number of parameters matched
 local function par_list(scope)
   -- parlist -> [ param { `,' param } ]
   if token.token == ")" then
     return 0
   end
-  repeat
+  while true do
     if token.token == "ident" then
       token.token = "local"
       scope.locals[#scope.locals+1] = {name = token, wholeblock = true}
@@ -251,16 +288,21 @@ local function par_list(scope)
     else
       syntax_error("<name> or '...' expected")
     end
-  until not test_next(",")
+    if test_next(",") then
+      scope.param_comma_tokens[#scope.param_comma_tokens+1] = new_token_node(true)
+    else
+      break
+    end
+  end
   return #scope.locals
 end
 
 --- Function Definition
----@param line number
+---@param function_token AstTokenNode
 ---@param scope AstScope
----@param ismethod boolean Insert the extra first parameter `self`
----@return Token
-local function body(line,scope,ismethod)
+---@param is_method boolean Insert the extra first parameter `self`
+---@return AstFuncProto
+local function body(function_token, scope, is_method)
   -- body -> `(` parlist `)`  block END
   local parent = {type = "upval", scope = scope}
   ---@narrow scope AstScope|AstFunctionDef
@@ -268,58 +310,70 @@ local function body(line,scope,ismethod)
     scope = scope.parent.scope
   end
   ---@narrow scope AstFunctionDef
-  local this_tok = {
-    token="functiondef",
-    source = scope.source,
-    body = false, -- list body before locals
-    ismethod = ismethod,
-    funcprotos = {},
-    locals = {}, upvals = {}, constants = {}, labels = {},
-    line = token.line, column = token.column,
-    parent = parent,
-  }
-  if ismethod then
-    this_tok.locals[1] = {name = {token="self",value="self"}, wholeblock = true}
+  local ref_node = new_node("functiondef")
+  ref_node.source = scope.source
+  ref_node.ismethod = is_method
+  ref_node.funcprotos = {}
+  ref_node.locals = {}
+  ref_node.upvals = {}
+  ref_node.constants = {}
+  ref_node.labels = {}
+  ref_node.param_comma_tokens = {}
+  ref_node.parent = parent
+  if is_method then
+    ref_node.locals[1] = {name = {token="self",value="self"}, wholeblock = true}
   end
+  ref_node.open_paren_token = new_token_node()
+  local this_tok = new_node("funcproto")
+  this_tok.ref = ref_node
+  this_tok.function_token = function_token
   assert_next("(")
-  this_tok.nparams = par_list(this_tok)
+  ref_node.nparams = par_list(ref_node)
+  ref_node.close_paren_token = new_token_node()
   assert_next(")")
-  this_tok.body = stat_list(this_tok)
-  this_tok.endline = token.line
-  this_tok.endcolumn = token.column + 3
-  assert_match("end","function",line)
-  scope.funcprotos[#scope.funcprotos+1] = this_tok
-  return {token="funcproto",ref=this_tok}
+  ref_node.body = stat_list(ref_node)
+  ref_node.endline = token.line
+  ref_node.endcolumn = token.column + 3
+  ref_node.end_token = new_token_node()
+  assert_match("end", "function", function_token.line)
+  scope.funcprotos[#scope.funcprotos+1] = ref_node
+  return this_tok
 end
 
 --- Expression List
 ---@param scope AstScope
----@return Token[]
+---@return AstExpression[] expression_list
+---@return AstTokenNode[] comma_tokens @ length is `#expression_list - 1`
 local function exp_list(scope)
   local el = {(expr(scope))}
+  local comma_tokens = {}
   while test_next(",") do
+    comma_tokens[#comma_tokens+1] = new_token_node(true)
     el[#el+1] = expr(scope)
   end
-  return el
+  return el, comma_tokens
 end
 
 --- Function Arguments
----@param line number
+---@param node AstCall|AstSelfCall
 ---@param scope AstScope
 ---@return Token[]
-local function func_args(line,scope)
+local function func_args(node, scope)
   return (({
     ["("] = function(scope)
+      node.open_paren_token = new_token_node()
       next_token()
       if token.token == ")" then
         next_token()
         return {}
       end
       local el = exp_list(scope)
-      assert_match(")","(",line)
+      node.close_paren_token = new_token_node()
+      assert_match(")","(",node.line)
       return el
     end,
     ["string"] = function(scope)
+      token.leading = leading
       local el = {token}
       next_token()
       return el
@@ -337,7 +391,7 @@ end
 ---@return Token
 local function primary_exp(scope)
   if token.token == "(" then
-    local line = token.line
+    local open_paren_token = new_token_node()
     next_token() -- skip '('
     --TODO: compact lambda here:
     -- token is ')', empty args expect `'=>' expr` next
@@ -346,7 +400,13 @@ local function primary_exp(scope)
     --  followed by `)` `=>` is single arg, expect `exprlist`
     --  followed by `)` or anything else is expr of inner, current behavior
     local ex = expr(scope)
-    assert_match(")","(",line)
+    local close_paren_token = new_token_node()
+    assert_match(")","(",open_paren_token.line)
+    ex.src_paren_wrappers = ex.src_paren_wrappers or {}
+    table.insert(ex.src_paren_wrappers, 1, {
+      open_paren_token = open_paren_token,
+      close_paren_token = close_paren_token,
+    })
     return ex
   elseif token.token == "ident" then
     return check_ref(scope)
@@ -357,46 +417,48 @@ end
 
 local suffixed_tab = {
   ["."] = function(ex)
-    local op = token
+    local node = new_node("index")
+    node.ex = ex
+    node.dot_token = new_token_node()
     next_token() -- skip '.'
-    local name = assert_name()
-    name.token = "string"
-    return {token="index", line = op.line, column = op.column,
-            ex = ex, suffix = name}
+    node.suffix = assert_name()
+    node.suffix.token = "string"
+    node.suffix.src_is_ident = true
+    return node
   end,
   ["["] = function(ex,scope)
-    return {token="index",
-            line = token.line, column = token.column,
-            ex = ex, suffix = yindex(scope)}
+    local node = new_node("index")
+    node.ex = ex
+    node.suffix, node.suffix_open_token, node.suffix_close_token = yindex(scope)
+    return node
   end,
   [":"] = function(ex,scope)
-    local op = token
+    local node = new_node("selfcall")
+    node.ex = ex
+    node.colon_token = new_token_node()
     next_token() -- skip ':'
-    local name = assert_name()
-    name.token = "string"
-    return {token="selfcall", ex = ex,
-      line = op.line, column = op.column,
-      suffix = name,
-      args = func_args(op.line,scope),
-    }
+    node.suffix = assert_name()
+    node.suffix.token = "string"
+    node.suffix.src_is_ident = true
+    node.args = func_args(node, scope)
+    return node
   end,
   ["("] = function(ex,scope)
-    return {token="call", ex = ex,
-      line = token.line, column = token.column,
-      args = func_args(token.line,scope),
-    }
+    local node = new_node("call")
+    node.ex = ex
+    node.args = func_args(node, scope)
+    return node
   end,
   ["string"] = function(ex,scope)
-    return {token="call", ex = ex,
-      line = token.line, column = token.column,
-      args = func_args(token.line,scope),
-    }
+    local node = new_node("call")
+    node.ex = ex
+    node.args = func_args(node, scope)
+    return node
   end,
   ["{"] = function(ex,scope)
-    return {token="call", ex = ex,
-      line = token.line, column = token.column,
-      args = func_args(token.line,scope),
-    }
+    local node = new_node("call")
+    node.ex = ex
+    node.args = func_args(node, scope)
   end,
 }
 
@@ -423,20 +485,20 @@ local simple_toks = invert{"number","string","nil","true","false","..."}
 --- Simple Expression
 ---@param scope AstScope
 ---@return Token
-local function simpleexp(scope)
+local function simple_exp(scope)
   -- simpleexp -> NUMBER | STRING | NIL | TRUE | FALSE | ... |
   --              constructor | FUNCTION body | suffixedexp
   if simple_toks[token.token] then
-    local t = token
+    local node = token
+    node.leading = leading
     next_token() --consume it
-    return t
+    return node
   end
 
   if token.token == "{" then
     return constructor(scope)
-  elseif token.token == "function" then
-    next_token() -- skip FUNCTION
-    return body(token.line,scope)
+  elseif test_next("function") then
+    return body(new_token_node(true), scope)
   else
     return suffixed_exp(scope)
   end
@@ -467,40 +529,56 @@ local binop_prio = {
 ---@param limit number
 ---@param scope AstScope
 ---@return AstExpression completed
----@return string nextop
+---@return string next_op
 local function sub_expr(limit,scope)
-  local ex
+  local node
   do
-    local unop = token.token
-    local uprio = unop_prio[unop]
-    if uprio then
+    local prio = unop_prio[token.token]
+    if prio then
+      node = new_node("unop")
+      node.op = token.token
+      node.op_token = new_token_node()
       next_token() -- consume unop
-      local sub = sub_expr(uprio,scope)
-      ex = {token="unop", op = unop, ex = sub}
+      node.sub = sub_expr(prio, scope)
     else
-      ex = simpleexp(scope)
+      node = simple_exp(scope)
     end
   end
   local binop = token.token
-  local bprio = binop_prio[binop]
-  while bprio and bprio.left > limit do
-    next_token()
-    local new_right,nextop = sub_expr(bprio.right,scope)
+  local prio = binop_prio[binop]
+  while prio and prio.left > limit do
+    local op_token = new_token_node()
+    next_token() -- consume `binop`
+    local right_node, next_op = sub_expr(prio.right,scope)
     if binop == ".." then
-      if new_right.token == "concat" then
-        ---@narrow new_right AstConcat
-        table.insert(new_right.explist,1,ex)
-        ex = new_right
+      if right_node.token == "concat" then
+        -- TODO: add start and end locations within the explist for src_paren_wrappers
+        ---@narrow right_node AstConcat
+        table.insert(right_node.explist, 1, node)
+        node = right_node
+        table.insert(node.op_tokens, 1, op_token)
+      elseif node.token == "concat" then
+        ---@narrow node AstConcat
+        node.explist[#node.explist+1] = right_node
+        node.op_tokens[#node.op_tokens+1] = op_token
       else
-        ex = {token="concat", explist = {ex,new_right}}
+        local left_node = node
+        node = new_node("concat")
+        node.explist = {left_node, right_node}
+        node.op_tokens = {op_token}
       end
     else
-      ex = {token="binop", op = binop, left = ex, right = new_right}
+      local left_node = node
+      node = new_node("binop")
+      node.op = binop
+      node.op_token = op_token
+      node.left = left_node
+      node.right = right_node
     end
-    binop = nextop
-    bprio = binop_prio[binop]
+    binop = next_op
+    prio = binop_prio[binop]
   end
-  return ex,binop
+  return node, binop
 end
 
 --- Expression
@@ -512,29 +590,35 @@ function expr(scope)
 end
 
 --- Assignment Statement
----@param lhs Token[]
+---@param lhs AstExpression[]
+---@param lhs_comma_tokens AstTokenNode[]
 ---@param scope AstScope
----@return Token
-local function assignment(lhs,scope)
+---@return AstAssignment
+local function assignment(lhs, lhs_comma_tokens, scope)
   if test_next(",") then
+    lhs_comma_tokens[#lhs_comma_tokens+1] = new_token_node(true)
     lhs[#lhs+1] = suffixed_exp(scope)
-    return assignment(lhs,scope)
+    return assignment(lhs, lhs_comma_tokens, scope)
   else
-    local this_tok = {token = "assignment", lhs = lhs,}
-    local assign = token
     assert_next("=")
-    this_tok.line = assign.line
-    this_tok.column = assign.column
-    this_tok.rhs = exp_list(scope)
+    local this_tok = new_node("assignment")
+    this_tok.eq_token = new_token_node(true)
+    this_tok.lhs = lhs
+    this_tok.lhs_comma_tokens = lhs_comma_tokens
+    this_tok.rhs, this_tok.rhs_comma_tokens = exp_list(scope)
     return this_tok
   end
 end
 
 --- Label Statement
----@param label Token
 ---@param scope AstScope
----@return Token
-local function label_stat(label,scope)
+---@return AstLabel
+local function label_stat(scope)
+  local open_token = new_token_node()
+  next_token() -- skip "::"
+  local label = assert_name()
+  label.open_token = open_token
+  label.close_token = new_token_node()
   assert_next("::")
   label.token = "label"
   local prev_label = scope.labels[label.value]
@@ -555,17 +639,17 @@ end
 ---@param scope AstScope
 ---@return Token
 local function while_stat(line,scope)
+  local this_tok = new_node("whilestat")
+  this_tok.locals = {}
+  this_tok.labels = {}
+  this_tok.parent = {type = "local", scope = scope}
+  this_tok.while_token = new_token_node()
   next_token() -- skip WHILE
-  local this_tok = {
-    token = "whilestat",
-    body = false, -- list body before locals
-    locals = {}, labels = {},
-    parent = {type = "local", scope = scope},
-  }
   this_tok.cond = expr(this_tok)
+  this_tok.do_token = new_token_node()
   assert_next("do")
-
   this_tok.body = stat_list(this_tok)
+  this_tok.end_token = new_token_node()
   assert_match("end","while",line)
   return this_tok
 end
@@ -576,15 +660,14 @@ end
 ---@param scope AstScope
 ---@return Token
 local function repeat_stat(line,scope)
-  local this_tok = {
-    token = "repeatstat",
-    cond = false, -- list cond first
-    body = false, -- list body before locals
-    locals = {}, labels = {},
-    parent = {type = "local", scope = scope},
-  }
+  local this_tok = new_node("repeatstat")
+  this_tok.locals = {}
+  this_tok.labels = {}
+  this_tok.parent = {type = "local", scope = scope}
+  this_tok.repeatstat = new_token_node()
   next_token() -- skip REPEAT
   this_tok.body = stat_list(this_tok)
+  this_tok.until_token = new_token_node()
   assert_match("until","repeat",line)
   this_tok.cond = expr(this_tok)
   return this_tok
@@ -595,26 +678,25 @@ end
 ---@param first_name Token
 ---@param scope AstScope
 ---@return Token
-local function fornum(first_name,scope)
+local function for_num(first_name,scope)
+  local this_tok = new_node("fornum")
+  this_tok.var = first_name
+  this_tok.locals = {{name = first_name, wholeblock = true}}
+  this_tok.labels = {}
+  this_tok.parent = {type = "local", scope = scope}
+  this_tok.eq_token = new_token_node()
   assert_next("=")
-  local start = expr(scope)
+  this_tok.start = expr(scope)
+  this_tok.first_comma_token = new_token_node()
   assert_next(",")
-  local stop = expr(scope)
-  local step = {token="number", value=1}
+  this_tok.stop = expr(scope)
+  this_tok.step = {token="number", value=1}
   if test_next(",") then
-    step = expr(scope)
+    this_tok.second_comma_token = new_token_node(true)
+    this_tok.step = expr(scope)
   end
+  this_tok.do_token = new_token_node()
   assert_next("do")
-  local this_tok = {
-    token = "fornum",
-    var = first_name,
-    start = start, stop = stop, step = step,
-    body = false, -- list body before local
-    locals = {
-      {name = first_name, wholeblock = true},
-    }, labels = {},
-    parent = {type = "local", scope = scope},
-  }
   this_tok.body = stat_list(this_tok)
   return this_tok
 end
@@ -624,27 +706,26 @@ end
 ---@param first_name Token
 ---@param scope AstScope
 ---@return Token
-local function forlist(first_name,scope)
+local function for_list(first_name,scope)
   local nl = {first_name}
-  local this_tok = {
-    token = "forlist",
-    namelist = nl,
-    explist = false, -- list explist in order
-    body = false, -- list body before locals
-    locals = {
-      {name = first_name, wholeblock = true},
-    }, labels = {},
-    parent = {type = "local", scope = scope},
-  }
+  local this_tok = new_node("forlist")
+  this_tok.namelist = nl
+  this_tok.locals = {{name = first_name, wholeblock = true}}
+  this_tok.labels = {}
+  this_tok.parent = {type = "local", scope = scope}
+  this_tok.comma_tokens = {}
   while test_next(",") do
+    this_tok.comma_tokens[#this_tok.comma_tokens+1] = new_token_node(true)
     local name = assert_name()
     name.token = "local"
     this_tok.locals[#this_tok.locals+1] =
       {name = name, wholeblock = true}
     nl[#nl+1] = name
   end
+  this_tok.in_token = new_token_node()
   assert_next("in")
-  this_tok.explist = exp_list(scope)
+  this_tok.explist, this_tok.explist_comma_tokens = exp_list(scope)
+  this_tok.do_token = new_token_node()
   assert_next("do")
   this_tok.body = stat_list(this_tok)
   return this_tok
@@ -656,20 +737,23 @@ end
 ---@param parent AstScope
 ---@return Token
 local function for_stat(line,parent)
+  local for_token = new_token_node()
   next_token() -- skip FOR
-  local firstname = assert_name()
-  firstname.token = "local"
-  local t= token.token
-  local for_tok
+  local first_name = assert_name()
+  first_name.token = "local"
+  local t = token.token
+  local for_node
   if t == "=" then
-    for_tok = fornum(firstname,parent)
+    for_node = for_num(first_name,parent)
   elseif t == "," or t == "in" then
-    for_tok = forlist(firstname,parent)
+    for_node = for_list(first_name,parent)
   else
     syntax_error("'=', ',' or 'in' expected")
   end
+  for_node.for_token = for_token
+  for_node.end_token = new_token_node()
   assert_match("end","for",line)
-  return for_tok
+  return for_node
 end
 
 
@@ -678,65 +762,80 @@ local function test_then_block(scope)
   --TODO: [IF | ELSEIF] ( cond | namelist '=' explist  [';' cond] ) THEN block
   -- if first token is ident, and second is ',' or '=', use if-init, else original parse
   -- if no cond in if-init, first name/expr is used
+  local this_tok = new_node("testblock")
+  this_tok.locals = {}
+  this_tok.lables = {}
+  this_tok.parent = {type = "local", scope = scope}
+  this_tok.if_token = new_token_node()
   next_token() -- skip IF or ELSEIF
-  local this_tok = {token = "testblock",
-    cond = false, -- list cond first
-    body = false, -- list body before locals
-    locals = {}, labels = {},
-    parent = {type = "local", scope = scope},
-  }
   this_tok.cond = expr(this_tok)
+  this_tok.then_token = new_token_node()
   assert_next("then")
-
   this_tok.body = stat_list(this_tok)
   return this_tok
 end
 
 local function if_stat(line,scope)
   -- ifstat -> IF cond THEN block {ELSEIF cond THEN block} [ELSE block] END
-  local ifs = {}
+  local this_tok = new_node("ifstat")
+  this_tok.ifs = {}
   repeat
-    ifs[#ifs+1] = test_then_block(scope)
+    this_tok.ifs[#this_tok.ifs+1] = test_then_block(scope)
   until token.token ~= "elseif"
-  local else_block
   if test_next("else") then
-    else_block = {token="elseblock",
-      body = false, -- list body before locals
-      locals = {}, labels = {},
-      parent = {type = "local", scope = scope},
-    }
+    local else_block = new_node("elseblock")
+    this_tok.elseblock = else_block
+    else_block.locals = {}
+    else_block.labels = {}
+    else_block.parent = {type = "local", scope = scope}
+    else_block.else_token = new_token_node(true)
     else_block.body = stat_list(else_block)
   end
+  this_tok.end_token = new_token_node()
   assert_match("end","if",line)
-  return {token = "ifstat", ifs = ifs, elseblock = else_block}
+  return
 end
 
-local function local_func(scope)
+local function local_func(local_token, function_token, scope)
   local name = assert_name()
   name.token = "local"
   local this_local = {name = name}
   scope.locals[#scope.locals+1] = this_local
-  local b = body(token.line,scope)
+  local b = body(function_token, scope)
   b.token = "localfunc"
+  b.local_token = local_token
   b.name = name
   this_local.startbefore = b
   return b
 end
 
-local function local_stat(scope)
+local function local_stat(local_token, scope)
   -- stat -> LOCAL NAME {`,' NAME} [`=' explist]
   local lhs = {}
-  local this_tok = {token="localstat", lhs = lhs}
+  local this_tok = new_node("localstat")
+  ---@narrow this_tok AstLocalStat
+  this_tok.local_token = local_token
+  this_tok.lhs = lhs
+  local lhs_comma_tokens = {}
+  this_tok.lhs_comma_tokens = lhs_comma_tokens
+  local function test_comma()
+    if test_next(",") then
+      lhs_comma_tokens[#lhs_comma_tokens+1] = new_token_node(true)
+      return true
+    end
+    return false
+  end
   repeat
     local name = assert_name()
     name.token = "local"
     lhs[#lhs+1] = name
-  until not test_next(",")
-  local assign = token
+  until not test_comma()
   if test_next("=") then
-    this_tok.line = assign.line
-    this_tok.column = assign.column
-    this_tok.rhs = exp_list(scope)
+    this_tok.eq_token = new_token_node(true)
+    this_tok.line = this_tok.eq_token.line
+    this_tok.column = this_tok.eq_token.column
+    this_tok.leading = this_tok.eq_token.leading
+    this_tok.rhs, this_tok.rhs_comma_tokens = exp_list(scope)
   end
   for _,name in ipairs(this_tok.lhs) do
     scope.locals[#scope.locals+1] = {name = name, startafter = this_tok}
@@ -744,32 +843,40 @@ local function local_stat(scope)
   return this_tok
 end
 
+---@param scope AstScope
+---@return boolean
+---@return AstExpression[] names
+---@return AstTokenNode[] dot_tokens @ length is `#names - 1`
 local function func_name(scope)
   -- funcname -> NAME {fieldsel} [`:' NAME]
+  -- TODO: fieldsel? i think that's already an extension from regular Lua
 
-  local dot_path = { check_ref(scope) }
+  local names = { check_ref(scope) }
+  local dot_tokens = {}
 
-  while token.token == "." do
-    next_token() -- skip '.'
-    dot_path[#dot_path+1] = assert_name()
+  while test_next(".") do
+    dot_tokens[#dot_tokens+1] = new_token_node(true)
+    names[#names+1] = assert_name()
   end
 
-  if token.token == ":" then
-    next_token() -- skip ':'
-    dot_path[#dot_path+1] = assert_name()
-    return true,dot_path
+  if test_next(":") then
+    dot_tokens[#dot_tokens+1] = new_token_node(true)
+    names[#names+1] = assert_name()
+    return true, names, dot_tokens
   end
 
-  return false,dot_path
+  return false, names, dot_tokens
 end
 
 local function func_stat(line,scope)
   -- funcstat -> FUNCTION funcname body
+  local function_token = new_token_node()
   next_token() -- skip FUNCTION
-  local ismethod,names = func_name(scope)
-  local b = body(line,scope,ismethod)
+  local ismethod, names, dot_tokens = func_name(scope)
+  local b = body(function_token, scope, ismethod)
   b.token = "funcstat"
   b.names = names
+  b.dot_tokens = dot_tokens
   return b
 end
 
@@ -778,7 +885,7 @@ local function expr_stat(scope)
   local first_exp = suffixed_exp(scope)
   if token.token == "=" or token.token == "," then
     -- stat -> assignment
-    return assignment({first_exp},scope)
+    return assignment({first_exp}, {}, scope)
   else
     -- stat -> func
     if first_exp.token == "call" or first_exp.token == "selfcall" then
@@ -791,78 +898,84 @@ end
 
 local function ret_stat(scope)
   -- stat -> RETURN [explist] [';']
-  local el
-  if block_follow(true) or token.token == ";" then
+  local this_tok = new_node("retstat")
+  this_tok.return_token = new_token_node()
+  next_token() -- skip "return"
+  if block_follow(true) then
     -- return no values
+  elseif token.token == ";" then
+    -- also return no values
+    this_tok.semi_colon_token = new_token_node()
+    next_token()
   else
-    el = exp_list(scope)
+    this_tok.explist, this_tok.explist_comma_tokens = exp_list(scope)
   end
-  test_next(";")
-  return {token="retstat", explist = el}
+  return this_tok
 end
 
 local statement_lut = {
   [";"] = function(scope) -- stat -> ';' (empty statement)
+    local this_tok = new_node("empty")
+    this_tok.semi_colon_token = new_token_node()
     next_token() -- skip
-    return {token = "empty", }
+    return this_tok
   end,
   ["if"] = function(scope) -- stat -> ifstat
-    local line = token.line;
-    return if_stat(line,scope)
+    return if_stat(token.line,scope)
   end,
   ["while"] = function(scope) -- stat -> whilestat
-    local line = token.line;
-    return while_stat(line,scope)
+    return while_stat(token.line,scope)
   end,
   ["do"] = function(scope) -- stat -> DO block END
-    local line = token.line;
+    local line = token.line
+    local do_stat = new_node("dostat")
+    do_stat.locals = {}
+    do_stat.labels = {}
+    do_stat.parent = {type = "local", scope = scope}
+    do_stat.do_token = new_token_node()
     next_token() -- skip "do"
-    local dostat = {
-      token = "dostat",
-      body = false, -- list body before local
-      locals = {}, labels = {},
-      parent = {type = "local", scope = scope}
-    }
-    dostat.body = stat_list(dostat)
+    do_stat.body = stat_list(do_stat)
+    do_stat.end_token = new_token_node()
     assert_match("end","do",line)
-    return dostat
+    return do_stat
   end,
   ["for"] = function(scope) -- stat -> forstat
-    local line = token.line;
-    return for_stat(line,scope)
+    return for_stat(token.line,scope)
   end,
   ["repeat"] = function(scope) -- stat -> repeatstat
-    local line = token.line;
-    return repeat_stat(line, scope)
+    return repeat_stat(token.line, scope)
   end,
   ["function"] = function(scope) -- stat -> funcstat
-    local line = token.line;
-    return func_stat(line, scope)
+    return func_stat(token.line, scope)
   end,
   ["local"] = function(scope) -- stat -> localstat
+    local local_token_node = new_token_node()
     next_token() -- skip "local"
     if test_next("function") then
-      return local_func(scope)
+      return local_func(local_token_node, new_token_node(true), scope)
     else
-      return local_stat(scope)
+      return local_stat(local_token_node, scope)
     end
   end,
   ["::"] = function(scope) -- stat -> label
-    next_token() -- skip "::"
-    return label_stat(assert_name(),scope)
+    return label_stat(scope)
   end,
   ["return"] = function(scope) -- stat -> retstat
-    next_token() -- skip "return"
     return ret_stat(scope)
   end,
 
   ["break"] = function(scope) -- stat -> breakstat
+    local this_tok = new_node("breakstat")
+    this_tok.break_token = new_token_node()
     next_token() -- skip BREAK
-    return {token = "breakstat"}
+    return this_tok
   end,
   ["goto"] = function(scope) -- stat -> 'goto' NAME
+    local this_tok = new_node("gotostat")
+    this_tok.goto_token = new_token_node()
     next_token() -- skip GOTO
-    return {token = "gotostat", target = assert_name()}
+    this_tok.target = assert_name()
+    return this_tok
   end,
 }
 function statement(scope)
@@ -900,6 +1013,7 @@ local function main_func(chunk_name)
     nparams = 0,
   }
   main.body = stat_list(main)
+  main.eof_token = new_token_node()
   return main
 end
 
