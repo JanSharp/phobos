@@ -120,6 +120,7 @@
 
 ---@class AstWhileStat : AstStatement, AstBody, AstScope
 ---@field token '"whilestat"'
+---@field cond AstExpression
 ---@field parent AstLocalParent
 ---@field while_token AstTokenNode
 ---@field do_token AstTokenNode
