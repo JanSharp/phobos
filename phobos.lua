@@ -118,7 +118,7 @@ do
         end
         generate_expr(expr,base + i,func,nres)
       elseif i > numexpr then
-        break
+        break -- TODO: no error?
       else
         if used_temp then
           func.nextreg = base + i + 1
@@ -189,6 +189,16 @@ do
       end
     end
   end
+  ---@param upval_name string
+  ---@param func GeneratedFunc
+  local function find_upval(upval_name,func)
+    for i = 1, #func.upvals do
+      if func.upvals[i].name == upval_name then
+        return func.upvals[i].index
+      end
+    end
+    error("Unable to find upval with name "..upval_name..".")
+  end
   local function local_or_fetch(expr,inreg,func)
     if expr.token == "local" then
       return find_local(expr.ref,func)
@@ -220,10 +230,13 @@ do
         op = opcodes.move, a = inreg, b = find_local(expr.ref,func),
       }
     end,
+    ---@param expr AstUpVal
+    ---@param inreg integer
+    ---@param func GeneratedFunc
     upval = function(expr,inreg,func)
       -- getupval
       func.instructions[#func.instructions+1] = {
-        op = opcodes.getupval, a = inreg, b = error(),
+        op = opcodes.getupval, a = inreg, b = find_upval(expr.value,func),
       }
     end,
     binop = function(expr,inreg,func)
@@ -295,7 +308,7 @@ do
     end,
     constructor = function(expr,inreg,func)
       local newtab = {
-        op = opcodes.newtable, a = inreg, b = 0, c = 0
+        op = opcodes.newtable, a = inreg, b = 0, c = 0 -- TODO: create with riht size
       }
       func.instructions[#func.instructions+1] = newtab
       local top = func.nextreg
