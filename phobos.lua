@@ -3,36 +3,7 @@ local invert = require("invert")
 ----------------------------------------------------------------------
 local generate_code
 do
-  local opcodes = {}
-  for i,op in ipairs{
-    "move", "loadk", "loadkx", "loadbool", "loadnil",
-
-    "getupval", "gettabup", "gettable",
-    "settabup", "setupval", "settable",
-
-    "newtable", "self",
-
-    "add", "sub", "mul", "div", "mod", "pow",
-    "unm", "not", "len",
-
-    "concat",
-
-    "jmp", "eq", "lt", "le",
-
-    "test", "testset",
-
-    "call", "tailcall", "return",
-
-    "forloop", "forprep",
-    "tforcall", "tforloop",
-
-    "setlist",
-    "closure",
-    "vararg",
-    "extraarg",
-  } do
-    opcodes[op] = i-1
-  end
+  local opcodes = require("opcodes")
   --- get the next available register in the current function
   ---@param func Function
   ---@return number regnum
