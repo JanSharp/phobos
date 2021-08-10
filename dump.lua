@@ -47,7 +47,7 @@ local function DumpString(str)
   -- size_t length (including trailing null, 0 for empty string)
   -- char[] value (not present for empty string)
   if #str == 0 then
-    return "\0"
+    return DumpSize(0)
   else
     return DumpSize(#str + 1) .. str .. "\0"
   end
