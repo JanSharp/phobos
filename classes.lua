@@ -19,6 +19,7 @@
 ---| '"forlist"'
 ---| '"repeatstat"'
 ---| '"funcstat"'
+---| '"localstat"'
 ---| '"localfunc"'
 ---| '"label"'
 ---| '"retstat"'
