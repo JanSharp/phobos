@@ -1,10 +1,6 @@
 {
   "Lua.runtime.version": "Lua 5.2",
   "Lua.runtime.plugin": ".vscode/lua/plugin.lua",
-  "cSpell.ignoreRegExpList": [
-    "[^\n]+\\-\\-\\-\\s*cSpell\\s+disable\\-line",
-    "\\-\\-\\-\\s*cSpell\\s+disable-next-line[^\n]*\n[^\n]*",
-  ],
   "cSpell.ignorePaths": [
     // default:
     "**/package-lock.json",
