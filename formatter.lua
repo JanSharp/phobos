@@ -74,7 +74,7 @@ local exprs = {
   ---@param node AstVarArg
   ["..."] = function(node)
   end,
-  ---@param node Astfunc_proto
+  ---@param node AstFuncProto
   func_proto = function(node)
     walk_func_base(node)
   end,

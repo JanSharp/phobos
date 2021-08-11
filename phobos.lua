@@ -566,7 +566,7 @@ do
       local in_reg,parent,parent_is_up
       if #stat.names == 1 and stat.names[1].token=="local" then
         -- if name is a local, we can just build the closure in place
-        in_reg = find_local(stat.names[1].ref,func)
+        in_reg = find_local(stat.names[1].ref,func) ---@diagnostic disable-line: undefined-field -- TODO
       else
         -- otherwise, we need its parent table and a temporary to fetch it in...
         error()
@@ -575,7 +575,7 @@ do
 
       -- CLOSURE into that register
       func.instructions[#func.instructions+1] = {
-        op = opcodes.closure, a = in_reg, bx = stat.ref.index,
+        op = opcodes.closure, a = in_reg, bx = stat.ref.index, ---@diagnostic disable-line: undefined-field -- TODO
       }
 
       if parent then

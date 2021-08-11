@@ -301,7 +301,7 @@ end
 ---@param function_token AstTokenNode
 ---@param scope AstScope
 ---@param is_method boolean Insert the extra first parameter `self`
----@return Astfunc_proto
+---@return AstFuncProto
 local function body(function_token, scope, is_method)
   -- body -> `(` param_list `)`  block END
   local parent = {type = "upval", scope = scope}

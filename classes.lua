@@ -324,7 +324,7 @@
 ---@field ref AstFunctionDef
 ---@field function_token AstTokenNode
 
----@class Astfunc_proto : AstExpression, AstFuncBase
+---@class AstFuncProto : AstExpression, AstFuncBase
 ---@field token '"func_proto"'
 
 ---@class AstField
