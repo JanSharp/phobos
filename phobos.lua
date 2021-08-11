@@ -515,8 +515,7 @@ do
         -- set nil to extra lefts
         for i = n_lefts,n_rights+1,-1 do
           -- justarandomgeek
-          -- not sure why i made a loop for setting nil to extras, you just need to generate a setnil for "the rest" there basically
-          -- TODO: check also here if setnil is supposed to be loadnil
+          -- not sure why i made a loop for setting nil to extras, you just need to generate a LOADNIL for "the rest" there basically
           error()
         end
       end

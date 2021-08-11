@@ -117,7 +117,7 @@ index => ex suffix
       not assignable
       no upvals?
     `static foo` vars for upvals only in scope for closure
-      SETNIL statics, then CLOSURE, then JMP to close them -- TODO: is SETNIL intentional or should it be LOADNIL
+      LOADNIL statics, then CLOSURE, then JMP to close them
     string interpolation?
       evaluate it all then do one big concat
       $"" or $[[]] like a function call of $

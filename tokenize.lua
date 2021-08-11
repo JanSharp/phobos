@@ -121,7 +121,7 @@ local function read_string(str,index,quote,state)
     local token = new_token("string",index,state.line,index - state.line_offset)
     token.src_value = str:sub(index+1,i-1)
     token.value = token.src_value
-      :gsub("\\([abfnrtv\\\"'\r\n])",
+      :gsub("\\([abfnrtv\\\"'\r\n])", ---cSpell disable-line
       {
         a = "\a", b = "\b", f = "\f", n = "\n",
         r = "\r", t = "\t", v = "\v", ["\\"] = "\\",
@@ -160,7 +160,7 @@ local function read_string(str,index,quote,state)
       local _,skip = str:find("^z%s",i)
       i = skip + 1
       goto matching
-    elseif next_char:match("[abfnrtv\\\"']") then
+    elseif next_char:match("[abfnrtv\\\"']") then ---cSpell disable-line
       i = i + 1
       goto matching
     else
