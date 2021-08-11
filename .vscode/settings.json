@@ -5,6 +5,17 @@
     "[^\n]+\\-\\-\\-\\s*cSpell\\s+disable\\-line",
     "\\-\\-\\-\\s*cSpell\\s+disable-next-line[^\n]*\n[^\n]*",
   ],
+  "cSpell.ignorePaths": [
+    // default:
+    "**/package-lock.json",
+    "**/node_modules/**",
+    "**/vscode-extension/**",
+    "**/.git/objects/**",
+    ".vscode",
+    ".vscode-insiders",
+    // custom:
+    "**/serpent.lua",
+  ],
   "cSpell.words": [
     "lua's",
     "proto",
