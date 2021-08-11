@@ -450,7 +450,8 @@ local function get_disassembly(func)
   local result = {
     "function at "..func.source..":"..func.firstline.."-"..func.lastline.."\n"
       ..(func.is_vararg and "vararg" or (func.nparam.." params")).." | "..(#func.upvals).." upvals | "..func.maxstack.." max stack\n"
-      ..(#func.instructions).." instructions | "..(#func.constants).." constants | "..(#func.inner_functions).." functions\n",
+      ..(#func.instructions).." instructions | "..(#func.constants).." constants | "..(#func.inner_functions).." functions",
+      "\n", -- separate entry so the removal at the end works if there are (for some reason) 0 instructions
   }
   local instructions = func.instructions
   for i = 1, #instructions do
@@ -496,7 +497,7 @@ local function get_disassembly(func)
     conditionally_add_raw_value("sbx")
     result[#result+1] = "\n"
   end
-  result[#result] = nil
+  result[#result] = nil -- remove trailing \n
   return table.concat(result)
 end
 
