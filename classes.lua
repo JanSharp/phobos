@@ -28,19 +28,19 @@
 ---| '"call"' @ expression or statement
 ---| '"assignment"'
 ---expressions:
----| '"local"'
----| '"upval"'
+---| '"local"' @ --TODO: change/clean up variables and references
+---| '"upval"' @ --TODO: change/clean up variables and references
 ---| '"index"'
----| '"ident"' @ -- TODO: same as '"string"'?
----| '"_ENV"' @ potentially also special
+---| '"ident"' @ -- TODO: same as '"string"'? --TODO: change/clean up variables and references
+---| '"_ENV"' @ potentially also special --TODO: change/clean up variables and references
 ---| '"unop"'
 ---| '"binop"'
 ---| '"concat"'
 ---| '"number"'
 ---| '"string"'
 ---| '"nil"'
----| '"true"'
----| '"false"'
+---| '"true"' @ -- TODO: combine these to be boolean with value
+---| '"false"' @ -- TODO: combine these to be boolean with value
 ---| '"..."'
 ---| '"funcproto"'
 ---| '"constructor"'

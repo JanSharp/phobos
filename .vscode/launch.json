@@ -5,11 +5,12 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Test",
+            "name": "Jan# Standard Lua (compile test.lua)",
             "type": "lua-local",
             "request": "launch",
             "program": {
-                "file": "./main.lua"
+                "lua": "lua52",
+                "file": "./main.lua",
             },
             "args": [
                 "test.lua",
@@ -21,8 +22,8 @@
             "request": "launch",
             "program": {
                 "lua": "c:/Users/Thomas/bin/lua52.exe",
-                "file": "./phobos.lua"
-            }
+                "file": "./phobos.lua",
+            },
         },
         {
             "name": "Factorio Lua",
@@ -30,8 +31,8 @@
             "request": "launch",
             "program": {
                 "lua": "${workspaceFolder}/lua-factorio.exe",
-                "file": "./phobos.lua"
-            }
+                "file": "./phobos.lua",
+            },
         },
         {
             "name": "Factorio Lua (test.lua)",
@@ -39,8 +40,8 @@
             "request": "launch",
             "program": {
                 "lua": "${workspaceFolder}/lua-factorio.exe",
-                "file": "./test.lua"
-            }
-        }
-    ]
+                "file": "./test.lua",
+            },
+        },
+    ],
 }

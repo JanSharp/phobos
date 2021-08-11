@@ -1,0 +1,6 @@
+{
+  "Lua.runtime.version": "Lua 5.2",
+  "Lua.runtime.plugin": ".vscode/lua/plugin.lua",
+  "cSpell.words": [
+  ],
+}
