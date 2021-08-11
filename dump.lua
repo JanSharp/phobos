@@ -12,7 +12,7 @@ local function DumpSize(s)
   -- size_t is 8 bytes
   -- but i really only support 32bit for now, so just write four extra zeros
   -- maybe expand this one day to 48bit? maybe all the way to 53?
-  -- If i'm compiling a program with >4gb strings, somethign has gone horribly wrong anyway
+  -- If i'm compiling a program with >4gb strings, something has gone horribly wrong anyway
   return DumpInt(s) .. "\0\0\0\0"
 end
 
@@ -35,9 +35,9 @@ do
     elseif double_cache[d] then
       return double_cache[d]
     else
-      local dstr = string.dump(load(([[return %a]]):format(d))):sub(s,e)
-      double_cache[d] = dstr
-      return dstr
+      local double_str = string.dump(load(([[return %a]]):format(d))):sub(s,e)
+      double_cache[d] = double_str
+      return double_str
     end
   end
 end
@@ -70,18 +70,18 @@ end
 
 local function DumpFunction(func)
   local dump = {}
-  -- int linedefined (0 for main chunk)
+  -- int line_defined (0 for main chunk)
   dump[#dump+1] = DumpInt(func.line)
-  -- int lastlinedefined (0 for main chunk)
-  dump[#dump+1] = DumpInt(func.endline)
+  -- int last_line_defined (0 for main chunk)
+  dump[#dump+1] = DumpInt(func.end_line)
   dump[#dump+1] = string.char(
-    func.nparams or 0,        -- byte nparams
-    func.isvararg and 1 or 0, -- byte isvararg
-    func.maxstacksize or 2    -- byte maxstacksize, min of 2, reg0/1 always valid
+    func.n_params or 0,        -- byte n_params
+    func.is_vararg and 1 or 0, -- byte is_vararg
+    func.max_stack_size or 2    -- byte max_stack_size, min of 2, reg0/1 always valid
   )
 
   -- [Code]
-  -- int ninstructions
+  -- int n_instructions
   dump[#dump+1] = DumpInt(#func.instructions)
   -- Instruction[] instructions
   for _,instruction in ipairs(func.instructions) do
@@ -112,47 +112,47 @@ local function DumpFunction(func)
 
 
   -- [Constants]
-  -- int nconsts
+  -- int n_consts
   dump[#dump+1] = DumpInt(#func.constants)
   -- TValue[] consts
   for _,constant in ipairs(func.constants) do
     dump[#dump+1] = DumpConstant(constant)
   end
 
-  -- [Funcprotos]
-  -- int nfuncs
-  dump[#dump+1] = DumpInt(#func.funcprotos)
+  -- [func_protos]
+  -- int n_funcs
+  dump[#dump+1] = DumpInt(#func.func_protos)
   -- DumpFunction[] funcs
-  for _,f in ipairs(func.funcprotos) do
+  for _,f in ipairs(func.func_protos) do
     dump[#dump+1] = DumpFunction(f)
   end
 
   -- [Upvals]
-  -- int nupvals
+  -- int n_upvals
   dump[#dump+1] = DumpInt(#func.upvals)
   -- upvals[] upvals
   for _,u in ipairs(func.upvals) do
-    -- byte instack (is a local in parent scope, else upvalue in parent scope)
+    -- byte in_stack (is a local in parent scope, else upvalue in parent scope)
     -- byte idx
-    dump[#dump+1] = string.char(u.updepth==1 and 1 or 0, u.ref.index or 0)
+    dump[#dump+1] = string.char(u.up_depth==1 and 1 or 0, u.ref.index or 0)
   end
 
   -- [Debug]
   -- string source
   dump[#dump+1] = DumpString(func.source or "(unknown phobos source)")
 
-  -- int nlines (always same as ninstructions?)
+  -- int n_lines (always same as n_instructions?)
   -- int[] lines (line number per instruction?)
   dump[#dump+1] = DumpInt(#func.instructions)
   for i, instruction in ipairs(func.instructions) do
     dump[#dump+1] = DumpInt(i)
   end
 
-  -- int nlocs
-  -- localdesc[] locs
+  -- int n_locals
+  -- local_desc[] locals
   --   string name
-  --   int startpc
-  --   int endpc
+  --   int start_pc
+  --   int end_pc
   dump[#dump+1] = DumpInt(0)
 
   -- dump[#dump+1] = DumpInt(#func.locals)
@@ -162,9 +162,9 @@ local function DumpFunction(func)
   --   dump[#dump+1] = DumpInt(0)
   -- end
 
-  -- int nups
+  -- int n_upvals
   dump[#dump+1] = DumpInt(#func.upvals)
-  -- string[] ups
+  -- string[] upvals
   for _,u in ipairs(func.upvals) do
     dump[#dump+1] = DumpString(u.name--[[.value]])
   end
@@ -174,7 +174,7 @@ local function DumpFunction(func)
   -- Phobos signature: "\x1bPhobos"
   -- byte version = "\x01"
   -- [branch annotations]
-  -- int nbranches
+  -- int n_branches
 
   return table.concat(dump)
 end

@@ -83,8 +83,8 @@ do
       return "SETTABLE", get_register_label("a").."["..get_register_or_constant_label("b").."] := "..get_register_or_constant_label("c")
     end,
 
-    [opcodes.newtable] = function()
-      return "NEWTABLE", get_register_label("a").." := {} size("..get_label("b")..", "..get_label("c")..")"
+    [opcodes.new_table] = function()
+      return "new_tabLE", get_register_label("a").." := {} size("..get_label("b")..", "..get_label("c")..")"
     end,
     [opcodes.self] = function()
       return "SELF", get_register_label("a+1", current.a + 1).." := "..get_register_label("b").."; "
@@ -125,7 +125,7 @@ do
 
     [opcodes.jmp] = function()
       return "JMP", "pc += "..get_label("sbx")
-        ..(current.a ~= 0 and ("; close all upvales >= "..get_register_label("a-1", current.a - 1)) or "")
+        ..(current.a ~= 0 and ("; close all upvals >= "..get_register_label("a-1", current.a - 1)) or "")
     end,
     [opcodes.eq] = function()
       return "EQ", "if ("..get_register_or_constant_label("b").." "..(current.a ~= 0 and "~=" or "==").." "
@@ -191,7 +191,7 @@ do
     end,
     [opcodes.closure] = function()
       local inner_func = func.inner_functions[current.bx + 1]
-      return "CLOSURE", get_register_label("a").." := closure("..inner_func.source..":"..inner_func.firstline.."-"..inner_func.lastline..")"
+      return "CLOSURE", get_register_label("a").." := closure("..inner_func.source..":"..inner_func.first_line.."-"..inner_func.last_line..")"
     end,
     [opcodes.vararg] = function()
       return "VARARG", get_register_label("a")..", ..., "
@@ -365,22 +365,22 @@ local function disassemble(bytecode)
 
   local function disassemble_func()
     local source
-    local nparam
+    local n_param
     local is_vararg
-    local maxstack
+    local max_stack
     local locals = {}
     local upvals = {}
     local instructions = {}
     local constants = {}
     local inner_functions = {}
-    local firstline
-    local lastline
+    local first_line
+    local last_line
 
-    firstline = read_uint32()
-    lastline = read_uint32()
-    nparam = read_uint8()
+    first_line = read_uint32()
+    last_line = read_uint32()
+    n_param = read_uint8()
     is_vararg = read_uint8() ~= 0
-    maxstack = read_uint8()
+    max_stack = read_uint8()
 
     for j = 1, read_uint32() do
       local raw = read_uint32()
@@ -397,7 +397,7 @@ local function disassemble(bytecode)
 
     for j = 1, read_uint32() do
       upvals[j] = {
-        instack = read_uint8() ~= 0,
+        in_stack = read_uint8() ~= 0,
         idx = read_uint8(),
       }
     end
@@ -422,16 +422,16 @@ local function disassemble(bytecode)
 
     return {
       source = source,
-      nparam = nparam,
+      n_param = n_param,
       is_vararg = is_vararg,
-      maxstack = maxstack,
+      max_stack = max_stack,
       locals = locals,
       upvals = upvals,
       instructions = instructions,
       constants = constants,
       inner_functions = inner_functions,
-      firstline = firstline,
-      lastline = lastline,
+      first_line = first_line,
+      last_line = last_line,
     }
   end
 
@@ -452,8 +452,8 @@ end
 ---gets called for every instruction. instruction_index is 1-based
 ---@param instruction_callback fun(line?: integer, instruction_index: integer, padded_opcode: string, description: string, description_with_keys: string, raw_values: string)
 local function get_disassembly(func, func_description_callback, instruction_callback)
-  func_description_callback("function at "..func.source..":"..func.firstline.."-"..func.lastline.."\n"
-    ..(func.is_vararg and "vararg" or (func.nparam.." params")).." | "..(#func.upvals).." upvals | "..func.maxstack.." max stack\n"
+  func_description_callback("function at "..func.source..":"..func.first_line.."-"..func.last_line.."\n"
+    ..(func.is_vararg and "vararg" or (func.n_param.." params")).." | "..(#func.upvals).." upvals | "..func.max_stack.." max stack\n"
     ..(#func.instructions).." instructions | "..(#func.constants).." constants | "..(#func.inner_functions).." functions")
 
   local instructions = func.instructions

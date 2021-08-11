@@ -87,14 +87,14 @@ end
 
 ---@param str string
 ---@param index number
----@param nextchar string
+---@param next_char string
 ---@return number
 ---@return Token
-local function peek_equals(str,index,nextchar,line,column)
+local function peek_equals(str,index,next_char,line,column)
   if str:sub(index+1,index+1) == "=" then
-    return index+2,new_token(nextchar.."=",index,line,column)
+    return index+2,new_token(next_char.."=",index,line,column)
   else
-    return index+1,new_token(nextchar,index,line,column)
+    return index+1,new_token(next_char,index,line,column)
   end
 end
 
@@ -189,15 +189,15 @@ local function read_block_string(str,index,state)
     state.line_offset = open_end
   end
 
-  local tokenline = state.line
-  local tokencol = (open_end+1) - state.line_offset
+  local token_line = state.line
+  local token_col = (open_end+1) - state.line_offset
 
-  local bracket,bracketend = str:find("%]"..pad.."%]",index)
+  local bracket,bracket_end = str:find("%]"..pad.."%]",index)
   if not bracket then
     error("Unterminated block string at EOF")
   end
 
-  local token = new_token("string",index,tokenline,tokencol)
+  local token = new_token("string",index,token_line,token_col)
   token.value = str:sub(open_end+1,bracket-1)
   local has_newline
   for _ in token.value:gmatch("\n") do
@@ -213,7 +213,7 @@ local function read_block_string(str,index,state)
   token.src_has_leading_newline = has_leading_newline
   token.src_pad = pad
 
-  return bracketend+1,token
+  return bracket_end+1,token
 end
 
 ---@param state TokenizeState
@@ -261,15 +261,15 @@ local function next_token(state,index)
         --[[
           read block string, build a token from that
           ]]
-        local nextindex,token = read_block_string(str,index+2,state)
+        local next_index,token = read_block_string(str,index+2,state)
         token.token = "comment"
         token.index = index
-        return nextindex,token
+        return next_index,token
       else
-        local tokenstart,tokenend,text = str:find("^([^\n]+)",index+2)
-        local token = new_token("comment",tokenstart,state.line,index - state.line_offset)
+        local token_start,token_end,text = str:find("^([^\n]+)",index+2)
+        local token = new_token("comment",token_start,state.line,index - state.line_offset)
         token.value = text
-        return tokenend+1,token
+        return token_end+1,token
       end
     else
       return index+1,new_token("-",index,state.line,index - state.line_offset)
@@ -302,42 +302,42 @@ local function next_token(state,index)
     return read_string(str,index,next_char,state)
   else
     -- hex numbers: "0x%x+" followed by "%.%x+" followed by "[pP][+-]?%x+"
-    local hexstart,hexend = str:find("^0x%x+",index)
-    if hexstart then
-      local fstart,fend = str:find("^%.%x+",hexend+1)
-      if fstart then
-        hexend = fend
+    local hex_start,hex_end = str:find("^0x%x+",index)
+    if hex_start then
+      local f_start,f_end = str:find("^%.%x+",hex_end+1) -- TODO: what does f stand for
+      if f_start then
+        hex_end = f_end
       end
-      local estart,eend = str:find("^[pP]%x+",hexend+1)
-      if estart then
-        hexend = eend
+      local e_start,e_end = str:find("^[pP]%x+",hex_end+1) -- TODO: what does e stand for
+      if e_start then
+        hex_end = e_end
       end
       local token = new_token("number",index,state.line,index - state.line_offset)
-      token.src_value = str:sub(hexstart,hexend)
+      token.src_value = str:sub(hex_start,hex_end)
       token.value = tonumber(token.src_value)
-      return hexend+1,token
+      return hex_end+1,token
     end
 
     -- decimal numbers: "%d+" followed by "%.%d+" followed by "[eE][+-]?%d+"
-    local numstart,numend = str:find("^%d+",index)
-    if numstart then
-      local fstart,fend = str:find("^%.%d+",numend+1)
-      if fstart then
-        numend = fend
+    local num_start,num_end = str:find("^%d+",index)
+    if num_start then
+      local f_start,f_end = str:find("^%.%d+",num_end+1) -- TODO: what does f stand for
+      if f_start then
+        num_end = f_end
       end
-      local estart,eend = str:find("^[eE]%d+",numend+1)
-      if estart then
-        numend = eend
+      local e_start,e_end = str:find("^[eE]%d+",num_end+1) -- TODO: what does e stand for
+      if e_start then
+        num_end = e_end
       end
       local token = new_token("number",index,state.line,index - state.line_offset)
-      token.src_value = str:sub(numstart,numend)
+      token.src_value = str:sub(num_start,num_end)
       token.value = tonumber(token.src_value)
-      return numend+1,token
+      return num_end+1,token
     end
 
     -- try to match keywords/identifiers
-    local matchstart,matchend,ident = str:find("^([_%a][_%w]*)",index)
-    if matchstart == index then
+    local match_start,match_end,ident = str:find("^([_%a][_%w]*)",index)
+    if match_start == index then
       local token = new_token(
         keywords[ident] and ident or "ident",
         index,state.line,index - state.line_offset)
@@ -348,7 +348,7 @@ local function next_token(state,index)
       elseif ident == "false" then
         token.value = false
       end
-      return matchend+1,token
+      return match_end+1,token
     else
       error("Invalid token at " .. state.line .. ":" .. index - state.line_offset)
     end

@@ -10,7 +10,7 @@ local lines = {}
 for line in file:lines() do
   lines[#lines+1] = {line = line}
 end
--- add trailing line becuase :lines() doesn't return that one if it's empty
+-- add trailing line because :lines() doesn't return that one if it's empty
 -- (since regardless of if the previous character was a newline,
 -- the current one is eof which returns nil)
 if text:sub(#text) == "\n" then
@@ -33,7 +33,7 @@ end
 
 local function add_func_to_lines(prefix, func)
   disassembler.get_disassembly(func, function(description)
-    local line = get_line(func.firstline)
+    local line = get_line(func.first_line)
     line[#line+1] = "-- "..prefix..": "..(description:gsub("\n", "\n-- "..prefix..": "))
   end, function (line_num, instruction_index, padded_opcode, description, description_with_keys, raw_values)
     local line = get_line(line_num)

@@ -19,7 +19,7 @@ end
 
 ---@param node AstFuncBase
 local function walk_func_base(node)
-  for i = 1, node.ref.nparams do
+  for i = 1, node.ref.n_params do
     walk_exp(node.ref.locals[i])
   end
   walk_body(node.ref)
@@ -57,7 +57,7 @@ local exprs = {
   end,
   ---@param node AstConcat
   concat = function(node)
-    walk_exp_list(node.explist)
+    walk_exp_list(node.exp_list)
   end,
   ---@param node AstNumber
   number = function(node)
@@ -74,8 +74,8 @@ local exprs = {
   ---@param node AstVarArg
   ["..."] = function(node)
   end,
-  ---@param node AstFuncProto
-  funcproto = function(node)
+  ---@param node Astfunc_proto
+  func_proto = function(node)
     walk_func_base(node)
   end,
   ---@param node AstConstructor
@@ -123,7 +123,7 @@ local stats = {
   end,
   ---@param node AstTestBlock
   testblock = function(node)
-    walk_exp(node.cond)
+    walk_exp(node.condition)
     walk_body(node)
   end,
   ---@param node AstElseBlock
@@ -132,7 +132,7 @@ local stats = {
   end,
   ---@param node AstWhileStat
   whilestat = function(node)
-    walk_exp(node.cond)
+    walk_exp(node.condition)
     walk_body(node)
   end,
   ---@param node AstDoStat
@@ -151,14 +151,14 @@ local stats = {
   end,
   ---@param node AstForList
   forlist = function(node)
-    walk_exp_list(node.namelist)
-    walk_exp_list(node.explist)
+    walk_exp_list(node.name_list)
+    walk_exp_list(node.exp_list)
     walk_body(node)
   end,
   ---@param node AstRepeatStat
   repeatstat = function(node)
     walk_body(node)
-    walk_exp(node.cond)
+    walk_exp(node.condition)
   end,
   ---@param node AstFuncStat
   funcstat = function(node)
@@ -181,8 +181,8 @@ local stats = {
   end,
   ---@param node AstRetStat
   retstat = function(node)
-    if node.explist then
-      walk_exp_list(node.explist)
+    if node.exp_list then
+      walk_exp_list(node.exp_list)
     end
   end,
   ---@param node AstBreakStat

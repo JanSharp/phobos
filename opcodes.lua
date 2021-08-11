@@ -6,7 +6,7 @@ for i,op in ipairs{
   "getupval", "gettabup", "gettable",
   "settabup", "setupval", "settable",
 
-  "newtable", "self",
+  "new_table", "self",
 
   "add", "sub", "mul", "div", "mod", "pow",
   "unm", "not", "len",

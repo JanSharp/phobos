@@ -43,7 +43,7 @@
 ---| '"true"' @ -- TODO: combine these to be boolean with value
 ---| '"false"' @ -- TODO: combine these to be boolean with value
 ---| '"..."'
----| '"funcproto"'
+---| '"func_proto"'
 ---| '"constructor"'
 
 ---@class AstNode
@@ -75,17 +75,17 @@
 ---@class AstFunctionDef : AstBody, AstScope
 ---@field token '"functiondef"'
 ---@field source string
----@field ismethod boolean @ is it `function foo:bar() end`?
----@field funcprotos AstFunctionDef[]
+---@field is_method boolean @ is it `function foo:bar() end`?
+---@field func_protos AstFunctionDef[]
 ---@field upvals AstUpValueDef[]
 ---@field constants AstConstantDef[]
----@field endline integer
----@field endcolumn integer
----@field isvararg boolean
----@field nparams integer
----@field parent AstUpValParent
----all parameters are `wholeblock = true` locals, except vararg
----@field param_comma_tokens AstTokenNode[] @ max length is `nparams - 1`, min `0`
+---@field end_line integer
+---@field end_column integer
+---@field is_vararg boolean
+---@field n_params integer
+---@field parent AstUpvalParent
+---all parameters are `whole_block = true` locals, except vararg
+---@field param_comma_tokens AstTokenNode[] @ max length is `n_params - 1`, min `0`
 ---@field open_paren_token AstTokenNode
 ---@field close_paren_token AstTokenNode
 ---@field end_token AstTokenNode
@@ -109,7 +109,7 @@
 
 ---@class AstTestBlock : AstStatement, AstBody, AstScope
 ---@field token '"testblock"'
----@field cond AstExpression
+---@field condition AstExpression
 ---@field parent AstLocalParent
 ---@field if_token AstTokenNode @ for the first test block this is an `if` token, otherwise `elseif`
 ---@field then_token AstTokenNode
@@ -121,7 +121,7 @@
 
 ---@class AstWhileStat : AstStatement, AstBody, AstScope
 ---@field token '"whilestat"'
----@field cond AstExpression
+---@field condition AstExpression
 ---@field parent AstLocalParent
 ---@field while_token AstTokenNode
 ---@field do_token AstTokenNode
@@ -140,7 +140,7 @@
 ---@field stop AstExpression
 ---@field step AstExpression|nil
 ---@field parent AstLocalParent
----`var` is used for a `whileblock = true` local
+---`var` is used for a `while_block = true` local -- TODO: while_block is never used, what was this about?
 ---@field locals AstLocalDef[]
 ---@field for_token AstTokenNode
 ---@field eq_token AstTokenNode
@@ -151,28 +151,28 @@
 
 ---@class AstForList : AstStatement, AstBody, AstScope
 ---@field token '"forlist"'
----@field namelist AstLocal[]
----@field explist AstExpression[]
----@field explist_comma_tokens AstTokenNode[]
+---@field name_list AstLocal[]
+---@field exp_list AstExpression[]
+---@field exp_list_comma_tokens AstTokenNode[]
 ---@field parent AstLocalParent
----all `namelist` names are used for a `wholeblock = true` local
+---all `name_list` names are used for a `whole_block = true` local
 ---@field locals AstLocalDef[]
 ---@field for_token AstTokenNode
----@field comma_tokens AstTokenNode[] @ max length is `#namelist - 1`
+---@field comma_tokens AstTokenNode[] @ max length is `#name_list - 1`
 ---@field in_token AstTokenNode
 ---@field do_token AstTokenNode
 ---@field end_token AstTokenNode
 
 ---@class AstRepeatStat : AstStatement, AstBody, AstScope
 ---@field token '"repeatstat"'
----@field cond AstExpression
+---@field condition AstExpression
 ---@field parent AstLocalParent
 ---@field repeat_token AstTokenNode
 ---@field until_token AstTokenNode
 
 ---@class AstFuncStat : AstStatement, AstFuncBase
 ---@field token '"funcstat"'
----@field names AstExpression[] @ first is anything from checkref, the rest AstIdent
+---@field names AstExpression[] @ first is anything from check_ref, the rest AstIdent
 ---@field dot_tokens AstTokenNode[] @ max length is `#names - 1`
 
 ---@class AstLocalFunc : AstStatement, AstFuncBase
@@ -198,8 +198,8 @@
 ---@class AstRetStat : AstStatement
 ---@field token '"retstat"'
 ---@field return_token AstTokenNode
----@field explist AstExpression[]|nil @ `nil` = no return values
----@field explist_comma_tokens AstTokenNode[]
+---@field exp_list AstExpression[]|nil @ `nil` = no return values
+---@field exp_list_comma_tokens AstTokenNode[]
 ---@field semi_colon_token AstTokenNode|nil @ trailing `;`. `nil` = no semi colon
 
 ---@class AstBreakStat : AstStatement
@@ -298,8 +298,8 @@
 
 ---@class AstConcat : AstExpression
 ---@field token '"concat"'
----@field explist AstExpression[]
----@field op_tokens AstTokenNode[] @ max length is `#explist - 1`
+---@field exp_list AstExpression[]
+---@field op_tokens AstTokenNode[] @ max length is `#exp_list - 1`
 
 ---@class AstNumber : AstExpression
 ---@field token '"number"'
@@ -324,8 +324,8 @@
 ---@field ref AstFunctionDef
 ---@field function_token AstTokenNode
 
----@class AstFuncProto : AstExpression, AstFuncBase
----@field token '"funcproto"'
+---@class Astfunc_proto : AstExpression, AstFuncBase
+---@field token '"func_proto"'
 
 ---@class AstField
 ---@field type '"rec"'|'"list"'
@@ -355,7 +355,7 @@
 
 ---@class AstUpValueDef
 ---@field name string
----@field updepth integer @ -- TODO: what does this mean
+---@field up_depth integer @ -- TODO: what does this mean
 ---@field ref any @ -- TODO
 
 
@@ -364,13 +364,13 @@
 ---@field name AstLocal|Ast_ENV
 ---i think this means it is defined at the start of
 ---the block and lasts for the entire block
----@field wholeblock boolean|nil
----@field startbefore AstStatement|nil
----@field startafter AstStatement|nil
+---@field whole_block boolean|nil
+---@field start_before AstStatement|nil
+---@field start_after AstStatement|nil
 
 ---@class AstEnv : AstNode
 ---@field token '"env"'
----@field locals AstLocalDef[] @ 1 `wholeblock = true` local with AstEnvName
+---@field locals AstLocalDef[] @ 1 `whole_block = true` local with AstEnvName
 
 ---@class AstParent
 ---@field type '"upval"'|'"local"'
@@ -379,20 +379,20 @@
 ---@class AstLocalParent : AstParent
 ---@field type '"local"'
 
----@class AstUpValParent : AstParent
+---@class AstUpvalParent : AstParent
 ---@field type '"upval"'
 
 ---@class AstConstantDef
 
 ---@class AstMain : AstFunctionDef
 ---@field token '"main"'
----@field ismethod 'false'
+---@field is_method 'false'
 ---@field line '0'
 ---@field column '0'
----@field endline '0'
----@field endcolumn '0'
----@field isvararg 'true'
----@field nparams '0'
+---@field end_line '0'
+---@field end_column '0'
+---@field is_vararg 'true'
+---@field n_params '0'
 ---@field locals AstLocalDef[]
 ---@field eof_token AstTokenNode @ to store trailing blank and comment tokens
 
@@ -416,9 +416,9 @@
 ---@field index integer @ **zero based**
 
 ---@class GeneratedFunc : AstFunctionDef
----@field liveregs any[]
----@field nextreg integer @ **zero based** index of next register to use
----@field maxstacksize integer @ always at least two registers
+---@field live_regs any[]
+---@field next_reg integer @ **zero based** index of next register to use
+---@field max_stack_size integer @ always at least two registers
 ---@field instructions Instruction[]
 ---@field upvals GeneratedUpValue[] @ overridden
 ---@field body GeneratedStatement[] @ overridden

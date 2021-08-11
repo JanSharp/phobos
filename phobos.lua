@@ -8,100 +8,100 @@ do
   ---@param func Function
   ---@return number regnum
   local function next_reg(func)
-    local n = func.nextreg
-    local ninc = n + 1
-    func.nextreg = ninc
-    if ninc > func.maxstacksize then
-      func.maxstacksize = ninc
+    local n = func.next_reg
+    local next_n = n + 1
+    func.next_reg = next_n
+    if next_n > func.max_stack_size then
+      func.max_stack_size = next_n
     end
     return n
   end
   local function release_reg(func,reg)
-    if reg ~= func.nextreg - 1 then
-      error("Attempted to release register "..reg.." when top was "..func.nextreg)
+    if reg ~= func.next_reg - 1 then
+      error("Attempted to release register "..reg.." when top was "..func.next_reg)
     end
     -- if it had a live local in it, end it here
-    local liveregs = func.liveregs
-    local lastinst = func.instructions[#func.instructions]
-    for i = #liveregs,1,-1 do
-      local lr = liveregs[i]
-      if not lr.stopat and lr.reg == reg then
-        lr.stopat = lastinst
+    local live_regs = func.live_regs
+    local last_inst = func.instructions[#func.instructions]
+    for i = #live_regs,1,-1 do
+      local lr = live_regs[i]
+      if not lr.stop_at and lr.reg == reg then
+        lr.stop_at = last_inst
       end
     end
 
-    func.nextreg = reg
+    func.next_reg = reg
   end
   local function release_down_to(func,reg)
-    if reg == func.nextreg then
+    if reg == func.next_reg then
       return
     end
 
-    if reg > func.nextreg then
-      error("Attempted to release registers down to "..reg.." when top was "..func.nextreg)
+    if reg > func.next_reg then
+      error("Attempted to release registers down to "..reg.." when top was "..func.next_reg)
     end
     -- if any had live locals, end them here
-    local liveregs = func.liveregs
-    local lastinst = func.instructions[#func.instructions]
-    for i = #liveregs,1,-1 do
-      local lr = liveregs[i]
-      if not lr.stopat and lr.reg >= reg then
-        lr.stopat = lastinst
+    local live_regs = func.live_regs
+    local last_inst = func.instructions[#func.instructions]
+    for i = #live_regs,1,-1 do
+      local lr = live_regs[i]
+      if not lr.stop_at and lr.reg >= reg then
+        lr.stop_at = last_inst
       end
     end
-    func.nextreg = reg
+    func.next_reg = reg
   end
 
   local generate_expr_code
-  local varargtokens = invert{"...","call","selfcall"}
-  local function generate_expr(expr,inreg,func,numresults)
-    generate_expr_code[expr.token](expr,inreg,func,numresults)
-    if numresults > 1 and not varargtokens[expr.token] then
-      --loadnil inreg+1 to inreg+numresults
+  local vararg_tokens = invert{"...","call","selfcall"}
+  local function generate_expr(expr,in_reg,func,num_results)
+    generate_expr_code[expr.token](expr,in_reg,func,num_results)
+    if num_results > 1 and not vararg_tokens[expr.token] then
+      --loadnil in_reg+1 to in_reg+num_results
       func.instructions[#func.instructions+1] = {
-        op = opcodes.loadnil, a = inreg+1, b = numresults - 1
+        op = opcodes.loadnil, a = in_reg+1, b = num_results - 1
       }
     end
   end
 
-  local function generate_explist(explist,inreg,func,numresults)
-    local numexpr = #explist
-    local base = inreg - 1
+  local function generate_exp_list(exp_list,in_reg,func,num_results)
+    local num_exp = #exp_list
+    local base = in_reg - 1
     local used_temp
     do
-      local attop = inreg >= func.nextreg - 1
-      if not attop then
-        if numresults == -1 then
-          error("Cannot generate variable-length explist except at top")
+      local at_top = in_reg >= func.next_reg - 1
+      if not at_top then
+        if num_results == -1 then
+          error("Cannot generate variable-length exp_list except at top")
         end
         used_temp = true
-        base = func.nextreg - 1
+        base = func.next_reg - 1
       end
     end
-    for i,expr in ipairs(explist) do
-      if i == numexpr then
-        local nres = -1
-        if numresults ~= -1 then
-          nres = (numresults - numexpr) + 1
+    for i,expr in ipairs(exp_list) do
+      if i == num_exp then
+        local n_result = -1
+        if num_results ~= -1 then
+          n_result = (num_results - num_exp) + 1
         end
         if used_temp then
-          func.nextreg = base + i + 1
+          func.next_reg = base + i + 1
         end
-        generate_expr(expr,base + i,func,nres)
-      elseif i > numexpr then
+        generate_expr(expr,base + i,func,n_result)
+      elseif i > num_exp then
         break -- TODO: no error?
       else
         if used_temp then
-          func.nextreg = base + i + 1
+          func.next_reg = base + i + 1
         end
         generate_expr(expr,base + i,func,1)
       end
     end
     if used_temp then
-      -- move from base+i to inreg+i
-      for i = 1,numresults do
+      -- move from base+i to in_reg+i
+      for i = 1,num_results do
         func.instructions[#func.instructions+1] = {
-          op = opcodes.move, a = inreg+i, b = base+i
+          op = opcodes.move, a = in_reg+i, b = base+i
         }
       end
       release_down_to(func,base+1)
@@ -118,22 +118,22 @@ do
     func.constants[i+1] = value
     return i
   end
-  local function generate_const_code(expr,inreg,func)
+  local function generate_const_code(expr,in_reg,func)
     local k = add_constant(expr.value,func)
     if k <= 0x3ffff then
       func.instructions[#func.instructions+1] = {
-        op = opcodes.loadk, a = inreg, bx = k,
+        op = opcodes.loadk, a = in_reg, bx = k,
       }
     else
       func.instructions[#func.instructions+1] = {
-        op = opcodes.loadkx, a = inreg,
+        op = opcodes.loadkx, a = in_reg,
       }
       func.instructions[#func.instructions+1] = {
         op = opcodes.extraarg, ax = k,
       }
     end
   end
-  local binopcodes = {
+  local bin_opcodes = {
     ["+"] = opcodes.add,
     ["-"] = opcodes.sub,
     ["*"] = opcodes.mul,
@@ -141,19 +141,19 @@ do
     ["%"] = opcodes.mod,
     ["^"] = opcodes.pow,
   }
-  local unopcodes = {
+  local un_opcodes = {
     ["-"] = opcodes.unm,
     ["#"] = opcodes.len,
     ["not"] = opcodes["not"],
   }
   local function find_local(ref,func)
-    -- find it in liveregs and use that...
-    local liveregs = func.liveregs
-    local lastreg
-    for i = #liveregs,1,-1 do
-      local lr = liveregs[i]
-      if not lr.stopat and lastreg ~= lr.reg then
-        lastreg = lr.reg
+    -- find it in live_regs and use that...
+    local live_regs = func.live_regs
+    local last_reg
+    for i = #live_regs,1,-1 do
+      local lr = live_regs[i]
+      if not lr.stop_at and last_reg ~= lr.reg then
+        last_reg = lr.reg
         if lr.name == ref.name then
           return lr.reg
         end
@@ -170,258 +170,258 @@ do
     end
     error("Unable to find upval with name "..upval_name..".")
   end
-  local function local_or_fetch(expr,inreg,func)
+  local function local_or_fetch(expr,in_reg,func)
     if expr.token == "local" then
       return find_local(expr.ref,func)
     else
-      generate_expr(expr,inreg,func,1)
-      return inreg
+      generate_expr(expr,in_reg,func,1)
+      return in_reg
     end
   end
   local const_tokens = invert{"true","false","nil","string","number"}
   local false_tokens = invert{"false","nil"}
   local logical_binops = invert{">",">=","==","~=","<=","<"}
-  local function const_or_local_or_fetch(expr,inreg,func)
+  local function const_or_local_or_fetch(expr,in_reg,func)
     if const_tokens[expr.token] then
       return bit32.bor(add_constant(expr.value,func),0x100)
     else
-      return local_or_fetch(expr,inreg,func)
+      return local_or_fetch(expr,in_reg,func)
     end
   end
-  local function upval_or_local_or_fetch(expr,inreg,func)
+  local function upval_or_local_or_fetch(expr,in_reg,func)
     if expr.token == "upval" then
       return expr.ref.index,true
     else
-      return local_or_fetch(expr,inreg,func),false
+      return local_or_fetch(expr,in_reg,func),false
     end
   end
   generate_expr_code = {
-    ["local"] = function(expr,inreg,func)
+    ["local"] = function(expr,in_reg,func)
       func.instructions[#func.instructions+1] = {
-        op = opcodes.move, a = inreg, b = find_local(expr.ref,func),
+        op = opcodes.move, a = in_reg, b = find_local(expr.ref,func),
       }
     end,
     ---@param expr AstUpVal
-    ---@param inreg integer
+    ---@param in_reg integer
     ---@param func GeneratedFunc
-    upval = function(expr,inreg,func)
+    upval = function(expr,in_reg,func)
       -- getupval
       func.instructions[#func.instructions+1] = {
-        op = opcodes.getupval, a = inreg, b = find_upval(expr.value,func),
+        op = opcodes.getupval, a = in_reg, b = find_upval(expr.value,func),
       }
     end,
-    binop = function(expr,inreg,func)
+    binop = function(expr,in_reg,func)
       -- if expr.left and .right are locals, use them in place
       -- if they're constants, add to const table and use in place from there
       --   unless const table is too big, then fetch into temporary (and emit warning: const table too large)
       -- else fetch them into temporaries
-      --   first temporary is inreg, second is next_reg()
-      local tmpreg,used_temp = inreg,false
-      local leftreg = const_or_local_or_fetch(expr.left,tmpreg,func)
-      if leftreg == inreg then
-        tmpreg = next_reg(func)
+      --   first temporary is in_reg, second is next_reg()
+      local tmp_reg,used_temp = in_reg,false
+      local left_reg = const_or_local_or_fetch(expr.left,tmp_reg,func)
+      if left_reg == in_reg then
+        tmp_reg = next_reg(func)
         used_temp = true
       end
-      local rightreg = const_or_local_or_fetch(expr.right,tmpreg,func)
-      if used_temp and rightreg ~= tmpreg then
-        release_reg(func,tmpreg)
+      local right_reg = const_or_local_or_fetch(expr.right,tmp_reg,func)
+      if used_temp and right_reg ~= tmp_reg then
+        release_reg(func,tmp_reg)
         used_temp = false
       end
 
       func.instructions[#func.instructions+1] = {
-        op = binopcodes[expr.op], a = inreg, bk = leftreg, ck = rightreg
+        op = bin_opcodes[expr.op], a = in_reg, bk = left_reg, ck = right_reg
       }
       -- if two temporaries, release second
       if used_temp then
-        release_reg(func,tmpreg)
+        release_reg(func,tmp_reg)
       end
     end,
-    unop = function(expr,inreg,func)
+    unop = function(expr,in_reg,func)
       -- if expr.ex is a local use that directly,
-      -- else fetch into inreg
-      local srcreg = local_or_fetch(expr.ex,inreg,func)
+      -- else fetch into in_reg
+      local scr_reg = local_or_fetch(expr.ex,in_reg,func)
       func.instructions[#func.instructions+1] = {
-        op = unopcodes[expr.op], a = inreg, b = srcreg,
+        op = un_opcodes[expr.op], a = in_reg, b = scr_reg,
       }
     end,
-    concat = function(expr,inreg,func)
-      local tmpreg = inreg
+    concat = function(expr,in_reg,func)
+      local tmp_reg = in_reg
       local used_temp
-      if tmpreg ~= func.nextreg - 1 then
-        tmpreg = next_reg(func)
+      if tmp_reg ~= func.next_reg - 1 then
+        tmp_reg = next_reg(func)
         used_temp = true
       end
-      local numexpr = #expr.explist
-      generate_explist(expr.explist,tmpreg,func,numexpr)
+      local num_exp = #expr.exp_list
+      generate_exp_list(expr.exp_list,tmp_reg,func,num_exp)
       func.instructions[#func.instructions+1] = {
-        op = opcodes.concat, a = inreg, b = tmpreg, c = tmpreg + numexpr - 1
+        op = opcodes.concat, a = in_reg, b = tmp_reg, c = tmp_reg + num_exp - 1
       }
       if used_temp then
-        release_reg(func,tmpreg)
+        release_reg(func,tmp_reg)
       end
     end,
     number = generate_const_code,
     string = generate_const_code,
-    ["true"] = function(expr,inreg,func)
+    ["true"] = function(expr,in_reg,func)
       func.instructions[#func.instructions+1] = {
-        op = opcodes.loadbool, a = inreg, b = 1, c = 0
+        op = opcodes.loadbool, a = in_reg, b = 1, c = 0
       }
     end,
-    ["false"] = function(expr,inreg,func)
+    ["false"] = function(expr,in_reg,func)
       func.instructions[#func.instructions+1] = {
-        op = opcodes.loadbool, a = inreg, b = 0, c = 0
+        op = opcodes.loadbool, a = in_reg, b = 0, c = 0
       }
     end,
-    ["nil"] = function(expr,inreg,func,numresults)
+    ["nil"] = function(expr,in_reg,func,num_results)
       func.instructions[#func.instructions+1] = {
-        op = opcodes.loadnil, a = inreg, b = numresults or 0
+        op = opcodes.loadnil, a = in_reg, b = num_results or 0
       }
     end,
-    constructor = function(expr,inreg,func)
-      local newtab = {
-        op = opcodes.newtable, a = inreg, b = 0, c = 0 -- TODO: create with riht size
+    constructor = function(expr,in_reg,func)
+      local new_tab = {
+        op = opcodes.new_table, a = in_reg, b = 0, c = 0 -- TODO: create with right size
       }
-      func.instructions[#func.instructions+1] = newtab
-      local top = func.nextreg
-      local listcount = 0
-      local lastfield = #expr.fields
+      func.instructions[#func.instructions+1] = new_tab
+      local top = func.next_reg
+      local list_count = 0
+      local last_field = #expr.fields
       for i,field in ipairs(expr.fields) do
         if field.type == "list" then
           -- if list accumulate values
           local count = 1
-          if i == lastfield then
+          if i == last_field then
             count = -1
           end
           generate_expr(field.value,next_reg(func),func,count)
           --TODO: for very long lists, go ahead and assign it and start another set
         elseif field.type == "rec" then
           -- if rec, set in table immediately
-          local tmpreg,used_temp = next_reg(func),{}
-          local keyreg = const_or_local_or_fetch(field.key,tmpreg,func)
-          if keyreg == inreg then
-            tmpreg = next_reg(func)
+          local tmp_reg,used_temp = next_reg(func),{}
+          local key_reg = const_or_local_or_fetch(field.key,tmp_reg,func)
+          if key_reg == in_reg then
+            tmp_reg = next_reg(func)
             used_temp.key = true
           end
-          local valreg = const_or_local_or_fetch(field.value,tmpreg,func)
-          if valreg ~= tmpreg then
-            release_reg(func,tmpreg)
+          local value_reg = const_or_local_or_fetch(field.value,tmp_reg,func)
+          if value_reg ~= tmp_reg then
+            release_reg(func,tmp_reg)
           else
             used_temp.val = true
           end
 
           func.instructions[#func.instructions+1] = {
-            op = opcodes.settable, a = inreg, bk = keyreg, ck = valreg
+            op = opcodes.settable, a = in_reg, bk = key_reg, ck = value_reg
           }
 
           if used_temp.val then
-            release_reg(func,valreg)
+            release_reg(func,value_reg)
           end
           if used_temp.key then
-            release_reg(func,keyreg)
+            release_reg(func,key_reg)
           end
         else
           error("Invalid field type in table constructor")
         end
       end
-      if listcount > 0 then
+      if list_count > 0 then
         func.instructions[#func.instructions+1] = {
-          op = opcodes.setlist, a = inreg, b = listcount,  c = 1
+          op = opcodes.setlist, a = in_reg, b = list_count,  c = 1
         }
         release_down_to(func,top)
       end
     end,
-    funcproto = function(expr,inreg,func)
+    func_proto = function(expr,in_reg,func)
       func.instructions[#func.instructions+1] = {
-        op = opcodes.closure, a = inreg, bx = expr.ref.index
+        op = opcodes.closure, a = in_reg, bx = expr.ref.index
       }
     end,
-    ["..."] = function(expr,inreg,func,numresults)
+    ["..."] = function(expr,in_reg,func,num_results)
       func.instructions[#func.instructions+1] = {
-        op = opcodes.vararg, a = inreg, b = (numresults or 1)+1
+        op = opcodes.vararg, a = in_reg, b = (num_results or 1)+1
       }
     end,
-    call = function(expr,inreg,func,numresults)
-      local funcreg = inreg
+    call = function(expr,in_reg,func,num_results)
+      local func_reg = in_reg
       local used_temp
-      local top = func.nextreg
-      local attop =  funcreg >= func.nextreg - 1
-      if not attop then
-        if numresults == -1 then
+      local top = func.next_reg
+      local at_top =  func_reg >= func.next_reg - 1
+      if not at_top then
+        if num_results == -1 then
           error("Can't return variable results unless top of stack")
         end
-        funcreg = next_reg(func)
+        func_reg = next_reg(func)
         used_temp = true
       end
-      generate_expr(expr.ex,funcreg,func,1)
+      generate_expr(expr.ex,func_reg,func,1)
       if used_temp then
-        func.nextreg = funcreg + 2
+        func.next_reg = func_reg + 2
       end
-      generate_explist(expr.args,funcreg+1,func,-1)
-      local argcount = #expr.args
-      if argcount > 0 and varargtokens[expr.args[argcount].token] then
-        argcount = -1
+      generate_exp_list(expr.args,func_reg+1,func,-1)
+      local arg_count = #expr.args
+      if arg_count > 0 and vararg_tokens[expr.args[arg_count].token] then
+        arg_count = -1
       end
       func.instructions[#func.instructions+1] = {
-        op = opcodes.call, a = funcreg, b = argcount+1, c = (numresults or 1)+1
+        op = opcodes.call, a = func_reg, b = arg_count+1, c = (num_results or 1)+1
       }
       if used_temp then
         error()
-        -- copy from funcreg+n to inreg+n
+        -- copy from func_reg+n to in_reg+n
       end
       release_down_to(func,top)
     end,
-    selfcall = function(expr,inreg,func,numresults)
-      local funcreg = inreg
+    selfcall = function(expr,in_reg,func,num_results)
+      local func_reg = in_reg
       local used_temp
-      if funcreg ~= func.nextreg - 1 then
-        if numresults == -1 then
+      if func_reg ~= func.next_reg - 1 then
+        if num_results == -1 then
           error("Can't return variable results unless top of stack")
         end
-        funcreg = next_reg(func)
+        func_reg = next_reg(func)
         used_temp = true
       end
-      local exreg = local_or_fetch(expr.ex,funcreg,func)
-      local suffixreg = const_or_local_or_fetch(expr.suffix,funcreg+1,func)
+      local exp_reg = local_or_fetch(expr.ex,func_reg,func)
+      local suffix_reg = const_or_local_or_fetch(expr.suffix,func_reg+1,func)
       func.instructions[#func.instructions+1] = {
-        op = opcodes.self, a = funcreg, b = exreg, c = suffixreg
+        op = opcodes.self, a = func_reg, b = exp_reg, c = suffix_reg
       }
-      generate_explist(expr.args,funcreg+2,func,-1)
-      local argcount = #expr.args
-      if argcount > 0 and varargtokens[expr.args[argcount].token] then
-        argcount = -1
+      generate_exp_list(expr.args,func_reg+2,func,-1)
+      local arg_count = #expr.args
+      if arg_count > 0 and vararg_tokens[expr.args[arg_count].token] then
+        arg_count = -1
       else
-        argcount = argcount + 1
+        arg_count = arg_count + 1
       end
       func.instructions[#func.instructions+1] = {
-        op = opcodes.call, a = funcreg, b = argcount+1, c = (numresults or 1)+1
+        op = opcodes.call, a = func_reg, b = arg_count+1, c = (num_results or 1)+1
       }
     end,
-    index = function(expr,inreg,func)
-      local tmpreg,used_temp = inreg,false
-      local ex,isupval = upval_or_local_or_fetch(expr.ex,tmpreg,func)
-      if (not isupval) and ex == inreg then
-        tmpreg = next_reg(func)
+    index = function(expr,in_reg,func)
+      local tmp_reg,used_temp = in_reg,false
+      local ex,is_upval = upval_or_local_or_fetch(expr.ex,tmp_reg,func)
+      if (not is_upval) and ex == in_reg then
+        tmp_reg = next_reg(func)
         used_temp = true
       end
 
-      local suffix = const_or_local_or_fetch(expr.suffix,tmpreg,func)
-      if used_temp and suffix ~= tmpreg then
-        release_reg(func,tmpreg)
+      local suffix = const_or_local_or_fetch(expr.suffix,tmp_reg,func)
+      if used_temp and suffix ~= tmp_reg then
+        release_reg(func,tmp_reg)
         used_temp = false
       end
 
       func.instructions[#func.instructions+1] = {
-        op = isupval and opcodes.gettabup or opcodes.gettable,
-        a = inreg, b = ex, ck = suffix
+        op = is_upval and opcodes.gettabup or opcodes.gettable,
+        a = in_reg, b = ex, ck = suffix
       }
       -- if two temporaries, release second
       if used_temp then
-        release_reg(func,tmpreg)
+        release_reg(func,tmp_reg)
       end
     end,
   }
 
-  local function generate_test_code(cond)
+  local function generate_test_code(condition)
     --[[
       binop
         eq -> eq
@@ -434,7 +434,7 @@ do
         or -> [repeat]
       * -> test
     ]]
-    if cond.token == "binop" and logical_binops[cond.op] then
+    if condition.token == "binop" and logical_binops[condition.op] then
 
     else
 
@@ -446,24 +446,24 @@ do
   generate_statement_code = {
     localstat = function(stat,func)
       -- allocate registers for LHS, eval expressions into them
-      local newlive = {}
+      local new_live = {}
       for i,ref in ipairs(stat.lhs) do
         local live = {reg = next_reg(func), name = ref}
-        newlive[i] = live
-        func.liveregs[#func.liveregs+1] = live
+        new_live[i] = live
+        func.live_regs[#func.live_regs+1] = live
       end
 
       if stat.rhs then
-        generate_explist(stat.rhs,newlive[1].reg,func,#stat.lhs)
+        generate_exp_list(stat.rhs,new_live[1].reg,func,#stat.lhs)
       else
         --loadnil
-        generate_expr_code["nil"](nil,newlive[1].reg,func,#stat.lhs)
+        generate_expr_code["nil"](nil,new_live[1].reg,func,#stat.lhs)
       end
 
       -- declare new registers to be "live" with locals after this
-      local lastpc = func.instructions[#func.instructions]
-      for i,live in ipairs(newlive) do
-        live.startafter = lastpc
+      local last_pc = func.instructions[#func.instructions]
+      for i,live in ipairs(new_live) do
+        live.start_after = last_pc
       end
     end,
     assignment = function(stat,func)
@@ -471,7 +471,7 @@ do
       -- last expr in value list is for enough values to fill the list
       -- emit warning and drop extra values with no targets
       -- move/settable/settabup from temporary to target, right to left
-      local top = func.nextreg
+      local top = func.next_reg
       local lefts = {}
       for i,left in ipairs(stat.lhs) do
         if left.token == "local" then
@@ -487,41 +487,42 @@ do
           }
         elseif left.token == "index" then
           -- if index and parent not local/upval, fetch parent to temporary
-          local newleft = {
+          local new_left = {
             type = "index",
           }
-          local tmpreg = next_reg(func)
-          newleft.ex,newleft.ex_is_up = upval_or_local_or_fetch(left.ex,tmpreg,func)
-          if not newleft.ex_is_up and newleft.ex == tmpreg then
-            tmpreg = next_reg(func)
+          local tmp_reg = next_reg(func)
+          new_left.ex,new_left.ex_is_up = upval_or_local_or_fetch(left.ex,tmp_reg,func)
+          if not new_left.ex_is_up and new_left.ex == tmp_reg then
+            tmp_reg = next_reg(func)
           end
-          newleft.suffix = const_or_local_or_fetch(left.suffix,tmpreg,func)
-          if newleft.suffix ~= tmpreg then
-            release_reg(func,tmpreg)
+          new_left.suffix = const_or_local_or_fetch(left.suffix,tmp_reg,func)
+          if new_left.suffix ~= tmp_reg then
+            release_reg(func,tmp_reg)
           end
-          lefts[i] = newleft
+          lefts[i] = new_left
         else
           error("Attempted to assign to " .. left.token)
         end
       end
-      local numlefts = #lefts
-      local firstright = func.nextreg
-      local numrights = #stat.rhs
-      if varargtokens[stat.rhs[numrights].token] then
-        numrights = numlefts
+      local n_lefts = #lefts
+      local first_right = func.next_reg
+      local n_rights = #stat.rhs
+      if vararg_tokens[stat.rhs[n_rights].token] then
+        n_rights = n_lefts
       end
-      generate_explist(stat.rhs,firstright,func,numrights)
-      if numrights < numlefts then
+      generate_exp_list(stat.rhs,first_right,func,n_rights)
+      if n_rights < n_lefts then
         -- set nil to extra lefts
-        for i = numlefts,numrights+1,-1 do
+        for i = n_lefts,n_rights+1,-1 do
           -- justarandomgeek
           -- not sure why i made a loop for setting nil to extras, you just need to generate a setnil for "the rest" there basically
+          -- TODO: check also here if setnil is supposed to be loadnil
           error()
         end
       end
       -- copy rights to lefts
-      for i = numrights,1,-1 do
-        local right = firstright + i - 1
+      for i = n_rights,1,-1 do
+        local right = first_right + i - 1
         local left = lefts[i]
         if left.type == "index" then
           func.instructions[#func.instructions+1] = {
@@ -548,33 +549,33 @@ do
       -- allocate register for stat.name
       local a = next_reg(func)
       -- declare new register to be "live" with local right away for upval capture
-      local livereg = {
+      local live_reg = {
         reg = a,
         name = stat.ref,
       }
-      func.liveregs[#func.liveregs+1] = livereg
+      func.live_regs[#func.live_regs+1] = live_reg
       -- CLOSURE into that register
       local instr = {
         op = opcodes.closure, a = a, bx = stat.ref.index,
       }
-      livereg.startat = instr
+      live_reg.start_at = instr
       func.instructions[#func.instructions+1] = instr
     end,
     ---@param stat AstFuncStat
     funcstat = function(stat,func)
-      local inreg,parent,parent_is_up
+      local in_reg,parent,parent_is_up
       if #stat.names == 1 and stat.names[1].token=="local" then
         -- if name is a local, we can just build the closure in place
-        inreg = find_local(stat.names[1].ref,func)
+        in_reg = find_local(stat.names[1].ref,func)
       else
         -- otherwise, we need its parent table and a temporary to fetch it in...
         error()
-        inreg = next_reg(func)
+        in_reg = next_reg(func)
       end
 
       -- CLOSURE into that register
       func.instructions[#func.instructions+1] = {
-        op = opcodes.closure, a = inreg, bx = stat.ref.index,
+        op = opcodes.closure, a = in_reg, bx = stat.ref.index,
       }
 
       if parent then
@@ -584,22 +585,22 @@ do
       end
     end,
     dostat = function(stat,func)
-      local top = func.nextreg
-      for i,innerstat in ipairs(stat.body) do
-        generate_statement_code[innerstat.token](innerstat,func)
+      local top = func.next_reg
+      for i,inner_stat in ipairs(stat.body) do
+        generate_statement_code[inner_stat.token](inner_stat,func)
       end
       release_down_to(func,top)
     end,
     ifstat = function(stat,func)
-      for i,ifblock in ipairs(stat.ifs) do
-        local top = func.nextreg
-        local cond = ifblock.cond
-        local condtoken = cond.token
+      for i,if_block in ipairs(stat.ifs) do
+        local top = func.next_reg
+        local condition = if_block.condition
+        local condition_token = condition.token
 
-        if false_tokens[condtoken] then
+        if false_tokens[condition_token] then
           -- always false, skip this block
-          goto nextblock
-        elseif const_tokens[condtoken] then
+          goto next_block
+        elseif const_tokens[condition_token] then
           -- always true, stop after this block
 
           -- TODO: include table constructors and closures here
@@ -608,23 +609,23 @@ do
           error()
         else
           -- generate a value and `test` it...
-          generate_test_code(cond)
+          generate_test_code(condition)
           error()
         end
 
         -- generate body
-        for j,innerstat in ipairs(ifblock.body) do
-          generate_statement_code[innerstat.token](innerstat,func)
+        for j,inner_stat in ipairs(if_block.body) do
+          generate_statement_code[inner_stat.token](inner_stat,func)
         end
         release_down_to(func,top)
-        -- jump from end of body to end of blocks (not yet determined, build patchlist)
-        -- patch test failure to jump here for next test/else/nextblock
-        ::nextblock::
+        -- jump from end of body to end of blocks (not yet determined, build patch list)
+        -- patch test failure to jump here for next test/else/next_block
+        ::next_block::
       end
       if stat.elseblock then
-        local top = func.nextreg
-        for i,innerstat in ipairs(stat.elseblock.body) do
-          generate_statement_code[innerstat.token](innerstat,func)
+        local top = func.next_reg
+        for i,inner_stat in ipairs(stat.elseblock.body) do
+          generate_statement_code[inner_stat.token](inner_stat,func)
         end
         release_down_to(func,top)
         -- patch if block ends to jump here
@@ -632,66 +633,66 @@ do
     end,
     call = function(stat,func)
       -- evaluate as a call expression for zero results
-      local funcreg = next_reg(func)
-      generate_expr(stat,funcreg,func,0)
-      release_down_to(func,funcreg)
+      local func_reg = next_reg(func)
+      generate_expr(stat,func_reg,func,0)
+      release_down_to(func,func_reg)
     end,
     selfcall = function(stat,func)
       -- evaluate as a selfcall expression for zero results
-      local funcreg = next_reg(func)
-      generate_expr(stat,funcreg,func,0)
-      release_down_to(func,funcreg)
+      local func_reg = next_reg(func)
+      generate_expr(stat,func_reg,func,0)
+      release_down_to(func,func_reg)
     end,
     forlist = function(stat,func)
-      local top = func.nextreg
-      -- alocate forlist internal vars
+      local top = func.next_reg
+      -- allocate forlist internal vars
       local generator = next_reg(func)
       local generator_info = {
         reg = generator,
         name = {token = "internal", value = "(for generator)"},
       }
-      func.liveregs[#func.liveregs+1] = generator_info
+      func.live_regs[#func.live_regs+1] = generator_info
       local state = next_reg(func)
       local state_info = {
         reg = state,
         name = {token = "internal", value = "(for state)"},
       }
-      func.liveregs[#func.liveregs+1] = state_info
+      func.live_regs[#func.live_regs+1] = state_info
       local control = next_reg(func)
       local control_info = {
         reg = control,
         name = {token = "internal", value = "(for control)"},
       }
-      func.liveregs[#func.liveregs+1] = control_info
-      local innertop = func.nextreg
-      -- eval explist for three results starting at generator
-      generate_explist(stat.explist,generator,func,3)
+      func.live_regs[#func.live_regs+1] = control_info
+      local inner_top = func.next_reg
+      -- eval exp_list for three results starting at generator
+      generate_exp_list(stat.exp_list,generator,func,3)
       -- jmp to tforcall
       local jmp = {
         op = opcodes.jmp, a = 0, -- a=close upvals?, sbx= jump target
       }
       func.instructions[#func.instructions+1] = jmp
       -- go back and set internals live
-      generator_info.startat = jmp
-      state_info.startat = jmp
-      control_info.startat = jmp
+      generator_info.start_at = jmp
+      state_info.start_at = jmp
+      control_info.start_at = jmp
       -- allocate for locals, declare them live
-      for i,name in ipairs(stat.namelist) do
-        func.liveregs[#func.liveregs+1] = {
+      for i,name in ipairs(stat.name_list) do
+        func.live_regs[#func.live_regs+1] = {
           reg = control,
           name = name,
-          startat = jmp
+          start_at = jmp
         }
       end
       -- generate body
-      for i,innerstat in ipairs(stat.body) do
-        generate_statement_code[innerstat.token](innerstat,func)
+      for i,inner_stat in ipairs(stat.body) do
+        generate_statement_code[inner_stat.token](inner_stat,func)
       end
 
-      release_down_to(func,innertop)
+      release_down_to(func,inner_top)
       -- loop
       local tforcall = {
-        op = opcodes.tforcall, a = generator, c = #stat.namelist, -- a=func, c=num loop vars
+        op = opcodes.tforcall, a = generator, c = #stat.name_list, -- a=func, c=num loop vars
       }
       jmp.sbx = tforcall
       func.instructions[#func.instructions+1] = tforcall
@@ -703,13 +704,13 @@ do
     end,
     fornum = function(stat,func)
       error()
-      local top = func.nextreg
-      -- alocate fornum internal vars
+      local top = func.next_reg
+      -- allocate fornum internal vars
       -- eval start/stop/step into internals
       -- allocate for local, declare it live
       -- generate body
-      for i,innerstat in ipairs(stat.body) do
-        generate_statement_code[innerstat.token](innerstat,func)
+      for i,inner_stat in ipairs(stat.body) do
+        generate_statement_code[inner_stat.token](inner_stat,func)
       end
       -- loop
 
@@ -717,12 +718,12 @@ do
     end,
     whilestat = function(stat,func)
       error()
-      local top = func.nextreg
-      -- eval stat.cond in a temporary
+      local top = func.next_reg
+      -- eval stat.condition in a temporary
       -- test, else jump past body+jump
       -- generate body
-      for i,innerstat in ipairs(stat.body) do
-        generate_statement_code[innerstat.token](innerstat,func)
+      for i,inner_stat in ipairs(stat.body) do
+        generate_statement_code[inner_stat.token](inner_stat,func)
       end
       -- jump back
 
@@ -730,12 +731,12 @@ do
     end,
     repeatstat = function(stat,func)
       error()
-      local top = func.nextreg
+      local top = func.next_reg
       -- generate body
-      for i,innerstat in ipairs(stat.body) do
-        generate_statement_code[innerstat.token](innerstat,func)
+      for i,inner_stat in ipairs(stat.body) do
+        generate_statement_code[inner_stat.token](inner_stat,func)
       end
-      -- eval stat.cond in a temporary
+      -- eval stat.condition in a temporary
       -- jump back if false
 
       release_down_to(func,top)
@@ -746,7 +747,7 @@ do
         op = opcodes["return"], a = 0, b = 1
       }
       -- error() -- TODO
-      -- eval explist into temporaries
+      -- eval exp_list into temporaries
       -- RETURN them
     end,
 
@@ -769,13 +770,13 @@ do
     end,
   }
   function generate_code(func)
-    func.liveregs = {}
-    func.nextreg = 0 -- *ZERO BASED* index of next register to use
-    func.maxstacksize = 2 -- always at least two registers
+    func.live_regs = {}
+    func.next_reg = 0 -- *ZERO BASED* index of next register to use
+    func.max_stack_size = 2 -- always at least two registers
     func.instructions = {}
 
-    for i,fproto in ipairs(func.funcprotos) do
-      fproto.index = i - 1 -- *ZERO BASED* index
+    for i,func_proto in ipairs(func.func_protos) do
+      func_proto.index = i - 1 -- *ZERO BASED* index
     end
 
     for i,upval in ipairs(func.upvals) do
@@ -790,8 +791,8 @@ do
       op = opcodes["return"], a = 0, b = 1,
     }
 
-    for i,fproto in ipairs(func.funcprotos) do
-      generate_code(fproto)
+    for i,func_proto in ipairs(func.func_protos) do
+      generate_code(func_proto)
     end
 
   end
