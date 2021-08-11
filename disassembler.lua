@@ -3,7 +3,7 @@ local opcodes = require("opcodes")
 
 local get_instruction_label
 do
-  local func, pc, current, next_inst
+  local func, pc, display_keys, current, next_inst
 
   local function get_register_label(key, idx)
     idx = idx or current[key]
@@ -13,7 +13,7 @@ do
       if loc.start <= pc + 1 then
         if loc._end >= pc+1 then
           if stack == idx then
-            return "R("..key..": "..idx.."|"..loc.name..")"
+            return "R("..(display_keys and (key..": ") or "")..idx.."|"..loc.name..")"
           end
           stack = stack + 1
         end
@@ -21,7 +21,7 @@ do
         break
       end
     end
-    return "R("..key..": "..idx..")"
+    return "R("..(display_keys and (key..": ") or "")..idx..")"
   end
 
   local function get_constant_label(key, idx)
@@ -40,11 +40,11 @@ do
 
   local function get_upval_label(key, idx)
     idx = idx or current[key]
-    return "Up("..key..": "..(func.upvals[idx + 1] and (idx.."|"..func.upvals[idx + 1].name) or idx)..")"
+    return "Up("..(display_keys and (key..": ") or "")..idx..(func.upvals[idx + 1] and ("|"..func.upvals[idx + 1].name) or "")..")"
   end
 
   local function get_label(key)
-    return key..": "..current[key]
+    return (display_keys and (key..": ") or "")..current[key]
   end
 
   local instruction_label_getter_lut = {
@@ -58,7 +58,7 @@ do
       return "LOADKX", get_register_label("a").." := "..get_constant_label("next.ax", next_inst.ax)
     end,
     [opcodes.loadbool] = function()
-      return "LOADBOOL", get_register_label("a").." := "..(tostring(current.b ~= 0))..(current.c ~= 0 and " pc++" or "") -- TODO: display keys
+      return "LOADBOOL", get_register_label("a").." := "..(tostring(current.b ~= 0))..(current.c ~= 0 and " pc++" or "")
     end,
     [opcodes.loadnil] = function()
       return "LOADNIL", get_register_label("a")..", ..., "..get_register_label("a+b", current.a + current.b).." := nil"
@@ -202,9 +202,10 @@ do
       return "EXTRAARG", "."
     end,
   }
-  function get_instruction_label(_func, _pc)
+  function get_instruction_label(_func, _pc, _display_keys)
     func = _func
     pc = _pc
+    display_keys = not not _display_keys
     current = func.instructions[pc]
     next_inst = func.instructions[pc + 1]
     return (
@@ -444,15 +445,17 @@ for opcode_name in pairs(opcodes) do
     max_opcode_name_length = #opcode_name
   end
 end
-local padding = " " -- used to vertically align strings with different lengths
 
-local function get_disassembly(func)
-  local result = {
-    "function at "..func.source..":"..func.firstline.."-"..func.lastline.."\n"
-      ..(func.is_vararg and "vararg" or (func.nparam.." params")).." | "..(#func.upvals).." upvals | "..func.maxstack.." max stack\n"
-      ..(#func.instructions).." instructions | "..(#func.constants).." constants | "..(#func.inner_functions).." functions",
-      "\n", -- separate entry so the removal at the end works if there are (for some reason) 0 instructions
-  }
+---@param func table
+---called once at the beginning with general information about the function. Contains 2 newlines.
+---@param func_description_callback fun(description: string)
+---gets called for every instruction. instruction_index is 1-based
+---@param instruction_callback fun(line?: integer, instruction_index: integer, padded_opcode: string, description: string, description_with_keys: string, raw_values: string)
+local function get_disassembly(func, func_description_callback, instruction_callback)
+  func_description_callback("function at "..func.source..":"..func.firstline.."-"..func.lastline.."\n"
+    ..(func.is_vararg and "vararg" or (func.nparam.." params")).." | "..(#func.upvals).." upvals | "..func.maxstack.." max stack\n"
+    ..(#func.instructions).." instructions | "..(#func.constants).." constants | "..(#func.inner_functions).." functions")
+
   local instructions = func.instructions
   for i = 1, #instructions do
     -- clear cache because that is how we know which values are used for the different instructions
@@ -464,29 +467,19 @@ local function get_disassembly(func)
     instructions[i].sbx = nil
   end
 
-  local inst_labels, inst_descriptions = {}, {}
-  local max_description_length = 0
   for i = 1, #instructions do
-    inst_labels[i], inst_descriptions[i] = get_instruction_label(func, i)
-    if #inst_descriptions[i] > max_description_length then
-      max_description_length = #inst_descriptions[i]
-    end
-  end
-
-  for i = 1, #instructions do
-    result[#result+1] = string.format("%04d", func.instructions[i].line or 9999)
-    result[#result+1] = padding
-    result[#result+1] = inst_labels[i]
-    result[#result+1] = string.rep(padding, max_opcode_name_length - #inst_labels[i] + 2)
-    result[#result+1] = inst_descriptions[i]
+    local label, description = get_instruction_label(func, i)
+    local _, description_with_keys = get_instruction_label(func, i, true)
+    local raw = ""
     local first = true
     local function conditionally_add_raw_value(key)
       if rawget(instructions[i], key) then -- if the value is cached in the table then it has been accessed at some point
         if first then
           first = false
-          result[#result+1] = string.rep(padding, max_description_length - #inst_descriptions[i] + 3)
+        else
+          raw = raw.." "
         end
-        result[#result+1] = padding.."["..key.." = "..instructions[i][key].."]"
+        raw = raw.."["..key.." = "..instructions[i][key].."]"
       end
     end
     conditionally_add_raw_value("a")
@@ -495,10 +488,8 @@ local function get_disassembly(func)
     conditionally_add_raw_value("ax")
     conditionally_add_raw_value("bx")
     conditionally_add_raw_value("sbx")
-    result[#result+1] = "\n"
+    instruction_callback(instructions[i].line, i, label..string.rep(" ", max_opcode_name_length - #label), description, description, raw)
   end
-  result[#result] = nil -- remove trailing \n
-  return table.concat(result)
 end
 
 return {
