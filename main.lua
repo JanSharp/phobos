@@ -2,34 +2,6 @@
 local serpent = require("serpent")
 local generate_code = require("phobos")
 
-local opcodes = {
-  "move", "loadk", "loadkx", "loadbool", "loadnil",
-
-  "getupval", "gettabup", "gettable",
-  "settabup", "setupval", "settable",
-
-  "newtable", "self",
-
-  "add", "sub", "mul", "div", "mod", "pow",
-  "unm", "not", "len",
-
-  "concat",
-
-  "jmp", "eq", "lt", "le",
-
-  "test", "testset",
-
-  "call", "tailcall", "return",
-
-  "forloop", "forprep",
-  "tforcall", "tforloop",
-
-  "setlist",
-  "closure",
-  "vararg",
-  "extraarg",
-}
-
 local filename = ... or "phobos.lua"
 local file = io.open(filename,"r")
 local text = file:read("*a")
