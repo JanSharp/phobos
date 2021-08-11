@@ -95,8 +95,7 @@ local function DumpFunction(func)
       if instruction.bx then
         opcode = opcode + bit32.lshift(instruction.bx, 14)
       elseif instruction.sbx then
-        opcode = opcode + bit32.lshift(instruction.sbx, 14) -- TODO: signed, somehow
-        error()
+        opcode = opcode + bit32.lshift(instruction.sbx + 0x1ffff, 14)
       else
         if instruction.b then
           opcode = opcode + bit32.lshift(instruction.b, 23)
