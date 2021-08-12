@@ -1,6 +1,5 @@
 
 local serpent = require("serpent")
-local generate_code = require("phobos")
 
 local filename = ... or "phobos.lua"
 local file = io.open(filename,"r")
@@ -61,6 +60,13 @@ add_func_to_lines("lua", disassembler.disassemble(string.dump(assert(loadfile(fi
 -- end
 
 do
+  local unsafe = false
+  if unsafe then
+    pcall = function(f, ...)
+      return true, f(...)
+    end
+  end
+
   local success, main = pcall(require("parser"), text, "@"..filename)
   if not success then print(main) goto finish end
   -- print(serpent.block(main))
@@ -69,7 +75,7 @@ do
   success, err = pcall(require("optimize.fold_const"), main)
   if not success then print(err) goto finish end
 
-  success, err = pcall(generate_code, main)
+  success, err = pcall(require("phobos"), main)
   if not success then print(err) goto finish end
   -- print(serpent.dump(main,{indent = '  ', sparse = true, sortkeys = false, comment=true}))
 

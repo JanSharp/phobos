@@ -340,19 +340,19 @@ local function disassemble(bytecode)
 
   local const_lut = {
     [0] = function()
-      return {token = "nil", label = "nil"}
+      return {node_type = "nil", label = "nil"}
     end,
     [1] = function()
       local value = read_uint8() ~= 0
-      return {token = value and "true" or "false", value = value, label = tostring(value)}
+      return {node_type = value and "true" or "false", value = value, label = tostring(value)}
     end,
     [3] = function()
       local value = to_double(read_bytes_as_str(8))
-      return {token = "number", value = value, label = tostring(value)}
+      return {node_type = "number", value = value, label = tostring(value)}
     end,
     [4] = function()
       local value = read_string()
-      return {token = "string", value = value, label = string.format("%q", value)--[[:gsub("\\\n", "\\n")]]}
+      return {node_type = "string", value = value, label = string.format("%q", value)--[[:gsub("\\\n", "\\n")]]}
     end,
   }
   setmetatable(const_lut, {

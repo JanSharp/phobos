@@ -53,10 +53,10 @@ do
   end
 
   local generate_expr_code
-  local vararg_tokens = invert{"...","call","selfcall"}
+  local vararg_node_types = invert{"...","call","selfcall"}
   local function generate_expr(expr,in_reg,func,num_results)
-    generate_expr_code[expr.token](expr,in_reg,func,num_results)
-    if num_results > 1 and not vararg_tokens[expr.token] then
+    generate_expr_code[expr.node_type](expr,in_reg,func,num_results)
+    if num_results > 1 and not vararg_node_types[expr.node_type] then
       --loadnil in_reg+1 to in_reg+num_results
       func.instructions[#func.instructions+1] = {
         op = opcodes.loadnil, a = in_reg+1, b = num_results - 1
@@ -171,25 +171,25 @@ do
     error("Unable to find upval with name "..upval_name..".")
   end
   local function local_or_fetch(expr,in_reg,func)
-    if expr.token == "local" then
+    if expr.node_type == "local" then
       return find_local(expr.ref,func)
     else
       generate_expr(expr,in_reg,func,1)
       return in_reg
     end
   end
-  local const_tokens = invert{"true","false","nil","string","number"}
-  local false_tokens = invert{"false","nil"}
+  local const_node_types = invert{"true","false","nil","string","number"}
+  local false_node_types = invert{"false","nil"}
   local logical_binops = invert{">",">=","==","~=","<=","<"}
   local function const_or_local_or_fetch(expr,in_reg,func)
-    if const_tokens[expr.token] then
+    if const_node_types[expr.node_type] then
       return bit32.bor(add_constant(expr.value,func),0x100)
     else
       return local_or_fetch(expr,in_reg,func)
     end
   end
   local function upval_or_local_or_fetch(expr,in_reg,func)
-    if expr.token == "upval" then
+    if expr.node_type == "upval" then
       return expr.ref.index,true
     else
       return local_or_fetch(expr,in_reg,func),false
@@ -358,7 +358,7 @@ do
       end
       generate_exp_list(expr.args,func_reg+1,func,-1)
       local arg_count = #expr.args
-      if arg_count > 0 and vararg_tokens[expr.args[arg_count].token] then
+      if arg_count > 0 and vararg_node_types[expr.args[arg_count].node_type] then
         arg_count = -1
       end
       func.instructions[#func.instructions+1] = {
@@ -387,7 +387,7 @@ do
       }
       generate_exp_list(expr.args,func_reg+2,func,-1)
       local arg_count = #expr.args
-      if arg_count > 0 and vararg_tokens[expr.args[arg_count].token] then
+      if arg_count > 0 and vararg_node_types[expr.args[arg_count].node_type] then
         arg_count = -1
       else
         arg_count = arg_count + 1
@@ -434,7 +434,7 @@ do
         or -> [repeat]
       * -> test
     ]]
-    if condition.token == "binop" and logical_binops[condition.op] then
+    if condition.node_type == "binop" and logical_binops[condition.op] then
 
     else
 
@@ -474,18 +474,18 @@ do
       local top = func.next_reg
       local lefts = {}
       for i,left in ipairs(stat.lhs) do
-        if left.token == "local" then
+        if left.node_type == "local" then
           lefts[i] = {
             type = "local",
             reg = find_local(left.ref,func),
           }
-        elseif left.token == "upval" then
+        elseif left.node_type == "upval" then
           lefts[i] = {
             type = "upval",
             upval = error()
 
           }
-        elseif left.token == "index" then
+        elseif left.node_type == "index" then
           -- if index and parent not local/upval, fetch parent to temporary
           local new_left = {
             type = "index",
@@ -501,13 +501,13 @@ do
           end
           lefts[i] = new_left
         else
-          error("Attempted to assign to " .. left.token)
+          error("Attempted to assign to " .. left.node_type)
         end
       end
       local n_lefts = #lefts
       local first_right = func.next_reg
       local n_rights = #stat.rhs
-      if vararg_tokens[stat.rhs[n_rights].token] then
+      if vararg_node_types[stat.rhs[n_rights].node_type] then
         n_rights = n_lefts
       end
       generate_exp_list(stat.rhs,first_right,func,n_rights)
@@ -537,7 +537,7 @@ do
           -- oh i guess it would need another case there paired with handling the top one to deal with an upval
           -- which is for if you do foo = 1 and foo is an upval rather than a local
           -- so it doesn't need any prefetch but it needs setupval instead of move when you generate code for it
-          -- presumably some clues attached to the token which upval it was, but i don't remember
+          -- presumably some clues attached to the node which upval it was, but i don't remember
           -- but that's some hints to attach for whenever you do get around to that
           error()
         end
@@ -563,7 +563,7 @@ do
     ---@param stat AstFuncStat
     funcstat = function(stat,func)
       local in_reg,parent,parent_is_up
-      if #stat.names == 1 and stat.names[1].token=="local" then
+      if #stat.names == 1 and stat.names[1].node_type=="local" then
         -- if name is a local, we can just build the closure in place
         in_reg = find_local(stat.names[1].ref,func) ---@diagnostic disable-line: undefined-field -- TODO
       else
@@ -586,7 +586,7 @@ do
     dostat = function(stat,func)
       local top = func.next_reg
       for i,inner_stat in ipairs(stat.body) do
-        generate_statement_code[inner_stat.token](inner_stat,func)
+        generate_statement_code[inner_stat.node_type](inner_stat,func)
       end
       release_down_to(func,top)
     end,
@@ -594,12 +594,12 @@ do
       for i,if_block in ipairs(stat.ifs) do
         local top = func.next_reg
         local condition = if_block.condition
-        local condition_token = condition.token
+        local condition_node_type = condition.node_type
 
-        if false_tokens[condition_token] then
+        if false_node_types[condition_node_type] then
           -- always false, skip this block
           goto next_block
-        elseif const_tokens[condition_token] then
+        elseif const_node_types[condition_node_type] then
           -- always true, stop after this block
 
           -- TODO: include table constructors and closures here
@@ -614,7 +614,7 @@ do
 
         -- generate body
         for j,inner_stat in ipairs(if_block.body) do
-          generate_statement_code[inner_stat.token](inner_stat,func)
+          generate_statement_code[inner_stat.node_type](inner_stat,func)
         end
         release_down_to(func,top)
         -- jump from end of body to end of blocks (not yet determined, build patch list)
@@ -624,7 +624,7 @@ do
       if stat.elseblock then
         local top = func.next_reg
         for i,inner_stat in ipairs(stat.elseblock.body) do
-          generate_statement_code[inner_stat.token](inner_stat,func)
+          generate_statement_code[inner_stat.node_type](inner_stat,func)
         end
         release_down_to(func,top)
         -- patch if block ends to jump here
@@ -648,19 +648,19 @@ do
       local generator = next_reg(func)
       local generator_info = {
         reg = generator,
-        name = {token = "internal", value = "(for generator)"},
+        name = {node_type = "internal", value = "(for generator)"},
       }
       func.live_regs[#func.live_regs+1] = generator_info
       local state = next_reg(func)
       local state_info = {
         reg = state,
-        name = {token = "internal", value = "(for state)"},
+        name = {node_type = "internal", value = "(for state)"},
       }
       func.live_regs[#func.live_regs+1] = state_info
       local control = next_reg(func)
       local control_info = {
         reg = control,
-        name = {token = "internal", value = "(for control)"},
+        name = {node_type = "internal", value = "(for control)"},
       }
       func.live_regs[#func.live_regs+1] = control_info
       local inner_top = func.next_reg
@@ -685,7 +685,7 @@ do
       end
       -- generate body
       for i,inner_stat in ipairs(stat.body) do
-        generate_statement_code[inner_stat.token](inner_stat,func)
+        generate_statement_code[inner_stat.node_type](inner_stat,func)
       end
 
       release_down_to(func,inner_top)
@@ -709,7 +709,7 @@ do
       -- allocate for local, declare it live
       -- generate body
       for i,inner_stat in ipairs(stat.body) do
-        generate_statement_code[inner_stat.token](inner_stat,func)
+        generate_statement_code[inner_stat.node_type](inner_stat,func)
       end
       -- loop
 
@@ -722,7 +722,7 @@ do
       -- test, else jump past body+jump
       -- generate body
       for i,inner_stat in ipairs(stat.body) do
-        generate_statement_code[inner_stat.token](inner_stat,func)
+        generate_statement_code[inner_stat.node_type](inner_stat,func)
       end
       -- jump back
 
@@ -733,7 +733,7 @@ do
       local top = func.next_reg
       -- generate body
       for i,inner_stat in ipairs(stat.body) do
-        generate_statement_code[inner_stat.token](inner_stat,func)
+        generate_statement_code[inner_stat.node_type](inner_stat,func)
       end
       -- eval stat.condition in a temporary
       -- jump back if false
@@ -783,7 +783,7 @@ do
     end
 
     for i,stat in ipairs(func.body) do
-      generate_statement_code[stat.token](stat,func)
+      generate_statement_code[stat.node_type](stat,func)
     end
 
     func.instructions[#func.instructions+1] = {

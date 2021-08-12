@@ -1,7 +1,7 @@
 local invert = require("invert")
 local function walk_block(ast,open,close)
   if open then open(ast) end
-  if ast.token == "ifstat" then
+  if ast.node_type == "ifstat" then
     for _,if_block in ipairs(ast.ifs) do
       walk_block(if_block,open,close)
     end
@@ -25,30 +25,30 @@ end
 
 local function walk_exp(exp,open,close)
   if open then open(exp) end
-  if exp.token == "unop" then
+  if exp.node_type == "unop" then
     walk_exp(exp.ex,open,close)
-  elseif exp.token == "binop" then
+  elseif exp.node_type == "binop" then
     walk_exp(exp.left,open,close)
     walk_exp(exp.right,open,close)
-  elseif exp.token == "concat" then
+  elseif exp.node_type == "concat" then
     for _,sub in ipairs(exp.exp_list) do
       walk_exp(sub,open,close)
     end
-  elseif exp.token == "index" then
+  elseif exp.node_type == "index" then
     walk_exp(exp.ex,open,close)
     walk_exp(exp.suffix,open,close)
-  elseif exp.token == "call" then
+  elseif exp.node_type == "call" then
     walk_exp(exp.ex,open,close)
     for _,sub in ipairs(exp.args) do
       walk_exp(sub,open,close)
     end
-  elseif exp.token == "selfcall" then
+  elseif exp.node_type == "selfcall" then
     walk_exp(exp.ex,open,close)
     walk_exp(exp.suffix,open,close)
     for _,sub in ipairs(exp.args) do
       walk_exp(sub,open,close)
     end
-  elseif exp.token == "func_proto" then
+  elseif exp.node_type == "func_proto" then
     -- no children, only ref
   else
     -- local, upval: no children, only ref
@@ -57,166 +57,166 @@ local function walk_exp(exp,open,close)
   if close then close(exp) end
 end
 
-local function fold_exp(parent_exp,tok,value,child_token)
-  parent_exp.token = tok
+local function fold_exp(parent_exp,tok,value,child_node)
+  parent_exp.node_type = tok
   parent_exp.value = value
   parent_exp.ex = nil        -- call, selfcall
   parent_exp.op = nil        -- binop,unop
   parent_exp.left = nil      -- binop
   parent_exp.right = nil     -- binop
   parent_exp.exp_list = nil   -- concat
-  if child_token then
-    parent_exp.line = child_token.line
-    parent_exp.column = child_token.column
-  elseif child_token == false then
+  if child_node then
+    parent_exp.line = child_node.line
+    parent_exp.column = child_node.column
+  elseif child_node == false then
     parent_exp.line = nil
     parent_exp.column = nil
   end
   parent_exp.folded = true
 end
 
-local is_const_token = invert{"string","number","true","false","nil"}
+local is_const_node = invert{"string","number","true","false","nil"}
 local fold_unop = {
   ["-"] = function(exp)
     -- number
-    if exp.ex.token == "number" then
+    if exp.ex.node_type == "number" then
       fold_exp(exp,"number", -exp.ex.value)
     end
   end,
   ["not"] = function(exp)
     -- boolean
-    if exp.ex.token == "boolean" then
+    if exp.ex.node_type == "boolean" then
       fold_exp(exp, "boolean", not exp.ex.value)
     end
   end,
   ["#"] = function(exp)
     -- table or string
-    if exp.ex.token == "string" then
+    if exp.ex.node_type == "string" then
       fold_exp(exp, "string", #exp.ex.value)
-    elseif exp.ex.token == "constructor" then
+    elseif exp.ex.node_type == "constructor" then
 
     end
   end,
 }
 local fold_binop = {
   ["+"] = function(exp)
-    if exp.left.token == "number" and exp.right.token == "number" then
+    if exp.left.node_type == "number" and exp.right.node_type == "number" then
       fold_exp(exp, "number", exp.left.value + exp.right.value)
     end
   end,
   ["-"] = function(exp)
-    if exp.left.token == "number" and exp.right.token == "number" then
+    if exp.left.node_type == "number" and exp.right.node_type == "number" then
       fold_exp(exp, "number", exp.left.value - exp.right.value)
     end
   end,
   ["*"] = function(exp)
-    if exp.left.token == "number" and exp.right.token == "number" then
+    if exp.left.node_type == "number" and exp.right.node_type == "number" then
       fold_exp(exp, "number", exp.left.value * exp.right.value)
     end
   end,
   ["/"] = function(exp)
-    if exp.left.token == "number" and exp.right.token == "number" then
+    if exp.left.node_type == "number" and exp.right.node_type == "number" then
       fold_exp(exp, "number", exp.left.value / exp.right.value)
     end
   end,
   ["%"] = function(exp)
-    if exp.left.token == "number" and exp.right.token == "number" then
+    if exp.left.node_type == "number" and exp.right.node_type == "number" then
       fold_exp(exp, "number", exp.left.value % exp.right.value)
     end
   end,
   ["^"] = function(exp)
-    if exp.left.token == "number" and exp.right.token == "number" then
+    if exp.left.node_type == "number" and exp.right.node_type == "number" then
       fold_exp(exp, "number", exp.left.value ^ exp.right.value)
     end
   end,
   ["<"] = function(exp)
     -- matching types, number or string
-    if exp.left.token == exp.right.token and
-      (exp.left.token == "number" or exp.left.token == "string") then
+    if exp.left.node_type == exp.right.node_type and
+      (exp.left.node_type == "number" or exp.left.node_type == "string") then
       local res =  exp.left.value < exp.right.value
       fold_exp(exp, tostring(res), res)
     end
   end,
   ["<="] = function(exp)
     -- matching types, number or string
-    if exp.left.token == exp.right.token and
-      (exp.left.token == "number" or exp.left.token == "string") then
+    if exp.left.node_type == exp.right.node_type and
+      (exp.left.node_type == "number" or exp.left.node_type == "string") then
         local res =  exp.left.value <= exp.right.value
         fold_exp(exp, tostring(res), res)
     end
   end,
   [">"] = function(exp)
     -- matching types, number or string
-    if exp.left.token == exp.right.token and
-      (exp.left.token == "number" or exp.left.token == "string") then
+    if exp.left.node_type == exp.right.node_type and
+      (exp.left.node_type == "number" or exp.left.node_type == "string") then
         local res =  exp.left.value > exp.right.value
         fold_exp(exp, tostring(res), res)
     end
   end,
   [">="] = function(exp)
     -- matching types, number or string
-    if exp.left.token == exp.right.token and
-      (exp.left.token == "number" or exp.left.token == "string") then
+    if exp.left.node_type == exp.right.node_type and
+      (exp.left.node_type == "number" or exp.left.node_type == "string") then
         local res =  exp.left.value >= exp.right.value
         fold_exp(exp, tostring(res), res)
     end
   end,
   ["=="] = function(exp)
     -- any type
-    if exp.left.token == exp.right.token and is_const_token[exp.left.token] then
+    if exp.left.node_type == exp.right.node_type and is_const_node[exp.left.node_type] then
       local res =  exp.left.value == exp.right.value
       fold_exp(exp, tostring(res), res)
-    elseif is_const_token[exp.left.token] and is_const_token[exp.right.token] then
+    elseif is_const_node[exp.left.node_type] and is_const_node[exp.right.node_type] then
       -- different types of constants
       fold_exp(exp, "false", false)
     end
   end,
   ["~="] = function(exp)
     -- any type
-    if exp.left.token == exp.right.token and is_const_token[exp.left.token] then
+    if exp.left.node_type == exp.right.node_type and is_const_node[exp.left.node_type] then
       local res =  exp.left.value ~= exp.right.value
       fold_exp(exp, tostring(res), res)
-    elseif is_const_token[exp.left.token] and is_const_token[exp.right.token] then
+    elseif is_const_node[exp.left.node_type] and is_const_node[exp.right.node_type] then
       -- different types of constants
       fold_exp(exp, "true", true)
     end
   end,
   ["and"] = function(exp)
     -- any type
-    if exp.left.token == "nil" or exp.left.token == "false" then
+    if exp.left.node_type == "nil" or exp.left.node_type == "false" then
       local sub = exp.left
-      fold_exp(exp, sub.token, sub.value, sub)
-    elseif is_const_token[exp.left.token] then
+      fold_exp(exp, sub.node_type, sub.value, sub)
+    elseif is_const_node[exp.left.node_type] then
       -- the constants that failed the first test are all truthy
       local sub = exp.right
-      fold_exp(exp, sub.token, sub.value, sub)
+      fold_exp(exp, sub.node_type, sub.value, sub)
     end
   end,
   ["or"] = function(exp)
     -- any type
-    if exp.left.token == "nil" or exp.left.token == "false" then
+    if exp.left.node_type == "nil" or exp.left.node_type == "false" then
       local sub = exp.right
-      fold_exp(exp, sub.token, sub.value, sub)
-    elseif is_const_token[exp.left.token] then
+      fold_exp(exp, sub.node_type, sub.value, sub)
+    elseif is_const_node[exp.left.node_type] then
       -- the constants that failed the first test are all truthy
       local sub = exp.left
-      fold_exp(exp, sub.token, sub.value, sub)
+      fold_exp(exp, sub.node_type, sub.value, sub)
     end
   end,
 }
 local function fold_const_exp(exp)
   walk_exp(exp,nil,function(exp)
-    if exp.token == "unop" then
+    if exp.node_type == "unop" then
       fold_unop[exp.op](exp)
-    elseif exp.token == "binop" then
+    elseif exp.node_type == "binop" then
       fold_binop[exp.op](exp)
-    elseif exp.token == "concat" then
+    elseif exp.node_type == "concat" then
       -- combine adjacent number or string
       local new_exp_list = {}
       local combining = {}
       local combining_pos
       for _,sub in ipairs(exp.exp_list) do
-        if sub.token == "string" or sub.token == "number" then
+        if sub.node_type == "string" or sub.node_type == "number" then
           if not combining[1] then
             combining_pos = {line = sub.line, column = sub.column}
           end
@@ -224,7 +224,7 @@ local function fold_const_exp(exp)
         else
           if #combining == 1 then
             new_exp_list[#new_exp_list+1] = {
-              token = "string",
+              node_type = "string",
               line = combining_pos.line, column = combining_pos.column,
               value = combining[1],
               folded = true
@@ -233,7 +233,7 @@ local function fold_const_exp(exp)
             combining_pos = nil
           elseif #combining > 1 then
             new_exp_list[#new_exp_list+1] = {
-              token = "string",
+              node_type = "string",
               line = combining_pos.line, column = combining_pos.column,
               value = table.concat(combining),
               folded = true
@@ -247,14 +247,14 @@ local function fold_const_exp(exp)
       end
       if #combining == 1 then
         new_exp_list[#new_exp_list+1] = {
-          token = "string",
+          node_type = "string",
           line = combining_pos.line, column = combining_pos.column,
           value = combining[1],
           folded = true
         }
       elseif #combining > 1 then
         new_exp_list[#new_exp_list+1] = {
-          token = "string",
+          node_type = "string",
           line = combining_pos.line, column = combining_pos.column,
           value = table.concat(combining),
           folded = true
@@ -267,7 +267,7 @@ local function fold_const_exp(exp)
       if #exp.exp_list == 1 then
         -- fold a single string away entirely, if possible
         local sub = exp.exp_list[1]
-        fold_exp(exp,sub.token,sub.value,sub)
+        fold_exp(exp,sub.node_type,sub.value,sub)
       end
     else
       -- anything else?
@@ -279,33 +279,33 @@ end
 
 local function fold_const(main)
   walk_block(main, nil,
-  function(token)
-    if token.condition then -- if,while,repeat
-      fold_const_exp(token.condition)
+  function(node)
+    if node.condition then -- if,while,repeat
+      fold_const_exp(node.condition)
     end
-    if token.ex then -- call, selfcall
-      fold_const_exp(token.ex)
+    if node.ex then -- call, selfcall
+      fold_const_exp(node.ex)
     end
-    if token.suffix then -- selfcall
-      fold_const_exp(token.suffix)
+    if node.suffix then -- selfcall
+      fold_const_exp(node.suffix)
     end
-    if token.args then -- call, selfcall
-      for _,exp in ipairs(token.args) do
+    if node.args then -- call, selfcall
+      for _,exp in ipairs(node.args) do
         fold_const_exp(exp)
       end
     end
-    if token.exp_list then -- localstat, return
-      for _,exp in ipairs(token.exp_list) do
+    if node.exp_list then -- localstat, return
+      for _,exp in ipairs(node.exp_list) do
         fold_const_exp(exp)
       end
     end
-    if token.lhs then -- assignment
-      for _,exp in ipairs(token.lhs) do
+    if node.lhs then -- assignment
+      for _,exp in ipairs(node.lhs) do
         fold_const_exp(exp)
       end
     end
-    if token.rhs then -- assignment
-      for _,exp in ipairs(token.rhs) do
+    if node.rhs then -- assignment
+      for _,exp in ipairs(node.rhs) do
         fold_const_exp(exp)
       end
     end

@@ -2,7 +2,7 @@
 --------------------------------------------------
 -- ast stuff:
 
----@alias AstNodeToken
+---@alias AstNodeType
 ---special:
 ---| '"main"'
 ---| '"env"'
@@ -47,7 +47,7 @@
 ---| '"constructor"'
 
 ---@class AstNode
----@field token AstNodeToken
+---@field node_type AstNodeType
 ---@field line integer
 ---@field column integer
 ---@field leading Token[] @ `"blank"` and `"comment"` tokens
@@ -73,7 +73,7 @@
 ---@field labels AstLabel[]
 
 ---@class AstFunctionDef : AstBody, AstScope
----@field token '"functiondef"'
+---@field node_type '"functiondef"'
 ---@field source string
 ---@field is_method boolean @ is it `function foo:bar() end`?
 ---@field func_protos AstFunctionDef[]
@@ -93,34 +93,34 @@
 
 
 ---@class AstEmpty : AstStatement
----@field token '"empty"'
+---@field node_type '"empty"'
 ---@field semi_colon_token AstTokenNode
 
 ---Like an empty node, no-op, purely describing the syntax
 ---@class AstTokenNode : AstNode
----@field token '"token"'
+---@field node_type '"token"'
 ---@field value string
 
 ---@class AstIfStat : AstStatement
----@field token '"ifstat"'
+---@field node_type '"ifstat"'
 ---@field ifs AstTestBlock[]
 ---@field elseblock AstElseBlock|nil
 ---@field end_token AstTokenNode
 
 ---@class AstTestBlock : AstStatement, AstBody, AstScope
----@field token '"testblock"'
+---@field node_type '"testblock"'
 ---@field condition AstExpression
 ---@field parent AstLocalParent
----@field if_token AstTokenNode @ for the first test block this is an `if` token, otherwise `elseif`
+---@field if_token AstTokenNode @ for the first test block this is an `if` node_type, otherwise `elseif`
 ---@field then_token AstTokenNode
 
 ---@class AstElseBlock : AstStatement, AstBody, AstScope
----@field token '"elseblock"'
+---@field node_type '"elseblock"'
 ---@field parent AstLocalParent
 ---@field else_token AstTokenNode
 
 ---@class AstWhileStat : AstStatement, AstBody, AstScope
----@field token '"whilestat"'
+---@field node_type '"whilestat"'
 ---@field condition AstExpression
 ---@field parent AstLocalParent
 ---@field while_token AstTokenNode
@@ -128,13 +128,13 @@
 ---@field end_token AstTokenNode
 
 ---@class AstDoStat : AstStatement, AstBody, AstScope
----@field token '"dostat"'
+---@field node_type '"dostat"'
 ---@field parent AstLocalParent
 ---@field do_token AstTokenNode
 ---@field end_token AstTokenNode
 
 ---@class AstForNum : AstStatement, AstBody, AstScope
----@field token '"fornum"'
+---@field node_type '"fornum"'
 ---@field var AstLocal
 ---@field start AstExpression
 ---@field stop AstExpression
@@ -150,7 +150,7 @@
 ---@field end_token AstTokenNode
 
 ---@class AstForList : AstStatement, AstBody, AstScope
----@field token '"forlist"'
+---@field node_type '"forlist"'
 ---@field name_list AstLocal[]
 ---@field exp_list AstExpression[]
 ---@field exp_list_comma_tokens AstTokenNode[]
@@ -164,24 +164,24 @@
 ---@field end_token AstTokenNode
 
 ---@class AstRepeatStat : AstStatement, AstBody, AstScope
----@field token '"repeatstat"'
+---@field node_type '"repeatstat"'
 ---@field condition AstExpression
 ---@field parent AstLocalParent
 ---@field repeat_token AstTokenNode
 ---@field until_token AstTokenNode
 
 ---@class AstFuncStat : AstStatement, AstFuncBase
----@field token '"funcstat"'
+---@field node_type '"funcstat"'
 ---@field names AstExpression[] @ first is anything from check_ref, the rest AstIdent
 ---@field dot_tokens AstTokenNode[] @ max length is `#names - 1`
 
 ---@class AstLocalFunc : AstStatement, AstFuncBase
----@field token '"localfunc"'
+---@field node_type '"localfunc"'
 ---@field name AstLocal
 ---@field local_token AstTokenNode
 
 ---@class AstLocalStat : AstStatement
----@field token '"localstat"'
+---@field node_type '"localstat"'
 ---@field lhs AstLocal[]
 ---@field rhs AstExpression[]|nil @ `nil` = no assignment
 ---@field local_token AstTokenNode
@@ -190,29 +190,29 @@
 ---@field eq_token AstTokenNode|nil @ only used if `rhs` is not `nil`
 
 ---@class AstLabel : AstStatement
----@field token '"label"'
+---@field node_type '"label"'
 ---@field value string
 ---@field open_token AstTokenNode @ opening `::`
 ---@field close_token AstTokenNode @ closing `::`
 
 ---@class AstRetStat : AstStatement
----@field token '"retstat"'
+---@field node_type '"retstat"'
 ---@field return_token AstTokenNode
 ---@field exp_list AstExpression[]|nil @ `nil` = no return values
 ---@field exp_list_comma_tokens AstTokenNode[]
 ---@field semi_colon_token AstTokenNode|nil @ trailing `;`. `nil` = no semi colon
 
 ---@class AstBreakStat : AstStatement
----@field token '"breakstat"'
+---@field node_type '"breakstat"'
 ---@field break_token AstTokenNode
 
 ---@class AstGotoStat : AstStatement
----@field token '"gotostat"'
+---@field node_type '"gotostat"'
 ---@field target AstIdent
 ---@field goto_token AstTokenNode
 
 ---@class AstSelfCall : AstStatement, AstExpression
----@field token '"selfcall"'
+---@field node_type '"selfcall"'
 ---@field ex AstExpression
 ---@field suffix AstString @ function name. `src_is_ident` is always `true`
 ---@field args AstExpression[]
@@ -221,14 +221,14 @@
 ---@field close_paren_token AstTokenNode|nil
 
 ---@class AstCall : AstStatement, AstExpression
----@field token '"call"'
+---@field node_type '"call"'
 ---@field ex AstExpression
 ---@field args AstExpression[]
 ---@field open_paren_token AstTokenNode|nil
 ---@field close_paren_token AstTokenNode|nil
 
 ---@class AstAssignment : AstStatement
----@field token '"assignment"'
+---@field node_type '"assignment"'
 ---@field lhs AstExpression[]
 ---@field lhs_comma_tokens AstTokenNode[]
 ---@field eq_token AstTokenNode
@@ -238,29 +238,29 @@
 
 
 ---@class AstLocal : AstExpression
----@field token '"local"'
+---@field node_type '"local"'
 ---@field value string
 
 ---@class AstUpVal : AstExpression
----@field token '"upval"'
+---@field node_type '"upval"'
 ---@field value string
 
 ---@class AstIndex : AstExpression
----@field token '"index"'
+---@field node_type '"index"'
 ---@field ex AstExpression
 ---if this is an AstString with `src_is_ident == true`
 ---then it is representing a literal identifier
 ---@field suffix AstExpression
 ---Only used if it is a literal identifier
 ---@field dot_token AstTokenNode|nil
----`[` token if it is not a literal identifier
+---`[` node_type if it is not a literal identifier
 ---@field suffix_open_token AstTokenNode|nil
----`]` token if it is not a literal identifier
+---`]` node_type if it is not a literal identifier
 ---@field suffix_close_token AstTokenNode|nil
 
 ---i think this is basically a string constant expression
 ---@class AstString : AstExpression
----@field token '"string"'
+---@field node_type '"string"'
 ---@field value string
 ---if it was just an identifier in source.\
 ---Used in record field keys for table constructors\
@@ -276,56 +276,56 @@
 
 ---the same as AstStringName, maybe a bug
 ---@class AstIdent : AstExpression
----@field token '"ident"'
+---@field node_type '"ident"'
 ---@field value string
 
 ---@class Ast_ENV : AstExpression
----@field token '"_ENV"'
+---@field node_type '"_ENV"'
 ---@field value '"_ENV"'
 
 ---@class AstUnOp : AstExpression
----@field token '"unop"'
+---@field node_type '"unop"'
 ---@field op '"not"'|'"-"'|'"#"'
 ---@field ex AstExpression
 ---@field op_token AstTokenNode
 
 ---@class AstBinOp : AstExpression
----@field token '"binop"'
+---@field node_type '"binop"'
 ---@field op '"^"'|'"*"'|'"/"'|'"%"'|'"+"'|'"-"'|'"=="'|'"<"'|'"<="'|'"~="'|'">"'|'">="'|'"and"'|'"or"'
 ---@field left AstExpression
 ---@field right AstExpression
 ---@field op_token AstTokenNode
 
 ---@class AstConcat : AstExpression
----@field token '"concat"'
+---@field node_type '"concat"'
 ---@field exp_list AstExpression[]
 ---@field op_tokens AstTokenNode[] @ max length is `#exp_list - 1`
 
 ---@class AstNumber : AstExpression
----@field token '"number"'
+---@field node_type '"number"'
 ---@field value number
 ---@field src_value string
 
 ---@class AstNil : AstExpression
----@field token '"nil"'
+---@field node_type '"nil"'
 
 ---@class AstTrue : AstExpression
----@field token '"true"'
+---@field node_type '"true"'
 ---@field value 'true'
 
 ---@class AstFalse : AstExpression
----@field token '"false"'
+---@field node_type '"false"'
 ---@field value 'false'
 
 ---@class AstVarArg : AstExpression
----@field token '"..."'
+---@field node_type '"..."'
 
 ---@class AstFuncBase : AstNode
 ---@field ref AstFunctionDef
 ---@field function_token AstTokenNode
 
 ---@class AstFuncProto : AstExpression, AstFuncBase
----@field token '"func_proto"'
+---@field node_type '"func_proto"'
 
 ---@class AstField
 ---@field type '"rec"'|'"list"'
@@ -336,8 +336,8 @@
 ---a string expression with `src_is_ident == true`
 ---@field key AstExpression
 ---@field value AstExpression
----@field key_open_token AstTokenNode|nil @ `[` token if the key is using it
----@field key_close_token AstTokenNode|nil @ `]` token if the key is using it
+---@field key_open_token AstTokenNode|nil @ `[` node_type if the key is using it
+---@field key_close_token AstTokenNode|nil @ `]` node_type if the key is using it
 ---@field eq_token AstTokenNode
 
 ---@class AstListField
@@ -345,7 +345,7 @@
 ---@field value AstExpression
 
 ---@class AstConstructor : AstExpression
----@field token '"constructor"'
+---@field node_type '"constructor"'
 ---@field fields AstField[]
 ---@field open_paren_token AstTokenNode
 ---@field comma_tokens AstTokenNode[] @ `,` or `;` tokens, max length is `#fields`
@@ -369,7 +369,7 @@
 ---@field start_after AstStatement|nil
 
 ---@class AstEnv : AstNode
----@field token '"env"'
+---@field node_type '"env"'
 ---@field locals AstLocalDef[] @ 1 `whole_block = true` local with AstEnvName
 
 ---@class AstParent
@@ -385,7 +385,7 @@
 ---@class AstConstantDef
 
 ---@class AstMain : AstFunctionDef
----@field token '"main"'
+---@field node_type '"main"'
 ---@field is_method 'false'
 ---@field line '0'
 ---@field column '0'

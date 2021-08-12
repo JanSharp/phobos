@@ -98,7 +98,7 @@ local exprs = {
 
 ---@param node AstExpression
 function walk_exp(node)
-  exprs[node.token](node)
+  exprs[node.node_type](node)
 end
 
 ---@param list AstExpression[]
@@ -204,7 +204,7 @@ local stats = {
 
 ---@param node AstStatement
 function walk_stat(node)
-  stats[node.token](node)
+  stats[node.node_type](node)
 end
 
 ---@param node AstBody[]

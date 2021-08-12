@@ -7,7 +7,7 @@ local keywords = invert{
   "while", "goto",
 }
 
----@alias TokenToken
+---@alias TokenType
 ---| '"blank"'
 ---| '"comment"'
 ---| '"string"'
@@ -60,7 +60,7 @@ local keywords = invert{
 ---| '"goto"'
 
 ---@class Token
----@field token TokenToken
+---@field token_type TokenType
 ---@field index number
 ---@field line number
 ---@field column number
@@ -71,14 +71,14 @@ local keywords = invert{
 ---@field src_has_leading_newline boolean @ for block `string` and `comment` tokens
 ---@field src_pad string @ the `=` chain for block `string` and `comment` tokens
 
----@param token TokenToken
+---@param token_type TokenType
 ---@param index number
 ---@param line number
 ---@param column number
 ---@return Token
-local function new_token(token,index,line,column)
+local function new_token(token_type,index,line,column)
   return {
-    token = token,
+    token_type = token_type,
     index = index,
     line = line,
     column = column
@@ -246,7 +246,7 @@ local function next_token(state,index)
     return -- EOF
   elseif next_char:match("[+*/%%^#;,(){}%]]") then
     return index+1,new_token(next_char,index,state.line,index - state.line_offset)
-  elseif next_char:match("[>=<]") then -- TODO: add these to TokenToken
+  elseif next_char:match("[>=<]") then -- TODO: add these to TokenType
     return peek_equals(str,index,next_char,state.line,index - state.line_offset)
   elseif next_char == "[" then
     local peek = str:sub(index+1,index+1)
@@ -262,7 +262,7 @@ local function next_token(state,index)
           read block string, build a token from that
           ]]
         local next_index,token = read_block_string(str,index+2,state)
-        token.token = "comment"
+        token.token_type = "comment"
         token.index = index
         return next_index,token
       else
