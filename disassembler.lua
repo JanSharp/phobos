@@ -83,8 +83,8 @@ do
       return "SETTABLE", get_register_label("a").."["..get_register_or_constant_label("b").."] := "..get_register_or_constant_label("c")
     end,
 
-    [opcodes.new_table] = function()
-      return "new_tabLE", get_register_label("a").." := {} size("..get_label("b")..", "..get_label("c")..")"
+    [opcodes.newtable] = function()
+      return "NEWTABLE", get_register_label("a").." := {} size("..get_label("b")..", "..get_label("c")..")"
     end,
     [opcodes.self] = function()
       return "SELF", get_register_label("a+1", current.a + 1).." := "..get_register_label("b").."; "

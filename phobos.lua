@@ -279,7 +279,7 @@ do
     end,
     constructor = function(expr,in_reg,func)
       local new_tab = {
-        op = opcodes.new_table, a = in_reg, b = 0, c = 0 -- TODO: create with right size
+        op = opcodes.newtable, a = in_reg, b = 0, c = 0 -- TODO: create with right size
       }
       func.instructions[#func.instructions+1] = new_tab
       local top = func.next_reg
