@@ -553,7 +553,7 @@ local function sub_expr(limit,scope)
       node.op = token.token_type
       node.op_token = new_token_node()
       next_token() -- consume unop
-      node.sub = sub_expr(prio, scope)
+      node.ex = sub_expr(prio, scope)
     else
       node = simple_exp(scope)
     end
