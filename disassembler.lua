@@ -488,7 +488,14 @@ local function get_disassembly(func, func_description_callback, instruction_call
     conditionally_add_raw_value("ax")
     conditionally_add_raw_value("bx")
     conditionally_add_raw_value("sbx")
-    instruction_callback(instructions[i].line, i, label..string.rep(" ", max_opcode_name_length - #label), description, description, raw)
+    instruction_callback(
+      instructions[i].line,
+      i,
+      label..string.rep(" ", max_opcode_name_length - #label),
+      description,
+      description_with_keys,
+      raw
+    )
   end
 end
 
