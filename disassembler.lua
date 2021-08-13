@@ -1,5 +1,6 @@
 
 local opcodes = require("opcodes")
+local phobos_consts = require("constants")
 
 local get_instruction_label
 do
@@ -185,9 +186,8 @@ do
 
     [opcodes.setlist] = function()
       local c = (current.c ~= 0 and current.c or next_inst.ax) - 1
-      local fields_per_flush = 50
-      return "SETLIST", get_register_label("a").."["..(c * fields_per_flush + 1)..", ..."
-        ..(current.b ~= 0 and (", "..(c * fields_per_flush + current.b)) or "").."] := "
+      return "SETLIST", get_register_label("a").."["..(c * phobos_consts.fields_per_flush + 1)..", ..."
+        ..(current.b ~= 0 and (", "..(c * phobos_consts.fields_per_flush + current.b)) or "").."] := "
         ..get_register_label("a+1", current.a + 1)..", ..., "..(current.b ~= 0 and get_register_label("a+b", current.a + current.b) or "top")
     end,
     [opcodes.closure] = function()

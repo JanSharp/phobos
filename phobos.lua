@@ -1,5 +1,6 @@
 
 local invert = require("invert")
+local phobos_consts = require("constants")
 ----------------------------------------------------------------------
 local generate_code
 do
@@ -276,21 +277,42 @@ do
     end,
     constructor = function(expr,in_reg,func)
       local new_tab = {
-        op = opcodes.newtable, a = in_reg, b = 0, c = 0 -- TODO: create with right size
+        op = opcodes.newtable, a = in_reg, b = nil, c = nil -- set later
       }
       func.instructions[#func.instructions+1] = new_tab
-      local top = func.next_reg
-      local list_count = 0
-      local last_field = #expr.fields
+      local initial_top = func.next_reg
+      local fields_count = #expr.fields
+      local num_fields_to_flush = 0
+      local flush_count = 0
+      local total_list_field_count = 0
+      local total_rec_field_count
+
+      local function flush(count)
+        flush_count = flush_count + 1
+        total_list_field_count = total_list_field_count + num_fields_to_flush
+        num_fields_to_flush = 0
+        func.instructions[#func.instructions+1] = {
+          op = opcodes.setlist, a = in_reg, b = count, c = flush_count
+        }
+        release_down_to(func,initial_top)
+      end
+
       for i,field in ipairs(expr.fields) do
         if field.type == "list" then
           -- if list accumulate values
           local count = 1
-          if i == last_field then
+          if i == fields_count and vararg_node_types[field.value.node_type] then
             count = -1
           end
           generate_expr(field.value,next_reg(func),func,count)
-          --TODO: for very long lists, go ahead and assign it and start another set
+          num_fields_to_flush = num_fields_to_flush + 1
+          if num_fields_to_flush == phobos_consts.fields_per_flush then
+            flush(num_fields_to_flush)
+          elseif count == -1 then
+            flush(0) -- 0 means up to top
+            total_rec_field_count = fields_count - total_list_field_count
+            total_list_field_count = total_list_field_count - 1 -- don't count the vararg field
+          end
         elseif field.type == "rec" then
           -- if rec, set in table immediately
           local tmp_reg,used_temp = next_reg(func),{}
@@ -320,12 +342,12 @@ do
           error("Invalid field type in table constructor")
         end
       end
-      if list_count > 0 then
-        func.instructions[#func.instructions+1] = {
-          op = opcodes.setlist, a = in_reg, b = list_count,  c = 1
-        }
-        release_down_to(func,top)
+
+      if num_fields_to_flush > 0 then
+        flush(num_fields_to_flush)
       end
+      new_tab.b = total_list_field_count
+      new_tab.c = total_rec_field_count or (fields_count - total_list_field_count)
     end,
     func_proto = function(expr,in_reg,func)
       func.instructions[#func.instructions+1] = {
