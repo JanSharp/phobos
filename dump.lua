@@ -145,7 +145,7 @@ local function DumpFunction(func)
   -- int[] lines (line number per instruction?)
   dump[#dump+1] = DumpInt(#func.instructions)
   for i, instruction in ipairs(func.instructions) do
-    dump[#dump+1] = DumpInt(i)
+    dump[#dump+1] = DumpInt(instruction.line or 0)
   end
 
   -- int n_locals
