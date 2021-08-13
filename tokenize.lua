@@ -28,6 +28,12 @@ local keywords = invert{
 ---| '"}"'
 ---| '"]"'
 ---| '"["'
+---| '"<"'
+---| '"<="'
+---| '"="'
+---| '"=="'
+---| '">"'
+---| '">="'
 ---| '"-"'
 ---| '"~="'
 ---| '"::"'
@@ -246,7 +252,7 @@ local function next_token(state,index)
     return -- EOF
   elseif next_char:match("[+*/%%^#;,(){}%]]") then
     return index+1,new_token(next_char,index,state.line,index - state.line_offset)
-  elseif next_char:match("[>=<]") then -- TODO: add these to TokenType
+  elseif next_char:match("[>=<]") then
     return peek_equals(str,index,next_char,state.line,index - state.line_offset)
   elseif next_char == "[" then
     local peek = str:sub(index+1,index+1)

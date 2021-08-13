@@ -189,7 +189,7 @@ end
 ---@return AstExpression
 ---@return AstTokenNode open_token @ `[` token
 ---@return AstTokenNode close_token @ `]` token
-local function y_index(scope) -- TODO: find a better word for y. I think it's just to prevent use of duplicate names right now
+local function index_expr(scope)
   local open_token = new_token_node()
   next_token()
   local e = expr(scope)
@@ -209,7 +209,7 @@ local function rec_field(scope)
     field.key.src_is_ident = true
     next_token()
   else
-    field.key, field.key_open_token, field.key_close_token = y_index(scope)
+    field.key, field.key_open_token, field.key_close_token = index_expr(scope)
   end
   field.eq_token = new_token_node()
   assert_next("=")
@@ -435,7 +435,7 @@ local suffixed_lut = {
   ["["] = function(ex,scope)
     local node = new_node("index")
     node.ex = ex
-    node.suffix, node.suffix_open_token, node.suffix_close_token = y_index(scope)
+    node.suffix, node.suffix_open_token, node.suffix_close_token = index_expr(scope)
     return node
   end,
   [":"] = function(ex,scope)

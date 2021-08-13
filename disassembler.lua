@@ -26,7 +26,8 @@ do
 
   local function get_constant_label(key, idx)
     idx = idx or current[key]
-    return func.constants[idx + 1].label--.." ("..key..")" -- TODO: once all label getters are done check if this key is ever needed
+    -- this key is pretty "in the way", but it says here (commented out) to know where and how to add it if needed
+    return func.constants[idx + 1].label--.." ("..key..")"
   end
 
   local function get_register_or_constant_label(key, idx)
@@ -129,15 +130,15 @@ do
     end,
     [opcodes.eq] = function()
       return "EQ", "if ("..get_register_or_constant_label("b").." "..(current.a ~= 0 and "~=" or "==").." "
-        ..get_register_or_constant_label("c")..") then pc++" -- TODO: maybe add info about a, but probably not
+        ..get_register_or_constant_label("c")..") then pc++"
     end,
     [opcodes.lt] = function()
       return "LT", "if ("..get_register_or_constant_label("b").." "..(current.a ~= 0 and ">=" or "<").." "
-        ..get_register_or_constant_label("c")..") then pc++" -- TODO: maybe add info about a, but probably not
+        ..get_register_or_constant_label("c")..") then pc++"
     end,
     [opcodes.le] = function()
       return "LE", "if ("..get_register_or_constant_label("b").." "..(current.a ~= 0 and ">" or "<=").." "
-        ..get_register_or_constant_label("c")..") then pc++" -- TODO: maybe add info about a, but probably not
+        ..get_register_or_constant_label("c")..") then pc++"
     end,
 
     [opcodes.test] = function()
