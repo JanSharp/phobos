@@ -421,7 +421,7 @@ local function primary_exp(scope)
   end
 end
 
-local suffixed_tab = {
+local suffixed_lut = {
   ["."] = function(ex)
     local node = new_node("index")
     node.ex = ex
@@ -478,7 +478,7 @@ local function suffixed_exp(scope)
   local ex = primary_exp(scope)
   local should_break = false
   repeat
-    ex = ((suffixed_tab)[token.token_type] or function(ex)
+    ex = ((suffixed_lut)[token.token_type] or function(ex)
       should_break = true
       return ex
     end)(ex,scope)
@@ -486,7 +486,32 @@ local function suffixed_exp(scope)
   return ex
 end
 
-local simple_token_types = invert{"number","string","nil","true","false","..."}
+local simple_lut = {
+  ["number"] = function()
+    return new_node("number")
+  end,
+  ["string"] = function()
+    local node = new_node("string")
+    node.src_is_block_str = token.src_is_block_str
+    node.src_quote = token.src_quote
+    node.src_value = token.src_value
+    node.src_has_leading_newline = token.src_has_leading_newline
+    node.src_pad = token.src_pad
+    return node
+  end,
+  ["nil"] = function()
+    return new_node("nil")
+  end,
+  ["true"] = function()
+    return new_node("boolean")
+  end,
+  ["false"] = function()
+    return new_node("boolean")
+  end,
+  ["..."] = function()
+    return new_node("...")
+  end,
+}
 
 --- Simple Expression
 ---@param scope AstScope
@@ -494,17 +519,9 @@ local simple_token_types = invert{"number","string","nil","true","false","..."}
 local function simple_exp(scope)
   -- simple_exp -> NUMBER | STRING | NIL | TRUE | FALSE | ... |
   --              constructor | FUNCTION body | suffixed_exp
-  if simple_token_types[token.token_type] then
-    local node = new_node(token.token_type)
+  if simple_lut[token.token_type] then
+    local node = simple_lut[token.token_type]()
     node.value = token.value
-    if node.node_type == "string" then
-      node.value = token.value
-      node.src_is_block_str = token.src_is_block_str
-      node.src_quote = token.src_quote
-      node.src_value = token.src_value
-      node.src_has_leading_newline = token.src_has_leading_newline
-      node.src_pad = token.src_pad
-    end
     next_token() --consume it
     return node
   end

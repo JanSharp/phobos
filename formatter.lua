@@ -65,11 +65,8 @@ local exprs = {
   ---@param node AstNil
   ["nil"] = function(node)
   end,
-  ---@param node AstTrue
-  ["true"] = function(node)
-  end,
-  ---@param node AstFalse
-  ["false"] = function(node)
+  ---@param node AstBoolean
+  boolean = function(node)
   end,
   ---@param node AstVarArg
   ["..."] = function(node)

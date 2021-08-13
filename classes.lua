@@ -40,8 +40,7 @@
 ---| '"number"'
 ---| '"string"'
 ---| '"nil"'
----| '"true"' @ -- TODO: combine these to be boolean with value
----| '"false"' @ -- TODO: combine these to be boolean with value
+---| '"boolean"'
 ---| '"..."'
 ---| '"func_proto"'
 ---| '"constructor"'
@@ -309,13 +308,9 @@
 ---@class AstNil : AstExpression
 ---@field node_type '"nil"'
 
----@class AstTrue : AstExpression
----@field node_type '"true"'
----@field value 'true'
-
----@class AstFalse : AstExpression
----@field node_type '"false"'
----@field value 'false'
+---@class AstBoolean : AstExpression
+---@field node_type '"boolean"'
+---@field value boolean
 
 ---@class AstVarArg : AstExpression
 ---@field node_type '"..."'

@@ -178,8 +178,10 @@ do
       return in_reg
     end
   end
-  local const_node_types = invert{"true","false","nil","string","number"}
-  local false_node_types = invert{"false","nil"}
+  local function is_falsy(node)
+    return node.node_type == "nil" or (node.node_type == "boolean" and node.node_type.value == false)
+  end
+  local const_node_types = invert{"boolean","nil","string","number"}
   local logical_binops = invert{">",">=","==","~=","<=","<"}
   local function const_or_local_or_fetch(expr,in_reg,func)
     if const_node_types[expr.node_type] then
@@ -262,14 +264,9 @@ do
     end,
     number = generate_const_code,
     string = generate_const_code,
-    ["true"] = function(expr,in_reg,func)
+    boolean = function(expr,in_reg,func)
       func.instructions[#func.instructions+1] = {
-        op = opcodes.loadbool, a = in_reg, b = 1, c = 0
-      }
-    end,
-    ["false"] = function(expr,in_reg,func)
-      func.instructions[#func.instructions+1] = {
-        op = opcodes.loadbool, a = in_reg, b = 0, c = 0
+        op = opcodes.loadbool, a = in_reg, b = expr.value and 1 or 0, c = 0
       }
     end,
     ["nil"] = function(expr,in_reg,func,num_results)
@@ -593,10 +590,10 @@ do
     ifstat = function(stat,func)
       for i,if_block in ipairs(stat.ifs) do
         local top = func.next_reg
-        local condition = if_block.condition
-        local condition_node_type = condition.node_type
+        local condition_node = if_block.condition
+        local condition_node_type = condition_node.node_type
 
-        if false_node_types[condition_node_type] then
+        if is_falsy(condition_node) then -- TODO: imo this should be moved out to be an optimization
           -- always false, skip this block
           goto next_block
         elseif const_node_types[condition_node_type] then
@@ -608,7 +605,7 @@ do
           error()
         else
           -- generate a value and `test` it...
-          generate_test_code(condition)
+          generate_test_code(condition_node)
           error()
         end
 

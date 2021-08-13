@@ -57,8 +57,8 @@ local function walk_exp(exp,open,close)
   if close then close(exp) end
 end
 
-local function fold_exp(parent_exp,tok,value,child_node)
-  parent_exp.node_type = tok
+local function fold_exp(parent_exp,node_type,value,child_node)
+  parent_exp.node_type = node_type
   parent_exp.value = value
   parent_exp.ex = nil        -- call, selfcall
   parent_exp.op = nil        -- binop,unop
@@ -75,7 +75,7 @@ local function fold_exp(parent_exp,tok,value,child_node)
   parent_exp.folded = true
 end
 
-local is_const_node = invert{"string","number","true","false","nil"}
+local is_const_node = invert{"string","number","boolean","nil"}
 local fold_unop = {
   ["-"] = function(exp)
     -- number
@@ -168,7 +168,7 @@ local fold_binop = {
       fold_exp(exp, tostring(res), res)
     elseif is_const_node[exp.left.node_type] and is_const_node[exp.right.node_type] then
       -- different types of constants
-      fold_exp(exp, "false", false)
+      fold_exp(exp, "boolean", false)
     end
   end,
   ["~="] = function(exp)
@@ -178,12 +178,12 @@ local fold_binop = {
       fold_exp(exp, tostring(res), res)
     elseif is_const_node[exp.left.node_type] and is_const_node[exp.right.node_type] then
       -- different types of constants
-      fold_exp(exp, "true", true)
+      fold_exp(exp, "boolean", true)
     end
   end,
   ["and"] = function(exp)
     -- any type
-    if exp.left.node_type == "nil" or exp.left.node_type == "false" then
+    if exp.left.node_type == "nil" or (exp.left.node_type == "boolean" and exp.left.value == false) then
       local sub = exp.left
       fold_exp(exp, sub.node_type, sub.value, sub)
     elseif is_const_node[exp.left.node_type] then
@@ -194,7 +194,7 @@ local fold_binop = {
   end,
   ["or"] = function(exp)
     -- any type
-    if exp.left.node_type == "nil" or exp.left.node_type == "false" then
+    if exp.left.node_type == "nil" or (exp.left.node_type == "boolean" and exp.left.value == false) then
       local sub = exp.right
       fold_exp(exp, sub.node_type, sub.value, sub)
     elseif is_const_node[exp.left.node_type] then
