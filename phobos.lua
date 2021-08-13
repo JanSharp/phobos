@@ -306,12 +306,12 @@ do
           end
           generate_expr(field.value,next_reg(func),func,count)
           num_fields_to_flush = num_fields_to_flush + 1
-          if num_fields_to_flush == phobos_consts.fields_per_flush then
-            flush(num_fields_to_flush)
-          elseif count == -1 then
+          if count == -1 then
             flush(0) -- 0 means up to top
             total_rec_field_count = fields_count - total_list_field_count
             total_list_field_count = total_list_field_count - 1 -- don't count the vararg field
+          elseif num_fields_to_flush == phobos_consts.fields_per_flush then
+            flush(num_fields_to_flush)
           end
         elseif field.type == "rec" then
           -- if rec, set in table immediately
