@@ -41,7 +41,7 @@
 ---| '"string"'
 ---| '"nil"'
 ---| '"boolean"'
----| '"..."'
+---| '"vararg"'
 ---| '"func_proto"'
 ---| '"constructor"'
 
@@ -313,7 +313,7 @@
 ---@field value boolean
 
 ---@class AstVarArg : AstExpression
----@field node_type '"..."'
+---@field node_type '"vararg"'
 
 ---@class AstFuncBase : AstNode
 ---@field ref AstFunctionDef

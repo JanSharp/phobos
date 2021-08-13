@@ -69,7 +69,7 @@ local exprs = {
   boolean = function(node)
   end,
   ---@param node AstVarArg
-  ["..."] = function(node)
+  vararg = function(node)
   end,
   ---@param node AstFuncProto
   func_proto = function(node)

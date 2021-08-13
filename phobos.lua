@@ -54,7 +54,7 @@ do
   end
 
   local generate_expr_code
-  local vararg_node_types = invert{"...","call","selfcall"}
+  local vararg_node_types = invert{"vararg","call","selfcall"}
   local function generate_expr(expr,in_reg,func,num_results)
     generate_expr_code[expr.node_type](expr,in_reg,func,num_results)
     if num_results > 1 and not vararg_node_types[expr.node_type] then
@@ -354,7 +354,7 @@ do
         op = opcodes.closure, a = in_reg, bx = expr.ref.index
       }
     end,
-    ["..."] = function(expr,in_reg,func,num_results)
+    vararg = function(expr,in_reg,func,num_results)
       func.instructions[#func.instructions+1] = {
         op = opcodes.vararg, a = in_reg, b = (num_results or 1)+1
       }

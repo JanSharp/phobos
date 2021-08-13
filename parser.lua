@@ -509,7 +509,7 @@ local simple_lut = {
     return new_node("boolean")
   end,
   ["..."] = function()
-    return new_node("...")
+    return new_node("vararg")
   end,
 }
 
