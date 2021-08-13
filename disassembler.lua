@@ -185,9 +185,9 @@ do
     [opcodes.setlist] = function()
       local c = (current.c ~= 0 and current.c or next_inst.ax) - 1
       local fields_per_flush = 50
-      -- TODO: maybe add display keys
-      return "SETLIST", get_register_label("a").."["..(c * fields_per_flush + 1)..", ..., "..(c * fields_per_flush + current.b).."] := "
-        ..get_register_label("a+1", current.a + 1)..", ..., "..get_register_label("a+b", current.a + current.b)
+      return "SETLIST", get_register_label("a").."["..(c * fields_per_flush + 1)..", ..."
+        ..(current.b ~= 0 and (", "..(c * fields_per_flush + current.b)) or "").."] := "
+        ..get_register_label("a+1", current.a + 1)..", ..., "..(current.b ~= 0 and get_register_label("a+b", current.a + current.b) or "top")
     end,
     [opcodes.closure] = function()
       local inner_func = func.inner_functions[current.bx + 1]
