@@ -1,6 +1,7 @@
 
 local invert = require("invert")
 local phobos_consts = require("constants")
+local util = require("util")
 ----------------------------------------------------------------------
 local generate_code
 do
@@ -346,8 +347,8 @@ do
       if num_fields_to_flush > 0 then
         flush(num_fields_to_flush)
       end
-      new_tab.b = total_list_field_count
-      new_tab.c = total_rec_field_count or (fields_count - total_list_field_count)
+      new_tab.b = util.number_to_floating_byte(total_list_field_count)
+      new_tab.c = util.number_to_floating_byte(total_rec_field_count or (fields_count - total_list_field_count))
     end,
     func_proto = function(expr,in_reg,func)
       func.instructions[#func.instructions+1] = {

@@ -1,6 +1,7 @@
 
 local opcodes = require("opcodes")
 local phobos_consts = require("constants")
+local util = require("util")
 
 local get_instruction_label
 do
@@ -45,8 +46,9 @@ do
     return "Up("..(display_keys and (key..": ") or "")..idx..(func.upvals[idx + 1] and ("|"..func.upvals[idx + 1].name) or "")..")"
   end
 
-  local function get_label(key)
-    return (display_keys and (key..": ") or "")..current[key]
+  local function get_label(key, idx)
+    idx = idx or current[key]
+    return (display_keys and (key..": ") or "")..idx
   end
 
   local instruction_label_getter_lut = {
@@ -86,7 +88,9 @@ do
     end,
 
     [opcodes.newtable] = function()
-      return "NEWTABLE", get_register_label("a").." := {} size("..get_label("b")..", "..get_label("c")..")"
+      return "NEWTABLE", get_register_label("a").." := {} size("
+        ..get_label("b", util.floating_byte_to_number(current.b))..", "
+        ..get_label("c", util.floating_byte_to_number(current.c))..")"
     end,
     [opcodes.self] = function()
       return "SELF", get_register_label("a+1", current.a + 1).." := "..get_register_label("b").."; "
