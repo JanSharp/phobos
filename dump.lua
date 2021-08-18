@@ -68,6 +68,7 @@ local function DumpConstant(val)
   return dumpConstantByType[type(val)](val)
 end
 
+---@param func GeneratedFunc
 local function DumpFunction(func)
   local dump = {}
   -- int line_defined (0 for main chunk)
@@ -99,11 +100,13 @@ local function DumpFunction(func)
       else
         if instruction.b then
           opcode = opcode + bit32.lshift(instruction.b, 23)
+        elseif instruction.bk then ---@diagnostic disable-line: undefined-field -- TODO: remove
+          error()
         end
         if instruction.c then
           opcode = opcode + bit32.lshift(instruction.c, 14)
-        elseif instruction.ck then
-          opcode = opcode + bit32.lshift(instruction.ck, 14)
+        elseif instruction.ck then ---@diagnostic disable-line: undefined-field -- TODO: remove
+          error()
         end
       end
     end
@@ -134,7 +137,7 @@ local function DumpFunction(func)
   for _,u in ipairs(func.upvals) do
     -- byte in_stack (is a local in parent scope, else upvalue in parent scope)
     -- byte idx
-    dump[#dump+1] = string.char(u.up_depth==1 and 1 or 0, u.ref.index or 0)
+    dump[#dump+1] = string.char(u.parent_def.def_type == "local" and 1 or 0, u.parent_def.index or 0)
   end
 
   -- [Debug]
@@ -153,20 +156,23 @@ local function DumpFunction(func)
   --   string name
   --   int start_pc
   --   int end_pc
-  dump[#dump+1] = DumpInt(0)
-
-  -- dump[#dump+1] = DumpInt(#func.locals)
-  -- for _, loc in ipairs(func.locals) do
-  --   dump[#dump+1] = DumpString(loc.name)
-  --   dump[#dump+1] = DumpInt(0)
-  --   dump[#dump+1] = DumpInt(0)
-  -- end
+  -- TODO: since there can be gaps in live_regs[i].reg this actually requires some data transformation
+  -- the right solution is most likely to perform this transformation at the end of compilation
+  -- and only store the raw "locals" info in the generated function
+  dump[#dump+1] = DumpInt(#func.live_regs)
+  for _, live in ipairs(func.live_regs) do
+    dump[#dump+1] = DumpString(live.name)
+    -- TODO: i'm not sure about these, but zero based including to excluding would be the most natural
+    -- so that's how it is for now
+    dump[#dump+1] = DumpInt(live.start_at - 1)
+    dump[#dump+1] = DumpInt(live.stop_at)
+  end
 
   -- int n_upvals
   dump[#dump+1] = DumpInt(#func.upvals)
   -- string[] upvals
   for _,u in ipairs(func.upvals) do
-    dump[#dump+1] = DumpString(u.name--[[.value]])
+    dump[#dump+1] = DumpString(u.name) -- TODO: how to deal with nil names?
   end
 
   -- lua will stop reading here

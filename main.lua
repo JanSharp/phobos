@@ -17,7 +17,13 @@ if text:sub(#text) == "\n" then
 end
 file:close()
 
+if not lines[1] then -- empty file edge case
+  lines[1] = {line = ""}
+end
+
 local disassembler = require("disassembler")
+
+lines[1][1] = "-- < compiler :  line  pc  opcode  description  params >\n"
 
 local function format_line_num(line_num)
   -- this didn't work (getting digit count): (math.ceil((#lines) ^ (-10))), so now i cheat:
@@ -34,7 +40,8 @@ local function add_func_to_lines(prefix, func)
   disassembler.get_disassembly(func, function(description)
     local line = get_line(func.first_line)
     line[#line+1] = "-- "..prefix..": "..(description:gsub("\n", "\n-- "..prefix..": "))
-  end, function (line_num, instruction_index, padded_opcode, description, description_with_keys, raw_values)
+  end, function(line_num, instruction_index, padded_opcode, description, description_with_keys, raw_values)
+    description = description_with_keys
     local line = get_line(line_num)
     local min_description_len = 64
     line[#line+1] = string.format("-- %s: %s  %4d  %s  %s%s  %s",
@@ -63,7 +70,7 @@ do
   -- i added this because the debugger was not breaking on error inside a pcall
   -- and now it suddenly does break even with this set to false.
   -- i don't understand
-  local unsafe = false
+  local unsafe = true
   if unsafe then
     pcall = function(f, ...)
       return true, f(...)
@@ -91,6 +98,9 @@ do
   if not success then print(disassembled) goto finish end
 
   add_func_to_lines("pho", disassembled)
+
+  success, err = pcall(load, dumped)
+  if not success then print(err) goto finish end
 end
 
 ::finish::

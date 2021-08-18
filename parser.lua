@@ -33,6 +33,15 @@ local function new_node(node_type, use_prev)
   }
 end
 
+local function copy_node(node, new_node_type)
+  return {
+    node_type = new_node_type,
+    line = node.line,
+    column = node.column,
+    leading = node.leading,
+  }
+end
+
 --- Check that the current token is an "ident" token, and if so consume and return it.
 ---@return AstIdent name
 local function assert_name()
@@ -54,70 +63,114 @@ local function new_token_node(use_prev, value)
   return node
 end
 
---- Search for a reference to a variable.
----@param scope AstScope scope within which to resolve the reference
----@param node Token|nil Token naming a variable to search for a reference for. Consumes the next token if not given one.
-local function check_ref(scope,node)
-  if not node then node = assert_name() end
-  local original_scope = scope
-  local is_upval = 0 -- 0 = local, 1 = upval from immediate parent scope, 2+ = chained upval
-  local upval_parent = {}
-  while scope do
-    local found
-    for _,loc in ipairs(scope.locals) do
-      if node.value == loc.name.value then
-        -- keep looking to find the most recently defined one,
-        -- in case some nut redefines the same name repeatedly in the same scope
-        found = loc
+---@param ident_node AstIdent
+---@return AstLocalDef def
+---@return AstLocalReference ref
+local function create_local(ident_node)
+  local local_def = {
+    def_type = "local",
+    name = ident_node.value,
+    child_defs = {},
+  }
+
+  local ref = copy_node(ident_node, "local_ref")
+  ref.name = ident_node.value
+  ref.reference_def = local_def
+  return local_def, ref
+end
+
+local get_ref
+do
+  ---@diagnostic disable: undefined-field
+  -- because AstScope doesn't have upvals, but some deriving classes do
+  -- to be exact, only functions do
+
+  ---@param scope AstScope
+  ---@param name string
+  ---@return AstLocalDef|AstUpvalDef|nil
+  local function try_get_def(scope, name)
+    -- search top down to find most recently defined one
+    -- in case of redefined locals in the same scope
+    for i = #scope.locals, 1, -1 do
+      if scope.locals[i].name == name then
+        return scope.locals[i]
       end
     end
-    if not found and scope.upvals then
-      for _,up in ipairs(scope.upvals) do
-        if node.value == up.name then
-          found = up
+
+    if scope.upvals then
+      for _, upval in ipairs(scope.upvals) do
+        if upval.name == name then
+          return upval
         end
       end
     end
-    if found then
-      if is_upval>0 then
-        for i = 1,is_upval do
-          local parent_upvals = upval_parent[i].upvals
-          local new_upval = {name=node.value,up_depth=i + (found.up_depth or 0),ref=found}
-          if node.value == "_ENV" then
-            -- always put _ENV first, if present,
-            -- so that `load`'s mangling will be correct
-            table.insert(parent_upvals,1,new_upval)
+
+    if scope.parent_scope then
+      local def = try_get_def(scope.parent_scope, name)
+      if def then
+        if scope.upvals then
+          local new_def = {
+            def_type = "upval",
+            name = name,
+            scope = scope,
+            parent_def = def,
+            child_defs = {},
+          }
+          def.child_defs[#def.child_defs+1] = new_def
+          if name == "_ENV" then
+            -- always put _ENV first so that `load`'s mangling will be correct
+            table.insert(scope.upvals, 1, new_def)
           else
-            parent_upvals[#parent_upvals+1] = new_upval
+            scope.upvals[#scope.upvals+1] = new_def
           end
-          found = new_upval
+          return new_def
+        else
+          return def
         end
-        node.upval_parent = upval_parent
-        node.node_type = "upval"
-      elseif found.up_depth then
-        node.node_type = "upval"
-      else
-        node.node_type = "local"
       end
-      node.ref = found
-      return node
-    end
-    if scope.parent then
-      if scope.parent.type == "upval" then
-        is_upval = is_upval + 1
-        upval_parent[is_upval] = scope
-      end
-      scope = scope.parent.scope
-    else
-      scope = nil
     end
   end
+  ---@diagnostic enable: undefined-field
 
-  node.node_type = "string"
-  node = {node_type="index",
-  line = node.line, column = node.column,
-  ex = check_ref(original_scope,{value = "_ENV"}), suffix = node}
-  return node
+  ---@param scope AstScope
+  ---@param ident_node AstIdent
+  ---@return AstUpvalReference|AstLocalReference
+  function get_ref(scope, ident_node)
+    local def = try_get_def(scope, ident_node.value)
+    if def then
+      return {
+        node_type = def.def_type.."_ref", -- `local_ref` or `upval_ref`
+        name = ident_node.value,
+        line = ident_node.line,
+        column = ident_node.column,
+        leading = ident_node.leading,
+        reference_def = def,
+      }
+    end
+
+    return {
+      node_type = "index",
+      line = ident_node.line,
+      column = ident_node.column,
+      leading = {},
+      ex = get_ref(scope, {
+        node_type = "ident",
+        value = "_ENV",
+        line = ident_node.line,
+        column = ident_node.column,
+        leading = {},
+      }),
+      suffix = {
+        node_type = "string",
+        line = ident_node.line,
+        column = ident_node.column,
+        value = ident_node.value,
+        leading = ident_node.leading,
+        src_is_ident = true,
+      },
+      src_did_not_exist = true,
+    }
+  end
 end
 
 --- Check if the next token is a `tok` token, and if so consume it. Returns the result of the test.
@@ -304,40 +357,48 @@ end
 ---@return AstFuncProto
 local function body(function_token, scope, is_method)
   -- body -> `(` param_list `)`  block END
-  local parent = {type = "upval", scope = scope}
+  local parent_scope = scope
   ---@narrow scope AstScope|AstFunctionDef
   while not scope.func_protos do
-    scope = scope.parent.scope
+    scope = scope.parent_scope
   end
   ---@narrow scope AstFunctionDef
-  local ref_node = new_node("functiondef")
-  ref_node.source = scope.source
-  ref_node.is_method = is_method
-  ref_node.func_protos = {}
-  ref_node.locals = {}
-  ref_node.upvals = {}
-  ref_node.constants = {}
-  ref_node.labels = {}
-  ref_node.param_comma_tokens = {}
-  ref_node.parent = parent
+  local func_def_node = new_node("functiondef")
+  func_def_node.source = scope.source
+  func_def_node.is_method = is_method
+  func_def_node.func_protos = {}
+  func_def_node.locals = {}
+  func_def_node.upvals = {}
+  func_def_node.constants = {}
+  func_def_node.labels = {}
+  func_def_node.param_comma_tokens = {}
+  func_def_node.parent_scope = parent_scope
+  func_def_node.increase_upval_depth = true
   if is_method then
-    ref_node.locals[1] = {name = {token="self",value="self"}, whole_block = true}
+    local self_ident = copy_node(func_def_node, "ident")
+    self_ident.value = "self"
+    local self_local = create_local(self_ident)
+    -- TODO: maybe add info on the local def that this did not exist in source
+    -- TODO: create_local really only needs the local name here,
+    -- since the reference is not used. _maybe_ do something about that
+    self_local.whole_block = true
+    func_def_node.locals[1] = self_local
   end
-  ref_node.open_paren_token = new_token_node()
-  local this_tok = new_node("func_proto")
-  this_tok.ref = ref_node
-  this_tok.function_token = function_token
+  func_def_node.open_paren_token = new_token_node()
+  local this_node = new_node("func_proto")
+  this_node.ref = func_def_node
+  this_node.function_token = function_token
   assert_next("(")
-  ref_node.n_params = par_list(ref_node)
-  ref_node.close_paren_token = new_token_node()
+  func_def_node.n_params = par_list(func_def_node)
+  func_def_node.close_paren_token = new_token_node()
   assert_next(")")
-  ref_node.body = stat_list(ref_node)
-  ref_node.end_line = token.line
-  ref_node.end_column = token.column + 3
-  ref_node.end_token = new_token_node()
+  func_def_node.body = stat_list(func_def_node)
+  func_def_node.end_line = token.line
+  func_def_node.end_column = token.column + 3
+  func_def_node.end_token = new_token_node()
   assert_match("end", "function", function_token.line)
-  scope.func_protos[#scope.func_protos+1] = ref_node
-  return this_tok
+  scope.func_protos[#scope.func_protos+1] = func_def_node
+  return this_node
 end
 
 --- Expression List
@@ -415,7 +476,7 @@ local function primary_exp(scope)
     })
     return ex
   elseif token.token_type == "ident" then
-    return check_ref(scope)
+    return get_ref(scope, assert_name())
   else
     syntax_error("Unexpected symbol '" .. token.token_type .. "'")
   end
@@ -673,7 +734,7 @@ local function while_stat(line,scope)
   local this_tok = new_node("whilestat")
   this_tok.locals = {}
   this_tok.labels = {}
-  this_tok.parent = {type = "local", scope = scope}
+  this_tok.parent_scope = scope
   this_tok.while_token = new_token_node()
   next_token() -- skip WHILE
   this_tok.condition = expr(this_tok)
@@ -694,7 +755,7 @@ local function repeat_stat(line,scope)
   local this_tok = new_node("repeatstat")
   this_tok.locals = {}
   this_tok.labels = {}
-  this_tok.parent = {type = "local", scope = scope}
+  this_tok.parent_scope = scope
   this_tok.repeatstat = new_token_node()
   next_token() -- skip REPEAT
   this_tok.body = stat_list(this_tok)
@@ -711,10 +772,12 @@ end
 ---@return Token
 local function for_num(first_name,scope)
   local this_tok = new_node("fornum")
-  this_tok.var = first_name
-  this_tok.locals = {{name = first_name, whole_block = true}}
+  local var_local, var_ref = create_local(first_name)
+  var_local.whole_block = true
+  this_tok.var = var_ref
+  this_tok.locals = {var_local}
   this_tok.labels = {}
-  this_tok.parent = {type = "local", scope = scope}
+  this_tok.parent_scope = scope
   this_tok.eq_token = new_token_node()
   assert_next("=")
   this_tok.start = expr(scope)
@@ -738,20 +801,20 @@ end
 ---@param scope AstScope
 ---@return Token
 local function for_list(first_name,scope)
-  local nl = {first_name}
+  local name_local, name_ref = create_local(first_name)
+  name_local.whole_block = true
+  local nl = {name_ref}
   local this_tok = new_node("forlist")
   this_tok.name_list = nl
-  this_tok.locals = {{name = first_name, whole_block = true}}
+  this_tok.locals = {name_local}
   this_tok.labels = {}
-  this_tok.parent = {type = "local", scope = scope}
+  this_tok.parent_scope = scope
   this_tok.comma_tokens = {}
   while test_next(",") do
     this_tok.comma_tokens[#this_tok.comma_tokens+1] = new_token_node(true)
     local name = assert_name()
-    name.node_type = "local"
-    this_tok.locals[#this_tok.locals+1] =
-      {name = name, whole_block = true}
-    nl[#nl+1] = name
+    this_tok.locals[#this_tok.locals+1], nl[#nl+1] = create_local(name)
+    this_tok.locals[#this_tok.locals].whole_block = true
   end
   this_tok.in_token = new_token_node()
   assert_next("in")
@@ -765,19 +828,18 @@ end
 --- For Statement
 --- `for_stat -> FOR (fornum | forlist) END`
 ---@param line number
----@param parent AstScope
+---@param scope AstScope
 ---@return Token
-local function for_stat(line,parent)
+local function for_stat(line,scope)
   local for_token = new_token_node()
   next_token() -- skip FOR
   local first_name = assert_name()
-  first_name.node_type = "local"
   local t = token.token_type
   local for_node
   if t == "=" then
-    for_node = for_num(first_name,parent)
+    for_node = for_num(first_name,scope)
   elseif t == "," or t == "in" then
-    for_node = for_list(first_name,parent)
+    for_node = for_list(first_name,scope)
   else
     syntax_error("'=', ',' or 'in' expected")
   end
@@ -796,7 +858,7 @@ local function test_then_block(scope)
   local this_tok = new_node("testblock")
   this_tok.locals = {}
   this_tok.labels = {}
-  this_tok.parent = {type = "local", scope = scope}
+  this_tok.parent_scope = scope
   this_tok.if_token = new_token_node()
   next_token() -- skip IF or ELSEIF
   this_tok.condition = expr(this_tok)
@@ -818,7 +880,7 @@ local function if_stat(line,scope)
     this_tok.elseblock = else_block
     else_block.locals = {}
     else_block.labels = {}
-    else_block.parent = {type = "local", scope = scope}
+    else_block.parent_scope = scope
     else_block.else_token = new_token_node(true)
     else_block.body = stat_list(else_block)
   end
@@ -828,15 +890,13 @@ local function if_stat(line,scope)
 end
 
 local function local_func(local_token, function_token, scope)
-  local name = assert_name()
-  name.node_type = "local"
-  local this_local = {name = name}
-  scope.locals[#scope.locals+1] = this_local
+  local name_local, name_ref = create_local(assert_name())
+  scope.locals[#scope.locals+1] = name_local
   local b = body(function_token, scope)
   b.node_type = "localfunc"
   b.local_token = local_token
-  b.name = name
-  this_local.start_before = b
+  b.name = name_ref
+  name_local.start_before = b
   return b
 end
 
@@ -856,10 +916,9 @@ local function local_stat(local_token, scope)
     end
     return false
   end
+  local local_defs = {}
   repeat
-    local name = assert_name()
-    name.node_type = "local"
-    lhs[#lhs+1] = name
+    local_defs[#local_defs+1], lhs[#lhs+1] = create_local(assert_name())
   until not test_comma()
   if test_next("=") then
     this_tok.eq_token = new_token_node(true)
@@ -868,8 +927,8 @@ local function local_stat(local_token, scope)
     this_tok.leading = this_tok.eq_token.leading
     this_tok.rhs, this_tok.rhs_comma_tokens = exp_list(scope)
   end
-  for _,name in ipairs(this_tok.lhs) do
-    scope.locals[#scope.locals+1] = {name = name, start_after = this_tok}
+  for _, name_local in ipairs(local_defs) do
+    scope.locals[#scope.locals+1] = name_local
   end
   return this_tok
 end
@@ -882,7 +941,7 @@ local function func_name(scope)
   -- func_name -> NAME {field_selector} [`:' NAME]
   -- TODO: field_selector? i think that's already an extension from regular Lua
 
-  local names = { check_ref(scope) }
+  local names = { get_ref(scope, assert_name()) }
   local dot_tokens = {}
 
   while test_next(".") do
@@ -962,7 +1021,7 @@ local statement_lut = {
     local do_stat = new_node("dostat")
     do_stat.locals = {}
     do_stat.labels = {}
-    do_stat.parent = {type = "local", scope = scope}
+    do_stat.parent_scope = scope
     do_stat.do_token = new_token_node()
     next_token() -- skip "do"
     do_stat.body = stat_list(do_stat)
@@ -1019,18 +1078,25 @@ local function main_func(chunk_name)
     node_type = "main",
     source = chunk_name,
     -- fake parent scope of main to provide _ENV upval
-    parent = {
-      type = "upval", scope = {
-        node_type = "env",
-        locals = {
-          -- Lua emits _ENV as if it's a local in the parent scope
-          -- of the file. I'll probably change this one day to be
-          -- the first upval of the parent scope, since load()
-          -- clobbers the first upval anyway to be the new _ENV value
-          {name = {node_type="_ENV",value="_ENV"}, whole_block = true}
-        }
-      }
+    parent_scope = {
+      node_type = "env",
+      body = {},
+      locals = {
+        -- Lua emits _ENV as if it's a local in the parent scope
+        -- of the file. I'll probably change this one day to be
+        -- the first upval of the parent scope, since load()
+        -- clobbers the first upval anyway to be the new _ENV value
+        {
+          def_name = "local",
+          name = "_ENV",
+          child_defs = {},
+          whole_block = true,
+          scope = nil, -- set down below
+        },
+      },
+      labels = {},
     },
+    increase_upval_depth = true,
     func_protos = {},
     body = false, -- list body before locals
     is_vararg = true, -- main is always vararg
@@ -1043,6 +1109,8 @@ local function main_func(chunk_name)
     end_column = 0,
     n_params = 0,
   }
+  main.parent_scope.locals[1].scope = main.parent_scope
+
   main.body = stat_list(main)
   main.eof_token = new_token_node()
   return main

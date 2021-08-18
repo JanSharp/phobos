@@ -26,11 +26,11 @@ local function walk_func_base(node)
 end
 
 local exprs = {
-  ---@param node AstLocal
-  ["local"] = function(node)
+  ---@param node AstLocalReference
+  local_ref = function(node)
   end,
-  ---@param node AstUpVal
-  upval = function(node)
+  ---@param node AstUpvalReference
+  upval_ref = function(node)
   end,
   ---@param node AstIndex
   index = function(node)
@@ -42,9 +42,6 @@ local exprs = {
   end,
   ---@param node AstIdent
   ident = function(node)
-  end,
-  ---@param node Ast_ENV
-  _ENV = function(node)
   end,
   ---@param node AstUnOp
   unop = function(node)

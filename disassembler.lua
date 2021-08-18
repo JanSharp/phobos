@@ -6,14 +6,15 @@ local util = require("util")
 local get_instruction_label
 do
   local func, pc, display_keys, current, next_inst
+  -- pc is **one based** to work best with local debug info `start` and `_end`
 
   local function get_register_label(key, idx)
     idx = idx or current[key]
     local stack = 0;
     for i = 1, #func.locals do
       local loc = func.locals[i];
-      if loc.start <= pc + 1 then
-        if loc._end >= pc+1 then
+      if loc.start <= pc then
+        if loc._end >= pc then
           if stack == idx then
             return "R("..(display_keys and (key..": ") or "")..idx.."|"..loc.name..")"
           end
@@ -416,7 +417,10 @@ local function disassemble(bytecode)
     for j = 1, read_uint32() do
       locals[j] = {
         name = read_string(),
-        start = read_uint32(),
+        -- TODO: not sure about this, same as in dumping
+        -- but assuming this is stored in byte code as zero based including excluding
+        -- this should convert to one based including including
+        start = read_uint32() + 1,
         _end = read_uint32(),
       }
     end

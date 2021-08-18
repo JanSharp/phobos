@@ -5,7 +5,7 @@
 ---@alias AstNodeType
 ---special:
 ---| '"main"'
----| '"env"'
+---| '"env"' @ -- TODO: maybe add a type for this one and define it on AstMain
 ---| '"functiondef"'
 ---| '"token"'
 ---statements:
@@ -29,11 +29,10 @@
 ---| '"call"' @ expression or statement
 ---| '"assignment"'
 ---expressions:
----| '"local"' @ --TODO: change/clean up variables and references
----| '"upval"' @ --TODO: change/clean up variables and references
+---| '"local_ref"'
+---| '"upval_ref"'
 ---| '"index"'
----| '"ident"' @ -- TODO: same as '"string"'? --TODO: change/clean up variables and references
----| '"_ENV"' @ potentially also special --TODO: change/clean up variables and references
+---| '"ident"' @ -- TODO: same as '"string"'?
 ---| '"unop"'
 ---| '"binop"'
 ---| '"concat"'
@@ -62,8 +61,11 @@
 
 -- since every scope inherits AstBody, AstScope now does as well
 
+-- TODO: once upval index dumping is completely done and "tested" check if `increase_upval_depth` is really needed
+
 ---@class AstScope : AstBody
----@field parent AstParent
+---@field parent_scope AstScope|nil @ `nil` for the top level scope, the main function
+---@field increase_upval_depth boolean|nil @ `nil` unless overridden
 
 
 ---@class AstBody
@@ -71,18 +73,18 @@
 ---@field locals AstLocalDef[]
 ---@field labels AstLabel[]
 
----@class AstFunctionDef : AstBody, AstScope
+---@class AstFunctionDef : AstBody, AstScope, AstNode
 ---@field node_type '"functiondef"'
 ---@field source string
 ---@field is_method boolean @ is it `function foo:bar() end`?
 ---@field func_protos AstFunctionDef[]
----@field upvals AstUpValueDef[]
+---@field upvals AstUpvalDef[]
 ---@field constants AstConstantDef[]
 ---@field end_line integer
 ---@field end_column integer
 ---@field is_vararg boolean
 ---@field n_params integer
----@field parent AstUpvalParent
+---@field increase_upval_depth 'true' @ overridden
 ---all parameters are `whole_block = true` locals, except vararg
 ---@field param_comma_tokens AstTokenNode[] @ max length is `n_params - 1`, min `0`
 ---@field open_paren_token AstTokenNode
@@ -109,37 +111,33 @@
 ---@class AstTestBlock : AstStatement, AstBody, AstScope
 ---@field node_type '"testblock"'
 ---@field condition AstExpression
----@field parent AstLocalParent
 ---@field if_token AstTokenNode @ for the first test block this is an `if` node_type, otherwise `elseif`
 ---@field then_token AstTokenNode
 
 ---@class AstElseBlock : AstStatement, AstBody, AstScope
 ---@field node_type '"elseblock"'
----@field parent AstLocalParent
 ---@field else_token AstTokenNode
 
 ---@class AstWhileStat : AstStatement, AstBody, AstScope
 ---@field node_type '"whilestat"'
 ---@field condition AstExpression
----@field parent AstLocalParent
 ---@field while_token AstTokenNode
 ---@field do_token AstTokenNode
 ---@field end_token AstTokenNode
 
 ---@class AstDoStat : AstStatement, AstBody, AstScope
 ---@field node_type '"dostat"'
----@field parent AstLocalParent
 ---@field do_token AstTokenNode
 ---@field end_token AstTokenNode
 
 ---@class AstForNum : AstStatement, AstBody, AstScope
 ---@field node_type '"fornum"'
----@field var AstLocal
+---`var` is referring to a `whole_block = true` local
+---@field var AstLocalReference
 ---@field start AstExpression
 ---@field stop AstExpression
 ---@field step AstExpression|nil
----@field parent AstLocalParent
----`var` is used for a `while_block = true` local -- TODO: while_block is never used, what was this about?
+---`var` is referring to a `whole_block = true` local
 ---@field locals AstLocalDef[]
 ---@field for_token AstTokenNode
 ---@field eq_token AstTokenNode
@@ -150,10 +148,9 @@
 
 ---@class AstForList : AstStatement, AstBody, AstScope
 ---@field node_type '"forlist"'
----@field name_list AstLocal[]
+---@field name_list AstLocalReference[]
 ---@field exp_list AstExpression[]
 ---@field exp_list_comma_tokens AstTokenNode[]
----@field parent AstLocalParent
 ---all `name_list` names are used for a `whole_block = true` local
 ---@field locals AstLocalDef[]
 ---@field for_token AstTokenNode
@@ -165,7 +162,6 @@
 ---@class AstRepeatStat : AstStatement, AstBody, AstScope
 ---@field node_type '"repeatstat"'
 ---@field condition AstExpression
----@field parent AstLocalParent
 ---@field repeat_token AstTokenNode
 ---@field until_token AstTokenNode
 
@@ -176,12 +172,12 @@
 
 ---@class AstLocalFunc : AstStatement, AstFuncBase
 ---@field node_type '"localfunc"'
----@field name AstLocal
+---@field name AstLocalReference
 ---@field local_token AstTokenNode
 
 ---@class AstLocalStat : AstStatement
 ---@field node_type '"localstat"'
----@field lhs AstLocal[]
+---@field lhs AstLocalReference[]
 ---@field rhs AstExpression[]|nil @ `nil` = no assignment
 ---@field local_token AstTokenNode
 ---@field lhs_comma_tokens AstTokenNode[] @ max length is `#lhs - 1`
@@ -236,13 +232,15 @@
 
 
 
----@class AstLocal : AstExpression
----@field node_type '"local"'
----@field value string
+---@class AstLocalReference : AstExpression
+---@field node_type '"local_ref"'
+---@field name string
+---@field reference_def AstLocalDef
 
----@class AstUpVal : AstExpression
----@field node_type '"upval"'
----@field value string
+---@class AstUpvalReference : AstExpression
+---@field node_type '"upval_ref"'
+---@field name string
+---@field reference_def AstUpvalDef
 
 ---@class AstIndex : AstExpression
 ---@field node_type '"index"'
@@ -256,8 +254,9 @@
 ---@field suffix_open_token AstTokenNode|nil
 ---`]` node_type if it is not a literal identifier
 ---@field suffix_close_token AstTokenNode|nil
+---if this is an index into `_ENV` where `_ENV.` did not exist in source
+---@field src_did_not_exist boolean|nil
 
----i think this is basically a string constant expression
 ---@class AstString : AstExpression
 ---@field node_type '"string"'
 ---@field value string
@@ -277,10 +276,6 @@
 ---@class AstIdent : AstExpression
 ---@field node_type '"ident"'
 ---@field value string
-
----@class Ast_ENV : AstExpression
----@field node_type '"_ENV"'
----@field value '"_ENV"'
 
 ---@class AstUnOp : AstExpression
 ---@field node_type '"unop"'
@@ -348,34 +343,22 @@
 
 
 
----@class AstUpValueDef
+---@class AstUpvalDef
+---@field def_type '"upval"'
 ---@field name string
----@field up_depth integer @ -- TODO: what does this mean
----@field ref any @ -- TODO
-
-
+---@field scope AstScope
+---@field parent_def AstUpvalDef|AstLocalDef
+---@field child_defs AstUpvalDef[]
 
 ---@class AstLocalDef
----@field name AstLocal|Ast_ENV
+---@field def_type '"local"'
+---@field name string
 ---i think this means it is defined at the start of
 ---the block and lasts for the entire block
 ---@field whole_block boolean|nil
 ---@field start_before AstStatement|nil
 ---@field start_after AstStatement|nil
-
----@class AstEnv : AstNode
----@field node_type '"env"'
----@field locals AstLocalDef[] @ 1 `whole_block = true` local with AstEnvName
-
----@class AstParent
----@field type '"upval"'|'"local"'
----@field scope AstNode
-
----@class AstLocalParent : AstParent
----@field type '"local"'
-
----@class AstUpvalParent : AstParent
----@field type '"upval"'
+---@field child_defs AstUpvalDef[]
 
 ---@class AstConstantDef
 
@@ -399,21 +382,36 @@
 ---@field a integer
 ---@field b integer
 ---@field c integer
----@field ck integer @ used instead of c if it is a constant
 ---@field ax integer
 ---@field bx integer
 ---@field sbx integer
+---@field line integer
 
----@class GeneratedUpValue : AstUpValueDef
+---@class Register
+---@field reg integer @ **zero based**
+---@field name string
+---@field start_at? integer @ pc **one based**
+---@field start_after? integer @ pc **one based**
+---@field stop_at? integer @ pc **one based**
+---@field stop_after? integer @ pc **one based**
+
+---@class GeneratedUpval : AstUpvalDef
 ---@field index integer @ **zero based**
+---@field parent_def GeneratedUpval|GeneratedLocal
+---@field child_defs GeneratedUpval[]
+
+---@class GeneratedLocal : AstLocalDef
+---@field index integer @ **zero based**
+---@field child_defs GeneratedUpval[]
 
 ---@class GeneratedStatement : AstStatement
 ---@field index integer @ **zero based**
 
 ---@class GeneratedFunc : AstFunctionDef
----@field live_regs any[]
+---@field live_regs Register[]
 ---@field next_reg integer @ **zero based** index of next register to use
 ---@field max_stack_size integer @ always at least two registers
 ---@field instructions Instruction[]
----@field upvals GeneratedUpValue[] @ overridden
+---@field locals GeneratedLocal[] @ overridden
+---@field upvals GeneratedUpval[] @ overridden
 ---@field body GeneratedStatement[] @ overridden
