@@ -335,10 +335,10 @@ local function disassemble(bytecode)
       error("Unable to read string longer than `UInt32.max_value`.")
     end
     i = i + 4
-    if length == 0 then
-      return ""
+    if length == 0 then -- 0 means nil
+      return nil
     else
-      local result = bytecode:sub(i, i + length - 1 - 1) -- an extra -1 for the extra \0
+      local result = bytecode:sub(i, i + length - 1 - 1) -- an extra -1 for the trailing \0
       i = i + length
       return result
     end
@@ -358,6 +358,7 @@ local function disassemble(bytecode)
     end,
     [4] = function()
       local value = read_string()
+      assert(value, "Strings in the constant table must not be `nil`.")
       return {node_type = "string", value = value, label = string.format("%q", value)--[[:gsub("\\\n", "\\n")]]}
     end,
   }

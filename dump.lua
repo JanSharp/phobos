@@ -42,11 +42,12 @@ do
   end
 end
 
+---all strings can be nil, except in the constant table
 local function DumpString(str)
   -- typedef string:
-  -- size_t length (including trailing null, 0 for empty string)
-  -- char[] value (not present for empty string)
-  if #str == 0 then
+  -- size_t length (including trailing \0, 0 for nil)
+  -- char[] value (not present for nil)
+  if not str then
     return DumpSize(0)
   else
     return DumpSize(#str + 1) .. str .. "\0"
