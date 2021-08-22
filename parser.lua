@@ -886,7 +886,7 @@ local function if_stat(line,scope)
   end
   this_tok.end_token = new_token_node()
   assert_match("end","if",line)
-  return
+  return this_tok
 end
 
 local function local_func(local_token, function_token, scope)
@@ -1087,7 +1087,7 @@ local function main_func(chunk_name)
         -- the first upval of the parent scope, since load()
         -- clobbers the first upval anyway to be the new _ENV value
         {
-          def_name = "local",
+          def_type = "local",
           name = "_ENV",
           child_defs = {},
           whole_block = true,
