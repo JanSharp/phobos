@@ -131,7 +131,7 @@ do
     end,
 
     [opcodes.jmp] = function()
-      return "JMP", "pc += "..get_label("sbx")
+      return "JMP", "-> "..(pc + current.sbx + 1).." (pc += "..get_label("sbx")..")"
         ..(current.a ~= 0 and ("; close all upvals >= "..get_register_label("a-1", current.a - 1)) or "")
     end,
     [opcodes.eq] = function()
@@ -170,13 +170,13 @@ do
     [opcodes.forloop] = function()
       return "FORLOOP", get_register_label("a").." += "..get_register_label("a+2", current.a + 2).."; "
         .."if "..get_register_label("a").." (step < 0 ? >= : <=) "..get_register_label("a+1", current.a + 1).." then { "
-        .."pc += "..get_label("sbx").."; "
+        .."-> "..(pc + current.sbx + 1).." (pc += "..get_label("sbx").."); "
         ..get_register_label("a+3", current.a + 3).." := "..get_register_label("a")
         .." }"
     end,
     [opcodes.forprep] = function()
       return "FORPREP", get_register_label("a").." -= "..get_register_label("a+2", current.a + 2).."; "
-        .."pc += "..get_label("sbx")
+        .."-> "..(pc + current.sbx + 1).." (pc += "..get_label("sbx")..")"
     end,
     [opcodes.tforcall] = function()
       return "TFORCALL", get_register_label("a+3", current.a + 3)..", ..., "..get_register_label("a+2+c", current.a + 2 + current.c).." := "
@@ -185,7 +185,7 @@ do
     [opcodes.tforloop] = function()
       return "TFORLOOP", "if "..get_register_label("a+1", current.a + 1).." ~= nil then { "
         ..get_register_label("a").." := "..get_register_label("a+1", current.a + 1).."; "
-        .."pc += "..get_label("sbx")
+        .."-> "..(pc + current.sbx + 1).." (pc += "..get_label("sbx")..")"
         .." }"
     end,
 
