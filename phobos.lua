@@ -968,11 +968,12 @@ do
         end
         scope = scope.parent_scope
       end
+      -- TODO: this is copy paste from `generate_scope` except scope comparison
       local lowest_captured_reg
       for _, live in ipairs(func.live_regs) do
         if scopes_that_matter_lut[live.scope] and live.upval_capture_pc then
           if (not lowest_captured_reg) or live.upval_capture_pc < lowest_captured_reg then
-            lowest_captured_reg = live.upval_capture_pc
+            lowest_captured_reg = live.reg
           end
         end
       end

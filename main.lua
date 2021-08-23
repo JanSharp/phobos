@@ -72,7 +72,7 @@ end
 
 local lua_func, err = loadfile(filename)
 if lua_func then
-  -- add_func_to_lines("lua", disassembler.disassemble(string.dump(lua_func)))
+  add_func_to_lines("lua", disassembler.disassemble(string.dump(lua_func)))
 else
   print(err)
 end
