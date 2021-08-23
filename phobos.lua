@@ -781,30 +781,61 @@ do
       live_reg.start_at = #func.instructions
       eval_upval_indexes(stat, func)
     end,
-    ---@param stat AstFuncStat
-    funcstat = function(stat,func) -- TODO: impl/update funcstat
-      local in_reg,parent,parent_is_up
-      if #stat.names == 1 and stat.names[1].node_type=="local_ref" then
-        -- if name is a local, we can just build the closure in place
-        in_reg = find_local(stat.names[1].name,func) ---@diagnostic disable-line: undefined-field
+    funcstat = function(stat,func)
+      local original_top = get_top(func)
+      local in_reg = next_reg(func)
+      local left
+
+      -- TODO: copy paste from assignment
+      if stat.name.node_type == "local_ref" then
+        left = {
+          type = "local",
+          reg = find_local(stat.name.name, func),
+        }
+      elseif stat.name.node_type == "upval_ref" then
+        left = {
+          type = "upval",
+          upval_idx = find_upval(stat.name.name, func),
+        }
+      elseif stat.name.node_type == "index" then
+        -- if index and parent not local/upval, fetch parent to temporary
+        left = {
+          type = "index",
+        }
+        left.ex, left.ex_is_upval = upval_or_local_or_fetch(stat.name.ex,peek_next_reg(func),func)
+        left.suffix = const_or_local_or_fetch(stat.name.suffix,peek_next_reg(func),func)
       else
-        -- otherwise, we need its parent table and a temporary to fetch it in...
-        error()
-        in_reg = next_reg(func)
+        error("Attempted to assign to " .. left.node_type)
       end
 
       -- CLOSURE into that register
       func.instructions[#func.instructions+1] = {
-        op = opcodes.closure, a = in_reg, bx = stat.ref.index, ---@diagnostic disable-line: undefined-field -- TODO
+        op = opcodes.closure, a = in_reg, bx = stat.ref.index,
         line = stat.line, column = stat.column,
       }
       eval_upval_indexes(stat, func)
 
-      if parent then
-        error()
-      elseif parent_is_up then
-        error()
+      -- TODO: copy paste from assignment
+      if left.type == "index" then
+        func.instructions[#func.instructions+1] = {
+          op = left.ex_is_upval and opcodes.settabup or opcodes.settable,
+          a = left.ex, b = left.suffix, c = in_reg,
+          line = stat.line, column = stat.column,
+        }
+      elseif left.type == "local" then
+        func.instructions[#func.instructions+1] = {
+          op = opcodes.move, a = left.reg, b = in_reg,
+          line = stat.line, column = stat.column,
+        }
+      elseif left.type == "upval" then
+        func.instructions[#func.instructions+1] = {
+          op = opcodes.setupval, a = in_reg, b = left.upval_idx, -- up(b) := r(a)
+          line = stat.line, column = stat.column,
+        }
+      else
+        error("Impossible left type "..left.type)
       end
+      release_down_to(func, original_top)
     end,
     dostat = generate_scope,
     ifstat = function(stat,func) -- TODO: impl/update ifstat

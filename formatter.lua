@@ -156,7 +156,7 @@ local stats = {
   end,
   ---@param node AstFuncStat
   funcstat = function(node)
-    walk_exp_list(node.names)
+    walk_exp(node.name)
     walk_func_base(node)
   end,
   ---@param node AstLocalFunc

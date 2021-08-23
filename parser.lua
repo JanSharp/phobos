@@ -935,38 +935,33 @@ end
 
 ---@param scope AstScope
 ---@return boolean
----@return AstExpression[] names
----@return AstTokenNode[] dot_tokens @ length is `#names - 1`
+---@return AstExpression name
 local function func_name(scope)
   -- func_name -> NAME {field_selector} [`:' NAME]
   -- TODO: field_selector? i think that's already an extension from regular Lua
 
-  local names = { get_ref(scope, assert_name()) }
-  local dot_tokens = {}
+  local name = get_ref(scope, assert_name())
 
-  while test_next(".") do
-    dot_tokens[#dot_tokens+1] = new_token_node(true)
-    names[#names+1] = assert_name()
+  while token.token_type == "." do
+    name = suffixed_lut["."](name)
   end
 
-  if test_next(":") then
-    dot_tokens[#dot_tokens+1] = new_token_node(true)
-    names[#names+1] = assert_name()
-    return true, names, dot_tokens
+  if token.token_type == ":" then
+    name = suffixed_lut["."](name)
+    return true, name
   end
 
-  return false, names, dot_tokens
+  return false, name
 end
 
 local function func_stat(line,scope)
   -- funcstat -> FUNCTION func_name body
   local function_token = new_token_node()
   next_token() -- skip FUNCTION
-  local is_method, names, dot_tokens = func_name(scope)
+  local is_method, name = func_name(scope)
   local b = body(function_token, scope, is_method)
   b.node_type = "funcstat"
-  b.names = names
-  b.dot_tokens = dot_tokens
+  b.name = name
   return b
 end
 

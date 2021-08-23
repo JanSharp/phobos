@@ -172,8 +172,7 @@
 
 ---@class AstFuncStat : AstStatement, AstFuncBase
 ---@field node_type '"funcstat"'
----@field names AstExpression[] @ first is anything from check_ref, the rest AstIdent
----@field dot_tokens AstTokenNode[] @ max length is `#names - 1`
+---@field name AstExpression
 
 ---@class AstLocalFunc : AstStatement, AstFuncBase
 ---@field node_type '"localfunc"'
