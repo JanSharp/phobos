@@ -742,6 +742,7 @@ do
       end
       local n_lefts = #lefts
       local first_right_reg = peek_next_reg(func)
+      -- TODO: the last expression could _somehow_ directly assign to locals (if left is a local)
       generate_exp_list(stat.rhs,first_right_reg,func,n_lefts)
       -- copy rights to lefts
       for i = n_lefts,1,-1 do
@@ -783,21 +784,24 @@ do
     end,
     funcstat = function(stat,func)
       local original_top = get_top(func)
-      local in_reg = next_reg(func)
+      local in_reg
       local left
 
-      -- TODO: copy paste from assignment
+      -- TODO: this is copy paste from assignment
       if stat.name.node_type == "local_ref" then
+        in_reg = find_local(stat.name.name, func)
         left = {
           type = "local",
-          reg = find_local(stat.name.name, func),
+          reg = in_reg,
         }
       elseif stat.name.node_type == "upval_ref" then
+        in_reg = next_reg(func)
         left = {
           type = "upval",
           upval_idx = find_upval(stat.name.name, func),
         }
       elseif stat.name.node_type == "index" then
+        in_reg = next_reg(func)
         -- if index and parent not local/upval, fetch parent to temporary
         left = {
           type = "index",
@@ -815,7 +819,7 @@ do
       }
       eval_upval_indexes(stat, func)
 
-      -- TODO: copy paste from assignment
+      -- TODO: this is copy paste from assignment
       if left.type == "index" then
         func.instructions[#func.instructions+1] = {
           op = left.ex_is_upval and opcodes.settabup or opcodes.settable,
@@ -823,10 +827,7 @@ do
           line = stat.line, column = stat.column,
         }
       elseif left.type == "local" then
-        func.instructions[#func.instructions+1] = {
-          op = opcodes.move, a = left.reg, b = in_reg,
-          line = stat.line, column = stat.column,
-        }
+        -- do nothing because the closure is directly put into the local
       elseif left.type == "upval" then
         func.instructions[#func.instructions+1] = {
           op = opcodes.setupval, a = in_reg, b = left.upval_idx, -- up(b) := r(a)
