@@ -642,6 +642,45 @@ do
     error()
   end
 
+  local function get_a_for_jump(go, func)
+    local is_backwards = go.linked_label.pc < go.pc
+    -- figure out if and how far it needs to close upvals
+    local scopes_that_matter_lut = {}
+    local scope = go.scope
+    while true do
+      scopes_that_matter_lut[scope] = true
+      if scope == go.linked_label.scope then
+        break
+      end
+      scope = scope.parent_scope
+    end
+    -- TODO: this is heavily modified copy paste from `generate_scope` except scope comparison
+    local lowest_captured_reg
+    local function should_close(reg)
+      if (not lowest_captured_reg) or reg < lowest_captured_reg then
+        lowest_captured_reg = reg
+      end
+    end
+    for _, live in ipairs(func.live_regs) do
+      if scopes_that_matter_lut[live.scope] and live.upval_capture_pc and live.upval_capture_pc < go.pc then
+        if is_backwards then
+          if (live.in_scope_at or live.start_at) > go.linked_label.pc then -- goes out of scope when jumping back
+            should_close(live.reg)
+          end
+        else
+          if live.stop_at and live.stop_at <= go.linked_label.pc then -- goes out of scope when jumping forward
+            should_close(live.reg)
+          end
+        end
+      end
+    end
+    if lowest_captured_reg then
+      return lowest_captured_reg + 1
+    else
+      return 0
+    end
+  end
+
   generate_statement_code = {
     localstat = function(stat,func)
       -- allocate registers for LHS, eval expressions into them
@@ -665,6 +704,7 @@ do
       -- declare new registers to be "live" with locals after this
       for _,live in ipairs(new_live_regs) do
         live.start_at = #func.instructions + 1
+        live.in_scope_at = #func.instructions
       end
     end,
     assignment = function(stat,func)
@@ -935,11 +975,12 @@ do
 
     label = function(stat,func)
       stat.pc = #func.instructions
+      stat.scope = func.current_scope
       for _, go in ipairs(stat.linked_gotos) do
         if go.inst then
           -- forwards jump
           go.inst.sbx = stat.pc - go.pc
-          -- TODO: somehow figure out if and how many upvals to close
+          go.inst.a = get_a_for_jump(go, func)
         end
       end
     end,
@@ -951,13 +992,21 @@ do
       func.instructions[#func.instructions+1] = inst
       stat.inst = inst
       stat.pc = #func.instructions
+      stat.scope = func.current_scope
       if stat.linked_label.pc then
         -- backwards jump
         inst.sbx = stat.linked_label.pc - stat.pc
-        -- TODO: somehow figure out if and how many upvals to close
+        inst.a = get_a_for_jump(stat, func)
       end
     end,
     breakstat = function(stat,func)
+      local inst = {
+        op = opcodes.jmp, a = nil, sbx = nil,
+        line = stat.line, column = stat.column,
+      }
+      func.instructions[#func.instructions+1] = inst
+      stat.inst = inst
+      stat.pc = #func.instructions
       -- figure out if and how far it needs to close upvals
       local scopes_that_matter_lut = {}
       local scope = func.current_scope
@@ -968,22 +1017,17 @@ do
         end
         scope = scope.parent_scope
       end
-      -- TODO: this is copy paste from `generate_scope` except scope comparison
+      -- this is copy paste from `generate_scope`
       local lowest_captured_reg
       for _, live in ipairs(func.live_regs) do
-        if scopes_that_matter_lut[live.scope] and live.upval_capture_pc then
-          if (not lowest_captured_reg) or live.upval_capture_pc < lowest_captured_reg then
+        -- except this condition
+        if scopes_that_matter_lut[live.scope] and live.upval_capture_pc and live.upval_capture_pc < inst.pc then
+          if (not lowest_captured_reg) or live.reg < lowest_captured_reg then
             lowest_captured_reg = live.reg
           end
         end
       end
-      local inst = {
-        op = opcodes.jmp, a = (lowest_captured_reg or -1) + 1, sbx = nil,
-        line = stat.line, column = stat.column,
-      }
-      func.instructions[#func.instructions+1] = inst
-      stat.inst = inst
-      stat.pc = #func.instructions
+      inst.a = (lowest_captured_reg or -1) + 1
       -- TODO: whilestat, fornum, forlist and repeatstat have to set sbx
     end,
 

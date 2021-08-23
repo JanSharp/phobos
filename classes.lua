@@ -400,8 +400,9 @@
 ---@field name string
 ---@field level integer
 ---@field scope AstScope
----@field start_at? integer @ pc **one based**
----@field stop_at? integer @ pc **one based**
+---@field in_scope_at? integer @ pc **one based including** used to figure out how many upvals to close
+---@field start_at? integer @ pc **one based including** when to consider `reg` to have this `name`
+---@field stop_at? integer @ pc **one based including**
 
 ---@class GeneratedUpval : AstUpvalDef
 ---@field index integer @ **zero based**

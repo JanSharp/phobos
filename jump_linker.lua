@@ -74,7 +74,6 @@ local function link(func)
           if go.lowest_level_stat_index > latest_new_local_stat_index or is_end_of_body() then
             go.stat.linked_label = label_stat
             label_stat.linked_gotos[#label_stat.linked_gotos+1] = go.stat
-            break
           else
             local local_stat = body[latest_new_local_stat_index]
             local local_ref = local_stat.node_type == "localfunc" and local_stat.name
