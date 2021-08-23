@@ -283,7 +283,10 @@ do
     local live_regs = func.live_regs
     for i = #live_regs,1,-1 do
       local lr = live_regs[i]
-      if (not lr.stop_at) and lr.name == local_name then
+      if lr.name == local_name
+        and (not lr.stop_at)
+        and (lr.start_at and lr.start_at <= #func.instructions)
+      then
         return lr.reg, lr
       end
     end
