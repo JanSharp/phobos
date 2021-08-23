@@ -28,7 +28,13 @@ local function floating_byte_to_number(x)
   return bit32.lshift(bit32.band(x, 7--[[0b0111]]) + 8--[[0b1000]], e - 1)
 end
 
+---@param upval_def AstUpvalDef
+local function upval_is_in_stack(upval_def)
+  return upval_def.parent_def.def_type == "local"
+end
+
 return {
   number_to_floating_byte = number_to_floating_byte,
   floating_byte_to_number = floating_byte_to_number,
+  upval_is_in_stack = upval_is_in_stack,
 }

@@ -6,11 +6,25 @@ local util = require("util")
 local generate_code
 do
   local opcodes = require("opcodes")
+
+  local function get_last_used_line(func)
+    return (#func.instructions > 0)
+      and func.instructions[#func.instructions].line
+      or 0
+  end
+
+  local function get_last_used_column(func)
+    return (#func.instructions > 0)
+      and func.instructions[#func.instructions].colum
+      or 0
+  end
+
   ---get the next available register in the given function\
   ---**without** increasing `max_stack_size`
   local function peek_next_reg(func)
     return func.next_reg
   end
+
   ---mark the given reg as used and adjust `max_stack_size`\
   ---only really meant to be used if the given `reg` is current or 1 past top
   local function use_reg(func, reg)
@@ -21,6 +35,7 @@ do
       func.max_stack_size = next_n
     end
   end
+
   ---get the next available register in the given function
   ---@param func Function
   ---@return number regnum
@@ -29,6 +44,7 @@ do
     use_reg(func, reg)
     return reg
   end
+
   local function release_reg(func, reg)
     if reg ~= func.next_reg - 1 then
       error("Attempted to release register "..reg.." when top was "..func.next_reg)
@@ -42,9 +58,9 @@ do
         lr.stop_at = last_pc
       end
     end
-
     func.next_reg = reg
   end
+
   ---releases all regs down to `reg` but keeps `reg` live
   local function release_down_to(func, reg)
     if reg == func.next_reg then
@@ -65,26 +81,51 @@ do
     end
     func.next_reg = reg + 1
   end
+
+  local function get_level(scope, func)
+    return func.scope_levels[scope]
+      or error("Trying to get the level for a scope that has not been reached yet")
+  end
+  local function get_current_level(func)
+    -- technically this could just return `func.level`, but i wanted to follow
+    -- the "convention" of always using the `get_level` function
+    return get_level(func.current_scope, func)
+  end
+
   local function create_live_reg(func, reg, name)
     local live = {
       reg = reg,
       name = name,
+      level = get_current_level(func),
+      scope = func.current_scope,
     }
     func.live_regs[#func.live_regs+1] = live
     return live
   end
+
   local function get_top(func)
     return func.next_reg - 1
   end
+
   local function reg_is_top(func, reg)
     return reg >= get_top(func)
   end
 
-  local generate_expr_code
+  local function ensure_used_reg(func, reg)
+    if reg > get_top(func) then
+      use_reg(func, reg)
+    end
+  end
+
   local vararg_node_types = invert{"vararg","call","selfcall"}
+  local function is_vararg(node)
+    return vararg_node_types[node.node_type]
+  end
+
+  local generate_expr_code
   local function generate_expr(expr,in_reg,func,num_results)
     generate_expr_code[expr.node_type](expr,in_reg,func,num_results)
-    if num_results > 1 and not (vararg_node_types[expr.node_type] or expr.node_type == "nil") then
+    if num_results > 1 and not (is_vararg(expr) or expr.node_type == "nil") then
       generate_expr({
         node_type = "nil",
         line = expr.line,
@@ -150,6 +191,50 @@ do
     end
   end
 
+  local generate_statement_code
+  local function generate_statement(stat, func)
+    generate_statement_code[stat.node_type](stat, func)
+  end
+
+  local function generate_scope(scope, func)
+    func.level = func.level + 1
+    func.scope_levels[scope] = func.level
+    local previous_scope = func.current_scope
+    func.current_scope = scope
+
+    local original_top = get_top(func)
+
+    for _,stat in ipairs(scope.body) do
+      generate_statement(stat,func)
+    end
+
+    if func.level ~= 1 then -- no need to do anything in the root scope
+      -- TODO: this condition can be improved once the compiler knows that the given location (the end of the scope) is unreachable
+      -- note that the root scope might still be an exception at that point
+      local lowest_captured_reg
+      for _, live in ipairs(func.live_regs) do
+        if live.scope == scope and live.upval_capture_pc then
+          if (not lowest_captured_reg) or live.reg < lowest_captured_reg then
+            lowest_captured_reg = live.reg
+          end
+        end
+      end
+      if lowest_captured_reg then
+        func.instructions[#func.instructions+1] = {
+          op = opcodes.jmp, a = lowest_captured_reg + 1, sbx = 0,
+          line = scope.end_token and scope.end_token.line or get_last_used_line(func),
+          column = scope.end_token and scope.end_token.column or get_last_used_column(func),
+        }
+      end
+    end
+
+    release_down_to(func, original_top)
+
+    func.current_scope = previous_scope
+    func.level = func.level - 1
+  end
+
+
   local function add_constant(value,func)
     for i,const in ipairs(func.constants) do
       if value == const then
@@ -160,6 +245,7 @@ do
     func.constants[i+1] = value
     return i
   end
+
   local function generate_const_code(expr,in_reg,func)
     local k = add_constant(expr.value,func)
     if k <= 0x3ffff then
@@ -178,6 +264,7 @@ do
       }
     end
   end
+
   local bin_opcodes = {
     ["+"] = opcodes.add,
     ["-"] = opcodes.sub,
@@ -191,16 +278,17 @@ do
     ["#"] = opcodes.len,
     ["not"] = opcodes["not"],
   }
-  local function find_local(ref,func)
+  local function find_local(local_name,func)
     -- find it in live_regs and use that...
     local live_regs = func.live_regs
     for i = #live_regs,1,-1 do
       local lr = live_regs[i]
-      if (not lr.stop_at) and lr.name == ref.name then
-        return lr.reg
+      if (not lr.stop_at) and lr.name == local_name then
+        return lr.reg, lr
       end
     end
   end
+
   ---@param upval_name string
   ---@param func GeneratedFunc
   local function find_upval(upval_name,func)
@@ -211,18 +299,21 @@ do
     end
     error("Unable to find upval with name "..upval_name..".")
   end
+
   local function local_or_fetch(expr,in_reg,func)
     if expr.node_type == "local_ref" then
-      return find_local(expr,func)
+      return find_local(expr.name,func)
     else
       use_reg(func, in_reg)
       generate_expr(expr,in_reg,func,1)
       return in_reg
     end
   end
+
   local function is_falsy(node)
     return node.node_type == "nil" or (node.node_type == "boolean" and node.node_type.value == false)
   end
+
   local const_node_types = invert{"boolean","nil","string","number"}
   local logical_binops = invert{">",">=","==","~=","<=","<"}
   local function const_or_local_or_fetch(expr,in_reg,func)
@@ -232,6 +323,7 @@ do
       return local_or_fetch(expr,in_reg,func)
     end
   end
+
   local function upval_or_local_or_fetch(expr,in_reg,func)
     if expr.node_type == "upval_ref" then
       return expr.reference_def.index,true
@@ -239,6 +331,23 @@ do
       return local_or_fetch(expr,in_reg,func),false
     end
   end
+
+  local function eval_upval_indexes(target_func_proto, func)
+    for _, upval in ipairs(target_func_proto.ref.upvals) do
+      upval.in_stack = util.upval_is_in_stack(upval)
+      if upval.in_stack then
+        local live_reg
+        upval.local_idx, live_reg = find_local(upval.name, func)
+        assert(live_reg)
+        if not live_reg.upval_capture_pc then
+          live_reg.upval_capture_pc = #func.instructions
+        end
+      else
+        upval.upval_idx = upval.parent_def.index
+      end
+    end
+  end
+
   generate_expr_code = {
     local_ref = function(expr,in_reg,func)
       func.instructions[#func.instructions+1] = {
@@ -320,6 +429,7 @@ do
           line = expr.line, column = expr.column,
         }
       end
+      ensure_used_reg(func, in_reg + num_results - 1)
     end,
     ---@param expr AstConstructor
     constructor = function(expr,in_reg,func)
@@ -356,7 +466,7 @@ do
           ---@narrow field AstListField
           -- if list accumulate values
           local count = 1
-          if i == fields_count and vararg_node_types[field.value.node_type] then
+          if i == fields_count and is_vararg(field.value) then
             count = -1
           end
           generate_expr(field.value,next_reg(func),func,count)
@@ -394,17 +504,18 @@ do
       new_tab.c = util.number_to_floating_byte(total_rec_field_count or (fields_count - total_list_field_count))
     end,
     func_proto = function(expr,in_reg,func)
-      -- TODO: set upval indexes for in_stack upvals
       func.instructions[#func.instructions+1] = {
         op = opcodes.closure, a = in_reg, bx = expr.ref.index,
         line = expr.line, column = expr.column,
       }
+      eval_upval_indexes(expr, func)
     end,
     vararg = function(expr,in_reg,func,num_results)
       func.instructions[#func.instructions+1] = {
         op = opcodes.vararg, a = in_reg, b = (num_results or 1)+1,
         line = expr.line, column = expr.column,
       }
+      ensure_used_reg(func, in_reg + num_results - 1)
     end,
     call = function(expr,in_reg,func,num_results)
       num_results = num_results or 1
@@ -421,7 +532,7 @@ do
       generate_expr(expr.ex,func_reg,func,1)
       generate_exp_list(expr.args,peek_next_reg(func),func,-1)
       local num_args = #expr.args
-      if num_args > 0 and vararg_node_types[expr.args[num_args].node_type] then
+      if num_args > 0 and is_vararg(expr.args[num_args]) then
         num_args = -1
       end
       func.instructions[#func.instructions+1] = {
@@ -436,8 +547,10 @@ do
             line = expr.line, column = expr.column,
           }
         end
+        release_down_to(func,original_top)
+      else
+        ensure_used_reg(func, in_reg + num_results - 1)
       end
-      release_down_to(func,original_top)
     end,
     selfcall = function(expr,in_reg,func,num_results)
       num_results = num_results or 1
@@ -464,7 +577,7 @@ do
       -- TODO: the rest is copy paste from call
       generate_exp_list(expr.args,peek_next_reg(func),func,-1)
       local num_args = #expr.args
-      if num_args > 0 and vararg_node_types[expr.args[num_args].node_type] then
+      if num_args > 0 and is_vararg(expr.args[num_args]) then
         num_args = -1
       else
         num_args = num_args + 1 -- except this, because selfcall has 1 more arg, period
@@ -484,8 +597,10 @@ do
             line = expr.line, column = expr.column,
           }
         end
+        release_down_to(func, original_top)
+      else
+        ensure_used_reg(func, in_reg + num_results - 1)
       end
-      release_down_to(func, original_top)
     end,
     index = function(expr,in_reg,func)
       local original_top = get_top(func)
@@ -527,14 +642,12 @@ do
     error()
   end
 
-  local generate_statement_code
   generate_statement_code = {
     localstat = function(stat,func)
       -- allocate registers for LHS, eval expressions into them
       local new_live_regs = {}
       for i,ref in ipairs(stat.lhs) do
         local live = create_live_reg(func, get_top(func) + i, ref.name)
-        live.start_at = #func.instructions + 1
         new_live_regs[i] = live
       end
 
@@ -549,11 +662,9 @@ do
         }, new_live_regs[1].reg, func, #stat.lhs)
       end
 
-      do return end -- TODO: figure out if it's really better to have them be life before the expression list is evaluated
       -- declare new registers to be "live" with locals after this
-      local last_pc = #func.instructions
       for _,live in ipairs(new_live_regs) do
-        live.start_at = last_pc + 1
+        live.start_at = #func.instructions + 1
       end
     end,
     assignment = function(stat,func)
@@ -561,99 +672,78 @@ do
       -- last expr in value list is for enough values to fill the list
       -- emit warning and drop extra values with no targets
       -- move/settable/settabup from temporary to target, right to left
-      local top = func.next_reg
+      local original_top = get_top(func)
       local lefts = {}
       for i,left in ipairs(stat.lhs) do
-        if left.node_type == "local" then
+        if left.node_type == "local_ref" then
           lefts[i] = {
             type = "local",
-            reg = find_local(left.ref,func),
+            reg = find_local(left.name, func),
           }
-        elseif left.node_type == "upval" then
+        elseif left.node_type == "upval_ref" then
           lefts[i] = {
             type = "upval",
-            upval = error()
-
+            upval_idx = find_upval(left.name, func),
           }
         elseif left.node_type == "index" then
           -- if index and parent not local/upval, fetch parent to temporary
           local new_left = {
             type = "index",
           }
-          local temp_reg = next_reg(func)
-          new_left.ex,new_left.ex_is_up = upval_or_local_or_fetch(left.ex,temp_reg,func)
-          if not new_left.ex_is_up and new_left.ex == temp_reg then
-            temp_reg = next_reg(func)
-          end
-          new_left.suffix = const_or_local_or_fetch(left.suffix,temp_reg,func)
-          if new_left.suffix ~= temp_reg then
-            release_reg(func,temp_reg)
-          end
+          new_left.ex, new_left.ex_is_upval = upval_or_local_or_fetch(left.ex,peek_next_reg(func),func)
+          new_left.suffix = const_or_local_or_fetch(left.suffix,peek_next_reg(func),func)
           lefts[i] = new_left
         else
           error("Attempted to assign to " .. left.node_type)
         end
       end
       local n_lefts = #lefts
-      local first_right = func.next_reg
-      local n_rights = #stat.rhs
-      if vararg_node_types[stat.rhs[n_rights].node_type] then
-        n_rights = n_lefts
-      end
-      generate_exp_list(stat.rhs,first_right,func,n_rights)
-      if n_rights < n_lefts then
-        -- set nil to extra lefts
-        for i = n_lefts,n_rights+1,-1 do
-          -- justarandomgeek
-          -- not sure why i made a loop for setting nil to extras, you just need to generate a LOADNIL for "the rest" there basically
-          error()
-        end
-      end
+      local first_right_reg = peek_next_reg(func)
+      generate_exp_list(stat.rhs,first_right_reg,func,n_lefts)
       -- copy rights to lefts
-      for i = n_rights,1,-1 do
-        local right = first_right + i - 1
+      for i = n_lefts,1,-1 do
+        local right_reg = first_right_reg + i - 1
         local left = lefts[i]
         if left.type == "index" then
           func.instructions[#func.instructions+1] = {
-            op = left.ex_is_up and opcodes.settabup or opcodes.settable,
-            a = left.ex, b = left.suffix, ck = right
+            op = left.ex_is_upval and opcodes.settabup or opcodes.settable,
+            a = left.ex, b = left.suffix, c = right_reg,
+            line = stat.line, column = stat.column,
           }
         elseif left.type == "local" then
           func.instructions[#func.instructions+1] = {
-            op = opcodes.move, a = left.reg, b = right
+            op = opcodes.move, a = left.reg, b = right_reg,
+            line = stat.line, column = stat.column,
+          }
+        elseif left.type == "upval" then
+          func.instructions[#func.instructions+1] = {
+            op = opcodes.setupval, a = right_reg, b = left.upval_idx, -- up(b) := r(a)
+            line = stat.line, column = stat.column,
           }
         else
-          -- justarandomgeek:
-          -- oh i guess it would need another case there paired with handling the top one to deal with an upval
-          -- which is for if you do foo = 1 and foo is an upval rather than a local
-          -- so it doesn't need any prefetch but it needs setupval instead of move when you generate code for it
-          -- presumably some clues attached to the node which upval it was, but i don't remember
-          -- but that's some hints to attach for whenever you do get around to that
-          error()
+          error("Impossible left type "..left.type)
         end
       end
-      release_down_to(func,top)
+      release_down_to(func,original_top)
     end,
     localfunc = function(stat,func)
       -- allocate register for stat.name
       local func_reg = next_reg(func)
-      local live_reg = create_live_reg(func, func_reg, stat.name.name)
-      -- declare new register to be "live" with local right away for upval capture
-      func.live_regs[#func.live_regs+1] = live_reg
       -- CLOSURE into that register
-      -- TODO: set upval indexes for in_stack upvals
       func.instructions[#func.instructions+1] = {
         op = opcodes.closure, a = func_reg, bx = stat.ref.index,
         line = stat.line, column = stat.column,
       }
+      local live_reg = create_live_reg(func, func_reg, stat.name.name)
       live_reg.start_at = #func.instructions
+      eval_upval_indexes(stat, func)
     end,
     ---@param stat AstFuncStat
-    funcstat = function(stat,func)
+    funcstat = function(stat,func) -- TODO: impl/update funcstat
       local in_reg,parent,parent_is_up
-      if #stat.names == 1 and stat.names[1].node_type=="local" then
+      if #stat.names == 1 and stat.names[1].node_type=="local_ref" then
         -- if name is a local, we can just build the closure in place
-        in_reg = find_local(stat.names[1].ref,func) ---@diagnostic disable-line: undefined-field -- TODO
+        in_reg = find_local(stat.names[1].name,func) ---@diagnostic disable-line: undefined-field
       else
         -- otherwise, we need its parent table and a temporary to fetch it in...
         error()
@@ -661,10 +751,11 @@ do
       end
 
       -- CLOSURE into that register
-      -- TODO: set upval indexes for in_stack upvals
       func.instructions[#func.instructions+1] = {
         op = opcodes.closure, a = in_reg, bx = stat.ref.index, ---@diagnostic disable-line: undefined-field -- TODO
+        line = stat.line, column = stat.column,
       }
+      eval_upval_indexes(stat, func)
 
       if parent then
         error()
@@ -672,14 +763,8 @@ do
         error()
       end
     end,
-    dostat = function(stat,func)
-      local top = func.next_reg
-      for i,inner_stat in ipairs(stat.body) do
-        generate_statement_code[inner_stat.node_type](inner_stat,func)
-      end
-      release_down_to(func,top)
-    end,
-    ifstat = function(stat,func)
+    dostat = generate_scope,
+    ifstat = function(stat,func) -- TODO: impl/update ifstat
       for i,if_block in ipairs(stat.ifs) do
         local top = func.next_reg
         local condition_node = if_block.condition
@@ -721,17 +806,17 @@ do
     end,
     call = function(stat,func)
       -- evaluate as a call expression for zero results
-      local func_reg = next_reg(func)
-      generate_expr(stat,func_reg,func,0)
-      release_down_to(func,func_reg)
+      local top = get_top(func)
+      generate_expr(stat,next_reg(func),func,0)
+      release_down_to(func,top)
     end,
     selfcall = function(stat,func)
       -- evaluate as a selfcall expression for zero results
-      local func_reg = next_reg(func)
-      generate_expr(stat,func_reg,func,0)
-      release_down_to(func,func_reg)
+      local top = get_top(func)
+      generate_expr(stat,next_reg(func),func,0)
+      release_down_to(func,top)
     end,
-    forlist = function(stat,func)
+    forlist = function(stat,func) -- TODO: impl/update forlist
       local top = func.next_reg
       -- allocate forlist internal vars
       local generator = next_reg(func)
@@ -790,7 +875,7 @@ do
 
       release_down_to(func,top)
     end,
-    fornum = function(stat,func)
+    fornum = function(stat,func) -- TODO: impl/update fornum
       error()
       local top = func.next_reg
       -- allocate fornum internal vars
@@ -804,7 +889,7 @@ do
 
       release_down_to(func,top)
     end,
-    whilestat = function(stat,func)
+    whilestat = function(stat,func) -- TODO: impl/update whilestat
       error()
       local top = func.next_reg
       -- eval stat.condition in a temporary
@@ -817,7 +902,7 @@ do
 
       release_down_to(func,top)
     end,
-    repeatstat = function(stat,func)
+    repeatstat = function(stat,func) -- TODO: impl/update repeatstat
       error()
       local top = func.next_reg
       -- generate body
@@ -830,27 +915,75 @@ do
       release_down_to(func,top)
     end,
 
+    ---@param stat AstRetStat
     retstat = function(stat,func)
+      local temp_reg = 0
+      local num_results = 0
+      if stat.exp_list then
+        num_results = #stat.exp_list
+        if num_results > 0 and is_vararg(stat.exp_list[num_results]) then
+          num_results = -1
+        end
+        temp_reg = peek_next_reg(func)
+        generate_exp_list(stat.exp_list, temp_reg, func, num_results)
+      end
       func.instructions[#func.instructions+1] = {
-        op = opcodes["return"], a = 0, b = 1
+        op = opcodes["return"], a = temp_reg, b = num_results + 1,
+        line = stat.line, column = stat.column,
       }
-      -- error() -- TODO
-      -- eval exp_list into temporaries
-      -- RETURN them
     end,
 
     label = function(stat,func)
-      error()
-      -- record PC for label
-      -- check for pending jump and patch to jump here
+      stat.pc = #func.instructions
+      for _, go in ipairs(stat.linked_gotos) do
+        if go.inst then
+          -- forwards jump
+          go.inst.sbx = stat.pc - go.pc
+          -- TODO: somehow figure out if and how many upvals to close
+        end
+      end
     end,
     gotostat = function(stat,func)
-      error()
-      -- match to jump-back label, or set as pending jump
+      local inst = {
+        op = opcodes.jmp, sbx = nil,
+        line = stat.line, column = stat.column,
+      }
+      func.instructions[#func.instructions+1] = inst
+      stat.inst = inst
+      stat.pc = #func.instructions
+      if stat.linked_label.pc then
+        -- backwards jump
+        inst.sbx = stat.linked_label.pc - stat.pc
+        -- TODO: somehow figure out if and how many upvals to close
+      end
     end,
     breakstat = function(stat,func)
-      error()
-      -- jump to end of block (record for later rewrite)
+      -- figure out if and how far it needs to close upvals
+      local scopes_that_matter_lut = {}
+      local scope = func.current_scope
+      while true do
+        scopes_that_matter_lut[scope] = true
+        if scope == stat.linked_loop then
+          break
+        end
+        scope = scope.parent_scope
+      end
+      local lowest_captured_reg
+      for _, live in ipairs(func.live_regs) do
+        if scopes_that_matter_lut[live.scope] and live.upval_capture_pc then
+          if (not lowest_captured_reg) or live.upval_capture_pc < lowest_captured_reg then
+            lowest_captured_reg = live.upval_capture_pc
+          end
+        end
+      end
+      local inst = {
+        op = opcodes.jmp, a = (lowest_captured_reg or -1) + 1, sbx = nil,
+        line = stat.line, column = stat.column,
+      }
+      func.instructions[#func.instructions+1] = inst
+      stat.inst = inst
+      stat.pc = #func.instructions
+      -- TODO: whilestat, fornum, forlist and repeatstat have to set sbx
     end,
 
     empty = function(stat,func)
@@ -870,28 +1003,27 @@ do
     for i,upval in ipairs(func.upvals) do
       upval.index = i - 1 -- *ZERO BASED* index
     end
-
-    for i,stat in ipairs(func.body) do
-      generate_statement_code[stat.node_type](stat,func)
+    if func.upvals[1] and func.upvals[1].name == "_ENV" and util.upval_is_in_stack(func.upvals[1]) then
+      func.upvals[1].in_stack = true
+      func.upvals[1].local_idx = 0
     end
 
-    -- TODO: this is temp
-    func.instructions[#func.instructions+1] = {
-      op = opcodes["return"], a = 0, b = 1,
-      line = func.end_token and func.end_token.line
-        or func.instructions[#func.instructions] and func.instructions[#func.instructions].line
-        or 0,
-      column = func.end_token and func.end_token.column
-        or func.instructions[#func.instructions] and func.instructions[#func.instructions].column
-        or 0,
-    }
-    -- TODO: not sure about this
-    release_down_to(func, -1)
+    func.level = 0
+    func.scope_levels = {}
+    generate_scope(func, func)
+    func.level = nil
+    func.scope_levels = nil
+
+    -- TODO: temp until it can be determined if the end of the function is reachable
+    generate_statement({
+      node_type = "retstat",
+      line = func.end_token and func.end_token.line or get_last_used_line(func),
+      column = func.end_token and func.end_token.column or get_last_used_column(func),
+    }, func)
 
     for i,func_proto in ipairs(func.func_protos) do
       generate_code(func_proto)
     end
-
   end
 end
 

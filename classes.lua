@@ -118,7 +118,12 @@
 ---@field node_type '"elseblock"'
 ---@field else_token AstTokenNode
 
----@class AstWhileStat : AstStatement, AstBody, AstScope
+---@class AstLoop
+---evaluated by the jump linker. not `nil` after successful linking,
+---**but only if there are any `break`s that linked to this loop**
+---@field linked_breaks AstBreakStat[]|nil
+
+---@class AstWhileStat : AstStatement, AstBody, AstScope, AstLoop
 ---@field node_type '"whilestat"'
 ---@field condition AstExpression
 ---@field while_token AstTokenNode
@@ -130,7 +135,7 @@
 ---@field do_token AstTokenNode
 ---@field end_token AstTokenNode
 
----@class AstForNum : AstStatement, AstBody, AstScope
+---@class AstForNum : AstStatement, AstBody, AstScope, AstLoop
 ---@field node_type '"fornum"'
 ---`var` is referring to a `whole_block = true` local
 ---@field var AstLocalReference
@@ -146,7 +151,7 @@
 ---@field do_token AstTokenNode
 ---@field end_token AstTokenNode
 
----@class AstForList : AstStatement, AstBody, AstScope
+---@class AstForList : AstStatement, AstBody, AstScope, AstLoop
 ---@field node_type '"forlist"'
 ---@field name_list AstLocalReference[]
 ---@field exp_list AstExpression[]
@@ -159,7 +164,7 @@
 ---@field do_token AstTokenNode
 ---@field end_token AstTokenNode
 
----@class AstRepeatStat : AstStatement, AstBody, AstScope
+---@class AstRepeatStat : AstStatement, AstBody, AstScope, AstLoop
 ---@field node_type '"repeatstat"'
 ---@field condition AstExpression
 ---@field repeat_token AstTokenNode
@@ -189,6 +194,7 @@
 ---@field value string
 ---@field open_token AstTokenNode @ opening `::`
 ---@field close_token AstTokenNode @ closing `::`
+---@field linked_gotos AstGotoStat[]|nil @ evaluated by the jump linker. not `nil` after successful linking
 
 ---@class AstRetStat : AstStatement
 ---@field node_type '"retstat"'
@@ -200,11 +206,13 @@
 ---@class AstBreakStat : AstStatement
 ---@field node_type '"breakstat"'
 ---@field break_token AstTokenNode
+---@field linked_loop AstStatement[]|nil @ evaluated by the jump linker. not `nil` after successful linking
 
 ---@class AstGotoStat : AstStatement
 ---@field node_type '"gotostat"'
 ---@field target AstIdent
 ---@field goto_token AstTokenNode
+---@field linked_label AstLabel|nil @ evaluated by the jump linker. not `nil` after successful linking
 
 ---@class AstSelfCall : AstStatement, AstExpression
 ---@field node_type '"selfcall"'
@@ -390,15 +398,18 @@
 ---@class Register
 ---@field reg integer @ **zero based**
 ---@field name string
+---@field level integer
+---@field scope AstScope
 ---@field start_at? integer @ pc **one based**
----@field start_after? integer @ pc **one based**
 ---@field stop_at? integer @ pc **one based**
----@field stop_after? integer @ pc **one based**
 
 ---@class GeneratedUpval : AstUpvalDef
 ---@field index integer @ **zero based**
 ---@field parent_def GeneratedUpval|GeneratedLocal
 ---@field child_defs GeneratedUpval[]
+---@field in_stack boolean @ cached for dumping. To not duplicate logic
+---@field upval_idx number|nil @ used when `in_stack` is `false`. index of the parent upval for dumping
+---@field local_idx number|nil @ used when `in_stack` is `true`. register index of the local variable when creating a closure
 
 ---@class GeneratedLocal : AstLocalDef
 ---@field index integer @ **zero based**
@@ -407,11 +418,25 @@
 ---@class GeneratedStatement : AstStatement
 ---@field index integer @ **zero based**
 
+---@class GeneratedLabel : AstLabel
+---@field pc integer|nil @ process counter of the instruction before the label
+
+---@class GeneratedGotoStat : AstGotoStat
+---@field pc integer|nil @ process counter of `inst`, the jmp instruction
+---@field inst Instruction|nil @ the jmp instruction of the goto
+
+---@class GeneratedBreakStat : AstBreakStat
+---@field pc integer|nil @ process counter of `inst`, the jmp instruction
+---@field inst Instruction|nil @ the jmp instruction of the goto
+
 ---@class GeneratedFunc : AstFunctionDef
 ---@field live_regs Register[]
 ---@field next_reg integer @ **zero based** index of next register to use
 ---@field max_stack_size integer @ always at least two registers
 ---@field instructions Instruction[]
+---@field level integer? @ only available during generation process
+---@field scope_levels? table<AstScope, integer> @ only available during generation process
+---@field current_scope? AstScope @ only available during generation process
 ---@field locals GeneratedLocal[] @ overridden
 ---@field upvals GeneratedUpval[] @ overridden
 ---@field body GeneratedStatement[] @ overridden

@@ -1,3 +1,6 @@
+
+local util = require("util")
+
 local function DumpInt(i)
   -- int is 4 bytes
   return string.char(
@@ -135,10 +138,13 @@ local function DumpFunction(func)
   -- int n_upvals
   dump[#dump+1] = DumpInt(#func.upvals)
   -- upvals[] upvals
-  for _,u in ipairs(func.upvals) do
+  for _,upval in ipairs(func.upvals) do
     -- byte in_stack (is a local in parent scope, else upvalue in parent scope)
     -- byte idx
-    dump[#dump+1] = string.char(u.parent_def.def_type == "local" and 1 or 0, u.parent_def.index or 0)
+    dump[#dump+1] = string.char(
+      upval.in_stack and 1 or 0,
+      upval.in_stack and upval.local_idx or upval.upval_idx
+    )
   end
 
   -- [Debug]
@@ -162,11 +168,13 @@ local function DumpFunction(func)
   -- and only store the raw "locals" info in the generated function
   dump[#dump+1] = DumpInt(#func.live_regs)
   for _, live in ipairs(func.live_regs) do
-    dump[#dump+1] = DumpString(live.name)
-    -- TODO: i'm not sure about these, but zero based including to excluding would be the most natural
-    -- so that's how it is for now
-    dump[#dump+1] = DumpInt(live.start_at - 1)
-    dump[#dump+1] = DumpInt(live.stop_at)
+    if live.name then -- TODO: i believe this will be needed
+      dump[#dump+1] = DumpString(live.name)
+      -- TODO: i'm not sure about these, but zero based including to excluding would be the most natural
+      -- so that's how it is for now
+      dump[#dump+1] = DumpInt(live.start_at - 1)
+      dump[#dump+1] = DumpInt(live.stop_at)
+    end
   end
 
   -- int n_upvals
