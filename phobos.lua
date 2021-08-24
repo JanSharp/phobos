@@ -45,9 +45,23 @@ do
     return reg
   end
 
+  local function get_top(func)
+    return func.next_reg - 1
+  end
+
+  local function reg_is_top(func, reg)
+    return reg >= get_top(func)
+  end
+
+  local function ensure_used_reg(func, reg)
+    if reg > get_top(func) then
+      use_reg(func, reg)
+    end
+  end
+
   local function release_reg(reg, func)
-    if reg ~= func.next_reg - 1 then
-      error("Attempted to release register "..reg.." when top was "..func.next_reg)
+    if reg ~= get_top(func) then
+      error("Attempted to release register "..reg.." when top was "..get_top(func))
     end
     -- if it had a live local in it, end it here
     local live_regs = func.live_regs
@@ -63,12 +77,12 @@ do
 
   ---releases all regs down to `reg` but keeps `reg` live
   local function release_down_to(reg, func)
-    if reg == func.next_reg then
+    if reg == get_top(func) then
       return
     end
 
-    if reg > func.next_reg then
-      error("Attempted to release registers down to "..reg.." when top was "..func.next_reg)
+    if reg > get_top(func) then
+      error("Attempted to release registers down to "..reg.." when top was "..get_top(func))
     end
     -- if any had live locals, end them here
     local live_regs = func.live_regs
@@ -101,20 +115,6 @@ do
     }
     func.live_regs[#func.live_regs+1] = live
     return live
-  end
-
-  local function get_top(func)
-    return func.next_reg - 1
-  end
-
-  local function reg_is_top(func, reg)
-    return reg >= get_top(func)
-  end
-
-  local function ensure_used_reg(func, reg)
-    if reg > get_top(func) then
-      use_reg(func, reg)
-    end
   end
 
   local vararg_node_types = invert{"vararg","call","selfcall"}
@@ -644,6 +644,7 @@ do
         release_down_to(original_top, func)
       else
         ensure_used_reg(func, in_reg + num_results - 1)
+        release_down_to(math.max(original_top, in_reg + num_results - 1), func)
       end
     end,
     selfcall = function(expr,in_reg,func,num_results)
@@ -694,6 +695,7 @@ do
         release_down_to(original_top, func)
       else
         ensure_used_reg(func, in_reg + num_results - 1)
+        release_down_to(math.max(original_top, in_reg + num_results - 1), func)
       end
     end,
     index = function(expr,in_reg,func)
@@ -1307,7 +1309,7 @@ do
       local lowest_captured_reg
       for _, live in ipairs(func.live_regs) do
         -- except this condition
-        if scopes_that_matter_lut[live.scope] and live.upval_capture_pc and live.upval_capture_pc < inst.pc then
+        if scopes_that_matter_lut[live.scope] and live.upval_capture_pc and live.upval_capture_pc < stat.pc then
           if (not lowest_captured_reg) or live.reg < lowest_captured_reg then
             lowest_captured_reg = live.reg
           end
