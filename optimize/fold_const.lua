@@ -219,7 +219,7 @@ local fold_binop = {
     if exp.left.node_type == exp.right.node_type and
       (exp.left.node_type == "number" or exp.left.node_type == "string") then
       local res =  exp.left.value < exp.right.value
-      fold_exp(exp, tostring(res), res)
+      fold_exp(exp, "boolean", res)
     end
   end,
   ["<="] = function(exp)
@@ -227,7 +227,7 @@ local fold_binop = {
     if exp.left.node_type == exp.right.node_type and
       (exp.left.node_type == "number" or exp.left.node_type == "string") then
         local res =  exp.left.value <= exp.right.value
-        fold_exp(exp, tostring(res), res)
+        fold_exp(exp, "boolean", res)
     end
   end,
   [">"] = function(exp)
@@ -235,7 +235,7 @@ local fold_binop = {
     if exp.left.node_type == exp.right.node_type and
       (exp.left.node_type == "number" or exp.left.node_type == "string") then
         local res =  exp.left.value > exp.right.value
-        fold_exp(exp, tostring(res), res)
+        fold_exp(exp, "boolean", res)
     end
   end,
   [">="] = function(exp)
@@ -243,7 +243,7 @@ local fold_binop = {
     if exp.left.node_type == exp.right.node_type and
       (exp.left.node_type == "number" or exp.left.node_type == "string") then
         local res =  exp.left.value >= exp.right.value
-        fold_exp(exp, tostring(res), res)
+        fold_exp(exp, "boolean", res)
     end
   end,
   ["=="] = function(exp)
