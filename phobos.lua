@@ -643,6 +643,7 @@ do
         end
         release_down_to(original_top, func)
       else
+        num_results = (num_results == -1) and 0 or num_results
         ensure_used_reg(func, in_reg + num_results - 1)
         release_down_to(math.max(original_top, in_reg + num_results - 1), func)
       end
@@ -694,6 +695,7 @@ do
         end
         release_down_to(original_top, func)
       else
+        num_results = (num_results == -1) and 0 or num_results
         ensure_used_reg(func, in_reg + num_results - 1)
         release_down_to(math.max(original_top, in_reg + num_results - 1), func)
       end
