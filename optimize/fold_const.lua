@@ -161,6 +161,10 @@ local function fold_exp_merge(parent_exp, child_node)
   parent_exp.folded = true
 end
 
+local function is_falsy(node)
+  return node.node_type == "nil" or (node.node_type == "boolean" and node.value == false)
+end
+
 local fold_unop = {
   ["-"] = function(exp)
     -- number
@@ -170,8 +174,8 @@ local fold_unop = {
   end,
   ["not"] = function(exp)
     -- boolean
-    if exp.ex.node_type == "boolean" then
-      fold_exp(exp, "boolean", not exp.ex.value)
+    if is_const_node[exp.ex.node_type] then
+      fold_exp(exp, "boolean", not not is_falsy(exp.ex)) -- not not just to make sure it's a boolean value
     end
   end,
   ["#"] = function(exp)
@@ -268,7 +272,7 @@ local fold_binop = {
   end,
   ["and"] = function(exp)
     -- any type
-    if exp.left.node_type == "nil" or (exp.left.node_type == "boolean" and exp.left.value == false) then
+    if is_falsy(exp.left) then
       fold_exp_merge(exp, exp.left)
     elseif is_const_node[exp.left.node_type] then
       -- the constants that failed the first test are all truthy
@@ -277,7 +281,7 @@ local fold_binop = {
   end,
   ["or"] = function(exp)
     -- any type
-    if exp.left.node_type == "nil" or (exp.left.node_type == "boolean" and exp.left.value == false) then
+    if is_falsy(exp.left) then
       fold_exp_merge(exp, exp.right)
     elseif is_const_node[exp.left.node_type] then
       -- the constants that failed the first test are all truthy
