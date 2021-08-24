@@ -45,7 +45,7 @@ do
     return reg
   end
 
-  local function release_reg(func, reg)
+  local function release_reg(reg, func)
     if reg ~= func.next_reg - 1 then
       error("Attempted to release register "..reg.." when top was "..func.next_reg)
     end
@@ -265,13 +265,29 @@ do
     end
   end
 
-  local bin_opcodes = {
+  local bin_opcode_lut = {
     ["+"] = opcodes.add,
     ["-"] = opcodes.sub,
     ["*"] = opcodes.mul,
     ["/"] = opcodes.div,
     ["%"] = opcodes.mod,
     ["^"] = opcodes.pow,
+  }
+  local logical_binop_lut = {
+    ["=="] = opcodes.eq,
+    ["<"] = opcodes.lt,
+    ["<="] = opcodes.le,
+    ["~="] = opcodes.eq, -- inverted
+    [">="] = opcodes.lt, -- inverted
+    [">"] = opcodes.le, -- inverted
+  }
+  local logical_invert_lut = {
+    ["=="] = false,
+    ["<"] = false,
+    ["<="] = false,
+    ["~="] = true,
+    [">="] = true,
+    [">"] = true,
   }
   local un_opcodes = {
     ["-"] = opcodes.unm,
@@ -285,7 +301,7 @@ do
       local lr = live_regs[i]
       if lr.name == local_name
         and (not lr.stop_at)
-        and (lr.start_at and lr.start_at <= #func.instructions)
+        and (lr.start_at and lr.start_at <= #func.instructions + 1)
       then
         return lr.reg, lr
       end
@@ -318,7 +334,6 @@ do
   end
 
   local const_node_types = invert{"boolean","nil","string","number"}
-  local logical_binops = invert{">",">=","==","~=","<=","<"}
   local function const_or_local_or_fetch(expr,in_reg,func)
     if const_node_types[expr.node_type] then
       return bit32.bor(add_constant(expr.value,func),0x100)
@@ -375,16 +390,77 @@ do
       --   unless const table is too big, then fetch into temporary (and emit warning: const table too large)
       -- else fetch them into temporaries
       --   first temporary is in_reg, second is next_reg()
-      local left_reg = const_or_local_or_fetch(expr.left,in_reg,func)
-      -- if left_reg used in_reg, eval next expression into next_reg if needed
-      local temp_reg = left_reg == in_reg and peek_next_reg(func) or in_reg
-      local right_reg = const_or_local_or_fetch(expr.right,temp_reg,func)
 
-      func.instructions[#func.instructions+1] = {
-        op = bin_opcodes[expr.op], a = in_reg, b = left_reg, c = right_reg,
-        line = expr.op_token and expr.op_token.line, -- TODO: probably should just use expr.line/column
-        column = expr.op_token and expr.op_token.column,
-      }
+      -- TODO: this ends up using way too many registers and instructions [...]
+      -- bin_opcode_lut is fine, logical_binop_lut on it's own as well.
+      -- but "and" and "or" are horrible, and combining them with logical binops is also bad
+
+      -- TODO: probably should just use expr.line/column
+      -- TODO: some of the instructions should probably use a different token for their line/column
+      local line = expr.op_token and expr.op_token.line or get_last_used_line(func)
+      local column = expr.op_token and expr.op_token.column or get_last_used_column(func)
+
+      if expr.op == "and" or expr.op == "or" then
+
+        -- in_reg can be the register of a local in which case we are not allowed
+        -- to set a value to it yet, so to be safe just always use a temporary reg
+        local temp_reg = peek_next_reg(func)
+        local left_reg = local_or_fetch(expr.left, temp_reg, func)
+        func.instructions[#func.instructions+1] = {
+          op = opcodes.testset, a = in_reg, b = left_reg, c = expr.op == "or" and 1 or 0,
+          line = line, column = column,
+        }
+        local jump = {
+          op = opcodes.jmp, a = 0, sbx = nil,
+          line = line, column = column,
+        }
+        func.instructions[#func.instructions+1] = jump
+        local jump_pc = #func.instructions
+
+        if left_reg == temp_reg then
+          release_reg(temp_reg, func)
+        end
+        local right_reg = local_or_fetch(expr.right,in_reg,func)
+        if right_reg ~= in_reg then
+          func.instructions[#func.instructions+1] = {
+            op = opcodes.move, a = in_reg, b = right_reg,
+            line = line, column = column,
+          }
+        end
+        jump.sbx = #func.instructions - jump_pc
+      else
+        local left_reg = const_or_local_or_fetch(expr.left,in_reg,func)
+        -- if left_reg used in_reg, eval next expression into next_reg if needed
+        local temp_reg = left_reg == in_reg and peek_next_reg(func) or in_reg
+        local right_reg = const_or_local_or_fetch(expr.right,temp_reg,func)
+
+        if bin_opcode_lut[expr.op] then
+          func.instructions[#func.instructions+1] = {
+            op = bin_opcode_lut[expr.op], a = in_reg, b = left_reg, c = right_reg,
+            line = line, column = column,
+          }
+        elseif logical_binop_lut[expr.op] then
+          func.instructions[#func.instructions+1] = {
+            op = logical_binop_lut[expr.op], a = logical_invert_lut[expr.op] and 1 or 0,
+            b = left_reg, c = right_reg,
+            line = line, column = column,
+          }
+          func.instructions[#func.instructions+1] = {
+            op = opcodes.jmp, a = 0, sbx = 1,
+            line = line, column = column,
+          }
+          func.instructions[#func.instructions+1] = {
+            op = opcodes.loadbool, a = in_reg, b = 1, c = 1,
+            line = line, column = column,
+          }
+          func.instructions[#func.instructions+1] = {
+            op = opcodes.loadbool, a = in_reg, b = 0, c = 0,
+            line = line, column = column,
+          }
+        else
+          error("Invalid binop operator '"..expr.op.."'.")
+        end
+      end
       -- release temporaries if they were used
       release_down_to(func, in_reg)
     end,
@@ -411,7 +487,7 @@ do
         line = expr.line, column = expr.column,
       }
       if used_temp then
-        release_reg(func,temp_reg) -- TODO: once i checked out generate_exp_list make sure this is correct
+        release_reg(temp_reg, func) -- TODO: once i checked out generate_exp_list make sure this is correct
       end
     end,
     number = generate_const_code,
@@ -637,7 +713,7 @@ do
         or -> [repeat]
       * -> test
     ]]
-    if condition.node_type == "binop" and logical_binops[condition.op] then
+    if condition.node_type == "binop" and logical_binop_lut[condition.op] then
 
     else
 
