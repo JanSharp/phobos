@@ -474,11 +474,10 @@ do
       }
     end,
     concat = function(expr,in_reg,func)
+      local original_top = get_top(func)
       local temp_reg = in_reg
-      local used_temp
       if not reg_is_top(func, temp_reg) then
         temp_reg = next_reg(func)
-        used_temp = true
       end
       local num_exp = #expr.exp_list
       generate_exp_list(expr.exp_list,temp_reg,func,num_exp)
@@ -486,9 +485,7 @@ do
         op = opcodes.concat, a = in_reg, b = temp_reg, c = temp_reg + num_exp - 1,
         line = expr.line, column = expr.column,
       }
-      if used_temp then
-        release_reg(temp_reg, func) -- TODO: once i checked out generate_exp_list make sure this is correct
-      end
+      release_down_to(func, original_top)
     end,
     number = generate_const_code,
     string = generate_const_code,
