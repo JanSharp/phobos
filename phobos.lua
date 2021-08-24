@@ -1105,18 +1105,46 @@ do
 
       release_down_to(top, func)
     end,
-    whilestat = function(stat,func) -- TODO: impl/update whilestat
-      error()
-      local top = func.next_reg
-      -- eval stat.condition in a temporary
-      -- test, else jump past body+jump
-      -- generate body
-      for i,inner_stat in ipairs(stat.body) do
-        generate_statement_code[inner_stat.node_type](inner_stat,func)
+    whilestat = function(stat,func)
+      local start_pc = #func.instructions
+      local failure_jump
+      local failure_jump_pc
+      -- TODO: this optimization should probably be moved out
+      if is_falsy(stat.condition) then
+        -- always false, no need to generate anything
+        return
+      elseif const_node_types[stat.condition.node_type] then
+        -- always true, no need to check the condition
+      else
+        -- generate condition and test
+        generate_test_code(stat.condition, func)
+        -- jump over everything and leave
+        failure_jump = {
+          op = opcodes.jmp, a = 0, sbx = nil,
+          line = get_last_used_line(func),
+          column = get_last_used_column(func),
+        }
+        func.instructions[#func.instructions+1] = failure_jump
+        failure_jump_pc = #func.instructions
       end
+      -- generate body
+      generate_scope(stat, func)
       -- jump back
-
-      release_down_to(top, func)
+      func.instructions[#func.instructions+1] = {
+        op = opcodes.jmp, a = 0, sbx = start_pc - (#func.instructions + 1),
+        line = stat.end_token and stat.end_token.line or get_last_used_line(func),
+        column = stat.end_token and stat.end_token.line or get_last_used_column(func),
+      }
+      -- patch failure_jump to jump here
+      if failure_jump then
+        failure_jump.sbx = #func.instructions - failure_jump_pc
+      end
+      -- patch breaks to jump here as well
+      if stat.linked_breaks then
+        for _, break_stat in ipairs(stat.linked_breaks) do
+          break_stat.inst.sbx = #func.instructions - break_stat.pc
+        end
+      end
     end,
     repeatstat = function(stat,func) -- TODO: impl/update repeatstat
       error()
