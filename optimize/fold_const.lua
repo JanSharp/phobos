@@ -57,25 +57,110 @@ local function walk_exp(exp,open,close)
   if close then close(exp) end
 end
 
-local function fold_exp(parent_exp,node_type,value,child_node)
+local clear_exp_field_lut = {
+  ["selfcall"] = function(exp)
+    exp.ex = nil
+    exp.suffix = nil
+    exp.args = nil
+    exp.colon_token = nil
+    exp.open_paren_token = nil
+    exp.close_paren_token = nil
+  end,
+  ["call"] = function(exp)
+    exp.ex = nil
+    exp.args = nil
+    exp.open_paren_token = nil
+    exp.close_paren_token = nil
+  end,
+  ["local_ref"] = function(exp)
+    exp.name = nil
+    exp.reference_def = nil
+  end,
+  ["upval_ref"] = function(exp)
+    exp.name = nil
+    exp.reference_def = nil
+  end,
+  ["index"] = function(exp)
+    exp.ex = nil
+    exp.suffix = nil
+    exp.dot_token = nil
+    exp.suffix_open_token = nil
+    exp.suffix_close_token = nil
+    exp.src_did_not_exist = nil
+  end,
+  ["string"] = function(exp)
+    exp.value = nil
+    exp.src_is_ident = nil
+    exp.src_is_block_str = nil
+    exp.src_quote = nil
+    exp.src_value = nil
+    exp.src_has_leading_newline = nil
+    exp.src_pad = nil
+  end,
+  ["ident"] = function(exp)
+    exp.value = nil
+  end,
+  ["unop"] = function(exp)
+    exp.op = nil
+    exp.ex = nil
+    exp.op_token = nil
+  end,
+  ["binop"] = function(exp)
+    exp.op = nil
+    exp.left = nil
+    exp.right = nil
+    exp.op_token = nil
+  end,
+  ["concat"] = function(exp)
+    exp.exp_list = nil
+    exp.op_tokens = nil
+  end,
+  ["number"] = function(exp)
+    exp.value = nil
+    exp.src_value = nil
+  end,
+  ["nil"] = function(exp)
+  end,
+  ["boolean"] = function(exp)
+    exp.value = nil
+  end,
+  ["vararg"] = function(exp)
+  end,
+    ["func_proto"] = function(exp)
+    exp.ref = nil
+    exp.function_token = nil
+  end,
+  ["constructor"] = function(exp)
+    exp.fields = nil
+    exp.open_paren_token = nil
+    exp.comma_tokens = nil
+    exp.close_paren_token = nil
+  end,
+}
+
+local function clear_exp_fields(exp)
+  clear_exp_field_lut[exp.node_type](exp)
+end
+
+local is_const_node = invert{"string","number","boolean","nil"}
+---only for constant `node_type`s
+local function fold_exp(parent_exp,node_type,value)
+  assert(is_const_node[node_type])
+  clear_exp_fields(parent_exp)
   parent_exp.node_type = node_type
   parent_exp.value = value
-  parent_exp.ex = nil        -- call, selfcall
-  parent_exp.op = nil        -- binop,unop
-  parent_exp.left = nil      -- binop
-  parent_exp.right = nil     -- binop
-  parent_exp.exp_list = nil   -- concat
-  if child_node then
-    parent_exp.line = child_node.line
-    parent_exp.column = child_node.column
-  elseif child_node == false then
-    parent_exp.line = nil
-    parent_exp.column = nil
+  parent_exp.folded = true
+end
+
+---parent_exp becomes child_node, but keeping `parent_exp`'s table
+local function fold_exp_merge(parent_exp, child_node)
+  clear_exp_fields(parent_exp)
+  for k, v in pairs(child_node) do
+    parent_exp[k] = v
   end
   parent_exp.folded = true
 end
 
-local is_const_node = invert{"string","number","boolean","nil"}
 local fold_unop = {
   ["-"] = function(exp)
     -- number
@@ -184,23 +269,19 @@ local fold_binop = {
   ["and"] = function(exp)
     -- any type
     if exp.left.node_type == "nil" or (exp.left.node_type == "boolean" and exp.left.value == false) then
-      local sub = exp.left
-      fold_exp(exp, sub.node_type, sub.value, sub)
+      fold_exp_merge(exp, exp.left)
     elseif is_const_node[exp.left.node_type] then
       -- the constants that failed the first test are all truthy
-      local sub = exp.right
-      fold_exp(exp, sub.node_type, sub.value, sub)
+      fold_exp_merge(exp, exp.right)
     end
   end,
   ["or"] = function(exp)
     -- any type
     if exp.left.node_type == "nil" or (exp.left.node_type == "boolean" and exp.left.value == false) then
-      local sub = exp.right
-      fold_exp(exp, sub.node_type, sub.value, sub)
+      fold_exp_merge(exp, exp.right)
     elseif is_const_node[exp.left.node_type] then
       -- the constants that failed the first test are all truthy
-      local sub = exp.left
-      fold_exp(exp, sub.node_type, sub.value, sub)
+      fold_exp_merge(exp, exp.left)
     end
   end,
 }
@@ -266,8 +347,7 @@ local function fold_const_exp(exp)
 
       if #exp.exp_list == 1 then
         -- fold a single string away entirely, if possible
-        local sub = exp.exp_list[1]
-        fold_exp(exp,sub.node_type,sub.value,sub)
+        fold_exp_merge(exp, exp.exp_list[1])
       end
     else
       -- anything else?
