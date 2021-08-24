@@ -983,19 +983,20 @@ end
 
 local function ret_stat(scope)
   -- stat -> RETURN [exp_list] [';']
-  local this_tok = new_node("retstat")
-  this_tok.return_token = new_token_node()
+  local this_node = new_node("retstat")
+  this_node.return_token = new_token_node()
   next_token() -- skip "return"
   if block_follow(true) then
     -- return no values
   elseif token.token_type == ";" then
     -- also return no values
-    this_tok.semi_colon_token = new_token_node()
-    next_token()
   else
-    this_tok.exp_list, this_tok.exp_list_comma_tokens = exp_list(scope)
+    this_node.exp_list, this_node.exp_list_comma_tokens = exp_list(scope)
   end
-  return this_tok
+  if test_next(";") then
+    this_node.semi_colon_token = new_token_node(true)
+  end
+  return this_node
 end
 
 local statement_lut = {
