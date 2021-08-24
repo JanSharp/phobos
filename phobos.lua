@@ -1115,19 +1115,65 @@ do
         live.stop_at = #func.instructions
       end
     end,
-    fornum = function(stat,func) -- TODO: impl/update fornum
-      error()
-      local top = func.next_reg
+    fornum = function(stat,func)
       -- allocate fornum internal vars
       -- eval start/stop/step into internals
       -- allocate for local, declare it live
       -- generate body
-      for i,inner_stat in ipairs(stat.body) do
-        generate_statement_code[inner_stat.node_type](inner_stat,func)
+
+      local index_reg, limit_reg, step_reg, var_reg
+      local index_live, limit_live, step_live, var_live
+      local forprep_inst, forprep_pc
+
+      local function pre_block()
+        index_reg = next_reg(func)
+        index_live = create_live_reg(func, index_reg, "(for index)")
+        generate_expr(stat.start, index_reg, func, 1)
+        limit_reg = next_reg(func)
+        limit_live = create_live_reg(func, limit_reg, "(for limit)")
+        generate_expr(stat.stop, limit_reg, func, 1)
+        step_reg = next_reg(func)
+        step_live = create_live_reg(func, step_reg, "(for limit)")
+        generate_expr(stat.step or {
+          node_type = "number",
+          value = 1,
+          -- TODO: which line/column to use?
+          line = stat.line, column = stat.column,
+        }, step_reg, func, 1)
+
+        var_reg = next_reg(func)
+        var_live = create_live_reg(func, var_reg, stat.var.name)
+
+        forprep_inst = {
+          op = opcodes.forprep, a = index_reg, sbx = nil,
+          -- TODO: which line/column to use?
+          line = stat.line, column = stat.column,
+        }
+        func.instructions[#func.instructions+1] = forprep_inst
+        forprep_pc = #func.instructions
+
+        for _, live in ipairs{index_live, limit_live, step_live, var_live} do
+          live.start_at = #func.instructions
+        end
       end
+
+      generate_scope(stat, func, pre_block)
       -- loop
 
-      release_down_to(top, func)
+      forprep_inst.sbx = #func.instructions - forprep_pc
+      func.instructions[#func.instructions+1] = {
+        op = opcodes.forloop, a = index_reg, sbx = forprep_pc - (#func.instructions + 1),
+        -- TODO: which line/column to use?
+        line = stat.line, column = stat.column,
+      }
+
+      -- patch the stop_at for the for internals
+      -- same hack as in forlist
+      for _, live in ipairs{index_live, limit_live, step_live} do
+        live.stop_at = #func.instructions
+      end
+
+      patch_breaks_to_jump_here(stat, func)
     end,
     whilestat = function(stat,func)
       local start_pc = #func.instructions
