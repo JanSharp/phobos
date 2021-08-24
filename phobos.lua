@@ -135,6 +135,16 @@ do
   end
 
   local function generate_exp_list(exp_list,in_reg,func,num_results)
+    if num_results > 0 and (#exp_list) == 0 then
+      -- it wants results but there are no expressions to generate, so just generate nil
+      generate_expr({
+        node_type = "nil",
+        line = get_last_used_line(func),
+        column = get_last_used_column(func),
+      }, in_reg, func, num_results)
+      return
+    end
+
     local num_exp = #exp_list
     local used_temp
     local original_top = get_top(func)
@@ -196,7 +206,7 @@ do
     generate_statement_code[stat.node_type](stat, func)
   end
 
-  local function generate_scope(scope, func)
+  local function generate_scope(scope, func, pre_block, post_block)
     func.level = func.level + 1
     func.scope_levels[scope] = func.level
     local previous_scope = func.current_scope
@@ -204,8 +214,14 @@ do
 
     local original_top = get_top(func)
 
+    if pre_block then
+      pre_block()
+    end
     for _,stat in ipairs(scope.body) do
       generate_statement(stat,func)
+    end
+    if post_block then
+      post_block()
     end
 
     if func.level ~= 1 then -- no need to do anything in the root scope
@@ -822,8 +838,8 @@ do
 
       -- declare new registers to be "live" with locals after this
       for _,live in ipairs(new_live_regs) do
-        live.start_at = #func.instructions + 1
         live.in_scope_at = #func.instructions
+        live.start_at = #func.instructions + 1
       end
     end,
     assignment = function(stat,func)
@@ -1041,64 +1057,63 @@ do
       generate_expr(stat,next_reg(func),func,0)
       release_down_to(top, func)
     end,
-    forlist = function(stat,func) -- TODO: impl/update forlist
-      local top = func.next_reg
-      -- allocate forlist internal vars
-      local generator = next_reg(func)
-      local generator_info = {
-        reg = generator,
-        name = {node_type = "internal", value = "(for generator)"},
-      }
-      func.live_regs[#func.live_regs+1] = generator_info
-      local state = next_reg(func)
-      local state_info = {
-        reg = state,
-        name = {node_type = "internal", value = "(for state)"},
-      }
-      func.live_regs[#func.live_regs+1] = state_info
-      local control = next_reg(func)
-      local control_info = {
-        reg = control,
-        name = {node_type = "internal", value = "(for control)"},
-      }
-      func.live_regs[#func.live_regs+1] = control_info
-      local inner_top = func.next_reg
-      -- eval exp_list for three results starting at generator
-      generate_exp_list(stat.exp_list,generator,func,3)
-      -- jmp to tforcall
-      local jmp = {
-        op = opcodes.jmp, a = 0, -- a=close upvals?, sbx= jump target
-      }
-      func.instructions[#func.instructions+1] = jmp
-      -- go back and set internals live
-      generator_info.start_at = jmp
-      state_info.start_at = jmp
-      control_info.start_at = jmp
-      -- allocate for locals, declare them live
-      for i,name in ipairs(stat.name_list) do
-        func.live_regs[#func.live_regs+1] = {
-          reg = control,
-          name = name,
-          start_at = jmp
+    forlist = function(stat,func)
+      local generator_reg, control_reg
+      local generator_live, state_live, control_live
+      local jump, jump_pc
+
+      local function pre_block()
+        generator_reg = peek_next_reg(func)
+        -- eval exp_list for three results starting at generator
+        generate_exp_list(stat.exp_list, generator_reg, func, 3)
+
+        -- allocate forlist internal vars
+        generator_live = create_live_reg(func, generator_reg, "(for generator)")
+        state_live = create_live_reg(func, generator_reg + 1, "(for state)")
+        control_reg = generator_reg + 2
+        control_live = create_live_reg(func, control_reg, "(for control)")
+
+        -- jmp to tforcall
+        jump = {
+          op = opcodes.jmp, a = 0, sbx = nil,
+          line = stat.do_token and stat.do_token.line or get_last_used_line(func),
+          column = stat.do_token and stat.do_token.column or get_last_used_column(func),
         }
-      end
-      -- generate body
-      for i,inner_stat in ipairs(stat.body) do
-        generate_statement_code[inner_stat.node_type](inner_stat,func)
+        func.instructions[#func.instructions+1] = jump
+        jump_pc = #func.instructions
+
+        -- go back and set internals live
+        for _, live in ipairs{generator_live, state_live, control_live} do
+          live.start_at = #func.instructions
+        end
+        -- allocate for locals, declare them live
+        for _, local_ref in ipairs(stat.name_list) do
+          local live = create_live_reg(func, next_reg(func), local_ref.name)
+          live.start_at = #func.instructions
+        end
       end
 
-      release_down_to(inner_top, func)
-      -- loop
-      local tforcall = {
-        op = opcodes.tforcall, a = generator, c = #stat.name_list, -- a=func, c=num loop vars
-      }
-      jmp.sbx = tforcall
-      func.instructions[#func.instructions+1] = tforcall
+      generate_scope(stat, func, pre_block)
+
+      jump.sbx = #func.instructions - jump_pc
       func.instructions[#func.instructions+1] = {
-        op = opcodes.tforloop, a = control, sbx = jmp, -- jump back to just start of body
+        op = opcodes.tforcall, a = generator_reg, c = #stat.name_list, -- a=func, c=num loop vars
+        line = stat.line, column = stat.column,
+      }
+      func.instructions[#func.instructions+1] = {
+        -- sbx: jump back to just start of body
+        op = opcodes.tforloop, a = control_reg, sbx = jump_pc - (#func.instructions + 1),
+        line = stat.line, column = stat.column,
       }
 
-      release_down_to(top, func)
+      patch_breaks_to_jump_here(stat, func)
+
+      -- patch the stop_at for the for internals
+      -- this is technically a hack that could be avoided by adding a fake scope
+      -- just around the loop which includes these locals, but this approach is a lot easier
+      for _, live in ipairs{generator_live, state_live, control_live} do
+        live.stop_at = #func.instructions
+      end
     end,
     fornum = function(stat,func) -- TODO: impl/update fornum
       error()

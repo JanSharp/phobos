@@ -526,6 +526,7 @@ local suffixed_lut = {
     local node = new_node("call")
     node.ex = ex
     node.args = func_args(node, scope)
+    return node
   end,
 }
 
