@@ -177,7 +177,7 @@ local fold_unop = {
   ["#"] = function(exp)
     -- table or string
     if exp.ex.node_type == "string" then
-      fold_exp(exp, "string", #exp.ex.value)
+      fold_exp(exp, "number", #exp.ex.value)
     elseif exp.ex.node_type == "constructor" then
 
     end
