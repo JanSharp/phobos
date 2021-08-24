@@ -1345,7 +1345,14 @@ do
 
     func.level = 0
     func.scope_levels = {}
-    generate_scope(func, func)
+    generate_scope(func, func, function()
+      for _, loc in ipairs(func.locals) do
+        if loc.whole_block then
+          local live = create_live_reg(func, next_reg(func), loc.name)
+          live.start_at = 1
+        end
+      end
+    end)
     func.level = nil
     func.scope_levels = nil
 

@@ -330,10 +330,9 @@ local function par_list(scope)
   end
   while true do
     if token.token_type == "ident" then
-      local name_node = new_node("local") -- TODO: almost the same as assert_name
-      name_node.value = token.value
-      scope.locals[#scope.locals+1] = {name = name_node, whole_block = true}
-      next_token()
+      local param_def = create_local(assert_name())
+      param_def.whole_block = true
+      scope.locals[#scope.locals+1] = param_def
     elseif token.token_type == "..." then
       scope.is_vararg = true
       next_token()
@@ -1134,7 +1133,7 @@ local function parse(text,source_name)
           -- @tag two dashes, a space, at-tag, and any text
         ]]
         if token.value:match("^%- ") or token.value:match("^[- ]@") then
-          print("found doc comment " .. token.value)
+          -- print("found doc comment " .. token.value)
         end
       elseif token.token_type == "blank" then
         leading[#leading+1] = token
