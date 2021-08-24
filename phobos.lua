@@ -791,6 +791,15 @@ do
     end
   end
 
+  local function patch_breaks_to_jump_here(loop_stat, func)
+    if loop_stat.linked_breaks then
+      for _, break_stat in ipairs(loop_stat.linked_breaks) do
+        break_stat.inst.sbx = #func.instructions - break_stat.pc
+        -- TODO: could remove `inst` and `pc` from `break_stat` here
+      end
+    end
+  end
+
   generate_statement_code = {
     localstat = function(stat,func)
       -- allocate registers for LHS, eval expressions into them
@@ -1140,23 +1149,35 @@ do
         failure_jump.sbx = #func.instructions - failure_jump_pc
       end
       -- patch breaks to jump here as well
-      if stat.linked_breaks then
-        for _, break_stat in ipairs(stat.linked_breaks) do
-          break_stat.inst.sbx = #func.instructions - break_stat.pc
-        end
-      end
+      patch_breaks_to_jump_here(stat, func)
     end,
-    repeatstat = function(stat,func) -- TODO: impl/update repeatstat
-      error()
-      local top = func.next_reg
+    repeatstat = function(stat,func)
+      local start_pc = #func.instructions
       -- generate body
-      for i,inner_stat in ipairs(stat.body) do
-        generate_statement_code[inner_stat.node_type](inner_stat,func)
-      end
-      -- eval stat.condition in a temporary
-      -- jump back if false
+      generate_scope(stat, func)
 
-      release_down_to(top, func)
+      local do_jump_back
+      -- TODO: this optimization should probably be moved out
+      if is_falsy(stat.condition) then
+        -- always false, always jump
+        do_jump_back = true
+      elseif const_node_types[stat.condition.node_type] then
+        -- always true, always leave
+        do_jump_back = false
+      else
+        -- generate condition and test
+        generate_test_code(stat.condition, func)
+        -- jump back if it failed
+        do_jump_back = true
+      end
+      if do_jump_back then
+        func.instructions[#func.instructions+1] = {
+          op = opcodes.jmp, a = 0, sbx = start_pc - (#func.instructions + 1),
+          line = stat.until_token and stat.until_token.line or get_last_used_line(func),
+          column = stat.until_token and stat.until_token.column or get_last_used_column(func),
+        }
+      end
+      patch_breaks_to_jump_here(stat, func)
     end,
 
     ---@param stat AstRetStat
