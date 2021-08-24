@@ -15,7 +15,7 @@ do
 
   local function get_last_used_column(func)
     return (#func.instructions > 0)
-      and func.instructions[#func.instructions].colum
+      and func.instructions[#func.instructions].column
       or 0
   end
 
@@ -62,7 +62,7 @@ do
   end
 
   ---releases all regs down to `reg` but keeps `reg` live
-  local function release_down_to(func, reg)
+  local function release_down_to(reg, func)
     if reg == func.next_reg then
       return
     end
@@ -187,7 +187,7 @@ do
           column = column,
         }
       end
-      release_down_to(func, original_top)
+      release_down_to(original_top, func)
     end
   end
 
@@ -228,7 +228,7 @@ do
       end
     end
 
-    release_down_to(func, original_top)
+    release_down_to(original_top, func)
 
     func.current_scope = previous_scope
     func.level = func.level - 1
@@ -330,7 +330,7 @@ do
   end
 
   local function is_falsy(node)
-    return node.node_type == "nil" or (node.node_type == "boolean" and node.node_type.value == false)
+    return node.node_type == "nil" or (node.node_type == "boolean" and node.value == false)
   end
 
   local const_node_types = invert{"boolean","nil","string","number"}
@@ -462,7 +462,7 @@ do
         end
       end
       -- release temporaries if they were used
-      release_down_to(func, in_reg)
+      release_down_to(in_reg, func)
     end,
     unop = function(expr,in_reg,func)
       -- if expr.ex is a local use that directly,
@@ -485,7 +485,7 @@ do
         op = opcodes.concat, a = in_reg, b = temp_reg, c = temp_reg + num_exp - 1,
         line = expr.line, column = expr.column,
       }
-      release_down_to(func, original_top)
+      release_down_to(original_top, func)
     end,
     number = generate_const_code,
     string = generate_const_code,
@@ -536,7 +536,7 @@ do
           line = src_position.line,
           column = src_position.column,
         }
-        release_down_to(func, initial_top)
+        release_down_to(initial_top, func)
       end
 
       for i,field in ipairs(expr.fields) do
@@ -569,7 +569,7 @@ do
             column = field.eq_token and field.eq_token.column,
           }
 
-          release_down_to(func, original_top)
+          release_down_to(original_top, func)
         else
           error("Invalid field type in table constructor")
         end
@@ -625,7 +625,7 @@ do
             line = expr.line, column = expr.column,
           }
         end
-        release_down_to(func,original_top)
+        release_down_to(original_top, func)
       else
         ensure_used_reg(func, in_reg + num_results - 1)
       end
@@ -675,7 +675,7 @@ do
             line = expr.line, column = expr.column,
           }
         end
-        release_down_to(func, original_top)
+        release_down_to(original_top, func)
       else
         ensure_used_reg(func, in_reg + num_results - 1)
       end
@@ -695,11 +695,11 @@ do
         a = in_reg, b = ex_reg, c = suffix_reg,
         line = expr.line, column = expr.column,
       }
-      release_down_to(func, original_top)
+      release_down_to(original_top, func)
     end,
   }
 
-  local function generate_test_code(condition)
+  local function generate_test_code(condition, func)
     --[[
       binop
         eq -> eq
@@ -710,14 +710,46 @@ do
         ge -> !lt
         and -> [repeat]
         or -> [repeat]
+      unop
+        not -> !test
       * -> test
     ]]
     if condition.node_type == "binop" and logical_binop_lut[condition.op] then
+      local original_top = get_top(func)
+      local temp_reg = peek_next_reg(func)
+      local left_reg = const_or_local_or_fetch(condition.left,temp_reg,func)
+      -- if left_reg used in_reg, eval next expression into next_reg if needed
+      temp_reg = left_reg == temp_reg and peek_next_reg(func) or temp_reg
+      local right_reg = const_or_local_or_fetch(condition.right,temp_reg,func)
 
+      func.instructions[#func.instructions+1] = {
+        op = logical_binop_lut[condition.op], a = logical_invert_lut[condition.op] and 1 or 0,
+        b = left_reg, c = right_reg,
+        -- TODO: probably should just use condition.line/column
+        line = condition.op_token and condition.op_token.line or get_last_used_line(func),
+        column = condition.op_token and condition.op_token.column or get_last_used_column(func),
+      }
+      release_down_to(original_top, func)
+    -- TODO: impl "and" and "or" test code
+    -- elseif condition.node_type == "binop" and (condition.op == "and" or condition.op == "or") then
+    --   error()
     else
+      local exp = condition
+      local inverted = false
+      if condition.node_type == "unop" and condition.op == "not" then
+        exp = condition.ex
+        inverted = true
+      end
+      local original_top = get_top(func)
+      local temp_reg = peek_next_reg(func)
+      local condition_reg = local_or_fetch(exp, temp_reg, func)
 
+      func.instructions[#func.instructions+1] = {
+        op = opcodes.test, a = condition_reg, c = inverted and 1 or 0,
+        line = condition.line, column = condition.column,
+      }
+      release_down_to(original_top, func)
     end
-    error()
   end
 
   local function get_a_for_jump(go, func)
@@ -843,7 +875,7 @@ do
           error("Impossible left type "..left.type)
         end
       end
-      release_down_to(func,original_top)
+      release_down_to(original_top, func)
     end,
     localfunc = function(stat,func)
       -- allocate register for stat.name
@@ -911,60 +943,94 @@ do
       else
         error("Impossible left type "..left.type)
       end
-      release_down_to(func, original_top)
+      release_down_to(original_top, func)
     end,
     dostat = generate_scope,
-    ifstat = function(stat,func) -- TODO: impl/update ifstat
+    ifstat = function(stat,func)
+      local prev_failure_jump
+      local finish_jumps = {}
+      local condition_is_always_truthy = false
       for i,if_block in ipairs(stat.ifs) do
-        local top = func.next_reg
+        -- local original_top = get_top(func)
         local condition_node = if_block.condition
         local condition_node_type = condition_node.node_type
 
         if is_falsy(condition_node) then -- TODO: imo this should be moved out to be an optimization
           -- always false, skip this block
-          goto next_block
+          goto continue
         elseif const_node_types[condition_node_type] then
           -- always true, stop after this block
+          prev_failure_jump = nil
+          condition_is_always_truthy = true
 
           -- TODO: include table constructors and closures here
           -- maybe function calls of known truthy return types too?
           -- but those still need to eval it if captured to a block local
-          error()
         else
           -- generate a value and `test` it...
-          generate_test_code(condition_node)
-          error()
+          generate_test_code(condition_node, func)
+          prev_failure_jump = {
+            op = opcodes.jmp, sbx = nil,
+            line = if_block.then_token and if_block.then_token.line or get_last_used_line(func),
+            column = if_block.then_token and if_block.then_token.column or get_last_used_column(func),
+          }
+          func.instructions[#func.instructions+1] = prev_failure_jump
+          prev_failure_jump.pc = #func.instructions
         end
 
         -- generate body
-        for j,inner_stat in ipairs(if_block.body) do
-          generate_statement_code[inner_stat.node_type](inner_stat,func)
+        generate_scope(if_block, func)
+
+        local finish_jump = {
+          op = opcodes.jmp, sbx = nil,
+          line = get_last_used_line(func),
+          column = get_last_used_column(func),
+        }
+        finish_jumps[#finish_jumps+1] = finish_jump
+        func.instructions[#func.instructions+1] = finish_jump
+        finish_jump.pc = #func.instructions
+
+        if prev_failure_jump then
+          prev_failure_jump.sbx = #func.instructions - prev_failure_jump.pc
+          prev_failure_jump.pc = nil
         end
-        release_down_to(func,top)
+
+        if condition_is_always_truthy then
+          break
+        end
+
+        -- release_down_to(original_top, func)
         -- jump from end of body to end of blocks (not yet determined, build patch list)
         -- patch test failure to jump here for next test/else/next_block
-        ::next_block::
+        ::continue::
       end
-      if stat.elseblock then
-        local top = func.next_reg
-        for i,inner_stat in ipairs(stat.elseblock.body) do
-          generate_statement_code[inner_stat.node_type](inner_stat,func)
+      if (not condition_is_always_truthy) and stat.elseblock then
+        generate_scope(stat.elseblock, func)
+      else
+        if finish_jumps[#finish_jumps] then
+          func.instructions[#func.instructions] = nil
+          finish_jumps[#finish_jumps] = nil
+          if prev_failure_jump then
+            prev_failure_jump.sbx = prev_failure_jump.sbx - 1
+          end
         end
-        release_down_to(func,top)
-        -- patch if block ends to jump here
+      end
+      for _, finish_jump in ipairs(finish_jumps) do
+        finish_jump.sbx = #func.instructions - finish_jump.pc
+        finish_jump.pc = nil
       end
     end,
     call = function(stat,func)
       -- evaluate as a call expression for zero results
       local top = get_top(func)
       generate_expr(stat,next_reg(func),func,0)
-      release_down_to(func,top)
+      release_down_to(top, func)
     end,
     selfcall = function(stat,func)
       -- evaluate as a selfcall expression for zero results
       local top = get_top(func)
       generate_expr(stat,next_reg(func),func,0)
-      release_down_to(func,top)
+      release_down_to(top, func)
     end,
     forlist = function(stat,func) -- TODO: impl/update forlist
       local top = func.next_reg
@@ -1012,7 +1078,7 @@ do
         generate_statement_code[inner_stat.node_type](inner_stat,func)
       end
 
-      release_down_to(func,inner_top)
+      release_down_to(inner_top, func)
       -- loop
       local tforcall = {
         op = opcodes.tforcall, a = generator, c = #stat.name_list, -- a=func, c=num loop vars
@@ -1023,7 +1089,7 @@ do
         op = opcodes.tforloop, a = control, sbx = jmp, -- jump back to just start of body
       }
 
-      release_down_to(func,top)
+      release_down_to(top, func)
     end,
     fornum = function(stat,func) -- TODO: impl/update fornum
       error()
@@ -1037,7 +1103,7 @@ do
       end
       -- loop
 
-      release_down_to(func,top)
+      release_down_to(top, func)
     end,
     whilestat = function(stat,func) -- TODO: impl/update whilestat
       error()
@@ -1050,7 +1116,7 @@ do
       end
       -- jump back
 
-      release_down_to(func,top)
+      release_down_to(top, func)
     end,
     repeatstat = function(stat,func) -- TODO: impl/update repeatstat
       error()
@@ -1062,7 +1128,7 @@ do
       -- eval stat.condition in a temporary
       -- jump back if false
 
-      release_down_to(func,top)
+      release_down_to(top, func)
     end,
 
     ---@param stat AstRetStat

@@ -85,7 +85,7 @@ do
   -- i added this because the debugger was not breaking on error inside a pcall
   -- and now it suddenly does break even with this set to false.
   -- i don't understand
-  local unsafe = true
+  local unsafe = false
   if unsafe then
     pcall = function(f, ...)
       return true, f(...)
