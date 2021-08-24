@@ -500,8 +500,10 @@ do
     end,
     ["nil"] = function(expr,in_reg,func,num_results)
       -- TODO: check if the "combine loadnil" optimization is enabled
-      if func.instructions[#func.instructions] and func.instructions[#func.instructions].op == opcodes.loadnil then
-        func.instructions[#func.instructions].b = func.instructions[#func.instructions].b + num_results
+      local prev = func.instructions[#func.instructions]
+      if prev and prev.op == opcodes.loadnil and (prev.a + prev.b + 1) == in_reg then
+        -- only combine if prev was loadnil and stops loading nils just before in_reg
+        prev.b = prev.b + num_results
       else
         func.instructions[#func.instructions+1] = {
           op = opcodes.loadnil, a = in_reg, b = num_results - 1, -- from a to a + b
