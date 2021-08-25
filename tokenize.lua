@@ -104,6 +104,12 @@ local function peek_equals(str,index,next_char,line,column)
   end
 end
 
+local escape_sequence_lut = {
+  a = "\a", b = "\b", f = "\f", n = "\n",
+  r = "\r", t = "\t", v = "\v", ["\\"] = "\\",
+  ['"'] = '"', ["'"] = "'", ["\r"] = "\r", ["\n"] = "\n",
+}
+
 local function read_string(str,index,quote,state)
   local i = index + 1
   local next_char = str:sub(i,i)
@@ -114,10 +120,17 @@ local function read_string(str,index,quote,state)
     return i+1,token
   end
 
+  local parts = {}
+
   ::matching::
+  local start_i = i
   -- read through normal text...
   while str:match("^[^"..quote.."\\\n]",i) do
     i = i + 1
+  end
+
+  if i ~= start_i then
+    parts[#parts+1] = str:sub(start_i, i - 1)
   end
 
   next_char = str:sub(i,i)
@@ -126,20 +139,7 @@ local function read_string(str,index,quote,state)
     -- finished string
     local token = new_token("string",index,state.line,index - state.line_offset)
     token.src_value = str:sub(index+1,i-1)
-    token.value = token.src_value
-      :gsub("\\([abfnrtv\\\"'\r\n])", ---cSpell: disable-line
-      {
-        a = "\a", b = "\b", f = "\f", n = "\n",
-        r = "\r", t = "\t", v = "\v", ["\\"] = "\\",
-        ['"'] = '"', ["'"] = "'", ["\r"] = "\r", ["\n"] = "\n",
-      })
-      :gsub("\\z%s*","")
-      :gsub("\\(%d%d?%d?)",function(digits)
-        return string.char(tonumber(digits,10))
-      end)
-      :gsub("\\x(%x%x)",function(digits)
-        return string.char(tonumber(digits,16))
-      end)
+    token.value = table.concat(parts)
 
     token.src_is_block_str = false
     token.src_quote = quote
@@ -154,24 +154,34 @@ local function read_string(str,index,quote,state)
     i = i + 1
     next_char = str:sub(i,i)
     if next_char == "x" then
+      local digits = str:match("^%x%x", i + 1)
+      if not digits then
+        error("Invalid escape sequence `\\x"..str:sub(i + 1, i + 2)
+          .."`, `\\x` must be followed by 2 hexadecimal digits."
+        )
+      end
+      parts[#parts+1] = string.char(tonumber(digits, 16))
       i = i + 3 -- skip x and two hex digits
       goto matching
     elseif next_char == "\n" then
       state.line = state.line + 1
       state.line_offset = i
+      parts[#parts+1] = "\n"
       i = i + 1
       goto matching
     elseif next_char == "z" then
       --skip z and whitespace
-      local _,skip = str:find("^z%s",i)
+      local _,skip = str:find("^z%s*",i)
       i = skip + 1
       goto matching
-    elseif next_char:match("[abfnrtv\\\"']") then ---cSpell: disable-line
+    elseif escape_sequence_lut[next_char] then
+      parts[#parts+1] = escape_sequence_lut[next_char]
       i = i + 1
       goto matching
     else
-      local digits,skip = str:find("^%d%d?%d?",i)
-      if digits then
+      local digits_start, skip, digits = str:find("^(%d%d?%d?)",i)
+      if digits_start then
+        parts[#parts+1] = string.char(tonumber(digits, 10))
         i = skip + 1
         goto matching
       else
