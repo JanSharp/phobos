@@ -4,12 +4,12 @@ local disassembler = require("disassembler")
 
 local unsafe = false
 local print_progress = true
-local use_regular_lua_compiler = true
+local use_regular_lua_compiler = false
 local use_phobos_compiler = true
 local do_fold_const = true
 local eval_instruction_count = true
 local eval_byte_count = true
-local create_disassembly = false
+local create_disassembly = true
 local show_keys_in_disassembly = false
 local load_and_run_compiled_funcs = false
 local run_count = 1
