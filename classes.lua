@@ -367,7 +367,9 @@
 ---@field start_after AstStatement|nil
 ---@field child_defs AstUpvalDef[]
 
+---this is a table because `value` can be `nil`
 ---@class AstConstantDef
+---@field value string|number|boolean|nil
 
 ---@class AstMain : AstFunctionDef
 ---@field node_type '"main"'

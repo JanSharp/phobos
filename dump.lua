@@ -68,8 +68,8 @@ local dumpConstantByType = {
 --   <string> string value
   ["string"] = function(val) return "\4" .. DumpString(val) end,
 }
-local function DumpConstant(val)
-  return dumpConstantByType[type(val)](val)
+local function DumpConstant(constant)
+  return dumpConstantByType[type(constant.value)](constant.value)
 end
 
 ---@param func GeneratedFunc

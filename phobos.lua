@@ -253,12 +253,12 @@ do
 
   local function add_constant(value,func)
     for i,const in ipairs(func.constants) do
-      if value == const then
+      if value == const.value then
         return i - 1
       end
     end
     local i = #func.constants
-    func.constants[i+1] = value
+    func.constants[i+1] = {value = value}
     return i
   end
 
@@ -822,26 +822,20 @@ do
 
   generate_statement_code = {
     localstat = function(stat,func)
-      -- allocate registers for LHS, eval expressions into them
-      local new_live_regs = {}
-      for i,ref in ipairs(stat.lhs) do
-        local live = create_live_reg(func, get_top(func) + i, ref.name)
-        new_live_regs[i] = live
-      end
-
+      local first_reg = next_reg(func)
       if stat.rhs then
-        generate_exp_list(stat.rhs, new_live_regs[1].reg, func, #stat.lhs)
+        generate_exp_list(stat.rhs, first_reg, func, #stat.lhs)
       else
-        use_reg(func, new_live_regs[#stat.lhs].reg)
         generate_expr({
           node_type = "nil",
           line = stat.line,
           column = stat.column,
-        }, new_live_regs[1].reg, func, #stat.lhs)
+        }, first_reg, func, #stat.lhs)
       end
 
       -- declare new registers to be "live" with locals after this
-      for _,live in ipairs(new_live_regs) do
+      for i, ref in ipairs(stat.lhs) do
+        local live = create_live_reg(func, first_reg + i - 1, ref.name)
         live.in_scope_at = #func.instructions
         live.start_at = #func.instructions + 1
       end

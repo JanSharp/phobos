@@ -3,9 +3,10 @@ local serpent = require("serpent")
 local disassembler = require("disassembler")
 
 local unsafe = false
-local print_progress = false
+local print_progress = true
 local use_regular_lua_compiler = false
 local use_phobos_compiler = true
+local do_fold_const = true
 local eval_instruction_count = false
 local eval_byte_count = false
 local create_disassembly = true
@@ -138,8 +139,10 @@ local function compile(filename)
     success, err = pcall(require("jump_linker"), main)
     if not success then print(err) goto finish end
 
-    success, err = pcall(require("optimize.fold_const"), main)
-    if not success then print(err) goto finish end
+    if do_fold_const then
+      success, err = pcall(require("optimize.fold_const"), main)
+      if not success then print(err) goto finish end
+    end
 
     success, err = pcall(require("phobos"), main)
     if not success then print(err) goto finish end
