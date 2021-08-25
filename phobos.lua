@@ -119,7 +119,7 @@ do
 
   local vararg_node_types = invert{"vararg","call","selfcall"}
   local function is_vararg(node)
-    return vararg_node_types[node.node_type]
+    return vararg_node_types[node.node_type] and (not node.force_single_result)
   end
 
   local generate_expr_code

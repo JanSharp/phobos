@@ -57,6 +57,9 @@
 ---@field close_paren_token AstTokenNode
 
 ---@class AstExpression : AstNode
+---should the expression be forced to evaluate to only one result
+---caused by the expression being wrapped in `()`
+---@field force_single_result boolean|nil
 ---@field src_paren_wrappers AstParenWrapper[]|nil
 
 -- since every scope inherits AstBody, AstScope now does as well

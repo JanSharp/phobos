@@ -468,6 +468,7 @@ local function primary_exp(scope)
     local ex = expr(scope)
     local close_paren_token = new_token_node()
     assert_match(")","(",open_paren_token.line)
+    ex.force_single_result = true
     ex.src_paren_wrappers = ex.src_paren_wrappers or {}
     table.insert(ex.src_paren_wrappers, 1, {
       open_paren_token = open_paren_token,

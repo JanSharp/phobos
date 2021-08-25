@@ -139,6 +139,9 @@ local clear_exp_field_lut = {
 }
 
 local function clear_exp_fields(exp)
+  -- fields every expression have
+  exp.src_paren_wrappers = nil
+  -- TODO: how to deal with force_single_result when folding expression?
   clear_exp_field_lut[exp.node_type](exp)
 end
 
