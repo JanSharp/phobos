@@ -17,6 +17,17 @@
             ],
         },
         {
+            "name": "Jan# Standard Lua (run compile_test)",
+            "type": "lua-local",
+            "request": "launch",
+            "program": {
+                "lua": "lua52",
+                "file": "./compile_test.lua",
+            },
+            "args": [
+            ],
+        },
+        {
             "name": "Jan# Standard Lua (compile phobos)",
             "type": "lua-local",
             "request": "launch",
