@@ -4,15 +4,18 @@ local disassembler = require("disassembler")
 
 local unsafe = false
 local print_progress = true
-local use_regular_lua_compiler = false
+local use_regular_lua_compiler = true
 local use_phobos_compiler = true
 local do_fold_const = true
-local eval_instruction_count = false
-local eval_byte_count = false
-local create_disassembly = true
+local eval_instruction_count = true
+local eval_byte_count = true
+local create_disassembly = false
 local show_keys_in_disassembly = false
 local load_and_run_compiled_funcs = false
 local run_count = 1
+
+local total_inst_diff = 0
+local total_byte_diff = 0
 
 local function compile(filename)
   if print_progress then
@@ -188,17 +191,24 @@ local function compile(filename)
 
   ::finish::
   if eval_instruction_count then
-    print(" #instructions: "..serpent.line(instruction_count)
-      ..(instruction_count.lua and instruction_count.pho and (
-        " diff: "..(instruction_count.pho - instruction_count.lua)
-      ) or ""))
+    local diff = instruction_count.lua and instruction_count.pho
+      and instruction_count.pho - instruction_count.lua
+      or nil
+    print(" #instructions: "..serpent.line(instruction_count)..(diff and (" diff: "..diff) or ""))
+    if diff then
+      total_inst_diff = total_inst_diff + diff
+    end
   end
   if eval_byte_count then
     local lua = use_regular_lua_compiler and lua_dumped and #lua_dumped or nil
     local pho = use_phobos_compiler and pho_dumped and #pho_dumped or nil
+    local diff = lua and pho and pho - lua or nil
     print(" #bytes:        "..serpent.line{lua = lua, pho = pho}
-      ..(lua and pho and (" diff: "..(pho - lua)) or "")
+      ..(diff and (" diff: "..diff) or "")
     )
+    if diff then
+      total_byte_diff = total_inst_diff + diff
+    end
   end
 
   if create_disassembly then
@@ -228,4 +238,11 @@ for i = 1, run_count do
     print()
     print()
   end
+end
+
+if eval_instruction_count and use_regular_lua_compiler and use_phobos_compiler then
+  print("total instruction count diff: "..total_inst_diff)
+end
+if eval_byte_count and use_regular_lua_compiler and use_phobos_compiler then
+  print("total byte count diff:        "..total_byte_diff)
 end
