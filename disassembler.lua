@@ -359,7 +359,7 @@ local function disassemble(bytecode)
     [4] = function()
       local value = read_string()
       assert(value, "Strings in the constant table must not be `nil`.")
-      return {node_type = "string", value = value, label = string.format("%q", value)--[[:gsub("\\\n", "\\n")]]}
+      return {node_type = "string", value = value, label = string.format("%q", value):gsub("\\\n", "\\n")}
     end,
   }
   setmetatable(const_lut, {
