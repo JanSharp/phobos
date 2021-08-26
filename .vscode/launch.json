@@ -5,12 +5,12 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Jan# Standard Lua (compile test.lua)",
+            "name": "Jan# Standard Lua (run debug_main)",
             "type": "lua-local",
             "request": "launch",
             "program": {
                 "lua": "lua52",
-                "file": "./main.lua",
+                "file": "./debug_main.lua",
             },
             "args": [
                 "test.lua",
@@ -25,32 +25,6 @@
                 "file": "./compile_test.lua",
             },
             "args": [
-            ],
-        },
-        {
-            "name": "Jan# Standard Lua (compile phobos)",
-            "type": "lua-local",
-            "request": "launch",
-            "program": {
-                "lua": "lua52",
-                "file": "./main.lua",
-            },
-            "args": [
-                "optimize/fold_const.lua",
-                "classes.lua",
-                "constants.lua",
-                "disassembler.lua",
-                "dump.lua",
-                "formatter.lua",
-                "invert.lua",
-                "jump_linker.lua",
-                "main.lua",
-                "opcodes.lua",
-                "parser.lua",
-                "phobos.lua",
-                "serpent.lua",
-                "tokenize.lua",
-                "util.lua",
             ],
         },
         {
