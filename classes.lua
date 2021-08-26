@@ -4,8 +4,7 @@
 
 ---@alias AstNodeType
 ---special:
----| '"main"'
----| '"env"' @ -- TODO: maybe add a type for this one and define it on AstMain
+---| '"env"'
 ---| '"functiondef"'
 ---| '"token"'
 ---statements:
@@ -32,7 +31,7 @@
 ---| '"local_ref"'
 ---| '"upval_ref"'
 ---| '"index"'
----| '"ident"' @ -- TODO: same as '"string"'?
+---| '"ident"'
 ---| '"unop"'
 ---| '"binop"'
 ---| '"concat"'
@@ -372,6 +371,7 @@
 ---@field value string|number|boolean|nil
 
 ---@class AstMain : AstFunctionDef
+---@field parent_scope AstENVScope
 ---@field is_main 'true'
 ---@field is_method 'false'
 ---@field line '0'
@@ -382,6 +382,12 @@
 ---@field n_params '0'
 ---@field locals AstLocalDef[]
 ---@field eof_token AstTokenNode @ to store trailing blank and comment tokens
+
+---@class AstENVScope : AstBody, AstScope
+---@field node_type '"env"'
+---@field body AstStatement[] @ always empty
+---@field locals AstLocalDef[] @ always 1 `whole_block = true` local with the name `_ENV`
+---@field labels AstLabel[] @ always empty
 
 --------------------------------------------------
 -- generated/bytecode stuff:
