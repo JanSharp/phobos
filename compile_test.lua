@@ -61,18 +61,21 @@ end
 
 ---@type LFS
 local lfs = require("lfs")
+local Path = require("lib.LuaPath.path")
 
 local function process_dir(dir)
-  for entry_name in lfs.dir(dir or ".") do
+  for entry_name in lfs.dir(dir and dir:str() or ".") do
     if entry_name ~= "." and entry_name ~= ".."
       and entry_name:sub(1, 1) ~= "."
     then
-      local relative_name = dir and (dir.."/"..entry_name) or entry_name
-      if lfs.attributes(relative_name, "mode") == "directory" then
-        process_dir(relative_name)
-      elseif relative_name:find("%.lua$") then
-        print(relative_name)
-        compile(relative_name)
+      local relative_path = dir
+        and dir:combine(entry_name)
+        or Path.new(entry_name)
+      if relative_path:attr("mode") == "directory" then
+        process_dir(relative_path)
+      elseif relative_path:extension() == ".lua" then
+        print(relative_path:str())
+        compile(relative_path:str())
       end
     end
   end
