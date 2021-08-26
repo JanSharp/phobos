@@ -365,6 +365,9 @@
 ---@field start_before AstStatement|nil
 ---@field start_after AstStatement|nil
 ---@field child_defs AstUpvalDef[]
+---when true this did not exist in source, but
+---was added because methods implicitly have the `self` parameter
+---@field src_is_method_self boolean|nil
 
 ---this is a table because `value` can be `nil`
 ---@class AstConstantDef

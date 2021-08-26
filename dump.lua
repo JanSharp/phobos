@@ -104,13 +104,9 @@ local function DumpFunction(func)
       else
         if instruction.b then
           opcode = opcode + bit32.lshift(instruction.b, 23)
-        elseif instruction.bk then ---@diagnostic disable-line: undefined-field -- TODO: remove
-          error()
         end
         if instruction.c then
           opcode = opcode + bit32.lshift(instruction.c, 14)
-        elseif instruction.ck then ---@diagnostic disable-line: undefined-field -- TODO: remove
-          error()
         end
       end
     end
@@ -170,8 +166,8 @@ local function DumpFunction(func)
   for _, live in ipairs(func.live_regs) do
     if live.name then -- TODO: i believe this will be needed
       dump[#dump+1] = DumpString(live.name)
-      -- TODO: i'm not sure about these, but zero based including to excluding would be the most natural
-      -- so that's how it is for now
+      -- convert from one based including including
+      -- to zero based including excluding
       dump[#dump+1] = DumpInt(live.start_at - 1)
       dump[#dump+1] = DumpInt(live.stop_at)
     end

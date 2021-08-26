@@ -418,9 +418,8 @@ local function disassemble(bytecode)
     for j = 1, read_uint32() do
       locals[j] = {
         name = read_string(),
-        -- TODO: not sure about this, same as in dumping
-        -- but assuming this is stored in byte code as zero based including excluding
-        -- this should convert to one based including including
+        -- convert from zero based including excluding
+        -- to one based including including
         start = read_uint32() + 1,
         _end = read_uint32(),
       }

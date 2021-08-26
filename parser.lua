@@ -63,15 +63,21 @@ local function new_token_node(use_prev, value)
   return node
 end
 
+---@param name string
+---@return AstLocalDef
+local function create_local_def(name)
+  return {
+    def_type = "local",
+    name = name,
+    child_defs = {},
+  }
+end
+
 ---@param ident_node AstIdent
 ---@return AstLocalDef def
 ---@return AstLocalReference ref
 local function create_local(ident_node)
-  local local_def = {
-    def_type = "local",
-    name = ident_node.value,
-    child_defs = {},
-  }
+  local local_def = create_local_def(ident_node.value)
 
   local ref = copy_node(ident_node, "local_ref")
   ref.name = ident_node.value
@@ -329,8 +335,8 @@ local function par_list(scope)
     return 0
   end
   while true do
-    if token.token_type == "ident" then
-      local param_def = create_local(assert_name())
+    if test_next("ident") then
+      local param_def = create_local_def(prev_token.value)
       param_def.whole_block = true
       scope.locals[#scope.locals+1] = param_def
     elseif token.token_type == "..." then
@@ -373,13 +379,9 @@ local function body(function_token, scope, is_method)
   func_def_node.param_comma_tokens = {}
   func_def_node.parent_scope = parent_scope
   if is_method then
-    local self_ident = copy_node(func_def_node, "ident")
-    self_ident.value = "self"
-    local self_local = create_local(self_ident)
-    -- TODO: maybe add info on the local def that this did not exist in source
-    -- TODO: create_local really only needs the local name here,
-    -- since the reference is not used. _maybe_ do something about that
+    local self_local = create_local_def("self")
     self_local.whole_block = true
+    self_local.src_is_method_self = true
     func_def_node.locals[1] = self_local
   end
   func_def_node.open_paren_token = new_token_node()
