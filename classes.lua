@@ -78,6 +78,7 @@
 
 ---@class AstFunctionDef : AstBody, AstScope, AstNode
 ---@field node_type '"functiondef"'
+---@field is_main 'nil' @ overridden by AstMain to be `true`
 ---@field source string
 ---@field is_method boolean @ is it `function foo:bar() end`?
 ---@field func_protos AstFunctionDef[]
@@ -375,7 +376,7 @@
 ---@field value string|number|boolean|nil
 
 ---@class AstMain : AstFunctionDef
----@field node_type '"main"'
+---@field is_main 'true'
 ---@field is_method 'false'
 ---@field line '0'
 ---@field column '0'

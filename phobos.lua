@@ -605,6 +605,10 @@ do
       eval_upval_indexes(expr, func)
     end,
     vararg = function(expr,in_reg,func,num_results)
+      if not func.is_vararg then
+        -- the parser also validates this, but AST can be transformed incorrectly
+        error("Cannot generate vararg expression ('...') outside a vararg function.")
+      end
       func.instructions[#func.instructions+1] = {
         op = opcodes.vararg, a = in_reg, b = (num_results or 1)+1,
         line = expr.line, column = expr.column,

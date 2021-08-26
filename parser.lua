@@ -570,7 +570,13 @@ local simple_lut = {
   ["false"] = function()
     return new_node("boolean")
   end,
-  ["..."] = function()
+  ["..."] = function(scope)
+    while scope.node_type ~= "functiondef" do
+      scope = scope.parent_scope
+    end
+    if not scope.is_vararg then
+      syntax_error("Cannot use '...' outside a vararg function")
+    end
     return new_node("vararg")
   end,
 }
@@ -582,7 +588,7 @@ local function simple_exp(scope)
   -- simple_exp -> NUMBER | STRING | NIL | TRUE | FALSE | ... |
   --              constructor | FUNCTION body | suffixed_exp
   if simple_lut[token.token_type] then
-    local node = simple_lut[token.token_type]()
+    local node = simple_lut[token.token_type](scope)
     node.value = token.value
     next_token() --consume it
     return node
@@ -1072,7 +1078,8 @@ end
 
 local function main_func(chunk_name)
   local main = {
-    node_type = "main",
+    node_type = "functiondef",
+    is_main = true,
     source = chunk_name,
     -- fake parent scope of main to provide _ENV upval
     parent_scope = {
