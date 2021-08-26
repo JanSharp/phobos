@@ -178,7 +178,9 @@ do
         end
         generate_expr(expr, get_expr_in_reg(), func, expr_num_results)
       elseif i > num_exp then
-        break -- TODO: no error?
+        -- TODO: still evaluate the rest of the expressions with 0 results, [...]
+        -- because things like function calls can still have an effect, even if their result is unused
+        break
       else
         generate_expr(expr, get_expr_in_reg(), func, 1)
       end
@@ -225,7 +227,8 @@ do
     end
 
     if func.level ~= 1 then -- no need to do anything in the root scope
-      -- TODO: this condition can be improved once the compiler knows that the given location (the end of the scope) is unreachable
+      -- TODO: this condition can be improved once the compiler knows that [...]
+      -- the given location (the end of the scope) is unreachable
       -- note that the root scope might still be an exception at that point
       local lowest_captured_reg
       for _, live in ipairs(func.live_regs) do
@@ -788,7 +791,7 @@ do
       end
       scope = scope.parent_scope
     end
-    -- TODO: this is heavily modified copy paste from `generate_scope` except scope comparison
+    -- TODO: this is heavily modified copy paste from `generate_scope`
     local lowest_captured_reg
     local function should_close(reg)
       if (not lowest_captured_reg) or reg < lowest_captured_reg then
@@ -1316,7 +1319,7 @@ do
         end
       end
       inst.a = (lowest_captured_reg or -1) + 1
-      -- TODO: whilestat, fornum, forlist and repeatstat have to set sbx
+      -- whilestat, fornum, forlist and repeatstat set sbx
     end,
 
     empty = function(stat,func)

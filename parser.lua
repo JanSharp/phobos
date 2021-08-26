@@ -945,8 +945,7 @@ end
 ---@return boolean
 ---@return AstExpression name
 local function func_name(scope)
-  -- func_name -> NAME {field_selector} [`:' NAME]
-  -- TODO: field_selector? i think that's already an extension from regular Lua
+  -- func_name -> NAME {‘.’ NAME} [`:' NAME]
 
   local name = get_ref(scope, assert_name())
 
