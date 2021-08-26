@@ -64,11 +64,8 @@
 
 -- since every scope inherits AstBody, AstScope now does as well
 
--- TODO: once upval index dumping is completely done and "tested" check if `increase_upval_depth` is really needed
-
 ---@class AstScope : AstBody
 ---@field parent_scope AstScope|nil @ `nil` for the top level scope, the main function
----@field increase_upval_depth boolean|nil @ `nil` unless overridden
 
 
 ---@class AstBody
@@ -88,7 +85,6 @@
 ---@field end_column integer
 ---@field is_vararg boolean
 ---@field n_params integer
----@field increase_upval_depth 'true' @ overridden
 ---all parameters are `whole_block = true` locals, except vararg
 ---@field param_comma_tokens AstTokenNode[] @ max length is `n_params - 1`, min `0`
 ---@field open_paren_token AstTokenNode

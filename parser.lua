@@ -372,7 +372,6 @@ local function body(function_token, scope, is_method)
   func_def_node.labels = {}
   func_def_node.param_comma_tokens = {}
   func_def_node.parent_scope = parent_scope
-  func_def_node.increase_upval_depth = true
   if is_method then
     local self_ident = copy_node(func_def_node, "ident")
     self_ident.value = "self"
@@ -1100,7 +1099,6 @@ local function main_func(chunk_name)
       },
       labels = {},
     },
-    increase_upval_depth = true,
     func_protos = {},
     body = false, -- list body before locals
     is_vararg = true, -- main is always vararg
