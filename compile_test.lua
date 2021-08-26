@@ -59,6 +59,7 @@ local function compile(filename)
   raw_compiled[filename] = bytecode
 end
 
+---@type LFS
 local lfs = require("lfs")
 
 local function process_dir(dir)

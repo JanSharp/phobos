@@ -1,3 +1,9 @@
 [submodule ".vscode/lua"]
 	path = .vscode/lua
 	url = https://github.com/JanSharp/FactorioSumnekoLuaPlugin.git
+[submodule "lib/LuaPath"]
+	path = lib/LuaPath
+	url = https://github.com/JanSharp/LuaPath.git
+[submodule "lib/LFSClasses"]
+	path = lib/LFSClasses
+	url = https://github.com/JanSharp/LFSClasses.git
