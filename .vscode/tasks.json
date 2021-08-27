@@ -1,0 +1,35 @@
+{
+  // See https://go.microsoft.com/fwlink/?LinkId=733558
+  // for the documentation about the tasks.json format
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "isBuildCommand": true,
+      "label": "Compile Debug",
+      "type": "process",
+      "options": {
+        // currently binaries that are considered stable enough
+        // get copied into the /bin/publish/v1 dir manually
+        "cwd": "${workspaceFolder}/bin/publish/v1",
+      },
+      "command": "lua52",
+      "args": [
+        "--", "main.lua",
+        // can't use ${workspaseFolder} because that results in
+        // backslashes on windows, and those are not supported as of now
+        "--source", "../../..",
+        "--output", "bin/debug",
+        "--ignore", ".vscode", "bin",
+        // for now source files are still `.lua` files because they
+        // do compile with regular lua compilers and i do not trust
+        // phobos enough yet
+        // this will probably change soon though
+        "--pho-extension", ".lua",
+      ],
+      "presentation": {
+        "reveal": "silent",
+        "clear": true,
+      },
+    },
+  ],
+}

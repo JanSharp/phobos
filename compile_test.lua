@@ -67,6 +67,7 @@ local function process_dir(dir)
   for entry_name in lfs.dir(dir and dir:str() or ".") do
     if entry_name ~= "." and entry_name ~= ".."
       and entry_name:sub(1, 1) ~= "."
+      and entry_name ~= "bin"
     then
       local relative_path = dir
         and dir:combine(entry_name)

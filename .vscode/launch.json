@@ -5,6 +5,25 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Jan# Standard Lua (run debug compiled debug_main)",
+            "type": "lua-local",
+            "request": "launch",
+            "program": {
+                "lua": "lua52",
+                "file": "debugger_entrypoint.lua", // a hacky entrypoint
+            },
+            "args": [
+                "debug", // which bin folder to run
+                "debug_main.lua", // which file is the entrypoint
+                "binary", // is that file "binary" or "text"
+
+                // the rest get passed along to the defined entrypoint
+                "main.lua",
+            ],
+            // and make sure the debug binaries are up to date
+            "preLaunchTask": "Compile Debug",
+        },
+        {
             "name": "Jan# Standard Lua (run debug_main)",
             "type": "lua-local",
             "request": "launch",
@@ -13,7 +32,7 @@
                 "file": "./debug_main.lua",
             },
             "args": [
-                "test.lua",
+                "main.lua",
             ],
         },
         {
