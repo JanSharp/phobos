@@ -127,6 +127,7 @@ index => ex suffix
       tostring() sub expressions? or just let it error on non-string?
     branch annotations for coverage testing?
     compile time regex? builds to a function that uses patterns?
+    numbers with `_`
 
     type annotations, somehow? steal a bunch from TypeScript?
       compile time warning on assignment of incompatible types
