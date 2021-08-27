@@ -7,3 +7,6 @@
 [submodule "lib/LFSClasses"]
 	path = lib/LFSClasses
 	url = https://github.com/JanSharp/LFSClasses.git
+[submodule "lib/LuaArgParser"]
+	path = lib/LuaArgParser
+	url = https://github.com/JanSharp/LuaArgParser.git
