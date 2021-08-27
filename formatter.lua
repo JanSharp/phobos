@@ -167,11 +167,12 @@ local stats = {
   ---@param node AstLocalStat
   localstat = function(node)
     walk_exp_list(node.lhs)
-    walk_exp_list(node.rhs)
+    if node.rhs then
+      walk_exp_list(node.rhs)
+    end
   end,
   ---@param node AstLabel
   label = function(node)
-    walk_exp(node.value)
   end,
   ---@param node AstRetStat
   retstat = function(node)

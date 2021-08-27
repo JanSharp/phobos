@@ -18,7 +18,7 @@
                 "binary", // is that file "binary" or "text"
 
                 // the rest get passed along to the defined entrypoint
-                "main.lua",
+                "test.lua",
             ],
             // and make sure the debug binaries are up to date
             "preLaunchTask": "Compile Debug",
@@ -32,7 +32,7 @@
                 "file": "./debug_main.lua",
             },
             "args": [
-                "main.lua",
+                "test.lua",
             ],
         },
         {

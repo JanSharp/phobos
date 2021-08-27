@@ -1,61 +1,6 @@
-local invert = require("invert")
-local function walk_block(ast,open,close)
-  if open then open(ast) end
-  if ast.node_type == "ifstat" then
-    for _,if_block in ipairs(ast.ifs) do
-      walk_block(if_block,open,close)
-    end
-    if ast.elseblock then
-      walk_block(ast.elseblock,open,close)
-    end
-  else
-    if ast.func_protos then
-      for _,func in ipairs(ast.func_protos) do
-        walk_block(func,open,close)
-      end
-    end
-    if ast.body then
-      for _,stat in ipairs(ast.body) do
-        walk_block(stat,open,close)
-      end
-    end
-  end
-  if close then close(ast) end
-end
 
-local function walk_exp(exp,open,close)
-  if open then open(exp) end
-  if exp.node_type == "unop" then
-    walk_exp(exp.ex,open,close)
-  elseif exp.node_type == "binop" then
-    walk_exp(exp.left,open,close)
-    walk_exp(exp.right,open,close)
-  elseif exp.node_type == "concat" then
-    for _,sub in ipairs(exp.exp_list) do
-      walk_exp(sub,open,close)
-    end
-  elseif exp.node_type == "index" then
-    walk_exp(exp.ex,open,close)
-    walk_exp(exp.suffix,open,close)
-  elseif exp.node_type == "call" then
-    walk_exp(exp.ex,open,close)
-    for _,sub in ipairs(exp.args) do
-      walk_exp(sub,open,close)
-    end
-  elseif exp.node_type == "selfcall" then
-    walk_exp(exp.ex,open,close)
-    walk_exp(exp.suffix,open,close)
-    for _,sub in ipairs(exp.args) do
-      walk_exp(sub,open,close)
-    end
-  elseif exp.node_type == "func_proto" then
-    -- no children, only ref
-  else
-    -- local, upval: no children, only ref
-    -- number, boolean, string: no children, only value
-  end
-  if close then close(exp) end
-end
+local walker = require("ast_walker")
+local invert = require("invert")
 
 local clear_exp_field_lut = {
   ["selfcall"] = function(exp)
@@ -190,6 +135,7 @@ local fold_unop = {
     end
   end,
 }
+
 local fold_binop = {
   ["+"] = function(exp)
     if exp.left.node_type == "number" and exp.right.node_type == "number" then
@@ -292,112 +238,80 @@ local fold_binop = {
     end
   end,
 }
-local function fold_const_exp(exp)
-  walk_exp(exp,nil,function(exp)
-    if exp.node_type == "unop" then
-      fold_unop[exp.op](exp)
-    elseif exp.node_type == "binop" then
-      fold_binop[exp.op](exp)
-    elseif exp.node_type == "concat" then
-      -- combine adjacent number or string
-      local new_exp_list = {}
-      local combining = {}
-      local combining_pos
-      for _,sub in ipairs(exp.exp_list) do
-        if sub.node_type == "string" or sub.node_type == "number" then
-          if not combining[1] then
-            combining_pos = {line = sub.line, column = sub.column}
-          end
-          combining[#combining+1] = sub.value
-        else
-          if #combining == 1 then
-            new_exp_list[#new_exp_list+1] = {
-              node_type = "string",
-              line = combining_pos.line, column = combining_pos.column,
-              value = combining[1],
-              folded = true
-            }
-            combining = {}
-            combining_pos = nil
-          elseif #combining > 1 then
-            new_exp_list[#new_exp_list+1] = {
-              node_type = "string",
-              line = combining_pos.line, column = combining_pos.column,
-              value = table.concat(combining),
-              folded = true
-            }
-            combining = {}
-            combining_pos = nil
-            exp.folded = true
-          end
-          new_exp_list[#new_exp_list+1] = sub
+
+local on_close = {
+  unop = function(node)
+    fold_unop[node.op](node)
+  end,
+  binop = function(node)
+    fold_binop[node.op](node)
+  end,
+  concat = function(node)
+    -- combine adjacent number or string
+    local new_exp_list = {}
+    local combining = {}
+    local combining_pos
+    for _,sub in ipairs(node.exp_list) do
+      if sub.node_type == "string" or sub.node_type == "number" then
+        if not combining[1] then
+          combining_pos = {line = sub.line, column = sub.column}
         end
+        combining[#combining+1] = sub.value
+      else
+        if #combining == 1 then
+          new_exp_list[#new_exp_list+1] = {
+            node_type = "string",
+            line = combining_pos.line, column = combining_pos.column,
+            value = combining[1],
+            folded = true
+          }
+          combining = {}
+          combining_pos = nil
+        elseif #combining > 1 then
+          new_exp_list[#new_exp_list+1] = {
+            node_type = "string",
+            line = combining_pos.line, column = combining_pos.column,
+            value = table.concat(combining),
+            folded = true
+          }
+          combining = {}
+          combining_pos = nil
+          node.folded = true
+        end
+        new_exp_list[#new_exp_list+1] = sub
       end
-      if #combining == 1 then
-        new_exp_list[#new_exp_list+1] = {
-          node_type = "string",
-          line = combining_pos.line, column = combining_pos.column,
-          value = combining[1],
-          folded = true
-        }
-      elseif #combining > 1 then
-        new_exp_list[#new_exp_list+1] = {
-          node_type = "string",
-          line = combining_pos.line, column = combining_pos.column,
-          value = table.concat(combining),
-          folded = true
-        }
-        exp.folded = true
-      end
-
-      exp.exp_list = new_exp_list
-
-      if #exp.exp_list == 1 then
-        -- fold a single string away entirely, if possible
-        fold_exp_merge(exp, exp.exp_list[1])
-      end
-    else
-      -- anything else?
-      -- indexing of known-const tables?
-      -- calling of specific known-identity, known-const functions?
     end
-  end)
-end
+    if #combining == 1 then
+      new_exp_list[#new_exp_list+1] = {
+        node_type = "string",
+        line = combining_pos.line, column = combining_pos.column,
+        value = combining[1],
+        folded = true
+      }
+    elseif #combining > 1 then
+      new_exp_list[#new_exp_list+1] = {
+        node_type = "string",
+        line = combining_pos.line, column = combining_pos.column,
+        value = table.concat(combining),
+        folded = true
+      }
+      node.folded = true
+    end
+
+    node.exp_list = new_exp_list
+
+    if #node.exp_list == 1 then
+      -- fold a single string away entirely, if possible
+      fold_exp_merge(node, node.exp_list[1])
+    end
+  end,
+  -- anything else?
+  -- indexing of known-const tables?
+  -- calling of specific known-identity, known-const functions?
+}
 
 local function fold_const(main)
-  walk_block(main, nil,
-  function(node)
-    if node.condition then -- if,while,repeat
-      fold_const_exp(node.condition)
-    end
-    if node.ex then -- call, selfcall
-      fold_const_exp(node.ex)
-    end
-    if node.suffix then -- selfcall
-      fold_const_exp(node.suffix)
-    end
-    if node.args then -- call, selfcall
-      for _,exp in ipairs(node.args) do
-        fold_const_exp(exp)
-      end
-    end
-    if node.exp_list then -- localstat, return
-      for _,exp in ipairs(node.exp_list) do
-        fold_const_exp(exp)
-      end
-    end
-    if node.lhs then -- assignment
-      for _,exp in ipairs(node.lhs) do
-        fold_const_exp(exp)
-      end
-    end
-    if node.rhs then -- assignment
-      for _,exp in ipairs(node.rhs) do
-        fold_const_exp(exp)
-      end
-    end
-  end)
+  walker(main, nil, on_close)
 end
-
 
 return fold_const
