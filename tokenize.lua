@@ -172,7 +172,18 @@ local function read_string(str,index,quote,state)
     elseif next_char == "z" then
       --skip z and whitespace
       local _,skip = str:find("^z%s*",i)
+      local j = i + 1
       i = skip + 1
+      -- figure out the right line and line_offset
+      while true do
+        local _, newline_index = str:find("^%s-\n", j)
+        if not newline_index then
+          break
+        end
+        j = newline_index + 1
+        state.line = state.line + 1
+        state.line_offset = newline_index
+      end
       goto matching
     elseif escape_sequence_lut[next_char] then
       parts[#parts+1] = escape_sequence_lut[next_char]
@@ -374,7 +385,7 @@ end
 ---@class TokenizeState
 ---@field str string
 ---@field line integer
----@field line_offset integer
+---@field line_offset integer @ the exact index of the last newline
 ---@field prev_line integer|nil
 ---@field prev_line_offset integer|nil
 
@@ -386,7 +397,7 @@ local function tokenize(str)
   local state = {
     str = str,
     line = 1,
-    line_offset = 1,
+    line_offset = 0, -- pretend the previous character was a newline. not too far fetched
   }
   return next_token,state
 end
