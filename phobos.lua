@@ -1138,7 +1138,7 @@ do
         limit_live = create_live_reg(func, limit_reg, "(for limit)")
         generate_expr(stat.stop, limit_reg, func, 1)
         step_reg = next_reg(func)
-        step_live = create_live_reg(func, step_reg, "(for limit)")
+        step_live = create_live_reg(func, step_reg, "(for step)")
         generate_expr(stat.step or {
           node_type = "number",
           value = 1,

@@ -792,7 +792,7 @@ local function for_num(first_name,scope)
   this_tok.first_comma_token = new_token_node()
   assert_next(",")
   this_tok.stop = expr(scope)
-  this_tok.step = {node_type="number", value=1}
+  this_tok.step = nil
   if test_next(",") then
     this_tok.second_comma_token = new_token_node(true)
     this_tok.step = expr(scope)
