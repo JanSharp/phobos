@@ -31,5 +31,27 @@
         "clear": true,
       },
     },
+    {
+      "isBuildCommand": true,
+      "label": "Compile Debug Using Regular Lua",
+      "type": "process",
+      "command": "lua52",
+      "args": [
+        "--", "main.lua",
+        "--source", ".",
+        "--output", "bin/debug",
+        "--ignore", ".vscode", "bin",
+        // for now source files are still `.lua` files because they
+        // do compile with regular lua compilers and i do not trust
+        // phobos enough yet
+        // this will probably change soon though
+        "--pho-extension", ".lua",
+        "--use-load",
+      ],
+      "presentation": {
+        "reveal": "silent",
+        "clear": true,
+      },
+    },
   ],
 }
