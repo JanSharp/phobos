@@ -2,16 +2,17 @@
 local serpent = require("serpent")
 local disassembler = require("disassembler")
 
-local unsafe = false
+local unsafe = true
 local print_progress = true
 local use_regular_lua_compiler = true
 local use_phobos_compiler = true
 local do_fold_const = true
+local do_create_inline_iife = true
 local eval_instruction_count = true
 local eval_byte_count = true
 local create_disassembly = true
 local show_keys_in_disassembly = false
-local load_and_run_compiled_funcs = false
+local load_and_run_compiled_funcs = true
 local run_count = 1
 
 local total_inst_diff = 0
@@ -147,6 +148,11 @@ local function compile(filename)
       if not success then print(err) goto finish end
     end
 
+    if do_create_inline_iife then
+      success, err = pcall(require("optimize.create_inline_iife"), main)
+      if not success then print(err) goto finish end
+    end
+
     success, err = pcall(require("phobos"), main)
     if not success then print(err) goto finish end
     -- print(serpent.dump(main,{indent = '  ', sparse = true, sortkeys = false, comment=true}))
@@ -207,7 +213,7 @@ local function compile(filename)
       ..(diff and (" diff: "..diff) or "")
     )
     if diff then
-      total_byte_diff = total_inst_diff + diff
+      total_byte_diff = total_byte_diff + diff
     end
   end
 

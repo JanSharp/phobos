@@ -175,6 +175,8 @@ do
         local expr_num_results = -1
         if num_results ~= -1 then
           expr_num_results = (num_results - num_exp) + 1
+        elseif not is_vararg(expr) then
+          expr_num_results = 1
         end
         generate_expr(expr, get_expr_in_reg(), func, expr_num_results)
       elseif i > num_exp then
@@ -724,6 +726,17 @@ do
       }
       release_down_to(original_top, func)
     end,
+
+    inline_iife = function(expr,in_reg,func,num_results)
+      -- TODO: handle vararg num_results [...]
+      -- currently inline_iife is not marked as a vararg expression, but it totally is
+      -- considering it is the replacement/inline variant of a function call.
+      -- that means if a vararg result is expected this expression has to "return"
+      -- (and in the process set top) however many expressions the inline_iife_retstat "returned"
+      expr.in_reg = in_reg
+      expr.num_results = num_results
+      generate_scope(expr, func)
+    end,
   }
 
   local function generate_test_code(condition, func)
@@ -779,6 +792,7 @@ do
     end
   end
 
+  ---go means goto
   local function get_a_for_jump(go, func)
     local is_backwards = go.linked_label.pc < go.pc
     -- figure out if and how far it needs to close upvals
@@ -1324,6 +1338,27 @@ do
 
     empty = function(stat,func)
       -- empty statement
+    end,
+
+    inline_iife_retstat = function(stat,func)
+      if stat.exp_list then
+        generate_exp_list(
+          stat.exp_list,
+          stat.linked_inline_iife.in_reg,
+          func,
+          stat.linked_inline_iife.num_results
+        )
+      else
+        generate_expr({
+          node_type = "nil",
+          line = stat.line,
+          column = stat.column,
+        },
+          stat.linked_inline_iife.in_reg,
+          func,
+          stat.linked_inline_iife.num_results
+        )
+      end
     end,
   }
   function generate_code(func)

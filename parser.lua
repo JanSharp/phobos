@@ -70,6 +70,7 @@ local function create_local_def(name)
     def_type = "local",
     name = name,
     child_defs = {},
+    refs = {},
   }
 end
 
@@ -121,6 +122,7 @@ do
             scope = scope,
             parent_def = def,
             child_defs = {},
+            refs = {},
           }
           def.child_defs[#def.child_defs+1] = new_def
           if name == "_ENV" then
@@ -144,7 +146,7 @@ do
   function get_ref(scope, ident_node)
     local def = try_get_def(scope, ident_node.value)
     if def then
-      return {
+      local ref = {
         node_type = def.def_type.."_ref", -- `local_ref` or `upval_ref`
         name = ident_node.value,
         line = ident_node.line,
@@ -152,6 +154,8 @@ do
         leading = ident_node.leading,
         reference_def = def,
       }
+      def.refs[#def.refs+1] = ref
+      return ref
     end
 
     return {
@@ -884,13 +888,13 @@ local function if_stat(line,scope)
     this_tok.ifs[#this_tok.ifs+1] = test_then_block(scope)
   until token.token_type ~= "elseif"
   if test_next("else") then
-    local else_block = new_node("elseblock")
-    this_tok.elseblock = else_block
-    else_block.locals = {}
-    else_block.labels = {}
-    else_block.parent_scope = scope
-    else_block.else_token = new_token_node(true)
-    else_block.body = stat_list(else_block)
+    local elseblock = new_node("elseblock")
+    this_tok.elseblock = elseblock
+    elseblock.locals = {}
+    elseblock.labels = {}
+    elseblock.parent_scope = scope
+    elseblock.else_token = new_token_node(true)
+    elseblock.body = stat_list(elseblock)
   end
   this_tok.end_token = new_token_node()
   assert_match("end","if",line)
@@ -1090,13 +1094,12 @@ local function main_func(chunk_name)
         -- of the file. I'll probably change this one day to be
         -- the first upval of the parent scope, since load()
         -- clobbers the first upval anyway to be the new _ENV value
-        {
-          def_type = "local",
-          name = "_ENV",
-          child_defs = {},
-          whole_block = true,
-          scope = nil, -- set down below
-        },
+        (function()
+          local def = create_local_def("_ENV")
+          def.whole_block = true
+          def.scope = nil -- set down below
+          return def
+        end)(),
       },
       labels = {},
     },

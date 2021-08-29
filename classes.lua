@@ -42,6 +42,10 @@
 ---| '"vararg"'
 ---| '"func_proto"'
 ---| '"constructor"'
+---optimizer statements:
+---| '"inline_iife_retstat"' @ inline immediately invoked function expression return statement
+---optimizer expressions:
+---| '"inline_iife"' @ inline immediately invoked function expression
 
 ---@class AstNode
 ---@field node_type AstNodeType
@@ -61,9 +65,9 @@
 ---@field force_single_result boolean|nil
 ---@field src_paren_wrappers AstParenWrapper[]|nil
 
--- since every scope inherits AstBody, AstScope now does as well
+-- since every scope inherits AstNode and AstBody, AstScope now does as well
 
----@class AstScope : AstBody
+---@class AstScope : AstNode, AstBody
 ---@field parent_scope AstScope|nil @ `nil` for the top level scope, the main function
 
 
@@ -212,6 +216,8 @@
 ---@field goto_token AstTokenNode
 ---@field linked_label AstLabel|nil @ evaluated by the jump linker. not `nil` after successful linking
 
+-- TODO: args are missing comma tokens
+
 ---@class AstSelfCall : AstStatement, AstExpression
 ---@field node_type '"selfcall"'
 ---@field ex AstExpression
@@ -235,6 +241,17 @@
 ---@field eq_token AstTokenNode
 ---@field rhs AstExpression[]
 ---@field rhs_comma_tokens AstTokenNode[]
+
+
+
+---@class AstInlineIIFERetstat : AstStatement
+---@field node_type '"inline_iife_retstat"'
+---@field return_token AstTokenNode
+---@field exp_list AstExpression[]|nil @ `nil` = no return values
+---@field exp_list_comma_tokens AstTokenNode[]
+---@field semi_colon_token AstTokenNode|nil @ trailing `;`. `nil` = no semi colon
+---@field linked_inline_iife AstInlineIIFE
+---@field leave_block_goto AstGotoStat
 
 
 
@@ -349,12 +366,20 @@
 
 
 
+---@class AstInlineIIFE : AstExpression, AstBody, AstScope
+---@field node_type '"inline_iife"'
+---@field leave_block_label AstLabel
+---@field linked_inline_iife_retstats AstInlineIIFERetstat[]
+
+
+
 ---@class AstUpvalDef
 ---@field def_type '"upval"'
 ---@field name string
 ---@field scope AstScope
 ---@field parent_def AstUpvalDef|AstLocalDef
 ---@field child_defs AstUpvalDef[]
+---@field refs AstUpvalReference[] @ all upval references referring to this upval
 
 ---@class AstLocalDef
 ---@field def_type '"local"'
@@ -365,6 +390,7 @@
 ---@field start_before AstStatement|nil
 ---@field start_after AstStatement|nil
 ---@field child_defs AstUpvalDef[]
+---@field refs AstLocalReference[] @ all local references referring to this local
 ---when true this did not exist in source, but
 ---was added because methods implicitly have the `self` parameter
 ---@field src_is_method_self boolean|nil

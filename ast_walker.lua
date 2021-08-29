@@ -1,9 +1,11 @@
 
 ---@param main AstMain
 local function walk(main, on_open, on_close)
+  local current_scope
+
   local function dispatch(listeners, node, is_statement)
     if listeners and listeners[node.node_type] then
-      listeners[node.node_type](node, is_statement)
+      listeners[node.node_type](node, current_scope, is_statement)
     end
   end
 
@@ -97,6 +99,11 @@ local function walk(main, on_open, on_close)
 
     selfcall = selfcall,
     call = call,
+
+    ---@param node AstInlineIIFE
+    inline_iife = function(node)
+      walk_body(node)
+    end,
   }
 
   ---@param node AstExpression
@@ -233,6 +240,13 @@ local function walk(main, on_open, on_close)
 
     selfcall = selfcall,
     call = call,
+
+    ---@param node AstInlineIIFERetstat
+    inline_iife_retstat = function(node)
+      if node.exp_list then
+        walk_exp_list(node.exp_list)
+      end
+    end,
   }
 
   ---@param node AstStatement
@@ -244,6 +258,8 @@ local function walk(main, on_open, on_close)
 
   ---@param node AstBody[]
   function walk_body(node)
+    local prev_scope = current_scope
+    current_scope = node
     local i = 1
     local c = #node.body
     while i <= c do
@@ -256,6 +272,7 @@ local function walk(main, on_open, on_close)
       end
       i = i + 1
     end
+    current_scope = prev_scope
   end
 
   walk_body(main)

@@ -88,6 +88,13 @@ local exprs = {
 
   selfcall = selfcall,
   call = call,
+
+  -- not sure about optimizer nodes being in the formatter
+
+  ---@param node AstInlineIIFE
+  inline_iife = function(node)
+    walk_body(node)
+  end,
 }
 
 ---@param node AstExpression
@@ -195,6 +202,15 @@ local stats = {
 
   selfcall = selfcall,
   call = call,
+
+  -- not sure about optimizer nodes being in the formatter
+
+  ---@param node AstInlineIIFERetstat
+  inline_iife_retstat = function(node)
+    if node.exp_list then
+      walk_exp_list(node.exp_list)
+    end
+  end,
 }
 
 ---@param node AstStatement
