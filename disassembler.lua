@@ -280,7 +280,7 @@ do
     if double_cache[double_bytes] then
       return double_cache[double_bytes]
     else
-      local double_func, err = load(prefix..double_bytes..postfix, "=(double loader)", "b", {})
+      local double_func, err = load(prefix..double_bytes..postfix, "=(double loader)", "b")
       if not double_func then
         error("Unable to load double, see inner error: "..err)
       end
