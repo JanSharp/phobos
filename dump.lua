@@ -3,6 +3,7 @@ local util = require("util")
 
 local function DumpInt(i)
   -- int is 4 bytes
+  -- **little endian**
   return string.char(
     bit32.band(             i    ,0xff),
     bit32.band(bit32.rshift(i,8 ),0xff),
@@ -28,13 +29,14 @@ do
   end
   local double_cache = {
     -- these two don't print %a correctly, so preload the cache with them
-    [1/0] = "\3\x7f\xf0\0\0\0\0\0\0",
-    [-1/0] = "\3\xff\xf0\0\0\0\0\0\0",
+    -- **little endian**
+    [1/0] = "\3\0\0\0\0\0\0\xf0\x7f",
+    [-1/0] = "\3\0\0\0\0\0\0\xf0\xff",
   }
   function DumpDouble(d)
     if d ~= d then
       -- nan
-      return "\3\x7f\xff\xff\xff\xff\xff\xff\xff"
+      return "\3\xff\xff\xff\xff\xff\xff\xff\xff"
     elseif double_cache[d] then
       return double_cache[d]
     else
