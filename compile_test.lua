@@ -1,4 +1,7 @@
 
+-- args to manually run this
+-- compile_test.lua temp/debug_test_filename_cache.lua
+
 local phobos_env = {}
 for k, v in pairs(_G) do
   phobos_env[k] = v
@@ -59,26 +62,27 @@ local function compile(filename)
   raw_compiled[filename] = bytecode
 end
 
----@type LFS
-local lfs = require("lfs")
-local Path = require("lib.LuaPath.path")
+local function pcall_with_one_result(f, ...)
+  local success, result = pcall(f, ...)
+  if success then
+    return result
+  else
+    return nil, result
+  end
+end
 
-local function process_dir(dir)
-  for entry_name in lfs.dir(dir and dir:str() or ".") do
-    if entry_name ~= "." and entry_name ~= ".."
-      and entry_name:sub(1, 1) ~= "."
-      and entry_name ~= "bin"
-    then
-      local relative_path = dir
-        and dir:combine(entry_name)
-        or Path.new(entry_name)
-      if relative_path:attr("mode") == "directory" then
-        process_dir(relative_path)
-      elseif relative_path:extension() == ".lua" then
-        print(relative_path:str())
-        compile(relative_path:str())
-      end
-    end
+local filenames = {}
+local cache_filename = ...
+if cache_filename then
+  filenames = assert(pcall_with_one_result(assert(loadfile(cache_filename, "t", {}))))
+else
+  filenames = require("debug_util").find_lua_source_files()
+end
+
+local function main()
+  for _, filename in ipairs(filenames) do
+    print(filename)
+    compile(filename)
   end
 end
 
@@ -89,7 +93,7 @@ compiled = {}
 raw_compiled = {}
 req = require
 init()
-process_dir()
+main()
 local lua_result = compiled
 local lua_raw_result = raw_compiled
 
@@ -103,7 +107,7 @@ compiled = {}
 raw_compiled = {}
 req = phobos_env.require
 init()
-process_dir()
+main()
 local pho_result = compiled
 local pho_raw_result = raw_compiled
 

@@ -36,12 +36,47 @@
             ],
         },
         {
+            "name": "Jan# VS Build Standard Lua (run debug_main)",
+            "type": "lua-local",
+            "request": "launch",
+            "program": {
+                "lua": "E:/Dev/Lua52/x64/Debug/Lua52.exe",
+                "file": "./debug_main.lua",
+            },
+            "args": [
+                "dump.lua",
+            ],
+        },
+        {
+            "name": "Jan# VS Build Standard Lua (run compile_test)",
+            "type": "lua-local",
+            "request": "launch",
+            "program": {
+                "lua": "E:/Dev/Lua52/x64/Debug/Lua52.exe",
+                "file": "./compile_test.lua",
+            },
+            "args": [
+                "temp/debug_test_filename_cache.lua",
+            ],
+        },
+        {
             "name": "Jan# Standard Lua (run compile_test)",
             "type": "lua-local",
             "request": "launch",
             "program": {
                 "lua": "lua52",
                 "file": "./compile_test.lua",
+            },
+            "args": [
+            ],
+        },
+        {
+            "name": "Jan# Standard Lua (run debug_compile_test_create_cache)",
+            "type": "lua-local",
+            "request": "launch",
+            "program": {
+                "lua": "lua52",
+                "file": "./debug_compile_test_create_cache.lua",
             },
             "args": [
             ],
