@@ -10,14 +10,14 @@
             "request": "launch",
             "program": {
                 "lua": "lua52",
-                "file": "debugger_entrypoint.lua", // a hacky entrypoint
+                "file": "debugger_entrypoint.lua", // a hacky entry_point
             },
             "args": [
                 "debug", // which bin folder to run
-                "debug_main.lua", // which file is the entrypoint
+                "debug_main.lua", // which file is the entry_point
                 "binary", // is that file "binary" or "text"
 
-                // the rest get passed along to the defined entrypoint
+                // the rest get passed along to the defined entry_point
                 "test.lua",
             ],
             // and make sure the debug binaries are up to date
