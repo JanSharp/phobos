@@ -667,13 +667,13 @@ local function sub_expr(limit,scope)
         node.op_tokens[#node.op_tokens+1] = op_token
       else
         local left_node = node
-        node = new_node("concat")
+        node = new_node("concat", true)
         node.exp_list = {left_node, right_node}
         node.op_tokens = {op_token}
       end
     else
       local left_node = node
-      node = new_node("binop")
+      node = new_node("binop", true)
       node.op = binop
       node.op_token = op_token
       node.left = left_node
