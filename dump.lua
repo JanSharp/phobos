@@ -1,6 +1,8 @@
 
 local util = require("util")
 
+---@return string dumped_integer
+---@return integer byte_count
 local function DumpInt(i)
   -- int is 4 bytes
   -- **little endian**
@@ -9,15 +11,17 @@ local function DumpInt(i)
     bit32.band(bit32.rshift(i,8 ),0xff),
     bit32.band(bit32.rshift(i,16),0xff),
     bit32.band(bit32.rshift(i,24),0xff)
-  )
+  ), 4
 end
 
+---@return string dumped_size
+---@return integer byte_count
 local function DumpSize(s)
   -- size_t is 8 bytes
   -- but i really only support 32bit for now, so just write four extra zeros
   -- maybe expand this one day to 48bit? maybe all the way to 53?
   -- If i'm compiling a program with >4gb strings, something has gone horribly wrong anyway
-  return DumpInt(s) .. "\0\0\0\0"
+  return DumpInt(s) .. "\0\0\0\0", 8
 end
 
 local DumpDouble
@@ -47,15 +51,17 @@ do
   end
 end
 
----all strings can be nil, except in the constant table
+---all strings can be nil, except in the constant table\
+---@return string dumped_string
+---@return integer byte_count
 local function DumpString(str)
   -- typedef string:
   -- size_t length (including trailing \0, 0 for nil)
   -- char[] value (not present for nil)
   if not str then
-    return DumpSize(0)
+    return DumpSize(0), 8
   else
-    return DumpSize(#str + 1) .. str .. "\0"
+    return DumpSize(#str + 1) .. str .. "\0", 8 + #str + 1
   end
 end
 
@@ -72,6 +78,37 @@ local dumpConstantByType = {
 }
 local function DumpConstant(constant)
   return dumpConstantByType[type(constant.value)](constant.value)
+end
+
+---last 2 bytes are a format version number
+---which just starts at 0 and counts up\
+---little endian
+local phobos_signature = "\x1bPho\x10\x42\x00\x00"
+
+local function DumpPhobosBytecode(dump, func)
+  -- open string constant
+  dump[#dump+1] = "\4" -- a "string" constant
+  local i = #dump + 1 -- + 1 to reserve a slot for the string size
+  local size_entry_index = i
+  local byte_count = 0
+  local function add(entry, entry_byte_count)
+    i = i + 1
+    byte_count = byte_count + entry_byte_count
+    dump[i] = entry
+  end
+
+  -- signature
+  add(phobos_signature, 8)
+
+  -- column debug info
+  add(DumpInt(#func.instructions))
+  for _, inst in ipairs(func.instructions) do
+    add(DumpInt(inst.column or 0)) -- default to 0 for now, but it should either all have column info or none
+  end
+
+  -- close string constant
+  add("\0", 1)
+  dump[size_entry_index] = DumpSize(byte_count)
 end
 
 ---@param func GeneratedFunc
@@ -118,11 +155,13 @@ local function DumpFunction(func)
 
   -- [Constants]
   -- int n_consts
-  dump[#dump+1] = DumpInt(#func.constants)
+  dump[#dump+1] = DumpInt(#func.constants + 1) -- + 1 for phobos data
   -- TValue[] consts
   for _,constant in ipairs(func.constants) do
     dump[#dump+1] = DumpConstant(constant)
   end
+
+  DumpPhobosBytecode(dump, func)
 
   -- [func_protos]
   -- int n_funcs
@@ -192,7 +231,7 @@ local function DumpFunction(func)
   return table.concat(dump)
 end
 
-local function DumpHeader()
+local function DumpLuaHeader()
   -- Lua Signature: "\x1bLua"
   -- byte version = "\x52"
   -- byte format = 0 (official)
@@ -207,7 +246,7 @@ local function DumpHeader()
 end
 
 local function DumpMain(main)
-  return DumpHeader() .. DumpFunction(main)
+  return DumpLuaHeader() .. DumpFunction(main)
 end
 
 return DumpMain

@@ -47,7 +47,7 @@ local function compile(filename)
     if not lines[1] then -- empty file edge case
       lines[1] = {line = ""}
     end
-    lines[1][1] = "-- < line  compiler :  func_id  line  pc  opcode  description  params >\n"
+    lines[1][1] = "-- < line column compiler :  func_id  line  pc  opcode  description  params >\n"
   end
 
   local function format_line_num(line_num)
@@ -80,12 +80,13 @@ local function compile(filename)
         disassembler.get_disassembly(func, function(description)
           local line = get_line(func.first_line)
           line[#line+1] = "-- "..prefix..": "..(description:gsub("\n", "\n-- "..prefix..": "))
-        end, function(line_num, instruction_index, padded_opcode, description, description_with_keys, raw_values)
+        end, function(line_num, column_num, instruction_index, padded_opcode, description, description_with_keys, raw_values)
           description = show_keys_in_disassembly and description_with_keys or description
           local line = get_line(line_num)
           local min_description_len = 50
-          line[#line+1] = string.format("-- %s  %s: %2df  %4d  %s  %s%s  %s",
-          format_line_num(line_num),
+          line[#line+1] = string.format("-- %s %3d %s: %2df  %4d  %s  %s%s  %s",
+            format_line_num(line_num),
+            column_num or 0,
             prefix,
             func_id,
             instruction_index,

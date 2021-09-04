@@ -293,6 +293,11 @@ do
   end
 end
 
+---last 2 bytes are a format version number
+---which just starts at 0 and counts up\
+---little endian
+local phobos_signature = "\x1bPho\x10\x42\x00\x00"
+
 ---@param bytecode string
 local function disassemble(bytecode)
   local i = 1
@@ -315,16 +320,16 @@ local function disassemble(bytecode)
     i = i + header_length
   end
 
+  local function read_uint8()
+    return read_bytes(1)
+  end
+
   local function read_uint32()
     local one, two, three, four = read_bytes(4)
     return one
       + bit32.lshift(two, 8)
       + bit32.lshift(three, 16)
       + bit32.lshift(four, 24)
-  end
-
-  local function read_uint8()
-    return read_bytes(1)
   end
 
   local function read_string()
@@ -338,6 +343,9 @@ local function disassemble(bytecode)
     if length == 0 then -- 0 means nil
       return nil
     else
+      if length > 8 and bytecode:sub(i, i + 8 - 1) == phobos_signature then
+        return nil, length
+      end
       local result = bytecode:sub(i, i + length - 1 - 1) -- an extra -1 for the trailing \0
       i = i + length
       return result
@@ -357,7 +365,10 @@ local function disassemble(bytecode)
       return {node_type = "number", value = value, label = tostring(value)}
     end,
     [4] = function()
-      local value = read_string()
+      local value, is_phobos_constant = read_string()
+      if is_phobos_constant then
+        return nil, is_phobos_constant
+      end
       assert(value, "Strings in the constant table must not be `nil`.")
       return {node_type = "string", value = value, label = string.format("%q", value):gsub("\\\n", "\\n")}
     end,
@@ -395,7 +406,18 @@ local function disassemble(bytecode)
     end
 
     for j = 1, read_uint32() do
-      constants[j] = const_lut[read_uint8()]()
+      local constant, is_phobos_constant = const_lut[read_uint8()]()
+      if not is_phobos_constant then
+        constants[j] = constant
+      else
+        read_bytes(8) -- consume signature
+
+        for k = 1, read_uint32() do
+          instructions[k].column = read_uint32()
+        end
+
+        assert(read_bytes(1) == 0)
+      end
     end
 
     for j = 1, read_uint32() do
@@ -459,7 +481,7 @@ end
 ---called once at the beginning with general information about the function. Contains 2 newlines.
 ---@param func_description_callback fun(description: string)
 ---gets called for every instruction. instruction_index is 1-based
----@param instruction_callback fun(line?: integer, instruction_index: integer, padded_opcode: string, description: string, description_with_keys: string, raw_values: string)
+---@param instruction_callback fun(line?: integer, column?: integer, instruction_index: integer, padded_opcode: string, description: string, description_with_keys: string, raw_values: string)
 local function get_disassembly(func, func_description_callback, instruction_callback)
   func_description_callback("function at "..func.source..":"..func.first_line.."-"..func.last_line.."\n"
     ..(func.is_vararg and "vararg" or (func.n_param.." params")).." | "..(#func.upvals).." upvals | "..func.max_stack.." max stack\n"
@@ -499,6 +521,7 @@ local function get_disassembly(func, func_description_callback, instruction_call
     conditionally_add_raw_value("sbx")
     instruction_callback(
       instructions[i].line,
+      instructions[i].column,
       i,
       label..string.rep(" ", max_opcode_name_length - #label),
       description,
