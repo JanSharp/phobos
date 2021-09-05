@@ -169,6 +169,7 @@ do
     env_ident.value = "_ENV"
 
     local suffix = copy_node(ident_node, "string", true)
+    suffix.value = ident_node.value
     suffix.src_is_ident = true
 
     local node = new_node("index")
