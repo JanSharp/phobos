@@ -94,7 +94,7 @@
 ---@field param_comma_tokens AstTokenNode[] @ max length is `n_params - 1`, min `0`
 ---@field open_paren_token AstTokenNode
 ---@field close_paren_token AstTokenNode
----@field function_token AstTokenNode
+---@field function_token AstTokenNode @ position for any `closure` instructions
 ---@field end_token AstTokenNode
 
 ---@class AstFuncBase : AstNode
@@ -125,7 +125,7 @@
 ---@field node_type '"testblock"'
 ---@field condition AstExpression
 ---@field if_token AstTokenNode @ for the first test block this is an `if` node_type, otherwise `elseif`
----@field then_token AstTokenNode
+---@field then_token AstTokenNode @ position for the failure `jup` instruction
 
 ---@class AstElseBlock : AstStatement, AstBody, AstScope
 ---@field node_type '"elseblock"'
@@ -140,8 +140,8 @@
 ---@field node_type '"whilestat"'
 ---@field condition AstExpression
 ---@field while_token AstTokenNode
----@field do_token AstTokenNode
----@field end_token AstTokenNode
+---@field do_token AstTokenNode @ position for the failure `jmp` instruction
+---@field end_token AstTokenNode @ position for the loop `jmp` instruction
 
 ---@class AstDoStat : AstStatement, AstBody, AstScope
 ---@field node_type '"dostat"'
@@ -157,11 +157,11 @@
 ---@field step AstExpression|nil
 ---`var` is referring to a `whole_block = true` local
 ---@field locals AstLocalDef[]
----@field for_token AstTokenNode
+---@field for_token AstTokenNode @ position for the `forloop` instruction
 ---@field eq_token AstTokenNode
 ---@field first_comma_token AstTokenNode
 ---@field second_comma_token AstTokenNode|nil @ only used when `step` is not `nil`
----@field do_token AstTokenNode
+---@field do_token AstTokenNode @ position for the `forprep` instruction
 ---@field end_token AstTokenNode
 
 ---@class AstForList : AstStatement, AstBody, AstScope, AstLoop
@@ -171,17 +171,17 @@
 ---@field exp_list_comma_tokens AstTokenNode[]
 ---all `name_list` names are used for a `whole_block = true` local
 ---@field locals AstLocalDef[]
----@field for_token AstTokenNode
+---@field for_token AstTokenNode @ position for the `tforcall` and `tforloop` instructions
 ---@field comma_tokens AstTokenNode[] @ max length is `#name_list - 1`
 ---@field in_token AstTokenNode
----@field do_token AstTokenNode
+---@field do_token AstTokenNode @ position for the `jmp` to `tforcall` instruction
 ---@field end_token AstTokenNode
 
 ---@class AstRepeatStat : AstStatement, AstBody, AstScope, AstLoop
 ---@field node_type '"repeatstat"'
 ---@field condition AstExpression
 ---@field repeat_token AstTokenNode
----@field until_token AstTokenNode
+---@field until_token AstTokenNode @ position for the loop `jmp` instruction
 
 ---@class AstFuncStat : AstStatement, AstFuncBase
 ---@field node_type '"funcstat"'
@@ -211,21 +211,21 @@
 
 ---@class AstRetStat : AstStatement
 ---@field node_type '"retstat"'
----@field return_token AstTokenNode
+---@field return_token AstTokenNode @ position for the `return` instruction
 ---@field exp_list AstExpression[]|nil @ `nil` = no return values
 ---@field exp_list_comma_tokens AstTokenNode[]
 ---@field semi_colon_token AstTokenNode|nil @ trailing `;`. `nil` = no semi colon
 
 ---@class AstBreakStat : AstStatement
 ---@field node_type '"breakstat"'
----@field break_token AstTokenNode
+---@field break_token AstTokenNode @ position for the break `jmp` instruction
 ---@field linked_loop AstStatement[]|nil @ evaluated by the jump linker. not `nil` after successful linking
 
 ---@class AstGotoStat : AstStatement
 ---@field node_type '"gotostat"'
 ---@field target string @ name of the label to jump to
 ---@field target_token AstTokenNode @ it's value is `nil`
----@field goto_token AstTokenNode
+---@field goto_token AstTokenNode @ position for the goto `jmp` instruction
 ---@field linked_label AstLabel|nil @ evaluated by the jump linker. not `nil` after successful linking
 
 ---@class AstSelfCall : AstStatement, AstExpression
@@ -234,17 +234,17 @@
 ---@field suffix AstString @ function name. `src_is_ident` is always `true`
 ---@field args AstExpression[]
 ---@field args_comma_tokens AstTokenNode[]
----@field colon_token AstTokenNode
----@field open_paren_token AstTokenNode|nil
----@field close_paren_token AstTokenNode|nil
+---@field colon_token AstTokenNode @ position for the `self` instruction
+---@field open_paren_token AstTokenNode|nil @ position for the `call` instruction
+---@field close_paren_token AstTokenNode|nil @ position for `move` instructions moving out of temp regs
 
 ---@class AstCall : AstStatement, AstExpression
 ---@field node_type '"call"'
 ---@field ex AstExpression
 ---@field args AstExpression[]
 ---@field args_comma_tokens AstTokenNode[]
----@field open_paren_token AstTokenNode|nil
----@field close_paren_token AstTokenNode|nil
+---@field open_paren_token AstTokenNode|nil @ position for the `call` instruction
+---@field close_paren_token AstTokenNode|nil @ position for `move` instructions moving out of temp regs
 
 ---@class AstAssignment : AstStatement
 ---@field node_type '"assignment"'
@@ -285,7 +285,8 @@
 ---if this is an AstString with `src_is_ident == true`
 ---then it is representing a literal identifier
 ---@field suffix AstExpression
----Only used if it is a literal identifier
+---Only used if it is a literal identifier\
+---position for index related instructions
 ---@field dot_token AstTokenNode|nil
 ---`[` node_type if it is not a literal identifier
 ---@field suffix_open_token AstTokenNode|nil
@@ -319,19 +320,21 @@
 ---@field node_type '"unop"'
 ---@field op '"not"'|'"-"'|'"#"'
 ---@field ex AstExpression
----@field op_token AstTokenNode
+---@field op_token AstTokenNode @ position for the various unop instructions
 
 ---@class AstBinOp : AstExpression
 ---@field node_type '"binop"'
 ---@field op '"^"'|'"*"'|'"/"'|'"%"'|'"+"'|'"-"'|'"=="'|'"<"'|'"<="'|'"~="'|'">"'|'">="'|'"and"'|'"or"'
 ---@field left AstExpression
 ---@field right AstExpression
----@field op_token AstTokenNode
+---@field op_token AstTokenNode @ position for the various binop instructions
 
 ---@class AstConcat : AstExpression
 ---@field node_type '"concat"'
 ---@field exp_list AstExpression[]
----@field op_tokens AstTokenNode[] @ max length is `#exp_list - 1`
+---max length is `#exp_list - 1`\
+---first one is position for the `concat` instruction
+---@field op_tokens AstTokenNode[]
 
 ---uses line, column and leading
 ---@class AstNumber : AstExpression
@@ -366,7 +369,7 @@
 ---@field value AstExpression
 ---@field key_open_token AstTokenNode|nil @ `[` node_type if the key is using it
 ---@field key_close_token AstTokenNode|nil @ `]` node_type if the key is using it
----@field eq_token AstTokenNode
+---@field eq_token AstTokenNode @ position for the `settable` instruction
 
 ---@class AstListField
 ---@field type '"list"'
@@ -375,8 +378,13 @@
 ---@class AstConstructor : AstExpression
 ---@field node_type '"constructor"'
 ---@field fields AstField[]
----@field open_token AstTokenNode
----@field comma_tokens AstTokenNode[] @ `,` or `;` tokens, max length is `#fields`
+---@field open_token AstTokenNode @ position for the `newtable` instruction
+---`,` or `;` tokens, max length is `#fields`\
+---position for `setlist` instructions if they are in the middle of the table constructor\
+---(so the ones created because of max field to flush being reached)
+---@field comma_tokens AstTokenNode[]
+---position for `setlist` instructions if they are the last one\
+---(so the ones not created because of max fields to flush being reached)
 ---@field close_token AstTokenNode
 
 

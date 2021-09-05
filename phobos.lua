@@ -10,13 +10,25 @@ do
   local function get_last_used_line(func)
     return (#func.instructions > 0)
       and func.instructions[#func.instructions].line
-      or 0
+      or nil
   end
 
   local function get_last_used_column(func)
     return (#func.instructions > 0)
       and func.instructions[#func.instructions].column
-      or 0
+      or nil
+  end
+
+  local function get_position_for_index(index_node)
+    if index_node.suffix.node_type == "string" and index_node.suffix.src_is_ident then
+      if index_node.scr_ex_did_not_exist then
+        return index_node.suffix
+      else
+        return index_node.dot_token
+      end
+    else
+      return index_node.suffix_open_token
+    end
   end
 
   ---get the next available register in the given function\
@@ -189,16 +201,14 @@ do
     end
     if used_temp then
       -- move from base+i to in_reg+i-1
-      local line = func.instructions[#func.instructions].line
-      local column = func.instructions[#func.instructions].column
       for i = 1, num_results do
         func.instructions[#func.instructions+1] = {
           -- since original_top is the original top live reg, the temporary regs
           -- are actually starting 1 past it, meaning it must not have the -1
           -- unlike in_reg
           op = opcodes.move, a = in_reg + i - 1, b = original_top + i,
-          line = line,
-          column = column,
+          line = get_last_used_line(func),
+          column = get_last_used_column(func),
         }
       end
       release_down_to(original_top, func)
@@ -418,8 +428,8 @@ do
 
       -- TODO: probably should just use expr.line/column
       -- TODO: some of the instructions should probably use a different token for their line/column
-      local line = expr.op_token and expr.op_token.line or get_last_used_line(func)
-      local column = expr.op_token and expr.op_token.column or get_last_used_column(func)
+      local line = expr.op_token and expr.op_token.line
+      local column = expr.op_token and expr.op_token.column
 
       if expr.op == "and" or expr.op == "or" then
 
@@ -491,7 +501,8 @@ do
       local scr_reg = local_or_fetch(expr.ex,in_reg,func)
       func.instructions[#func.instructions+1] = {
         op = un_opcodes[expr.op], a = in_reg, b = scr_reg,
-        line = expr.line, column = expr.column,
+        line = expr.op_token and expr.op_token.line,
+        column = expr.op_token and expr.op_token.column,
       }
     end,
     concat = function(expr,in_reg,func)
@@ -502,9 +513,11 @@ do
       end
       local num_exp = #expr.exp_list
       generate_exp_list(expr.exp_list,temp_reg,func,num_exp)
+      local position = expr.op_tokens and expr.op_tokens[1]
       func.instructions[#func.instructions+1] = {
         op = opcodes.concat, a = in_reg, b = temp_reg, c = temp_reg + num_exp - 1,
-        line = expr.line, column = expr.column,
+        line = position and position.line,
+        column = position and position.column,
       }
       release_down_to(original_top, func)
     end,
@@ -534,7 +547,8 @@ do
     constructor = function(expr,in_reg,func)
       local new_tab = {
         op = opcodes.newtable, a = in_reg, b = nil, c = nil, -- set later
-        line = expr.line, column = expr.column,
+        line = expr.open_token and expr.open_token.line,
+        column = expr.open_token and expr.open_token.column,
       }
       func.instructions[#func.instructions+1] = new_tab
       local initial_top = get_top(func)
@@ -548,15 +562,15 @@ do
         flush_count = flush_count + 1
         total_list_field_count = total_list_field_count + num_fields_to_flush
         num_fields_to_flush = 0
-        local src_position = (field_index == 0 and expr.close_token)
+        local position = (field_index == 0 and expr.close_token)
         -- if `field_index == 0` and `expr.close_token == nil`
         -- this will also be `nil` because there is no `0` field
           or expr.comma_tokens[field_index]
           or func.instructions[#func.instructions] -- fallback in both cases
         func.instructions[#func.instructions+1] = {
           op = opcodes.setlist, a = in_reg, b = count, c = flush_count,
-          line = src_position.line,
-          column = src_position.column,
+          line = position.line,
+          column = position.column,
         }
         release_down_to(initial_top, func)
       end
@@ -587,7 +601,7 @@ do
 
           func.instructions[#func.instructions+1] = {
             op = opcodes.settable, a = in_reg, b = key_reg, c = value_reg,
-            line = field.eq_token and field.eq_token.line, -- TODO: probably should just use expr.line/column
+            line = field.eq_token and field.eq_token.line,
             column = field.eq_token and field.eq_token.column,
           }
 
@@ -604,9 +618,11 @@ do
       new_tab.c = util.number_to_floating_byte(total_rec_field_count or (fields_count - total_list_field_count))
     end,
     func_proto = function(expr,in_reg,func)
+      local func_token = expr.func_def.function_token
       func.instructions[#func.instructions+1] = {
         op = opcodes.closure, a = in_reg, bx = expr.func_def.index,
-        line = expr.line, column = expr.column,
+        line = func_token and func_token.line,
+        column = func_token and func_token.column,
       }
       eval_upval_indexes(expr, func)
     end,
@@ -641,14 +657,16 @@ do
       end
       func.instructions[#func.instructions+1] = {
         op = opcodes.call, a = func_reg, b = num_args+1, c = num_results + 1,
-        line = expr.line, column = expr.column,
+        line = expr.open_paren_token and expr.open_paren_token.line,
+        column = expr.open_paren_token and expr.open_paren_token.column,
       }
       if used_temp then
         -- copy from func_reg+n to in_reg+n
         for i = 1, num_results do
           func.instructions[#func.instructions+1] = {
             op = opcodes.move, a = in_reg + i - 1, b = func_reg + i - 1,
-            line = expr.line, column = expr.column,
+            line = expr.close_paren_token and expr.close_paren_token.line,
+            column = expr.close_paren_token and expr.close_paren_token.column,
           }
         end
         release_down_to(original_top, func)
@@ -676,8 +694,8 @@ do
       -- so never actually using the given register
       func.instructions[#func.instructions+1] = {
         op = opcodes.self, a = func_reg, b = actual_func_reg, c = suffix_reg,
-        line = expr.suffix.line or expr.line,
-        column = expr.suffix.column or expr.column,
+        line = expr.colon_token and expr.colon_token.line,
+        column = expr.colon_token and expr.colon_token.column,
       }
       use_reg(func, func_reg + 1)
       -- TODO: the rest is copy paste from call
@@ -691,16 +709,16 @@ do
       func.instructions[#func.instructions+1] = {
         op = opcodes.call, a = func_reg, b = num_args + 1, c = num_results + 1,
         -- and this is different
-        -- TODO: change what the parser assigns to line/column
-        line = expr.open_paren_token and expr.open_paren_token.line or expr.line,
-        column = expr.open_paren_token and expr.open_paren_token.column or expr.column,
+        line = expr.open_paren_token and expr.open_paren_token.line,
+        column = expr.open_paren_token and expr.open_paren_token.column,
       }
       if used_temp then
         -- copy from func_reg+n to in_reg+n
         for i = 1, num_results do
           func.instructions[#func.instructions+1] = {
             op = opcodes.move, a = in_reg + i - 1, b = func_reg + i - 1,
-            line = expr.line, column = expr.column,
+            line = expr.close_paren_token and expr.close_paren_token.line,
+            column = expr.close_paren_token and expr.close_paren_token.column,
           }
         end
         release_down_to(original_top, func)
@@ -720,10 +738,12 @@ do
 
       local suffix_reg = const_or_local_or_fetch(expr.suffix,temp_reg,func)
 
+      local position = get_position_for_index(expr)
       func.instructions[#func.instructions+1] = {
         op = is_upval and opcodes.gettabup or opcodes.gettable,
         a = in_reg, b = ex_reg, c = suffix_reg,
-        line = expr.line, column = expr.column,
+        line = position and position.line,
+        column = position and position.column,
       }
       release_down_to(original_top, func)
     end,
@@ -766,9 +786,8 @@ do
       func.instructions[#func.instructions+1] = {
         op = logical_binop_lut[condition.op], a = logical_invert_lut[condition.op] and 1 or 0,
         b = left_reg, c = right_reg,
-        -- TODO: probably should just use condition.line/column
-        line = condition.op_token and condition.op_token.line or get_last_used_line(func),
-        column = condition.op_token and condition.op_token.column or get_last_used_column(func),
+        line = condition.op_token and condition.op_token.line,
+        column = condition.op_token and condition.op_token.column,
       }
       release_down_to(original_top, func)
     -- TODO: impl "and" and "or" test code
@@ -787,7 +806,8 @@ do
 
       func.instructions[#func.instructions+1] = {
         op = opcodes.test, a = condition_reg, c = inverted and 1 or 0,
-        line = condition.line, column = condition.column,
+        line = get_last_used_line(func),
+        column = get_last_used_column(func),
       }
       release_down_to(original_top, func)
     end
@@ -850,8 +870,8 @@ do
       else
         generate_expr({
           node_type = "nil",
-          line = stat.line,
-          column = stat.column,
+          line = stat.lhs[1].line,
+          column = stat.lhs[1].column,
         }, first_reg, func, #stat.lhs)
       end
 
@@ -901,20 +921,21 @@ do
         local right_reg = first_right_reg + i - 1
         local left = lefts[i]
         if left.type == "index" then
+          local position = get_position_for_index(stat.lhs[i])
           func.instructions[#func.instructions+1] = {
             op = left.ex_is_upval and opcodes.settabup or opcodes.settable,
             a = left.ex, b = left.suffix, c = right_reg,
-            line = stat.line, column = stat.column,
+            line = position and position.line, column = position and position.column,
           }
         elseif left.type == "local" then
           func.instructions[#func.instructions+1] = {
             op = opcodes.move, a = left.reg, b = right_reg,
-            line = stat.line, column = stat.column,
+            line = stat.lhs[i].line, column = stat.lhs[i].column,
           }
         elseif left.type == "upval" then
           func.instructions[#func.instructions+1] = {
             op = opcodes.setupval, a = right_reg, b = left.upval_idx, -- up(b) := r(a)
-            line = stat.line, column = stat.column,
+            line = stat.lhs[i].line, column = stat.lhs[i].column,
           }
         else
           error("Impossible left type "..left.type)
@@ -925,10 +946,11 @@ do
     localfunc = function(stat,func)
       -- allocate register for stat.name
       local func_reg = next_reg(func)
+      local func_token = stat.func_def.function_token
       -- CLOSURE into that register
       func.instructions[#func.instructions+1] = {
         op = opcodes.closure, a = func_reg, bx = stat.func_def.index,
-        line = stat.line, column = stat.column,
+        line = func_token and func_token.line, column = func_token and func_token.column,
       }
       local live_reg = create_live_reg(func, func_reg, stat.name.name)
       live_reg.start_at = #func.instructions
@@ -964,26 +986,28 @@ do
         error("Attempted to assign to " .. left.node_type)
       end
 
+      local func_token = stat.func_def.function_token
       -- CLOSURE into that register
       func.instructions[#func.instructions+1] = {
         op = opcodes.closure, a = in_reg, bx = stat.func_def.index,
-        line = stat.line, column = stat.column,
+        line = func_token and func_token.line, column = func_token and func_token.column,
       }
       eval_upval_indexes(stat, func)
 
       -- TODO: this is copy paste from assignment
       if left.type == "index" then
+        local position = get_position_for_index(stat.name)
         func.instructions[#func.instructions+1] = {
           op = left.ex_is_upval and opcodes.settabup or opcodes.settable,
           a = left.ex, b = left.suffix, c = in_reg,
-          line = stat.line, column = stat.column,
+          line = position and position.line, column = position and position.column,
         }
       elseif left.type == "local" then
         -- do nothing because the closure is directly put into the local
       elseif left.type == "upval" then
         func.instructions[#func.instructions+1] = {
           op = opcodes.setupval, a = in_reg, b = left.upval_idx, -- up(b) := r(a)
-          line = stat.line, column = stat.column,
+          line = stat.name.line, column = stat.name.column,
         }
       else
         error("Impossible left type "..left.type)
@@ -1096,8 +1120,8 @@ do
         -- jmp to tforcall
         jump = {
           op = opcodes.jmp, a = 0, sbx = nil,
-          line = stat.do_token and stat.do_token.line or get_last_used_line(func),
-          column = stat.do_token and stat.do_token.column or get_last_used_column(func),
+          line = stat.do_token and stat.do_token.line,
+          column = stat.do_token and stat.do_token.column,
         }
         func.instructions[#func.instructions+1] = jump
         jump_pc = #func.instructions
@@ -1118,12 +1142,14 @@ do
       jump.sbx = #func.instructions - jump_pc
       func.instructions[#func.instructions+1] = {
         op = opcodes.tforcall, a = generator_reg, c = #stat.name_list, -- a=func, c=num loop vars
-        line = stat.line, column = stat.column,
+        line = stat.for_token and stat.for_token.line,
+        column = stat.for_token and stat.for_token.column,
       }
       func.instructions[#func.instructions+1] = {
         -- sbx: jump back to just start of body
         op = opcodes.tforloop, a = control_reg, sbx = jump_pc - (#func.instructions + 1),
-        line = stat.line, column = stat.column,
+        line = stat.for_token and stat.for_token.line,
+        column = stat.for_token and stat.for_token.column,
       }
 
       patch_breaks_to_jump_here(stat, func)
@@ -1157,8 +1183,8 @@ do
         generate_expr(stat.step or {
           node_type = "number",
           value = 1,
-          -- TODO: which line/column to use?
-          line = stat.line, column = stat.column,
+          line = get_last_used_line(func),
+          column = get_last_used_column(func),
         }, step_reg, func, 1)
 
         var_reg = next_reg(func)
@@ -1166,8 +1192,8 @@ do
 
         forprep_inst = {
           op = opcodes.forprep, a = index_reg, sbx = nil,
-          -- TODO: which line/column to use?
-          line = stat.line, column = stat.column,
+          line = stat.do_token and stat.do_token.line,
+          column = stat.do_token and stat.do_token.column,
         }
         func.instructions[#func.instructions+1] = forprep_inst
         forprep_pc = #func.instructions
@@ -1183,8 +1209,8 @@ do
       forprep_inst.sbx = #func.instructions - forprep_pc
       func.instructions[#func.instructions+1] = {
         op = opcodes.forloop, a = index_reg, sbx = forprep_pc - (#func.instructions + 1),
-        -- TODO: which line/column to use?
-        line = stat.line, column = stat.column,
+        line = stat.for_token and stat.for_token.line,
+        column = stat.for_token and stat.for_token.column,
       }
 
       -- patch the stop_at for the for internals
@@ -1211,8 +1237,8 @@ do
         -- jump over everything and leave
         failure_jump = {
           op = opcodes.jmp, a = 0, sbx = nil,
-          line = get_last_used_line(func),
-          column = get_last_used_column(func),
+          line = stat.do_token and stat.do_token.line,
+          column = stat.do_token and stat.do_token.column,
         }
         func.instructions[#func.instructions+1] = failure_jump
         failure_jump_pc = #func.instructions
@@ -1222,8 +1248,8 @@ do
       -- jump back
       func.instructions[#func.instructions+1] = {
         op = opcodes.jmp, a = 0, sbx = start_pc - (#func.instructions + 1),
-        line = stat.end_token and stat.end_token.line or get_last_used_line(func),
-        column = stat.end_token and stat.end_token.line or get_last_used_column(func),
+        line = stat.end_token and stat.end_token.line,
+        column = stat.end_token and stat.end_token.column,
       }
       -- patch failure_jump to jump here
       if failure_jump then
@@ -1254,8 +1280,8 @@ do
       if do_jump_back then
         func.instructions[#func.instructions+1] = {
           op = opcodes.jmp, a = 0, sbx = start_pc - (#func.instructions + 1),
-          line = stat.until_token and stat.until_token.line or get_last_used_line(func),
-          column = stat.until_token and stat.until_token.column or get_last_used_column(func),
+          line = stat.until_token and stat.until_token.line,
+          column = stat.until_token and stat.until_token.column,
         }
       end
       patch_breaks_to_jump_here(stat, func)
@@ -1275,7 +1301,8 @@ do
       end
       func.instructions[#func.instructions+1] = {
         op = opcodes["return"], a = temp_reg, b = num_results + 1,
-        line = stat.line, column = stat.column,
+        line = stat.return_token and stat.return_token.line,
+        column = stat.return_token and stat.return_token.column,
       }
     end,
 
@@ -1293,7 +1320,8 @@ do
     gotostat = function(stat,func)
       local inst = {
         op = opcodes.jmp, sbx = nil,
-        line = stat.line, column = stat.column,
+        line = stat.goto_token and stat.goto_token.line,
+        column = stat.goto_token and stat.goto_token.column,
       }
       func.instructions[#func.instructions+1] = inst
       stat.inst = inst
@@ -1308,7 +1336,8 @@ do
     breakstat = function(stat,func)
       local inst = {
         op = opcodes.jmp, a = nil, sbx = nil,
-        line = stat.line, column = stat.column,
+        line = stat.break_token and stat.break_token.line,
+        column = stat.break_token and stat.break_token.column,
       }
       func.instructions[#func.instructions+1] = inst
       stat.inst = inst
@@ -1397,8 +1426,11 @@ do
     -- TODO: temp until it can be determined if the end of the function is reachable
     generate_statement({
       node_type = "retstat",
-      line = func.end_token and func.end_token.line or get_last_used_line(func),
-      column = func.end_token and func.end_token.column or get_last_used_column(func),
+      return_token = func.end_token or {
+        node_type = "token",
+        line = get_last_used_line(func),
+        column = get_last_used_column(func),
+      },
     }, func)
 
     for i,func_proto in ipairs(func.func_protos) do
