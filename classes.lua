@@ -52,7 +52,6 @@
 ---however even those those these value are optional,
 ---them being omitted means stripped/missing debug info\
 ---it should also be expected that only some of them could be `nil`
----TODO: actually get rid of and use this change properly
 ---@class AstNode
 ---@field node_type AstNodeType
 ---@field line integer|nil
@@ -293,7 +292,7 @@
 ---`]` node_type if it is not a literal identifier
 ---@field suffix_close_token AstTokenNode|nil
 ---if this is an index into `_ENV` where `_ENV.` did not exist in source
----@field src_did_not_exist boolean|nil
+---@field scr_ex_did_not_exist boolean|nil
 
 ---uses line, column and leading
 ---@class AstString : AstExpression

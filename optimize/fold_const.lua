@@ -33,7 +33,7 @@ local clear_exp_field_lut = {
     exp.dot_token = nil
     exp.suffix_open_token = nil
     exp.suffix_close_token = nil
-    exp.src_did_not_exist = nil
+    exp.scr_ex_did_not_exist = nil
   end,
   ["string"] = function(exp)
     exp.value = nil

@@ -25,24 +25,30 @@ local function syntax_error(msg)
   )
 end
 
----create new AstNode using the current `token` and `leading`
 ---@param node_type AstNodeType
----@param use_prev boolean @ should this node be created using `prev_token` and `prev_leading`?
+---@param use_prev? boolean @ indicates if this node was created for the current or previous token (unused)
 local function new_node(node_type, use_prev)
-  return {
-    node_type = node_type,
-    line = (use_prev and prev_token or token).line,
-    column = (use_prev and prev_token or token).column,
-    leading = (use_prev and prev_leading or leading),
-  }
+  return {node_type = node_type}
 end
 
-local function copy_node(node, new_node_type)
+---create new AstNode using the current `token` and `leading`
+---@param node_type AstNodeType
+---@param use_prev? boolean @ should this node be created using `prev_token` and `prev_leading`?
+local function new_full_node(node_type, use_prev)
+  local node = new_node(node_type, use_prev)
+  node.line = (use_prev and prev_token or token).line
+  node.column = (use_prev and prev_token or token).column
+  node.leading = (use_prev and prev_leading or leading)
+  return node
+end
+
+---@param copy_src_data boolean @ should it copy line, column and leading?
+local function copy_node(node, new_node_type, copy_src_data)
   return {
     node_type = new_node_type,
-    line = node.line,
-    column = node.column,
-    leading = node.leading,
+    line = copy_src_data and node.line or nil,
+    column = copy_src_data and node.column or nil,
+    leading = copy_src_data and node.leading or nil,
   }
 end
 
@@ -52,7 +58,7 @@ local function assert_name()
   if token.token_type ~= "ident" then
     syntax_error("<name> expected")
   end
-  local name_node = new_node("ident")
+  local name_node = new_full_node("ident")
   name_node.value = token.value
   next_token()
   return name_node
@@ -62,7 +68,7 @@ end
 ---@param value? string @ Default: `(use_prev and prev_token.token_type or token.token_type)`
 ---@return AstTokenNode
 local function new_token_node(use_prev, value)
-  local node = new_node("token", use_prev)
+  local node = new_full_node("token", use_prev)
   node.value = value or (use_prev and prev_token.token_type or token.token_type)
   return node
 end
@@ -84,7 +90,7 @@ end
 local function create_local(ident_node)
   local local_def = create_local_def(ident_node.value)
 
-  local ref = copy_node(ident_node, "local_ref")
+  local ref = copy_node(ident_node, "local_ref", true)
   ref.name = ident_node.value
   ref.reference_def = local_def
   return local_def, ref
@@ -150,40 +156,27 @@ do
   function get_ref(scope, ident_node)
     local def = try_get_def(scope, ident_node.value)
     if def then
-      local ref = {
-        node_type = def.def_type.."_ref", -- `local_ref` or `upval_ref`
-        name = ident_node.value,
-        line = ident_node.line,
-        column = ident_node.column,
-        leading = ident_node.leading,
-        reference_def = def,
-      }
+      -- `local_ref` or `upval_ref`
+      local ref = copy_node(ident_node, def.def_type.."_ref", true)
+      ref.reference_def = def
+      ref.name = ident_node.value
       def.refs[#def.refs+1] = ref
       return ref
     end
 
-    return {
-      node_type = "index",
-      line = ident_node.line,
-      column = ident_node.column,
-      leading = {},
-      ex = get_ref(scope, {
-        node_type = "ident",
-        value = "_ENV",
-        line = ident_node.line,
-        column = ident_node.column,
-        leading = {},
-      }),
-      suffix = {
-        node_type = "string",
-        line = ident_node.line,
-        column = ident_node.column,
-        value = ident_node.value,
-        leading = ident_node.leading,
-        src_is_ident = true,
-      },
-      src_did_not_exist = true,
-    }
+    local env_ident = copy_node(ident_node, "ident", true)
+    env_ident.leading = {} -- i'd like to have that data "duplicated"
+    env_ident.value = "_ENV"
+
+    local suffix = copy_node(ident_node, "string", true)
+    suffix.src_is_ident = true
+
+    local node = new_node("index")
+    node.ex = get_ref(scope, env_ident)
+    node.suffix = suffix
+    node.scr_ex_did_not_exist = true
+
+    return node
   end
 end
 
@@ -273,7 +266,7 @@ end
 local function rec_field(scope)
   local field = {type = "rec"}
   if token.token_type == "ident" then
-    field.key = new_node("string")
+    field.key = new_full_node("string")
     field.key.value = token.value
     field.key.src_is_ident = true
     next_token()
@@ -440,7 +433,7 @@ local function func_args(node, scope)
       return el, comma_tokens
     end,
     ["string"] = function(scope)
-      local string_node = new_node("string")
+      local string_node = new_full_node("string")
       string_node.value = token.value
       string_node.src_is_block_str = token.src_is_block_str
       string_node.src_quote = token.src_quote
@@ -555,12 +548,15 @@ local function suffixed_exp(scope)
   return ex
 end
 
+---value is set outside, for all of them
 local simple_lut = {
   ["number"] = function()
-    return new_node("number")
+    local node = new_full_node("number")
+    node.src_value = token.src_value
+    return node
   end,
   ["string"] = function()
-    local node = new_node("string")
+    local node = new_full_node("string")
     node.src_is_block_str = token.src_is_block_str
     node.src_quote = token.src_quote
     node.src_value = token.src_value
@@ -569,13 +565,13 @@ local simple_lut = {
     return node
   end,
   ["nil"] = function()
-    return new_node("nil")
+    return new_full_node("nil")
   end,
   ["true"] = function()
-    return new_node("boolean")
+    return new_full_node("boolean")
   end,
   ["false"] = function()
-    return new_node("boolean")
+    return new_full_node("boolean")
   end,
   ["..."] = function(scope)
     while scope.node_type ~= "functiondef" do
@@ -584,7 +580,7 @@ local simple_lut = {
     if not scope.is_vararg then
       syntax_error("Cannot use '...' outside a vararg function")
     end
-    return new_node("vararg")
+    return new_full_node("vararg")
   end,
 }
 
@@ -938,9 +934,6 @@ local function local_stat(local_token, scope)
   until not test_comma()
   if test_next("=") then
     this_tok.eq_token = new_token_node(true)
-    this_tok.line = this_tok.eq_token.line
-    this_tok.column = this_tok.eq_token.column
-    this_tok.leading = this_tok.eq_token.leading
     this_tok.rhs, this_tok.rhs_comma_tokens = exp_list(scope)
   end
   for _, name_local in ipairs(local_defs) do
