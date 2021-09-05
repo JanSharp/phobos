@@ -22,7 +22,7 @@ local on_open = {
       end
 
       local args = node.args
-      local args_comma_tokens = node.args_comma_tokens -- TODO: args_comma_tokens is not a thing yet
+      local args_comma_tokens = node.args_comma_tokens
       node.args = nil
       node.args_comma_tokens = nil
       node.open_paren_token = nil

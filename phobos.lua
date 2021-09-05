@@ -655,18 +655,33 @@ do
       if num_args > 0 and is_vararg(expr.args[num_args]) then
         num_args = -1
       end
+      local position = expr.open_paren_token
+      if (not position) and #expr.args == 1 then
+        if expr.args[1].node_type == "string" then
+          position = expr.args[1]
+        elseif expr.args[1].node_type == "constructor" then
+          position = expr.args[1].open_token
+        end
+      end
       func.instructions[#func.instructions+1] = {
         op = opcodes.call, a = func_reg, b = num_args+1, c = num_results + 1,
-        line = expr.open_paren_token and expr.open_paren_token.line,
-        column = expr.open_paren_token and expr.open_paren_token.column,
+        line = position and position.line,
+        column = position and position.column,
       }
       if used_temp then
         -- copy from func_reg+n to in_reg+n
+        position = expr.close_paren_token
+        if (not position)
+          and #expr.args == 1
+          and expr.args[1].node_type == "constructor"
+        then
+          position = expr.args[1].close_token
+        end
         for i = 1, num_results do
           func.instructions[#func.instructions+1] = {
             op = opcodes.move, a = in_reg + i - 1, b = func_reg + i - 1,
-            line = expr.close_paren_token and expr.close_paren_token.line,
-            column = expr.close_paren_token and expr.close_paren_token.column,
+            line = position and position.line or get_last_used_line(func),
+            column = position and position.column or get_last_used_column(func),
           }
         end
         release_down_to(original_top, func)
@@ -706,19 +721,33 @@ do
       else
         num_args = num_args + 1 -- except this, because selfcall has 1 more arg, period
       end
+      local position = expr.open_paren_token
+      if (not position) and #expr.args == 1 then
+        if expr.args[1].node_type == "string" then
+          position = expr.args[1]
+        elseif expr.args[1].node_type == "constructor" then
+          position = expr.args[1].open_token
+        end
+      end
       func.instructions[#func.instructions+1] = {
         op = opcodes.call, a = func_reg, b = num_args + 1, c = num_results + 1,
-        -- and this is different
-        line = expr.open_paren_token and expr.open_paren_token.line,
-        column = expr.open_paren_token and expr.open_paren_token.column,
+        line = position and position.line,
+        column = position and position.column,
       }
       if used_temp then
         -- copy from func_reg+n to in_reg+n
+        position = expr.close_paren_token
+        if (not position)
+          and #expr.args == 1
+          and expr.args[1].node_type == "constructor"
+        then
+          position = expr.args[1].close_token
+        end
         for i = 1, num_results do
           func.instructions[#func.instructions+1] = {
             op = opcodes.move, a = in_reg + i - 1, b = func_reg + i - 1,
-            line = expr.close_paren_token and expr.close_paren_token.line,
-            column = expr.close_paren_token and expr.close_paren_token.column,
+            line = position and position.line or get_last_used_line(func),
+            column = position and position.column or get_last_used_column(func),
           }
         end
         release_down_to(original_top, func)

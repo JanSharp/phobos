@@ -381,10 +381,12 @@
 ---@field open_token AstTokenNode @ position for the `newtable` instruction
 ---`,` or `;` tokens, max length is `#fields`\
 ---position for `setlist` instructions if they are in the middle of the table constructor\
----(so the ones created because of max field to flush being reached)
+---(so the ones created because of max field to flush being reached)\
+---also position for `call` instructions for calls without `open_paren_token`
 ---@field comma_tokens AstTokenNode[]
 ---position for `setlist` instructions if they are the last one\
----(so the ones not created because of max fields to flush being reached)
+---(so the ones not created because of max fields to flush being reached)\
+---also position for `move` instructions out of temp regs for calls without `close_paren_token`
 ---@field close_token AstTokenNode
 
 
