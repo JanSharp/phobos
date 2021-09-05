@@ -1,18 +1,20 @@
 
 # General
 
-endianness is the same as Lua's, so since it only supports little endian right now, everything is little endian in here as well.
+Endianness is the same as Lua's, so since it only supports little endian right now, everything is little endian in here as well.
 
 Indexes are 0 based. For ranges they are `start`: _including_, `end`: _excluding_.
 
-strings are encoded the same way as lua strings.
+Strings are encoded the same way as lua strings.
+
+Phobos debug symbols exist on a per function basis, including main chunk.
 
 # Identification
 
-phobos debug symbols are stored in an extra, unused string constant identified by it's length being _greater than_ the signature length + trailing `\0` (8 + 1 bytes) and it's first 8 bytes matching the signature.\
-phobos adds this constant as the last constant, however to allow for other tools to mess with bytecode just in case the specification does not require it to be the last constant.
+Phobos debug symbols are stored in an extra, unused string constant identified by it's length being _greater than_ the signature length + trailing `\0` (8 + 1 bytes) and it's first 8 bytes matching the signature.\
+Phobos adds this constant as the last constant, however to allow for other tools to mess with bytecode just in case the specification does not require it to be the last constant.
 
-(_greater than_ because it allows for the signature alone to exist as a string in the constant table without it being identified as the phobos debug symbols)
+(_Greater than_ because it allows for the signature alone to exist as a string in the constant table without it being identified as the phobos debug symbols)
 
 The signature is
 ```lua
@@ -24,7 +26,7 @@ local phobos_signature = "\x1bPho\x10\x42\x00\x00"
 
 Just like any other string constant it has a trailing `\0` (which also counts towards the string's size).
 
-phobos debug symbols are between this signature and trailing `\0` in binary form.
+Phobos debug symbols are between this signature and trailing `\0` in binary form.
 
 # Phobos Debug Symbols
 
