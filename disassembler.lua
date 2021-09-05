@@ -343,7 +343,7 @@ local function disassemble(bytecode)
     if length == 0 then -- 0 means nil
       return nil
     else
-      if length > 8 and bytecode:sub(i, i + 8 - 1) == phobos_signature then
+      if length > (8 + 1) and bytecode:sub(i, i + 8 - 1) == phobos_signature then
         return nil, length
       end
       local result = bytecode:sub(i, i + length - 1 - 1) -- an extra -1 for the trailing \0
