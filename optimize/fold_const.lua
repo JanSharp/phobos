@@ -7,6 +7,7 @@ local clear_exp_field_lut = {
     exp.ex = nil
     exp.suffix = nil
     exp.args = nil
+    exp.args_comma_tokens = nil
     exp.colon_token = nil
     exp.open_paren_token = nil
     exp.close_paren_token = nil
@@ -14,6 +15,7 @@ local clear_exp_field_lut = {
   ["call"] = function(exp)
     exp.ex = nil
     exp.args = nil
+    exp.args_comma_tokens = nil
     exp.open_paren_token = nil
     exp.close_paren_token = nil
   end,
@@ -71,15 +73,14 @@ local clear_exp_field_lut = {
   end,
   ["vararg"] = function(exp)
   end,
-    ["func_proto"] = function(exp)
-    exp.ref = nil
-    exp.function_token = nil
+  ["func_proto"] = function(exp)
+    exp.func_def = nil
   end,
   ["constructor"] = function(exp)
     exp.fields = nil
-    exp.open_paren_token = nil
+    exp.open_token = nil
     exp.comma_tokens = nil
-    exp.close_paren_token = nil
+    exp.close_token = nil
   end,
 }
 

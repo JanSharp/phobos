@@ -47,11 +47,17 @@
 ---optimizer expressions:
 ---| '"inline_iife"' @ inline immediately invoked function expression
 
+---line, column and leading is only used for some node types that represent a single token\
+---each ose these nodes have a comment noting this\
+---however even those those these value are optional,
+---them being omitted means stripped/missing debug info\
+---it should also be expected that only some of them could be `nil`
+---TODO: actually get rid of and use this change properly
 ---@class AstNode
 ---@field node_type AstNodeType
----@field line integer
----@field column integer
----@field leading Token[] @ `"blank"` and `"comment"` tokens
+---@field line integer|nil
+---@field column integer|nil
+---@field leading Token[]|nil @ `"blank"` and `"comment"` tokens
 
 ---@class AstStatement : AstNode
 
@@ -83,16 +89,17 @@
 ---@field is_method boolean @ is it `function foo:bar() end`?
 ---@field func_protos AstFunctionDef[]
 ---@field upvals AstUpvalDef[]
----@field constants AstConstantDef[]
----@field end_line integer
----@field end_column integer
 ---@field is_vararg boolean
 ---@field n_params integer
 ---all parameters are `whole_block = true` locals, except vararg
 ---@field param_comma_tokens AstTokenNode[] @ max length is `n_params - 1`, min `0`
 ---@field open_paren_token AstTokenNode
 ---@field close_paren_token AstTokenNode
+---@field function_token AstTokenNode
 ---@field end_token AstTokenNode
+
+---@class AstFuncBase : AstNode
+---@field func_def AstFunctionDef
 
 
 
@@ -103,7 +110,11 @@
 ---Like an empty node, no-op, purely describing the syntax
 ---@class AstTokenNode : AstNode
 ---@field node_type '"token"'
----@field value string
+---some token nodes are purely used for their line, column and leading data\
+---specifically those with dynamic values where their value is already stored
+---on the parent/main node\
+---each of these have a comment noting that their `value` is `nil`
+---@field value string|nil
 
 ---@class AstIfStat : AstStatement
 ---@field node_type '"ifstat"'
@@ -193,7 +204,8 @@
 
 ---@class AstLabel : AstStatement
 ---@field node_type '"label"'
----@field value string
+---@field name string
+---@field name_token AstTokenNode @ it's value is `nil`
 ---@field open_token AstTokenNode @ opening `::`
 ---@field close_token AstTokenNode @ closing `::`
 ---@field linked_gotos AstGotoStat[]|nil @ evaluated by the jump linker. not `nil` after successful linking
@@ -212,17 +224,17 @@
 
 ---@class AstGotoStat : AstStatement
 ---@field node_type '"gotostat"'
----@field target AstIdent
+---@field target string @ name of the label to jump to
+---@field target_token AstTokenNode @ it's value is `nil`
 ---@field goto_token AstTokenNode
 ---@field linked_label AstLabel|nil @ evaluated by the jump linker. not `nil` after successful linking
-
--- TODO: args are missing comma tokens
 
 ---@class AstSelfCall : AstStatement, AstExpression
 ---@field node_type '"selfcall"'
 ---@field ex AstExpression
 ---@field suffix AstString @ function name. `src_is_ident` is always `true`
 ---@field args AstExpression[]
+---@field args_comma_tokens AstTokenNode[]
 ---@field colon_token AstTokenNode
 ---@field open_paren_token AstTokenNode|nil
 ---@field close_paren_token AstTokenNode|nil
@@ -231,6 +243,7 @@
 ---@field node_type '"call"'
 ---@field ex AstExpression
 ---@field args AstExpression[]
+---@field args_comma_tokens AstTokenNode[]
 ---@field open_paren_token AstTokenNode|nil
 ---@field close_paren_token AstTokenNode|nil
 
@@ -255,11 +268,13 @@
 
 
 
+---uses line, column and leading
 ---@class AstLocalReference : AstExpression
 ---@field node_type '"local_ref"'
 ---@field name string
 ---@field reference_def AstLocalDef
 
+---uses line, column and leading
 ---@class AstUpvalReference : AstExpression
 ---@field node_type '"upval_ref"'
 ---@field name string
@@ -280,6 +295,7 @@
 ---if this is an index into `_ENV` where `_ENV.` did not exist in source
 ---@field src_did_not_exist boolean|nil
 
+---uses line, column and leading
 ---@class AstString : AstExpression
 ---@field node_type '"string"'
 ---@field value string
@@ -295,7 +311,7 @@
 ---@field src_has_leading_newline boolean|nil @ for block strings
 ---@field src_pad string|nil @ the `=` chain for block strings
 
----the same as AstStringName, maybe a bug
+---uses line, column and leading
 ---@class AstIdent : AstExpression
 ---@field node_type '"ident"'
 ---@field value string
@@ -318,24 +334,24 @@
 ---@field exp_list AstExpression[]
 ---@field op_tokens AstTokenNode[] @ max length is `#exp_list - 1`
 
+---uses line, column and leading
 ---@class AstNumber : AstExpression
 ---@field node_type '"number"'
 ---@field value number
 ---@field src_value string
 
+---uses line, column and leading
 ---@class AstNil : AstExpression
 ---@field node_type '"nil"'
 
+---uses line, column and leading
 ---@class AstBoolean : AstExpression
 ---@field node_type '"boolean"'
 ---@field value boolean
 
+---uses line, column and leading
 ---@class AstVarArg : AstExpression
 ---@field node_type '"vararg"'
-
----@class AstFuncBase : AstNode
----@field ref AstFunctionDef
----@field function_token AstTokenNode
 
 ---@class AstFuncProto : AstExpression, AstFuncBase
 ---@field node_type '"func_proto"'
@@ -360,9 +376,9 @@
 ---@class AstConstructor : AstExpression
 ---@field node_type '"constructor"'
 ---@field fields AstField[]
----@field open_paren_token AstTokenNode
+---@field open_token AstTokenNode
 ---@field comma_tokens AstTokenNode[] @ `,` or `;` tokens, max length is `#fields`
----@field close_paren_token AstTokenNode
+---@field close_token AstTokenNode
 
 
 
@@ -395,10 +411,6 @@
 ---was added because methods implicitly have the `self` parameter
 ---@field src_is_method_self boolean|nil
 
----this is a table because `value` can be `nil`
----@class AstConstantDef
----@field value string|number|boolean|nil
-
 ---@class AstMain : AstFunctionDef
 ---@field parent_scope AstENVScope
 ---@field is_main 'true'
@@ -430,6 +442,10 @@
 ---@field bx integer
 ---@field sbx integer
 ---@field line integer
+
+---this is a table because `value` can be `nil`
+---@class Constant
+---@field value string|number|boolean|nil
 
 ---@class Register
 ---@field reg integer @ **zero based**
@@ -471,6 +487,7 @@
 ---@field next_reg integer @ **zero based** index of next register to use
 ---@field max_stack_size integer @ always at least two registers
 ---@field instructions Instruction[]
+---@field constants Constant[]
 ---@field level integer? @ only available during generation process
 ---@field scope_levels? table<AstScope, integer> @ only available during generation process
 ---@field current_scope? AstScope @ only available during generation process

@@ -372,7 +372,7 @@ do
   end
 
   local function eval_upval_indexes(target_func_proto, func)
-    for _, upval in ipairs(target_func_proto.ref.upvals) do
+    for _, upval in ipairs(target_func_proto.func_def.upvals) do
       upval.in_stack = util.upval_is_in_stack(upval)
       if upval.in_stack then
         local live_reg
@@ -548,8 +548,9 @@ do
         flush_count = flush_count + 1
         total_list_field_count = total_list_field_count + num_fields_to_flush
         num_fields_to_flush = 0
-        local src_position = (field_index == 0 and expr.close_paren_token)
-        -- if `field_index == 0` and `expr.close_paren_token == nil` this will also be `nil` because there is no `0` field
+        local src_position = (field_index == 0 and expr.close_token)
+        -- if `field_index == 0` and `expr.close_token == nil`
+        -- this will also be `nil` because there is no `0` field
           or expr.comma_tokens[field_index]
           or func.instructions[#func.instructions] -- fallback in both cases
         func.instructions[#func.instructions+1] = {
@@ -604,7 +605,7 @@ do
     end,
     func_proto = function(expr,in_reg,func)
       func.instructions[#func.instructions+1] = {
-        op = opcodes.closure, a = in_reg, bx = expr.ref.index,
+        op = opcodes.closure, a = in_reg, bx = expr.func_def.index,
         line = expr.line, column = expr.column,
       }
       eval_upval_indexes(expr, func)
@@ -926,7 +927,7 @@ do
       local func_reg = next_reg(func)
       -- CLOSURE into that register
       func.instructions[#func.instructions+1] = {
-        op = opcodes.closure, a = func_reg, bx = stat.ref.index,
+        op = opcodes.closure, a = func_reg, bx = stat.func_def.index,
         line = stat.line, column = stat.column,
       }
       local live_reg = create_live_reg(func, func_reg, stat.name.name)
@@ -965,7 +966,7 @@ do
 
       -- CLOSURE into that register
       func.instructions[#func.instructions+1] = {
-        op = opcodes.closure, a = in_reg, bx = stat.ref.index,
+        op = opcodes.closure, a = in_reg, bx = stat.func_def.index,
         line = stat.line, column = stat.column,
       }
       eval_upval_indexes(stat, func)
@@ -1366,6 +1367,7 @@ do
     func.next_reg = 0 -- *ZERO BASED* index of next register to use
     func.max_stack_size = 2 -- always at least two registers
     func.instructions = {}
+    func.constants = {}
 
     for i,func_proto in ipairs(func.func_protos) do
       func_proto.index = i - 1 -- *ZERO BASED* index

@@ -19,10 +19,10 @@ end
 
 ---@param node AstFuncBase
 local function walk_func_base(node)
-  for i = 1, node.ref.n_params do
-    walk_exp(node.ref.locals[i])
+  for i = 1, node.func_def.n_params do
+    walk_exp(node.func_def.locals[i])
   end
-  walk_body(node.ref)
+  walk_body(node.func_def)
 end
 
 local exprs = {
@@ -192,7 +192,6 @@ local stats = {
   end,
   ---@param node AstGotoStat
   gotostat = function(node)
-    walk_exp(node.target)
   end,
   ---@param node AstAssignment
   assignment = function(node)

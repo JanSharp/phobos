@@ -29,7 +29,7 @@ local function walk(main, on_open, on_close)
 
   ---@param node AstFuncBase
   local function walk_func_base(node)
-    walk_body(node.ref)
+    walk_body(node.func_def)
   end
 
   -- all the empty functions could be removed from this
@@ -230,7 +230,6 @@ local function walk(main, on_open, on_close)
     end,
     ---@param node AstGotoStat
     gotostat = function(node)
-      walk_exp(node.target)
     end,
     ---@param node AstAssignment
     assignment = function(node)

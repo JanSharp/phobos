@@ -15,7 +15,7 @@ local on_open = {
       end
 
       ---@type AstFunctionDef
-      local inner_func = node.ex.ref
+      local inner_func = node.ex.func_def
 
       if inner_func.is_vararg then
         error("Unable to inline vararg IIFE at "..scope.source..":"..node.line..":"..node.column..".")
@@ -161,10 +161,7 @@ local on_open = {
       node_type = "gotostat",
       line = node.line,
       column = node.column,
-      target = {
-        node_type = "ident",
-        value = "(leave inline iife block)",
-      },
+      target = "(leave inline iife block)",
       linked_label = scope.leave_block_label,
     }
     scope.leave_block_label.linked_gotos[#scope.leave_block_label.linked_gotos+1] = node.leave_block_goto

@@ -115,13 +115,13 @@ end
 local function DumpFunction(func)
   local dump = {}
   -- int line_defined (0 for main chunk)
-  dump[#dump+1] = DumpInt(func.line)
+  dump[#dump+1] = DumpInt(func.function_token and func.function_token.line or 0)
   -- int last_line_defined (0 for main chunk)
-  dump[#dump+1] = DumpInt(func.end_line)
+  dump[#dump+1] = DumpInt(func.end_token and func.end_token.line or 0)
   dump[#dump+1] = string.char(
     func.n_params or 0,        -- byte n_params
     func.is_vararg and 1 or 0, -- byte is_vararg
-    func.max_stack_size or 2    -- byte max_stack_size, min of 2, reg0/1 always valid
+    func.max_stack_size or 2   -- byte max_stack_size, min of 2, reg0/1 always valid
   )
 
   -- [Code]
