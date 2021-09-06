@@ -1,3 +1,4 @@
+
 # Phobos
 
 Phobos is an optimizing bytecode compiler for Lua with minor language extensions.
@@ -39,3 +40,23 @@ Lua's existing function syntax is already fairly compact, but for the specific c
 ```lua
 (foo,bar) => foo?[bar]
 ```
+
+# Compiling
+
+Clone the repo and init and or update all submodules. something like this should work:
+```
+git submodule init
+git submodule update
+```
+
+Currently there are Windows Lua and LFS binaries in the root dir of the repo, so just clone the repo and try running this in the root directory. if it is successful, phobos will most likely run properly.
+```
+./lua52.exe -- compile_test.lua
+```
+<!-- cSpell:ignore luarocks -->
+(for other platforms you'll somehow have to get those binaries. LFS is on luarocks, for the record)
+
+`main.lua` is the main entry point for phobos which can only compile right now.\
+The arg parser does not print any help messages so just read the arg config in the main.lua file for info about args.
+
+When compiling for factorio you'd most likely want to set `--use-load` and `--source-name @__mod-name__/?` (mod-name being your mod name) with just `--source` (pointing to your mod root) and no `--output` in order to compile all `.pho` files in the mod folder (and sub folders) into `.lua` files relative next to the source files. Optionally with `--ignore` of course.

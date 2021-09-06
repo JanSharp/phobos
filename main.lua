@@ -28,7 +28,8 @@ local args_config = {
       field = "output_path",
       long = "output",
       short = "o",
-      description = "Target directory path to put generated files into. Relative to source dir.",
+      description = "Target directory path to put generated files into. Relative to source dir. \z
+        Leave this out to generate output next to source files.",
       single_param = true,
       type = "path",
       optional = true,
