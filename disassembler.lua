@@ -293,11 +293,6 @@ do
   end
 end
 
----last 2 bytes are a format version number
----which just starts at 0 and counts up\
----little endian
-local phobos_signature = "\x1bPho\x10\x42\x00\x00"
-
 ---@param bytecode string
 local function disassemble(bytecode)
   local i = 1
@@ -343,7 +338,7 @@ local function disassemble(bytecode)
     if length == 0 then -- 0 means nil
       return nil
     else
-      if length > (8 + 1) and bytecode:sub(i, i + 8 - 1) == phobos_signature then
+      if length > (8 + 1) and bytecode:sub(i, i + 8 - 1) == phobos_consts.phobos_signature then
         return nil, length
       end
       local result = bytecode:sub(i, i + length - 1 - 1) -- an extra -1 for the trailing \0

@@ -1,5 +1,5 @@
 
-local util = require("util")
+local phobos_consts = require("constants")
 
 ---@return string dumped_integer
 ---@return integer byte_count
@@ -80,11 +80,6 @@ local function DumpConstant(constant)
   return dumpConstantByType[type(constant.value)](constant.value)
 end
 
----last 2 bytes are a format version number
----which just starts at 0 and counts up\
----little endian
-local phobos_signature = "\x1bPho\x10\x42\x00\x00"
-
 local function DumpPhobosBytecode(dump, func)
   -- open string constant
   dump[#dump+1] = "\4" -- a "string" constant
@@ -98,7 +93,7 @@ local function DumpPhobosBytecode(dump, func)
   end
 
   -- signature
-  add(phobos_signature, 8)
+  add(phobos_consts.phobos_signature, 8)
 
   -- column debug info
   add(DumpInt(#func.instructions))

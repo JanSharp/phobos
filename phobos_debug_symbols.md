@@ -18,10 +18,9 @@ Phobos adds this constant as the last constant, however to allow for other tools
 
 The signature is
 ```lua
----last 2 bytes are a format version number
----which just starts at 0 and counts up\
----TODO: is that number always big endian or should it also reflect whichever endian is currently used?
-local phobos_signature = "\x1bPho\x10\x42\x00\x00"
+---last byte is a format version number
+---which just starts at 0 and counts up
+local phobos_signature = "\x1bPho\x10\x42\xf5\x00"
 ```
 
 Just like any other string constant it has a trailing `\0` (which also counts towards the string's size).
@@ -30,21 +29,15 @@ Phobos debug symbols are between this signature and trailing `\0` in binary form
 
 # Phobos Debug Symbols
 
-- `uint32` line_defined (0 for main chunk)
-- `uint32` column_defined (0 for main chunk)
-- `uint32` end_line (0 for main chunk)
-- `uint32` end_column (0 for main chunk)
+- `uint32` column_defined (0 for unknown or main chunk)
+- `uint32` end_column (0 for unknown or main chunk)
 - `uint32` num_instruction_positions (same as total instruction count)
 - instruction_positions - array of (length = num_instructions)
-  - `uint32` line
   - `uint32` column
-- (--TODO: from this point forward i'm really not sure)
 - `uint32` num_source_files
 - source_files - array of (length = num_source_files)
-  - `string` source_file_uri (--TODO: should it be a URI? a regular path? idk)
+  - `string` source_file_uri (same format as Lua `source`, except never a `=` identifier)
 - `uint32` num_sections
 - sections - array of (length = num_sections)
   - `uint32` instruction_index - section start index
   - `uint32` file_index - index in source_files. instructions from this point forward originate from that file
-
-(this also contains line information in case the line numbers visible to regular lua are compound numbers consisting of line and column combined in some way)
