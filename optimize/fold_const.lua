@@ -87,17 +87,19 @@ local clear_exp_field_lut = {
 local function clear_exp_fields(exp)
   -- fields every expression have
   exp.src_paren_wrappers = nil
-  -- TODO: how to deal with force_single_result when folding expression?
+  exp.force_single_result = nil -- we only output constant nodes where this never matters
   clear_exp_field_lut[exp.node_type](exp)
 end
 
 local is_const_node = invert{"string","number","boolean","nil"}
 ---only for constant `node_type`s
-local function fold_exp(parent_exp,node_type,value)
+local function fold_exp(parent_exp,node_type,position,value)
   assert(is_const_node[node_type])
   clear_exp_fields(parent_exp)
   parent_exp.node_type = node_type
   parent_exp.value = value
+  parent_exp.line = position.line
+  parent_exp.column = position.column
   parent_exp.folded = true
 end
 
@@ -118,19 +120,19 @@ local fold_unop = {
   ["-"] = function(exp)
     -- number
     if exp.ex.node_type == "number" then
-      fold_exp(exp,"number", -exp.ex.value)
+      fold_exp(exp, "number", exp.op_token, -exp.ex.value)
     end
   end,
   ["not"] = function(exp)
     -- boolean
     if is_const_node[exp.ex.node_type] then
-      fold_exp(exp, "boolean", not not is_falsy(exp.ex)) -- not not just to make sure it's a boolean value
+      fold_exp(exp, "boolean", exp.op_token, is_falsy(exp.ex))
     end
   end,
   ["#"] = function(exp)
     -- table or string
     if exp.ex.node_type == "string" then
-      fold_exp(exp, "number", #exp.ex.value)
+      fold_exp(exp, "number", exp.op_token, #exp.ex.value)
     elseif exp.ex.node_type == "constructor" then
 
     end
@@ -140,32 +142,32 @@ local fold_unop = {
 local fold_binop = {
   ["+"] = function(exp)
     if exp.left.node_type == "number" and exp.right.node_type == "number" then
-      fold_exp(exp, "number", exp.left.value + exp.right.value)
+      fold_exp(exp, "number", exp.left, exp.left.value + exp.right.value)
     end
   end,
   ["-"] = function(exp)
     if exp.left.node_type == "number" and exp.right.node_type == "number" then
-      fold_exp(exp, "number", exp.left.value - exp.right.value)
+      fold_exp(exp, "number", exp.left, exp.left.value - exp.right.value)
     end
   end,
   ["*"] = function(exp)
     if exp.left.node_type == "number" and exp.right.node_type == "number" then
-      fold_exp(exp, "number", exp.left.value * exp.right.value)
+      fold_exp(exp, "number", exp.left, exp.left.value * exp.right.value)
     end
   end,
   ["/"] = function(exp)
     if exp.left.node_type == "number" and exp.right.node_type == "number" then
-      fold_exp(exp, "number", exp.left.value / exp.right.value)
+      fold_exp(exp, "number", exp.left, exp.left.value / exp.right.value)
     end
   end,
   ["%"] = function(exp)
     if exp.left.node_type == "number" and exp.right.node_type == "number" then
-      fold_exp(exp, "number", exp.left.value % exp.right.value)
+      fold_exp(exp, "number", exp.left, exp.left.value % exp.right.value)
     end
   end,
   ["^"] = function(exp)
     if exp.left.node_type == "number" and exp.right.node_type == "number" then
-      fold_exp(exp, "number", exp.left.value ^ exp.right.value)
+      fold_exp(exp, "number", exp.left, exp.left.value ^ exp.right.value)
     end
   end,
   ["<"] = function(exp)
@@ -173,7 +175,7 @@ local fold_binop = {
     if exp.left.node_type == exp.right.node_type and
       (exp.left.node_type == "number" or exp.left.node_type == "string") then
       local res =  exp.left.value < exp.right.value
-      fold_exp(exp, "boolean", res)
+      fold_exp(exp, "boolean", exp.left, res)
     end
   end,
   ["<="] = function(exp)
@@ -181,7 +183,7 @@ local fold_binop = {
     if exp.left.node_type == exp.right.node_type and
       (exp.left.node_type == "number" or exp.left.node_type == "string") then
         local res =  exp.left.value <= exp.right.value
-        fold_exp(exp, "boolean", res)
+        fold_exp(exp, "boolean", exp.left, res)
     end
   end,
   [">"] = function(exp)
@@ -189,7 +191,7 @@ local fold_binop = {
     if exp.left.node_type == exp.right.node_type and
       (exp.left.node_type == "number" or exp.left.node_type == "string") then
         local res =  exp.left.value > exp.right.value
-        fold_exp(exp, "boolean", res)
+        fold_exp(exp, "boolean", exp.left, res)
     end
   end,
   [">="] = function(exp)
@@ -197,27 +199,27 @@ local fold_binop = {
     if exp.left.node_type == exp.right.node_type and
       (exp.left.node_type == "number" or exp.left.node_type == "string") then
         local res =  exp.left.value >= exp.right.value
-        fold_exp(exp, "boolean", res)
+        fold_exp(exp, "boolean", exp.left, res)
     end
   end,
   ["=="] = function(exp)
     -- any type
     if exp.left.node_type == exp.right.node_type and is_const_node[exp.left.node_type] then
-      local res =  exp.left.value == exp.right.value
-      fold_exp(exp, tostring(res), res)
+      local res = exp.left.value == exp.right.value
+      fold_exp(exp, tostring(res), exp.left, res)
     elseif is_const_node[exp.left.node_type] and is_const_node[exp.right.node_type] then
       -- different types of constants
-      fold_exp(exp, "boolean", false)
+      fold_exp(exp, "boolean", exp.left, false)
     end
   end,
   ["~="] = function(exp)
     -- any type
     if exp.left.node_type == exp.right.node_type and is_const_node[exp.left.node_type] then
-      local res =  exp.left.value ~= exp.right.value
-      fold_exp(exp, tostring(res), res)
+      local res = exp.left.value ~= exp.right.value
+      fold_exp(exp, tostring(res), exp.left, res)
     elseif is_const_node[exp.left.node_type] and is_const_node[exp.right.node_type] then
       -- different types of constants
-      fold_exp(exp, "boolean", true)
+      fold_exp(exp, "boolean", exp.left, true)
     end
   end,
   ["and"] = function(exp)
