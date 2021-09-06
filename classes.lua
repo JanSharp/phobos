@@ -89,9 +89,9 @@
 ---@field func_protos AstFunctionDef[]
 ---@field upvals AstUpvalDef[]
 ---@field is_vararg boolean
----@field n_params integer
+---@field num_params integer
 ---all parameters are `whole_block = true` locals, except vararg
----@field param_comma_tokens AstTokenNode[] @ max length is `n_params - 1`, min `0`
+---@field param_comma_tokens AstTokenNode[] @ max length is `num_params - 1`, min `0`
 ---@field open_paren_token AstTokenNode
 ---@field close_paren_token AstTokenNode
 ---@field function_token AstTokenNode @ position for any `closure` instructions
@@ -429,7 +429,7 @@
 ---@field end_line '0'
 ---@field end_column '0'
 ---@field is_vararg 'true'
----@field n_params '0'
+---@field num_params '0'
 ---@field locals AstLocalDef[]
 ---@field eof_token AstTokenNode @ to store trailing blank and comment tokens
 

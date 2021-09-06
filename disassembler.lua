@@ -360,9 +360,9 @@ local function disassemble(bytecode)
       return {node_type = "number", value = value, label = tostring(value)}
     end,
     [4] = function()
-      local value, is_phobos_constant = read_string()
-      if is_phobos_constant then
-        return nil, is_phobos_constant
+      local value, is_phobos_debug_symbols = read_string()
+      if is_phobos_debug_symbols then
+        return nil, is_phobos_debug_symbols
       end
       assert(value, "Strings in the constant table must not be `nil`.")
       return {node_type = "string", value = value, label = string.format("%q", value):gsub("\\\n", "\\n")}
@@ -378,7 +378,7 @@ local function disassemble(bytecode)
 
   local function disassemble_func()
     local source
-    local n_param
+    local num_param
     local is_vararg
     local max_stack
     local locals = {}
@@ -386,12 +386,12 @@ local function disassemble(bytecode)
     local instructions = {}
     local constants = {}
     local inner_functions = {}
-    local first_line
-    local last_line
+    local first_line, first_column
+    local last_line, last_column
 
     first_line = read_uint32()
     last_line = read_uint32()
-    n_param = read_uint8()
+    num_param = read_uint8()
     is_vararg = read_uint8() ~= 0
     max_stack = read_uint8()
 
@@ -401,14 +401,47 @@ local function disassemble(bytecode)
     end
 
     for j = 1, read_uint32() do
-      local constant, is_phobos_constant = const_lut[read_uint8()]()
-      if not is_phobos_constant then
+      local constant, is_phobos_debug_symbols = const_lut[read_uint8()]()
+      if not is_phobos_debug_symbols then
         constants[j] = constant
       else
         read_bytes(8) -- consume signature
 
+        -- first_column_defined
+        first_column = read_uint32()
+        -- last_column_defined
+        last_column = read_uint32()
+
+        -- instruction_columns
         for k = 1, read_uint32() do
           instructions[k].column = read_uint32()
+        end
+
+        -- sources
+        local sources = {}
+        for k = 1, read_uint32() do
+          sources[k] = read_string()
+        end
+
+        -- sections
+        do
+          local current_source = nil -- nil stands for the main `source`
+          local current_index = 1
+          for _ = 1, read_uint32() do
+            local instruction_index = read_uint32()
+            local source_index = read_uint32()
+            for k = current_index, (instruction_index + 1) - 1 do
+              instructions[k].source = current_source
+            end
+            if source_index == 0 then
+              current_source = nil
+            else
+              current_source = sources[source_index]
+            end
+          end
+          for k = current_index, #instructions do
+            instructions[k].source = current_source
+          end
         end
 
         assert(read_bytes(1) == 0)
@@ -448,7 +481,7 @@ local function disassemble(bytecode)
 
     return {
       source = source,
-      n_param = n_param,
+      num_param = num_param,
       is_vararg = is_vararg,
       max_stack = max_stack,
       locals = locals,
@@ -457,7 +490,9 @@ local function disassemble(bytecode)
       constants = constants,
       inner_functions = inner_functions,
       first_line = first_line,
+      first_column = first_column or 0,
       last_line = last_line,
+      last_column = last_column or 0,
     }
   end
 
@@ -479,7 +514,7 @@ end
 ---@param instruction_callback fun(line?: integer, column?: integer, instruction_index: integer, padded_opcode: string, description: string, description_with_keys: string, raw_values: string)
 local function get_disassembly(func, func_description_callback, instruction_callback)
   func_description_callback("function at "..func.source..":"..func.first_line.."-"..func.last_line.."\n"
-    ..(func.is_vararg and "vararg" or (func.n_param.." params")).." | "..(#func.upvals).." upvals | "..func.max_stack.." max stack\n"
+    ..(func.is_vararg and "vararg" or (func.num_param.." params")).." | "..(#func.upvals).." upvals | "..func.max_stack.." max stack\n"
     ..(#func.instructions).." instructions | "..(#func.constants).." constants | "..(#func.inner_functions).." functions")
 
   local instructions = func.instructions

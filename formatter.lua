@@ -19,7 +19,7 @@ end
 
 ---@param node AstFuncBase
 local function walk_func_base(node)
-  for i = 1, node.func_def.n_params do
+  for i = 1, node.func_def.num_params do
     walk_exp(node.func_def.locals[i])
   end
   walk_body(node.func_def)

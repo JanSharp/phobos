@@ -31,13 +31,16 @@ Phobos debug symbols are between this signature and trailing `\0` in binary form
 
 - `uint32` column_defined (0 for unknown or main chunk)
 - `uint32` end_column (0 for unknown or main chunk)
-- `uint32` num_instruction_positions (same as total instruction count)
-- instruction_positions - array of (length = num_instructions)
-  - `uint32` column
-- `uint32` num_source_files
-- source_files - array of (length = num_source_files)
-  - `string` source_file_uri (same format as Lua `source`, except never a `=` identifier)
+- `uint32` num_instruction_columns (same as total instruction count)
+- instruction_columns - array of (length = num_instruction_columns)
+  - `uint32` column (0 for unknown)
+- `uint32` num_sources
+- sources - array of (length = num_sources)
+  - `string` source (same format as Lua `source`) -- TODO: though `=` identifiers or raw sources probably don't make sense/aren't very smart
 - `uint32` num_sections
 - sections - array of (length = num_sections)
   - `uint32` instruction_index - section start index
-  - `uint32` file_index - index in source_files. instructions from this point forward originate from that file
+  - `uint32` source_index - index in `sources`. instructions from this point forward originate from that source\
+    0 stands for the regular Lua `source`, 1 is the 0th entry in `sources`
+
+there is an implied first section with instruction_index and source_index both being `0`.

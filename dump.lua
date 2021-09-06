@@ -80,7 +80,7 @@ local function DumpConstant(constant)
   return dumpConstantByType[type(constant.value)](constant.value)
 end
 
-local function DumpPhobosBytecode(dump, func)
+local function DumpPhobosDebugSymbols(dump, func)
   -- open string constant
   dump[#dump+1] = "\4" -- a "string" constant
   local i = #dump + 1 -- + 1 to reserve a slot for the string size
@@ -95,11 +95,25 @@ local function DumpPhobosBytecode(dump, func)
   -- signature
   add(phobos_consts.phobos_signature, 8)
 
-  -- column debug info
+  -- uint32 column_defined (0 for unknown or main chunk)
+  add(DumpInt(func.function_token and func.function_token.column or 0))
+  -- uint32 last_column_defined (0 for unknown or main chunk)
+  add(DumpInt(func.end_token and func.end_token.column or 0))
+
+  -- uint32 num_instruction_positions (always same as num_instructions)
+  -- uint32[] column (columns of each instruction)
   add(DumpInt(#func.instructions))
   for _, inst in ipairs(func.instructions) do
-    add(DumpInt(inst.column or 0)) -- default to 0 for now, but it should either all have column info or none
+    add(DumpInt(inst.column or 0)) -- 0 for unknown
   end
+
+  -- uint32 num_sources
+  add(DumpInt(0))
+  -- string[] source (all sources used in this function)
+
+  -- uint32 num_sections
+  add(DumpInt(0))
+  -- (uint32 instruction_index, uint32 file_index)[]
 
   -- close string constant
   add("\0", 1)
@@ -109,18 +123,18 @@ end
 ---@param func GeneratedFunc
 local function DumpFunction(func)
   local dump = {}
-  -- int line_defined (0 for main chunk)
+  -- int line_defined (0 for unknown or main chunk)
   dump[#dump+1] = DumpInt(func.function_token and func.function_token.line or 0)
-  -- int last_line_defined (0 for main chunk)
+  -- int last_line_defined (0 for unknown or main chunk)
   dump[#dump+1] = DumpInt(func.end_token and func.end_token.line or 0)
   dump[#dump+1] = string.char(
-    func.n_params or 0,        -- byte n_params
+    func.num_params or 0,        -- byte num_params
     func.is_vararg and 1 or 0, -- byte is_vararg
     func.max_stack_size or 2   -- byte max_stack_size, min of 2, reg0/1 always valid
   )
 
   -- [Code]
-  -- int n_instructions
+  -- int num_instructions
   dump[#dump+1] = DumpInt(#func.instructions)
   -- Instruction[] instructions
   for _,instruction in ipairs(func.instructions) do
@@ -149,17 +163,17 @@ local function DumpFunction(func)
 
 
   -- [Constants]
-  -- int n_consts
-  dump[#dump+1] = DumpInt(#func.constants + 1) -- + 1 for phobos data
+  -- int num_consts
+  dump[#dump+1] = DumpInt(#func.constants + 1) -- + 1 for phobos debug symbols
   -- TValue[] consts
   for _,constant in ipairs(func.constants) do
     dump[#dump+1] = DumpConstant(constant)
   end
 
-  DumpPhobosBytecode(dump, func)
+  DumpPhobosDebugSymbols(dump, func)
 
   -- [func_protos]
-  -- int n_funcs
+  -- int num_funcs
   dump[#dump+1] = DumpInt(#func.func_protos)
   -- DumpFunction[] funcs
   for _,f in ipairs(func.func_protos) do
@@ -167,7 +181,7 @@ local function DumpFunction(func)
   end
 
   -- [Upvals]
-  -- int n_upvals
+  -- int num_upvals
   dump[#dump+1] = DumpInt(#func.upvals)
   -- upvals[] upvals
   for _,upval in ipairs(func.upvals) do
@@ -183,14 +197,14 @@ local function DumpFunction(func)
   -- string source
   dump[#dump+1] = DumpString(func.source or "(unknown phobos source)")
 
-  -- int n_lines (always same as n_instructions?)
-  -- int[] lines (line number per instruction?)
+  -- int num_lines (always same as num_instructions)
+  -- int[] lines (line number per instruction)
   dump[#dump+1] = DumpInt(#func.instructions)
   for i, instruction in ipairs(func.instructions) do
     dump[#dump+1] = DumpInt(instruction.line or 0)
   end
 
-  -- int n_locals
+  -- int num_locals
   -- local_desc[] locals
   --   string name
   --   int start_pc
@@ -209,7 +223,7 @@ local function DumpFunction(func)
     end
   end
 
-  -- int n_upvals
+  -- int num_upvals
   dump[#dump+1] = DumpInt(#func.upvals)
   -- string[] upvals
   for _,u in ipairs(func.upvals) do
@@ -221,7 +235,7 @@ local function DumpFunction(func)
   -- Phobos signature: "\x1bPhobos"
   -- byte version = "\x01"
   -- [branch annotations]
-  -- int n_branches
+  -- int num_branches
 
   return table.concat(dump)
 end

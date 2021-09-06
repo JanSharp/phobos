@@ -391,7 +391,7 @@ local function body(function_token, scope, is_method)
   local this_node = new_node("func_proto")
   this_node.func_def = func_def_node
   assert_next("(")
-  func_def_node.n_params = par_list(func_def_node)
+  func_def_node.num_params = par_list(func_def_node)
   func_def_node.close_paren_token = new_token_node()
   assert_next(")")
   func_def_node.body = stat_list(func_def_node)
@@ -1109,7 +1109,7 @@ local function main_func(chunk_name)
     locals = {}, upvals = {}, labels = {},
 
     is_method = false,
-    n_params = 0,
+    num_params = 0,
   }
   main.parent_scope.locals[1].scope = main.parent_scope
 

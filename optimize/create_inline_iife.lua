@@ -57,10 +57,10 @@ local on_open = {
         end
       end
 
-      if inner_func.n_params > 0 then
+      if inner_func.num_params > 0 then
         local param_local_defs = {}
         local param_local_refs = {}
-        for i = 1, inner_func.n_params do
+        for i = 1, inner_func.num_params do
           local local_def = inner_func.locals[i]
           local_def.whole_block = nil
           param_local_defs[i] = local_def

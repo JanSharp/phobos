@@ -941,12 +941,12 @@ do
           error("Attempted to assign to " .. left.node_type)
         end
       end
-      local n_lefts = #lefts
+      local num_lefts = #lefts
       local first_right_reg = peek_next_reg(func)
       -- TODO: the last expression could _somehow_ directly assign to locals (if left is a local)
-      generate_exp_list(stat.rhs,first_right_reg,func,n_lefts)
+      generate_exp_list(stat.rhs,first_right_reg,func,num_lefts)
       -- copy rights to lefts
-      for i = n_lefts,1,-1 do
+      for i = num_lefts,1,-1 do
         local right_reg = first_right_reg + i - 1
         local left = lefts[i]
         if left.type == "index" then
