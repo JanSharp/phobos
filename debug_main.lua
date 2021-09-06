@@ -47,7 +47,7 @@ local function compile(filename)
     if not lines[1] then -- empty file edge case
       lines[1] = {line = ""}
     end
-    lines[1][1] = "-- < line column compiler :  func_id  line  pc  opcode  description  params >\n"
+    lines[1][1] = "-- < line column compiler :  func_id  pc  opcode  description  params >\n"
   end
 
   local function format_line_num(line_num)

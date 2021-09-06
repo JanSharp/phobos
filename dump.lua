@@ -120,6 +120,100 @@ local function DumpPhobosDebugSymbols(dump, func)
   dump[size_entry_index] = DumpSize(byte_count)
 end
 
+---outputs locals that start after they end.
+---those locals should be ignored when processing the data further\
+---output indexes are one based including excluding
+local function GetLocalDebugSymbols(func)
+  local locals = {} -- output debug symbols
+  local reg_stack = {} -- **zero based** array
+  local top_reg = -1 -- **zero based**
+  local function next_reg()
+    return top_reg + 1
+  end
+  local function replace_reg_stack_entry(reg, new_entry)
+    assert(reg < top_reg)
+    local popped = {}
+    for j = reg + 1, top_reg do
+      popped[#popped+1] = reg_stack[j]
+      -- stop just before the new one starts
+      reg_stack[j].stop_at = new_entry.start_at - 1
+    end
+    -- stop just before the new one starts
+    reg_stack[reg].stop_at = new_entry.start_at - 1
+    reg_stack[reg] = new_entry
+    locals[#locals+1] = new_entry
+    for j, popped_entry in ipairs(popped) do
+      local entry = {
+        unnamed = popped_entry.unnamed,
+        name = popped_entry.name,
+        start_at = new_entry.start_at,
+      }
+      reg_stack[reg + j] = entry
+      locals[#locals+1] = entry
+    end
+  end
+
+  for i = 1, #func.instructions do
+    for _, live in ipairs(func.live_regs) do
+      -- start_at being bigger than stop_at is valid and means the live_reg lasts for 0 instructions
+      -- however they break this algorithm so we just ignore them, which is correct anyway
+      if (not live.name) or (live.start_at > live.stop_at) then
+        goto continue
+      end
+
+      if live.start_at == i then
+        if live.reg >= next_reg() then
+          for j = next_reg(), live.reg - 1 do
+            local entry = {
+              unnamed = true,
+              name = "(unnamed)",
+              start_at = live.start_at,
+            }
+            reg_stack[j] = entry
+            locals[#locals+1] = entry
+          end
+          top_reg = live.reg
+          local entry = {
+            name = live.name,
+            start_at = live.start_at,
+          }
+          reg_stack[top_reg] = entry
+          locals[#locals+1] = entry
+        else -- live.reg < next_reg()
+          replace_reg_stack_entry(live.reg, {
+            name = live.name,
+            start_at = live.start_at,
+          })
+        end
+      end
+
+      if live.stop_at == i then
+        if live.reg ~= top_reg then
+          replace_reg_stack_entry(live.reg, {
+            unnamed = true,
+            name = "(unnamed)",
+            -- + 1 because this is for the new unnamed entry, not the actual one we are "stopping"
+            start_at = live.stop_at + 1
+          })
+        else
+          reg_stack[top_reg].stop_at = live.stop_at
+          top_reg = top_reg - 1
+          for j = top_reg, 0, -1 do
+            if not reg_stack[j].unnamed then
+              break
+            end
+            reg_stack[j].stop_at = live.stop_at
+            top_reg = j - 1
+          end
+        end
+      end
+
+      ::continue::
+    end
+  end
+  return locals
+end
+
 ---@param func GeneratedFunc
 local function DumpFunction(func)
   local dump = {}
@@ -209,18 +303,21 @@ local function DumpFunction(func)
   --   string name
   --   int start_pc
   --   int end_pc
-  -- TODO: since there can be gaps in live_regs[i].reg this actually requires some data transformation
-  -- the right solution is most likely to perform this transformation at the end of compilation
-  -- and only store the raw "locals" info in the generated function
-  dump[#dump+1] = DumpInt(#func.live_regs)
-  for _, live in ipairs(func.live_regs) do
-    if live.name then -- TODO: i believe this will be needed
-      dump[#dump+1] = DumpString(live.name)
-      -- convert from one based including including
-      -- to zero based including excluding
-      dump[#dump+1] = DumpInt(live.start_at - 1)
-      dump[#dump+1] = DumpInt(live.stop_at)
+  do
+    dump[#dump+1] = 0 -- set later
+    local num_locals_index = #dump
+    local num_locals = 0
+    for _, loc in ipairs(GetLocalDebugSymbols(func)) do
+      if loc.start_at <= loc.stop_at then
+        num_locals = num_locals + 1
+        dump[#dump+1] = DumpString(loc.name)
+        -- convert from one based including including
+        -- to zero based including excluding
+        dump[#dump+1] = DumpInt(loc.start_at - 1)
+        dump[#dump+1] = DumpInt(loc.stop_at)
+      end
     end
+    dump[num_locals_index] = DumpInt(num_locals)
   end
 
   -- int num_upvals
