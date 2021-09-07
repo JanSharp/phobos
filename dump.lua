@@ -154,55 +154,55 @@ local function GetLocalDebugSymbols(func)
   end
 
   for i = 1, #func.instructions do
-    for _, live in ipairs(func.live_regs) do
+    for _, reg_name in ipairs(func.debug_registers) do
       -- start_at being bigger than stop_at is valid and means the live_reg lasts for 0 instructions
       -- however they break this algorithm so we just ignore them, which is correct anyway
-      if (not live.name) or (live.start_at > live.stop_at) then
+      if (not reg_name.name) or (reg_name.start_at > reg_name.stop_at) then
         goto continue
       end
 
-      if live.start_at == i then
-        if live.reg >= next_reg() then
-          for j = next_reg(), live.reg - 1 do
+      if reg_name.start_at == i then
+        if reg_name.reg >= next_reg() then
+          for j = next_reg(), reg_name.reg - 1 do
             local entry = {
               unnamed = true,
               name = "(unnamed)",
-              start_at = live.start_at,
+              start_at = reg_name.start_at,
             }
             reg_stack[j] = entry
             locals[#locals+1] = entry
           end
-          top_reg = live.reg
+          top_reg = reg_name.reg
           local entry = {
-            name = live.name,
-            start_at = live.start_at,
+            name = reg_name.name,
+            start_at = reg_name.start_at,
           }
           reg_stack[top_reg] = entry
           locals[#locals+1] = entry
         else -- live.reg < next_reg()
-          replace_reg_stack_entry(live.reg, {
-            name = live.name,
-            start_at = live.start_at,
+          replace_reg_stack_entry(reg_name.reg, {
+            name = reg_name.name,
+            start_at = reg_name.start_at,
           })
         end
       end
 
-      if live.stop_at == i then
-        if live.reg ~= top_reg then
-          replace_reg_stack_entry(live.reg, {
+      if reg_name.stop_at == i then
+        if reg_name.reg ~= top_reg then
+          replace_reg_stack_entry(reg_name.reg, {
             unnamed = true,
             name = "(unnamed)",
             -- + 1 because this is for the new unnamed entry, not the actual one we are "stopping"
-            start_at = live.stop_at + 1
+            start_at = reg_name.stop_at + 1
           })
         else
-          reg_stack[top_reg].stop_at = live.stop_at
+          reg_stack[top_reg].stop_at = reg_name.stop_at
           top_reg = top_reg - 1
           for j = top_reg, 0, -1 do
             if not reg_stack[j].unnamed then
               break
             end
-            reg_stack[j].stop_at = live.stop_at
+            reg_stack[j].stop_at = reg_name.stop_at
             top_reg = j - 1
           end
         end
@@ -214,17 +214,19 @@ local function GetLocalDebugSymbols(func)
   return locals
 end
 
----@param func GeneratedFunc
+---@param func CompiledFunc
 local function DumpFunction(func)
   local dump = {}
   -- int line_defined (0 for unknown or main chunk)
-  dump[#dump+1] = DumpInt(func.function_token and func.function_token.line or 0)
+  dump[#dump+1] = DumpInt(func.line_defined or 0)
   -- int last_line_defined (0 for unknown or main chunk)
-  dump[#dump+1] = DumpInt(func.end_token and func.end_token.line or 0)
+  dump[#dump+1] = DumpInt(func.last_line_defined or 0)
+  assert(func.num_params)
+  assert(func.max_stack_size >= 2)
   dump[#dump+1] = string.char(
-    func.num_params or 0,        -- byte num_params
+    func.num_params,           -- byte num_params
     func.is_vararg and 1 or 0, -- byte is_vararg
-    func.max_stack_size or 2   -- byte max_stack_size, min of 2, reg0/1 always valid
+    func.max_stack_size        -- byte max_stack_size, min of 2, reg0/1 always valid
   )
 
   -- [Code]
@@ -268,9 +270,9 @@ local function DumpFunction(func)
 
   -- [func_protos]
   -- int num_funcs
-  dump[#dump+1] = DumpInt(#func.func_protos)
+  dump[#dump+1] = DumpInt(#func.inner_functions)
   -- DumpFunction[] funcs
-  for _,f in ipairs(func.func_protos) do
+  for _,f in ipairs(func.inner_functions) do
     dump[#dump+1] = DumpFunction(f)
   end
 
@@ -289,7 +291,7 @@ local function DumpFunction(func)
 
   -- [Debug]
   -- string source
-  dump[#dump+1] = DumpString(func.source or "(unknown phobos source)")
+  dump[#dump+1] = DumpString(func.source --[[or "(unknown phobos source)"]]) -- TODO: how does nil behave
 
   -- int num_lines (always same as num_instructions)
   -- int[] lines (line number per instruction)

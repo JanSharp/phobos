@@ -442,43 +442,8 @@
 --------------------------------------------------
 -- generated/bytecode stuff:
 
----@class Instruction
----@field op integer
----@field a integer
----@field b integer
----@field c integer
----@field ax integer
----@field bx integer
----@field sbx integer
----@field line integer
-
----this is a table because `value` can be `nil`
----@class Constant
----@field value string|number|boolean|nil
-
----@class Register
----@field reg integer @ **zero based**
----@field name string
----@field level integer
----@field scope AstScope
----@field in_scope_at? integer @ pc **one based including** used to figure out how many upvals to close
----@field start_at? integer @ pc **one based including** when to consider `reg` to have this `name`
----@field stop_at? integer @ pc **one based including**
-
----@class GeneratedUpval : AstUpvalDef
----@field index integer @ **zero based**
----@field parent_def GeneratedUpval|GeneratedLocal
----@field child_defs GeneratedUpval[]
----@field in_stack boolean @ cached for dumping. To not duplicate logic
----@field upval_idx number|nil @ used when `in_stack` is `false`. index of the parent upval for dumping
----@field local_idx number|nil @ used when `in_stack` is `true`. register index of the local variable when creating a closure
-
----@class GeneratedLocal : AstLocalDef
----@field index integer @ **zero based**
----@field child_defs GeneratedUpval[]
-
----@class GeneratedStatement : AstStatement
----@field index integer @ **zero based**
+-- TODO: clean this kind of data up after/during compilation. [...]
+-- there are a few others that aren't listed here believe
 
 ---@class GeneratedLabel : AstLabel
 ---@field pc integer|nil @ process counter of the instruction before the label
@@ -491,15 +456,59 @@
 ---@field pc integer|nil @ process counter of `inst`, the jmp instruction
 ---@field inst Instruction|nil @ the jmp instruction of the goto
 
----@class GeneratedFunc : AstFunctionDef
----@field live_regs Register[]
----@field next_reg integer @ **zero based** index of next register to use
----@field max_stack_size integer @ always at least two registers
+---@class Instruction
+---@field op integer
+---@field a integer
+---@field b integer
+---@field c integer
+---@field ax integer
+---@field bx integer
+---@field sbx integer
+---@field line integer|nil
+---@field column integer|nil @ stored in phobos debug symbols
+---@field source string|nil @ stored in phobos debug symbols
+
+---this is a table because `value` can be `nil`
+---@class CompiledConstant
+---@field value string|number|boolean|nil
+
+---@class CompiledRegister
+---@field reg integer @ **zero based** index of the register this name is for from start_at until stop_at
+---@field name string
+---@field start_at integer @ **one based including**
+---@field stop_at integer @ **one based including**
+---temporary data during compilation
+---@field level integer
+---@field scope AstScope
+---@field in_scope_at integer|nil @ pc **one based including** used to figure out how many upvals to close
+
+---@class CompiledUpval
+---@field index integer @ **zero based**
+---@field name string
+---@field in_stack boolean
+---used when `in_stack` is `false`. index of the parent upval for bytecode
+---@field upval_idx number|nil
+---used when `in_stack` is `true`.
+---register index of the local variable at the time of creating the closure
+---@field local_idx number|nil
+
+---@class CompiledFunc
+---@field line_defined integer|nil
+---@field column_defined integer|nil @ stored in phobos debug symbols
+---@field last_line_defined integer|nil
+---@field last_column_defined integer|nil @ stored in phobos debug symbols
+---@field num_params integer
+---@field is_vararg boolean
+---@field max_stack_size integer @ min 2, reg0/1 always valid
 ---@field instructions Instruction[]
----@field constants Constant[]
+---@field constants CompiledConstant[]
+---@field inner_functions CompiledFunc[]
+---@field upvals CompiledUpval[]
+---@field source string|nil
+---@field debug_registers CompiledRegister[] @ which names are used for registers when debugging
+---temporary data during compilation
+---@field live_regs CompiledRegister[]
+---@field next_reg integer @ **zero based** index of next register to use
 ---@field level integer? @ only available during generation process
 ---@field scope_levels? table<AstScope, integer> @ only available during generation process
 ---@field current_scope? AstScope @ only available during generation process
----@field locals GeneratedLocal[] @ overridden
----@field upvals GeneratedUpval[] @ overridden
----@field body GeneratedStatement[] @ overridden

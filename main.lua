@@ -200,8 +200,8 @@ for _, source_file_path in ipairs(source_file_paths) do
   local ast = parser(text, args.source_name:gsub("%?", source_file_path:str()))
   jump_linker(ast)
   fold_const(ast)
-  phobos(ast)
-  local bytecode = dump(ast)
+  local compiled = phobos(ast)
+  local bytecode = dump(compiled)
   local output
   if args.use_load then
     output = string.format("local main_chunk=assert(load(%q,nil,'b'))\nreturn main_chunk(...)", bytecode)

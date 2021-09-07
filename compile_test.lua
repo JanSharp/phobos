@@ -56,8 +56,8 @@ local function compile(filename)
   local ast = parser(text, "@"..filename)
   jump_linker(ast)
   fold_const(ast)
-  phobos(ast)
-  local bytecode = dump(ast)
+  local compiled_data = phobos(ast)
+  local bytecode = dump(compiled_data)
   compiled[filename] = assert(load(bytecode, nil, "b", phobos_env))
   raw_compiled[filename] = bytecode
 end

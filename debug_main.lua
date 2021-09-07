@@ -154,11 +154,12 @@ local function compile(filename)
       if not success then print(err) goto finish end
     end
 
-    success, err = pcall(require("phobos"), main)
-    if not success then print(err) goto finish end
+    local compiled
+    success, compiled = pcall(require("phobos"), main)
+    if not success then print(compiled) goto finish end
     -- print(serpent.dump(main,{indent = '  ', sparse = true, sortkeys = false, comment=true}))
 
-    success, pho_dumped = pcall(require("dump"), main)
+    success, pho_dumped = pcall(require("dump"), compiled)
     if not success then print(pho_dumped) goto finish end
 
     if eval_byte_count or create_disassembly then

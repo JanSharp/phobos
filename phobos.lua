@@ -340,7 +340,7 @@ do
   end
 
   ---@param upval_name string
-  ---@param func GeneratedFunc
+  ---@param func CompiledFunc
   local function find_upval(upval_name,func)
     for i = 1, #func.upvals do
       if func.upvals[i].name == upval_name then
@@ -406,7 +406,7 @@ do
     end,
     ---@param expr AstUpvalReference
     ---@param in_reg integer
-    ---@param func GeneratedFunc
+    ---@param func CompiledFunc
     upval_ref = function(expr,in_reg,func)
       -- getupval
       func.instructions[#func.instructions+1] = {
@@ -1420,51 +1420,109 @@ do
       end
     end,
   }
-  function generate_code(func)
-    func.live_regs = {}
-    func.next_reg = 0 -- *ZERO BASED* index of next register to use
-    func.max_stack_size = 2 -- always at least two registers
-    func.instructions = {}
-    func.constants = {}
+  function generate_code(functiondef)
+    local debug_registers = {}
+    local func = {
+      line_defined = functiondef.function_token and functiondef.function_token.line,
+      column_defined = functiondef.function_token and functiondef.function_token.column,
+      last_line_defined = functiondef.end_token and functiondef.end_token.line,
+      last_column_defined = functiondef.end_token and functiondef.end_token.column,
+      num_params = functiondef.num_params,
+      is_vararg = functiondef.is_vararg,
+      max_stack_size = 2,
+      instructions = {},
+      constants = {},
+      inner_functions = {},
+      upvals = {},
+      source = functiondef.source,
+      debug_registers = debug_registers, -- cleaned up at the end
+      ---temporary data during compilation
+      live_regs = debug_registers,
+      next_reg = 0,
+      level = 0,
+      scope_levels = {},
+      current_scope = nil, -- managed by generate_scope
+    }
 
-    for i,func_proto in ipairs(func.func_protos) do
+    local upvals = func.upvals
+    for i,upval in ipairs(functiondef.upvals) do
+      local index = i - 1 -- *ZERO BASED* index
+      upvals[i] = {
+        index = index,
+        name = upval.name,
+        in_stack = upval.in_stack,
+        local_idx = upval.local_idx,
+        upval_idx = upval.upval_idx,
+      }
+      -- temporary, needed for closures to know the upval_idx to use
+      upval.index = index
+
+      -- since the parent function already evaluated these, it now
+      -- just gets moved to the new data structure and deleted from the old one
+      upval.in_stack = nil
+      upval.local_idx = nil
+      upval.upval_idx = nil
+    end
+    -- env being special as always
+    if functiondef.is_main and upvals[1] then
+      assert(upvals[1].name == "_ENV")
+      upvals[1].in_stack = true
+      upvals[1].local_idx = 0
+    end
+
+    for i,func_proto in ipairs(functiondef.func_protos) do
+      -- temporary, needed for closures to know the function index
       func_proto.index = i - 1 -- *ZERO BASED* index
     end
 
-    for i,upval in ipairs(func.upvals) do
-      upval.index = i - 1 -- *ZERO BASED* index
-    end
-    if func.upvals[1] and func.upvals[1].name == "_ENV" and util.upval_is_in_stack(func.upvals[1]) then
-      func.upvals[1].in_stack = true
-      func.upvals[1].local_idx = 0
-    end
-
-    func.level = 0
-    func.scope_levels = {}
-    generate_scope(func, func, function()
-      for _, loc in ipairs(func.locals) do
+    -- compile
+    generate_scope(functiondef, func, function()
+      for _, loc in ipairs(functiondef.locals) do
         if loc.whole_block then
           local live = create_live_reg(func, next_reg(func), loc.name)
           live.start_at = 1
         end
       end
     end)
-    func.level = nil
-    func.scope_levels = nil
 
     -- TODO: temp until it can be determined if the end of the function is reachable
     generate_statement({
       node_type = "retstat",
-      return_token = func.end_token or {
+      return_token = functiondef.end_token or {
         node_type = "token",
         line = get_last_used_line(func),
         column = get_last_used_column(func),
       },
     }, func)
 
-    for i,func_proto in ipairs(func.func_protos) do
-      generate_code(func_proto)
+    -- debug_registers cleanup
+    for _, reg in ipairs(debug_registers) do
+      reg.level = nil
+      reg.scope = nil
+      reg.in_scope_at = nil
     end
+
+    -- cleanup
+    for _,func_proto in ipairs(functiondef.func_protos) do
+      func_proto.index = nil
+    end
+
+    for _,upval in ipairs(functiondef.upvals) do
+      upval.index = nil
+    end
+
+    func.live_regs = nil
+    func.next_reg = nil
+    func.level = nil
+    func.scope_levels = nil
+    -- func.current_scope = nil -- is already `nil` after generate_scope
+
+    -- inner_functions
+    for i, func_proto in ipairs(functiondef.func_protos) do
+      func.inner_functions[i] = generate_code(func_proto)
+    end
+
+    return func
   end
 end
 
