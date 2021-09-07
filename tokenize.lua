@@ -293,7 +293,7 @@ local function next_token(state,index)
         token.index = index
         return next_index,token
       else
-        local token_start,token_end,text = str:find("^([^\n]+)",index+2)
+        local token_start,token_end,text = str:find("^([^\n]*)",index+2)
         local token = new_token("comment",token_start,state.line,index - state.line_offset)
         token.value = text
         return token_end+1,token
