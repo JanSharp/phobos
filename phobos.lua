@@ -266,19 +266,22 @@ do
   end
 
 
-  local function add_constant(value,func)
-    for i,const in ipairs(func.constants) do
-      if value == const.value then
+  local function add_constant(new_constant,func)
+    for i,constant in ipairs(func.constants) do
+      if new_constant.value == constant.value then
         return i - 1
       end
     end
     local i = #func.constants
-    func.constants[i+1] = {value = value}
+    func.constants[i+1] = {
+      node_type = new_constant.node_type,
+      value = new_constant.value,
+    }
     return i
   end
 
   local function generate_const_code(expr,in_reg,func)
-    local k = add_constant(expr.value,func)
+    local k = add_constant(expr, func)
     if k <= 0x3ffff then
       func.instructions[#func.instructions+1] = {
         op = opcodes.loadk, a = in_reg, bx = k,
@@ -367,7 +370,7 @@ do
   local const_node_types = invert{"boolean","nil","string","number"}
   local function const_or_local_or_fetch(expr,in_reg,func)
     if const_node_types[expr.node_type] then
-      return bit32.bor(add_constant(expr.value,func),0x100)
+      return bit32.bor(add_constant(expr,func),0x100)
     else
       return local_or_fetch(expr,in_reg,func)
     end
@@ -1068,7 +1071,7 @@ do
           -- generate a value and `test` it...
           generate_test_code(condition_node, func)
           prev_failure_jump = {
-            op = opcodes.jmp, sbx = nil,
+            op = opcodes.jmp, a = 0, sbx = nil,
             line = if_block.then_token and if_block.then_token.line or get_last_used_line(func),
             column = if_block.then_token and if_block.then_token.column or get_last_used_column(func),
           }
@@ -1080,7 +1083,7 @@ do
         generate_scope(if_block, func)
 
         local finish_jump = {
-          op = opcodes.jmp, sbx = nil,
+          op = opcodes.jmp, a = 0, sbx = nil,
           line = get_last_used_line(func),
           column = get_last_used_column(func),
         }
@@ -1348,7 +1351,7 @@ do
     end,
     gotostat = function(stat,func)
       local inst = {
-        op = opcodes.jmp, sbx = nil,
+        op = opcodes.jmp, a = nil, sbx = nil,
         line = stat.goto_token and stat.goto_token.line,
         column = stat.goto_token and stat.goto_token.column,
       }
@@ -1507,6 +1510,9 @@ do
       func_proto.index = nil
     end
 
+    for _,upval in ipairs(func.upvals) do
+      upval.index = nil
+    end
     for _,upval in ipairs(functiondef.upvals) do
       upval.index = nil
     end

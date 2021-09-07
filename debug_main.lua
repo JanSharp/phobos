@@ -78,14 +78,14 @@ local function compile(filename)
       if create_disassembly then
         func_id = func_id + 1
         disassembler.get_disassembly(func, function(description)
-          local line = get_line(func.first_line)
+          local line = get_line(func.line_defined)
           line[#line+1] = "-- "..prefix..": "..(description:gsub("\n", "\n-- "..prefix..": "))
         end, function(line_num, column_num, instruction_index, padded_opcode, description, description_with_keys, raw_values)
           description = show_keys_in_disassembly and description_with_keys or description
           local line = get_line(line_num)
           local min_description_len = 50
           line[#line+1] = string.format("-- %s %3d %s: %2df  %4d  %s  %s%s  %s",
-            format_line_num(line_num),
+            format_line_num(line_num or 0),
             column_num or 0,
             prefix,
             func_id,
@@ -158,17 +158,16 @@ local function compile(filename)
     success, compiled = pcall(require("phobos"), main)
     if not success then print(compiled) goto finish end
     -- print(serpent.dump(main,{indent = '  ', sparse = true, sortkeys = false, comment=true}))
+    if eval_byte_count or create_disassembly then
+      add_func_to_lines("pho", compiled)
+    end
 
     success, pho_dumped = pcall(require("dump"), compiled)
     if not success then print(pho_dumped) goto finish end
 
-    if eval_byte_count or create_disassembly then
-      local disassembled
-      success, disassembled = pcall(disassembler.disassemble, pho_dumped)
-      if not success then print(disassembled) goto finish end
-
-      add_func_to_lines("pho", disassembled)
-    end
+    local disassembled
+    success, disassembled = pcall(disassembler.disassemble, pho_dumped)
+    if not success then print(disassembled) goto finish end
 
     if load_and_run_compiled_funcs then
       local pho_func

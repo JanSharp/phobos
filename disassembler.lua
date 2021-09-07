@@ -3,25 +3,29 @@ local opcodes = require("opcodes")
 local phobos_consts = require("constants")
 local util = require("util")
 
+local get_function_label
+do
+  local function get_position(line, column)
+    return (line or 0)..(column and ":"..column or "")
+  end
+
+  function get_function_label(func)
+    return func.source..":" -- TODO: if source can be nil (which i'm quite sure it can) change this here
+      ..get_position(func.line_defined, func.column_defined).."-"
+      ..get_position(func.last_line_defined, func.last_column_defined)
+  end
+end
+
 local get_instruction_label
 do
-  local func, pc, display_keys, current, next_inst
-  -- pc is **one based** to work best with local debug info `start` and `_end`
+  local func, pc, constant_labels, display_keys, current, next_inst
+  -- pc is **one based** to work best with func.debug_registers
 
   local function get_register_label(key, idx)
     idx = idx or current[key]
-    local stack = 0;
-    for i = 1, #func.locals do
-      local loc = func.locals[i];
-      if loc.start <= pc then
-        if loc._end >= pc then
-          if stack == idx then
-            return "R("..(display_keys and (key..": ") or "")..idx.."|"..loc.name..")"
-          end
-          stack = stack + 1
-        end
-      else
-        break
+    for _, reg_name in ipairs(func.debug_registers) do
+      if reg_name.reg == idx and reg_name.start_at <= pc and reg_name.stop_at >= pc then
+        return "R("..(display_keys and (key..": ") or "")..idx.."|"..reg_name.name..")"
       end
     end
     return "R("..(display_keys and (key..": ") or "")..idx..")"
@@ -30,7 +34,7 @@ do
   local function get_constant_label(key, idx)
     idx = idx or current[key]
     -- this key is pretty "in the way", but it says here (commented out) to know where and how to add it if needed
-    return func.constants[idx + 1].label--.." ("..key..")"
+    return constant_labels[idx + 1]--.." ("..key..")"
   end
 
   local function get_register_or_constant_label(key, idx)
@@ -197,7 +201,7 @@ do
     end,
     [opcodes.closure] = function()
       local inner_func = func.inner_functions[current.bx + 1]
-      return "CLOSURE", get_register_label("a").." := closure("..inner_func.source..":"..inner_func.first_line.."-"..inner_func.last_line..")"
+      return "CLOSURE", get_register_label("a").." := closure("..get_function_label(inner_func)..")"
     end,
     [opcodes.vararg] = function()
       return "VARARG", get_register_label("a")..", ..., "
@@ -208,9 +212,10 @@ do
       return "EXTRAARG", "."
     end,
   }
-  function get_instruction_label(_func, _pc, _display_keys)
+  function get_instruction_label(_func, _pc, _constant_labels, _display_keys)
     func = _func
     pc = _pc
+    constant_labels = _constant_labels
     display_keys = not not _display_keys
     current = func.instructions[pc]
     next_inst = func.instructions[pc + 1]
@@ -230,8 +235,56 @@ do
   end
 end
 
-local instruction_meta
+local create_instruction
 do
+  local ABC = {"a", "b", "c"}
+  local ABx = {"a", "bx"}
+  local AsBx = {"a", "sbx"}
+  local Ax = {"ax"}
+
+  local instruction_arg_mode_lut = {
+    [opcodes.move] = ABC,
+    [opcodes.loadk] = ABx,
+    [opcodes.loadkx] = ABx,
+    [opcodes.loadbool] = ABC,
+    [opcodes.loadnil] = ABC,
+    [opcodes.getupval] = ABC,
+    [opcodes.gettabup] = ABC,
+    [opcodes.gettable] = ABC,
+    [opcodes.settabup] = ABC,
+    [opcodes.setupval] = ABC,
+    [opcodes.settable] = ABC,
+    [opcodes.newtable] = ABC,
+    [opcodes.self] = ABC,
+    [opcodes.add] = ABC,
+    [opcodes.sub] = ABC,
+    [opcodes.mul] = ABC,
+    [opcodes.div] = ABC,
+    [opcodes.mod] = ABC,
+    [opcodes.pow] = ABC,
+    [opcodes.unm] = ABC,
+    [opcodes["not"]] = ABC,
+    [opcodes.len] = ABC,
+    [opcodes.concat] = ABC,
+    [opcodes.jmp] = AsBx,
+    [opcodes.eq] = ABC,
+    [opcodes.lt] = ABC,
+    [opcodes.le] = ABC,
+    [opcodes.test] = ABC,
+    [opcodes.testset] = ABC,
+    [opcodes.call] = ABC,
+    [opcodes.tailcall] = ABC,
+    [opcodes["return"]] = ABC,
+    [opcodes.forloop] = AsBx,
+    [opcodes.forprep] = AsBx,
+    [opcodes.tforcall] = ABC,
+    [opcodes.tforloop] = AsBx,
+    [opcodes.setlist] = ABC,
+    [opcodes.closure] = ABx,
+    [opcodes.vararg] = ABC,
+    [opcodes.extraarg] = Ax,
+  }
+
   local instruction_part_getter_lut = {
     a = function(raw) return bit32.band(bit32.rshift(raw, 6), 0xff) end,
     b = function(raw) return bit32.band(bit32.rshift(raw, 23), 0x1ff) end,
@@ -240,30 +293,18 @@ do
     bx = function(raw) return bit32.band(bit32.rshift(raw, 14), 0x3ffff) end,
     sbx = function(raw) return bit32.band(bit32.rshift(raw, 14), 0x3ffff) - 0x1ffff end,
   }
-  instruction_meta = {
-    __index = function(inst, k)
-      local getter = instruction_part_getter_lut[k]
-      if not getter then
-        return nil
-      end
-      inst[k] = getter(inst.raw)
-      return getter(inst.raw)
-    end,
-  }
+
+  function create_instruction(raw)
+    local op = bit32.band(raw, 0x3f)
+    local instruction = {op = op}
+    for _, part in ipairs(instruction_arg_mode_lut[op]) do
+      instruction[part] = instruction_part_getter_lut[part](raw)
+    end
+    return instruction
+  end
 end
 
-local function new_instruction(raw)
-  return setmetatable({raw = raw, op = bit32.band(raw, 0x3f)}, instruction_meta)
-end
-
-local header_bytes = {
-  0x1b, 0x4c, 0x75, 0x61, -- LUA_SIGNATURE
-	0x52, 0x00, -- lua version
-	0x01, 0x04, 0x08, 0x04, 0x08, 0x00, -- lua config parameters: LE, 4 byte int, 8 byte size_t, 4 byte instruction, 8 byte LuaNumber, number is double
-	0x19, 0x93, 0x0d, 0x0a, 0x1a, 0x0a, -- magic
-}
-local header_str = string.char(table.unpack(header_bytes))
-local header_length = #header_str
+local header_length = #phobos_consts.lua_header_str
 
 local to_double
 do
@@ -309,7 +350,7 @@ local function disassemble(bytecode)
   end
 
   local function read_header()
-    if bytecode:sub(i, i + header_length - 1) ~= header_str then
+    if bytecode:sub(i, i + header_length - 1) ~= phobos_consts.lua_header_str then
       error("Invalid Lua Header.");
     end
     i = i + header_length
@@ -349,15 +390,15 @@ local function disassemble(bytecode)
 
   local const_lut = {
     [0] = function()
-      return {node_type = "nil", label = "nil"}
+      return {node_type = "nil", value = nil}
     end,
     [1] = function()
       local value = read_uint8() ~= 0
-      return {node_type = value and "true" or "false", value = value, label = tostring(value)}
+      return {node_type = "boolean", value = value}
     end,
     [3] = function()
       local value = to_double(read_bytes_as_str(8))
-      return {node_type = "number", value = value, label = tostring(value)}
+      return {node_type = "number", value = value}
     end,
     [4] = function()
       local value, is_phobos_debug_symbols = read_string()
@@ -365,7 +406,7 @@ local function disassemble(bytecode)
         return nil, is_phobos_debug_symbols
       end
       assert(value, "Strings in the constant table must not be `nil`.")
-      return {node_type = "string", value = value, label = string.format("%q", value):gsub("\\\n", "\\n")}
+      return {node_type = "string", value = value}
     end,
   }
   setmetatable(const_lut, {
@@ -376,45 +417,45 @@ local function disassemble(bytecode)
     end,
   })
 
-  local function disassemble_func()
-    local source
-    local num_param
-    local is_vararg
-    local max_stack
-    local locals = {}
-    local upvals = {}
-    local instructions = {}
-    local constants = {}
-    local inner_functions = {}
-    local first_line, first_column
-    local last_line, last_column
+  local function nil_if_zero(number)
+    return number ~= 0 and number or nil
+  end
 
-    first_line = read_uint32()
-    last_line = read_uint32()
-    num_param = read_uint8()
-    is_vararg = read_uint8() ~= 0
-    max_stack = read_uint8()
+  local function disassemble_func()
+    local func = {
+      instructions = {},
+      constants = {},
+      inner_functions = {},
+      upvals = {},
+      debug_registers = {},
+    }
+
+    func.line_defined = nil_if_zero(read_uint32())
+    func.last_line_defined = nil_if_zero(read_uint32())
+    func.num_params = read_uint8()
+    func.is_vararg = read_uint8() ~= 0
+    func.max_stack_size = read_uint8()
 
     for j = 1, read_uint32() do
       local raw = read_uint32()
-      instructions[j] = new_instruction(raw)
+      func.instructions[j] = create_instruction(raw)
     end
 
     for j = 1, read_uint32() do
       local constant, is_phobos_debug_symbols = const_lut[read_uint8()]()
       if not is_phobos_debug_symbols then
-        constants[j] = constant
+        func.constants[j] = constant
       else
         read_bytes(8) -- consume signature
 
-        -- first_column_defined
-        first_column = read_uint32()
+        -- column_defined
+        func.column_defined = nil_if_zero(read_uint32())
         -- last_column_defined
-        last_column = read_uint32()
+        func.last_column_defined = nil_if_zero(read_uint32())
 
         -- instruction_columns
         for k = 1, read_uint32() do
-          instructions[k].column = read_uint32()
+          func.instructions[k].column = nil_if_zero(read_uint32())
         end
 
         -- sources
@@ -431,7 +472,7 @@ local function disassemble(bytecode)
             local instruction_index = read_uint32()
             local source_index = read_uint32()
             for k = current_index, (instruction_index + 1) - 1 do
-              instructions[k].source = current_source
+              func.instructions[k].source = current_source
             end
             if source_index == 0 then
               current_source = nil
@@ -439,8 +480,8 @@ local function disassemble(bytecode)
               current_source = sources[source_index]
             end
           end
-          for k = current_index, #instructions do
-            instructions[k].source = current_source
+          for k = current_index, #func.instructions do
+            func.instructions[k].source = current_source
           end
         end
 
@@ -449,51 +490,59 @@ local function disassemble(bytecode)
     end
 
     for j = 1, read_uint32() do
-      inner_functions[j] = disassemble_func()
+      func.inner_functions[j] = disassemble_func()
     end
 
     for j = 1, read_uint32() do
-      upvals[j] = {
-        in_stack = read_uint8() ~= 0,
-        idx = read_uint8(),
+      local in_stack = read_uint8() ~= 0
+      func.upvals[j] = {
+        in_stack = in_stack,
+        [in_stack and "local_idx" or "upval_idx"] = read_uint8(),
       }
     end
 
-    source = read_string()
+    func.source = read_string()
 
     for j = 1, read_uint32() do
-      instructions[j].line = read_uint32()
+      func.instructions[j].line = nil_if_zero(read_uint32())
     end
 
     for j = 1, read_uint32() do
-      locals[j] = {
+      func.debug_registers[j] = {
         name = read_string(),
         -- convert from zero based including excluding
         -- to one based including including
-        start = read_uint32() + 1,
-        _end = read_uint32(),
+        start_at = read_uint32() + 1,
+        stop_at = read_uint32(),
       }
     end
 
-    for j = 1, read_uint32() do
-      upvals[j].name = read_string()
+    local top = -1 -- **zero based**
+    for j = 1, #func.instructions do
+      local stopped = 0
+      for _, reg_name in ipairs(func.debug_registers) do
+        if reg_name.start_at == j then
+          top = top + 1
+          reg_name.reg = top
+        end
+        if reg_name.stop_at == j then
+          stopped = stopped + 1
+        end
+      end
+      top = top - stopped
     end
 
-    return {
-      source = source,
-      num_param = num_param,
-      is_vararg = is_vararg,
-      max_stack = max_stack,
-      locals = locals,
-      upvals = upvals,
-      instructions = instructions,
-      constants = constants,
-      inner_functions = inner_functions,
-      first_line = first_line,
-      first_column = first_column or 0,
-      last_line = last_line,
-      last_column = last_column or 0,
-    }
+    for j = #func.debug_registers, 1, -1 do
+      if func.debug_registers[j].name == phobos_consts.unnamed_register_name then
+        table.remove(func.debug_registers, j)
+      end
+    end
+
+    for j = 1, read_uint32() do
+      func.upvals[j].name = read_string()
+    end
+
+    return func
   end
 
   read_header()
@@ -507,34 +556,41 @@ for opcode_name in pairs(opcodes) do
   end
 end
 
----@param func table
+---@param func CompiledFunc
 ---called once at the beginning with general information about the function. Contains 2 newlines.
 ---@param func_description_callback fun(description: string)
 ---gets called for every instruction. instruction_index is 1-based
 ---@param instruction_callback fun(line?: integer, column?: integer, instruction_index: integer, padded_opcode: string, description: string, description_with_keys: string, raw_values: string)
 local function get_disassembly(func, func_description_callback, instruction_callback)
-  func_description_callback("function at "..func.source..":"..func.first_line.."-"..func.last_line.."\n"
-    ..(func.is_vararg and "vararg" or (func.num_param.." params")).." | "..(#func.upvals).." upvals | "..func.max_stack.." max stack\n"
-    ..(#func.instructions).." instructions | "..(#func.constants).." constants | "..(#func.inner_functions).." functions")
+  func_description_callback("function at "..get_function_label(func).."\n"
+    ..(func.is_vararg and "vararg" or (func.num_params.." params")).." | "
+    ..(#func.upvals).." upvals | "..func.max_stack_size.." max stack\n"
+    ..(#func.instructions).." instructions | "..(#func.constants)
+    .." constants | "..(#func.inner_functions).." functions")
+
+  local constant_labels = {}
+  for i, constant in ipairs(func.constants) do
+    if constant.node_type == "string" then
+      constant_labels[i] = string.format("%q", constant.value):gsub("\\\n", "\\n")
+    elseif constant.node_type == "number" then
+      constant_labels[i] = tostring(constant.value)
+    elseif constant.node_type == "boolean" then
+      constant_labels[i] = tostring(constant.value)
+    elseif constant.node_type == "nil" then
+      constant_labels[i] = "nil"
+    else
+      error("Invalid compiled constant type '"..constant.node_type.."'.")
+    end
+  end
 
   local instructions = func.instructions
   for i = 1, #instructions do
-    -- clear cache because that is how we know which values are used for the different instructions
-    instructions[i].a = nil
-    instructions[i].b = nil
-    instructions[i].c = nil
-    instructions[i].ax = nil
-    instructions[i].bx = nil
-    instructions[i].sbx = nil
-  end
-
-  for i = 1, #instructions do
-    local label, description = get_instruction_label(func, i)
-    local _, description_with_keys = get_instruction_label(func, i, true)
+    local label, description = get_instruction_label(func, i, constant_labels)
+    local _, description_with_keys = get_instruction_label(func, i, constant_labels, true)
     local raw = ""
     local first = true
     local function conditionally_add_raw_value(key)
-      if rawget(instructions[i], key) then -- if the value is cached in the table then it has been accessed at some point
+      if instructions[i][key] then
         if first then
           first = false
         else

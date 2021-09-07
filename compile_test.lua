@@ -2,6 +2,9 @@
 -- args to manually run this
 -- compile_test.lua temp/debug_test_filename_cache.lua
 
+-- TODO: maybe make an arg for this
+local test_disassembler = true
+
 local phobos_env = {}
 for k, v in pairs(_G) do
   phobos_env[k] = v
@@ -34,6 +37,7 @@ local jump_linker
 local fold_const
 local phobos
 local dump
+local disassembler
 
 local compiled
 local raw_compiled
@@ -46,7 +50,10 @@ local function init()
   fold_const = req("optimize.fold_const")
   phobos = req("phobos")
   dump = req("dump")
+  disassembler = req("disassembler")
 end
+
+local serpent = require("serpent")
 
 local function compile(filename)
   local file = assert(io.open(filename,"r"))
@@ -58,6 +65,19 @@ local function compile(filename)
   fold_const(ast)
   local compiled_data = phobos(ast)
   local bytecode = dump(compiled_data)
+  if test_disassembler then
+    disassembler.get_disassembly(compiled_data, function() end, function() end)
+    local disassembled = disassembler.disassemble(bytecode)
+    if bytecode ~= dump(disassembled) then
+      assert(io.open("E:/Temp/.Compare/temp1.txt", "w"))
+        :write(serpent.block(compiled_data))
+        :close()
+      assert(io.open("E:/Temp/.Compare/temp2.txt", "w"))
+        :write(serpent.block(disassembled))
+        :close()
+      error("Disassembler has different output.")
+    end
+  end
   compiled[filename] = assert(load(bytecode, nil, "b", phobos_env))
   raw_compiled[filename] = bytecode
 end
@@ -113,9 +133,6 @@ local pho_raw_result = raw_compiled
 
 print("compilation time ~ "..(os.clock() - start_time).."s")
 print("--------")
-
-local disassembler = require("disassembler")
-local serpent = require("serpent")
 
 -- a _lot_ of copy paste from main.lua
 

@@ -468,9 +468,7 @@
 ---@field column integer|nil @ stored in phobos debug symbols
 ---@field source string|nil @ stored in phobos debug symbols
 
----this is a table because `value` can be `nil`
----@class CompiledConstant
----@field value string|number|boolean|nil
+---@alias CompiledConstant AstString|AstNumber|AstBoolean|AstNil
 
 ---@class CompiledRegister
 ---@field reg integer @ **zero based** index of the register this name is for from start_at until stop_at

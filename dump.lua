@@ -96,9 +96,9 @@ local function DumpPhobosDebugSymbols(dump, func)
   add(phobos_consts.phobos_signature, 8)
 
   -- uint32 column_defined (0 for unknown or main chunk)
-  add(DumpInt(func.function_token and func.function_token.column or 0))
+  add(DumpInt(func.column_defined or 0))
   -- uint32 last_column_defined (0 for unknown or main chunk)
-  add(DumpInt(func.end_token and func.end_token.column or 0))
+  add(DumpInt(func.last_column_defined or 0))
 
   -- uint32 num_instruction_positions (always same as num_instructions)
   -- uint32[] column (columns of each instruction)
@@ -153,6 +153,8 @@ local function GetLocalDebugSymbols(func)
     end
   end
 
+  local stopped = {}
+  local stopped_count = 0
   for i = 1, #func.instructions do
     for _, reg_name in ipairs(func.debug_registers) do
       -- start_at being bigger than stop_at is valid and means the live_reg lasts for 0 instructions
@@ -166,7 +168,7 @@ local function GetLocalDebugSymbols(func)
           for j = next_reg(), reg_name.reg - 1 do
             local entry = {
               unnamed = true,
-              name = "(unnamed)",
+              name = phobos_consts.unnamed_register_name,
               start_at = reg_name.start_at,
             }
             reg_stack[j] = entry
@@ -188,28 +190,37 @@ local function GetLocalDebugSymbols(func)
       end
 
       if reg_name.stop_at == i then
-        if reg_name.reg ~= top_reg then
-          replace_reg_stack_entry(reg_name.reg, {
-            unnamed = true,
-            name = "(unnamed)",
-            -- + 1 because this is for the new unnamed entry, not the actual one we are "stopping"
-            start_at = reg_name.stop_at + 1
-          })
-        else
-          reg_stack[top_reg].stop_at = reg_name.stop_at
-          top_reg = top_reg - 1
-          for j = top_reg, 0, -1 do
-            if not reg_stack[j].unnamed then
-              break
-            end
-            reg_stack[j].stop_at = reg_name.stop_at
-            top_reg = j - 1
-          end
-        end
+        stopped_count = stopped_count + 1
+        stopped[stopped_count] = reg_name
       end
 
       ::continue::
     end
+
+    -- processing of registers that stopped has to be done
+    -- _after_ **all** registers that started have been processed
+    for j = 1, stopped_count do
+      local reg_name = stopped[j]
+      if reg_name.reg ~= top_reg then
+        replace_reg_stack_entry(reg_name.reg, {
+          unnamed = true,
+          name = phobos_consts.unnamed_register_name,
+          -- + 1 because this is for the new unnamed entry, not the actual one we are "stopping"
+          start_at = reg_name.stop_at + 1
+        })
+      else
+        reg_stack[top_reg].stop_at = reg_name.stop_at
+        top_reg = top_reg - 1
+        for j = top_reg, 0, -1 do
+          if not reg_stack[j].unnamed then
+            break
+          end
+          reg_stack[j].stop_at = reg_name.stop_at
+          top_reg = j - 1
+        end
+      end
+    end
+    stopped_count = 0
   end
   return locals
 end
@@ -309,8 +320,10 @@ local function DumpFunction(func)
     dump[#dump+1] = 0 -- set later
     local num_locals_index = #dump
     local num_locals = 0
+    local temp = {}
     for _, loc in ipairs(GetLocalDebugSymbols(func)) do
       if loc.start_at <= loc.stop_at then
+        temp[#temp+1] = loc
         num_locals = num_locals + 1
         dump[#dump+1] = DumpString(loc.name)
         -- convert from one based including including
@@ -340,17 +353,7 @@ local function DumpFunction(func)
 end
 
 local function DumpLuaHeader()
-  -- Lua Signature: "\x1bLua"
-  -- byte version = "\x52"
-  -- byte format = 0 (official)
-  -- byte endianness = 1
-  -- byte sizeof(int) = 4
-  -- byte sizeof(size_t) = 8
-  -- byte sizeof(Instruction) = 4
-  -- byte sizeof(luaNumber) = 8
-  -- byte lua_number is int? = 0
-  -- magic "\x19\x93\r\n\x1a\n"
-  return "\x1bLua\x52\0\1\4\8\4\8\0\x19\x93\r\n\x1a\n"
+  return phobos_consts.lua_header_str
 end
 
 local function DumpMain(main)
