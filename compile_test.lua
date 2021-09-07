@@ -2,8 +2,30 @@
 -- args to manually run this
 -- compile_test.lua temp/debug_test_filename_cache.lua
 
--- TODO: maybe make an arg for this
-local test_disassembler = true
+local arg_parser = require("lib.LuaArgParser.arg_parser")
+local args = arg_parser.parse({...}, {
+  options = {
+    {
+      field = "test_disassembler",
+      long = "test-disassembler",
+      short = "d",
+      description = "Ensure get_disassembly doesn't throw errors with freshly compiled \z
+        data nor disassembled data. \z
+        Also ensure disassembled and then dumped bytecode is the same as the original bytecode.",
+      flag = true,
+    },
+    {
+      field = "cache_filename",
+      long = "cache-filename",
+      short = "c",
+      description = "Relative path to a cache file containing the list of files to compile.",
+      single_param = true,
+      type = "string",
+      optional = true,
+    },
+  },
+  positional = {},
+})
 
 local phobos_env = {}
 for k, v in pairs(_G) do
@@ -65,9 +87,10 @@ local function compile(filename)
   fold_const(ast)
   local compiled_data = phobos(ast)
   local bytecode = dump(compiled_data)
-  if test_disassembler then
-    disassembler.get_disassembly(compiled_data, function() end, function() end)
+  if args.test_disassembler then
     local disassembled = disassembler.disassemble(bytecode)
+    disassembler.get_disassembly(compiled_data, function() end, function() end)
+    disassembler.get_disassembly(disassembled, function() end, function() end)
     if bytecode ~= dump(disassembled) then
       assert(io.open("E:/Temp/.Compare/temp1.txt", "w"))
         :write(serpent.block(compiled_data))
@@ -92,9 +115,8 @@ local function pcall_with_one_result(f, ...)
 end
 
 local filenames = {}
-local cache_filename = ...
-if cache_filename then
-  filenames = assert(pcall_with_one_result(assert(loadfile(cache_filename, "t", {}))))
+if args.cache_filename then
+  filenames = assert(pcall_with_one_result(assert(loadfile(args.cache_filename, "t", {}))))
 else
   filenames = require("debug_util").find_lua_source_files()
 end

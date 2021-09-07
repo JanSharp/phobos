@@ -429,7 +429,6 @@ do
       -- bin_opcode_lut is fine, logical_binop_lut on it's own as well.
       -- but "and" and "or" are horrible, and combining them with logical binops is also bad
 
-      -- TODO: probably should just use expr.line/column
       -- TODO: some of the instructions should probably use a different token for their line/column
       local line = expr.op_token and expr.op_token.line
       local column = expr.op_token and expr.op_token.column

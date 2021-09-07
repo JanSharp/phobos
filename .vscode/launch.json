@@ -68,6 +68,7 @@
                 "file": "./compile_test.lua",
             },
             "args": [
+                "-d"
             ],
         },
         {
