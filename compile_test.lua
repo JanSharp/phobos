@@ -6,12 +6,21 @@ local arg_parser = require("lib.LuaArgParser.arg_parser")
 local args_config = {
   options = {
     {
+      field = "cache_filename",
+      long = "cache-filename",
+      short = "c",
+      description = "Relative path to a cache file containing the list of files to compile",
+      single_param = true,
+      type = "string",
+      optional = true,
+    },
+    {
       field = "test_disassembler",
       long = "test-disassembler",
       short = "d",
-      description = "Ensure get_disassembly doesn't throw errors with freshly compiled \z
-        data nor disassembled data. \z
-        Also ensure disassembled and then dumped bytecode is the same as the original bytecode.",
+      description = "Ensure get_disassembly doesn't throw errors with freshly\n\z
+        compiled data nor disassembled data. Also ensure disassembled\n\z
+        and then dumped bytecode is the same as the original bytecode",
       flag = true,
     },
     {
@@ -22,16 +31,14 @@ local args_config = {
       flag = true,
     },
     {
-      field = "cache_filename",
-      long = "cache-filename",
-      short = "c",
-      description = "Relative path to a cache file containing the list of files to compile.",
-      single_param = true,
-      type = "string",
-      optional = true,
+      field = "diff_files",
+      long = "diff-files",
+      short = "f",
+      description = "Create files to be diffed for disassembler or compiler issues\n\z
+        Files would be at `E:/Temp/.Compare/temp1.txt` and `E:/Temp/.Compare/temp2.txt`",
+      flag = true,
     },
   },
-  positional = {},
 }
 
 local args
@@ -114,12 +121,14 @@ local function compile(filename)
   if args.ensure_clean_data then
     local ast_str = serpent.block(ast)
     if ast_str ~= prev_ast_str then
-      assert(io.open("E:/Temp/.Compare/temp1.txt", "w"))
-        :write(prev_ast_str)
-        :close()
-      assert(io.open("E:/Temp/.Compare/temp2.txt", "w"))
-        :write(ast_str)
-        :close()
+      if args.diff_files then
+        assert(io.open("E:/Temp/.Compare/temp1.txt", "w"))
+          :write(prev_ast_str)
+          :close()
+        assert(io.open("E:/Temp/.Compare/temp2.txt", "w"))
+          :write(ast_str)
+          :close()
+      end
       error("Compiler left a mess behind.")
     end
   end
@@ -129,12 +138,14 @@ local function compile(filename)
     disassembler.get_disassembly(compiled_data, function() end, function() end)
     disassembler.get_disassembly(disassembled, function() end, function() end)
     if bytecode ~= dump(disassembled) then
-      assert(io.open("E:/Temp/.Compare/temp1.txt", "w"))
-        :write(serpent.block(compiled_data))
-        :close()
-      assert(io.open("E:/Temp/.Compare/temp2.txt", "w"))
-        :write(serpent.block(disassembled))
-        :close()
+      if args.diff_files then
+        assert(io.open("E:/Temp/.Compare/temp1.txt", "w"))
+          :write(serpent.block(compiled_data))
+          :close()
+        assert(io.open("E:/Temp/.Compare/temp2.txt", "w"))
+          :write(serpent.block(disassembled))
+          :close()
+      end
       error("Disassembler has different output.")
     end
   end
