@@ -3,7 +3,7 @@
 -- compile_test.lua temp/debug_test_filename_cache.lua
 
 local arg_parser = require("lib.LuaArgParser.arg_parser")
-local args = arg_parser.parse({...}, {
+local args_config = {
   options = {
     {
       field = "test_disassembler",
@@ -32,7 +32,21 @@ local args = arg_parser.parse({...}, {
     },
   },
   positional = {},
-})
+}
+
+local args
+do
+  local err
+  args, err = arg_parser.parse({...}, args_config)
+  if (not args) or args.help then
+    if not args then
+      print(err)
+      print()
+    end
+    print(arg_parser.get_help_string(args_config))
+    return
+  end
+end
 
 local phobos_env = {}
 for k, v in pairs(_G) do
