@@ -845,14 +845,14 @@ do
   end
 
   ---go means goto
-  local function get_a_for_jump(go, func)
-    local is_backwards = go.linked_label.pc < go.pc
+  local function get_a_for_jump(go, label_position, func)
+    local is_backwards = label_position.pc < go.pc
     -- figure out if and how far it needs to close upvals
     local scopes_that_matter_lut = {}
     local scope = go.scope
     while true do
       scopes_that_matter_lut[scope] = true
-      if scope == go.linked_label.scope then
+      if scope == label_position.scope then
         break
       end
       scope = scope.parent_scope
@@ -867,11 +867,11 @@ do
     for _, live in ipairs(func.live_regs) do
       if scopes_that_matter_lut[live.scope] and live.upval_capture_pc and live.upval_capture_pc < go.pc then
         if is_backwards then
-          if (live.in_scope_at or live.start_at) > go.linked_label.pc then -- goes out of scope when jumping back
+          if (live.in_scope_at or live.start_at) > label_position.pc then -- goes out of scope when jumping back
             should_close(live.reg)
           end
         else
-          if live.stop_at and live.stop_at <= go.linked_label.pc then -- goes out of scope when jumping forward
+          if live.stop_at and live.stop_at <= label_position.pc then -- goes out of scope when jumping forward
             should_close(live.reg)
           end
         end
@@ -888,7 +888,8 @@ do
     if loop_stat.linked_breaks then
       for _, break_stat in ipairs(loop_stat.linked_breaks) do
         break_stat.inst.sbx = #func.instructions - break_stat.pc
-        -- TODO: could remove `inst` and `pc` from `break_stat` here
+        break_stat.inst = nil
+        break_stat.pc = nil
       end
     end
   end
@@ -1338,13 +1339,20 @@ do
     end,
 
     label = function(stat,func)
-      stat.pc = #func.instructions
-      stat.scope = func.current_scope
+      local label_position = {
+        scope = func.current_scope,
+        pc = #func.instructions,
+      }
+      func.label_positions[stat] = label_position
       for _, go in ipairs(stat.linked_gotos) do
         if go.inst then
           -- forwards jump
-          go.inst.sbx = stat.pc - go.pc
-          go.inst.a = get_a_for_jump(go, func)
+          go.inst.sbx = #func.instructions - go.pc
+          go.inst.a = get_a_for_jump(go, label_position, func)
+          -- cleanup
+          go.inst = nil
+          go.pc = nil
+          go.scope = nil
         end
       end
     end,
@@ -1355,13 +1363,19 @@ do
         column = stat.goto_token and stat.goto_token.column,
       }
       func.instructions[#func.instructions+1] = inst
-      stat.inst = inst
       stat.pc = #func.instructions
       stat.scope = func.current_scope
-      if stat.linked_label.pc then
+      local label_position = func.label_positions[stat.linked_label]
+      if label_position then
         -- backwards jump
-        inst.sbx = stat.linked_label.pc - stat.pc
-        inst.a = get_a_for_jump(stat, func)
+        inst.sbx = label_position.pc - stat.pc
+        inst.a = get_a_for_jump(stat, label_position, func)
+        -- cleanup
+        stat.pc = nil
+        stat.scope = nil
+      else
+        -- store for the label to link forwards jumps
+        stat.inst = inst
       end
     end,
     breakstat = function(stat,func)
@@ -1443,6 +1457,7 @@ do
       next_reg = 0,
       level = 0,
       scope_levels = {},
+      label_positions = {}, -- `pc` and `scope` labels are in, needed for backwards jmp `a` and `sbx`
       current_scope = nil, -- managed by generate_scope
     }
 
@@ -1520,6 +1535,7 @@ do
     func.next_reg = nil
     func.level = nil
     func.scope_levels = nil
+    func.label_positions = nil
     -- func.current_scope = nil -- is already `nil` after generate_scope
 
     -- inner_functions

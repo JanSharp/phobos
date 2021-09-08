@@ -15,6 +15,13 @@ local args = arg_parser.parse({...}, {
       flag = true,
     },
     {
+      field = "ensure_clean_data",
+      long = "ensure-clean",
+      short = "e",
+      description = "Ensure the compiler doesn't leave the ast in a modified state",
+      flag = true,
+    },
+    {
       field = "cache_filename",
       long = "cache-filename",
       short = "c",
@@ -85,7 +92,23 @@ local function compile(filename)
   local ast = parser(text, "@"..filename)
   jump_linker(ast)
   fold_const(ast)
+  local prev_ast_str
+  if args.ensure_clean_data then
+    prev_ast_str = serpent.block(ast)
+  end
   local compiled_data = phobos(ast)
+  if args.ensure_clean_data then
+    local ast_str = serpent.block(ast)
+    if ast_str ~= prev_ast_str then
+      assert(io.open("E:/Temp/.Compare/temp1.txt", "w"))
+        :write(prev_ast_str)
+        :close()
+      assert(io.open("E:/Temp/.Compare/temp2.txt", "w"))
+        :write(ast_str)
+        :close()
+      error("Compiler left a mess behind.")
+    end
+  end
   local bytecode = dump(compiled_data)
   if args.test_disassembler then
     local disassembled = disassembler.disassemble(bytecode)
