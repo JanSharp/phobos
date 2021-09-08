@@ -1,6 +1,8 @@
 
--- args to manually run this
--- compile_test.lua temp/debug_test_filename_cache.lua
+-- args to manually run this:
+-- compile_test.lua
+-- or if the cache file was created using debug_compile_test_create_cache.lua:
+-- compile_test.lua -c temp/debug_test_filename_cache.lua
 
 local arg_parser = require("lib.LuaArgParser.arg_parser")
 local args_config = {

@@ -56,7 +56,7 @@
                 "file": "./compile_test.lua",
             },
             "args": [
-                "temp/debug_test_filename_cache.lua",
+                "-c", "temp/debug_test_filename_cache.lua",
             ],
         },
         {
