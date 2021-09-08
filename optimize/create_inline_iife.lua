@@ -1,6 +1,4 @@
 
--- TODO: fix line and column positions
-
 local walker = require("ast_walker")
 
 local on_open = {
@@ -30,8 +28,6 @@ local on_open = {
       node.open_paren_token = nil
       node.close_paren_token = nil
       node.ex = nil
-      node.line = inner_func.line
-      node.column = inner_func.column
       node.node_type = "inline_iife"
 
       for _, upval in ipairs(inner_func.upvals) do
@@ -102,14 +98,11 @@ local on_open = {
 
       node.body[#node.body+1] = {
         node_type = "retstat",
-        line = node.line,
-        column = node.column,
+        return_token = inner_func.end_token,
       }
 
       node.leave_block_label = {
         node_type = "label",
-        line = node.line,
-        column = node.column,
         value = "(leave inline iife block)",
         linked_gotos = {},
       }
@@ -161,8 +154,7 @@ local on_open = {
 
     node.leave_block_goto = {
       node_type = "gotostat",
-      line = node.line,
-      column = node.column,
+      goto_token = node.return_token, -- how to deal with token values in this kind of a scenario?
       target = "(leave inline iife block)",
       linked_label = scope.leave_block_label,
     }

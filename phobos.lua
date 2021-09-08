@@ -788,6 +788,8 @@ do
       expr.in_reg = in_reg
       expr.num_results = num_results
       generate_scope(expr, func)
+      expr.in_reg = nil
+      expr.num_results = nil
     end,
   }
 
@@ -1426,8 +1428,8 @@ do
       else
         generate_expr({
           node_type = "nil",
-          line = stat.line,
-          column = stat.column,
+          line = stat.return_token and stat.return_token.line,
+          column = stat.return_token and stat.return_token.column,
         },
           stat.linked_inline_iife.in_reg,
           func,
