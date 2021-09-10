@@ -412,14 +412,15 @@ do
 
   local branch
   local function branch_last_expr(last_expr, in_reg, jumps, func)
-    local inner_jumps
-    last_expr, inner_jumps = branch(last_expr, in_reg, func)
-    if inner_jumps then
-      for _, jump in ipairs(inner_jumps) do
+    local inner_jumps_or_test, jump
+    last_expr, inner_jumps_or_test, jump = branch(last_expr, in_reg, func)
+    if last_expr and inner_jumps_or_test then
+      for _, jump in ipairs(inner_jumps_or_test) do
         jumps[#jumps+1] = jump
       end
+      return last_expr
     end
-    return last_expr
+    return last_expr, inner_jumps_or_test, jump
   end
 
   local function jump_here(jumps, func)
@@ -431,6 +432,9 @@ do
 
   function branch(node, in_reg, func)
     if node.node_type == "binop" then
+      local line = node.op_token and node.op_token.line
+      local column = node.op_token and node.op_token.column
+
       if node.op == "and" or node.op == "or" then
         local chain = {}
         local function add(sub_node)
@@ -447,44 +451,69 @@ do
         local inner_jumps = {}
         for i = 1, #chain - 1 do
           local expr = chain[i]
-          while is_branchy(expr) do
+          local test, jump
+          while expr and is_branchy(expr) do
             if expr.node_type == "binop" and expr.op == node.op then
-              expr = branch_last_expr(expr, in_reg, jumps, func)
+              expr, test, jump = branch_last_expr(expr, in_reg, jumps, func)
             else
-              expr = branch_last_expr(expr, nil, inner_jumps, func)
+              expr, test, jump = branch_last_expr(expr, nil, inner_jumps, func)
             end
           end
 
-          local temp_reg = peek_next_reg(func)
-          local expr_reg = local_or_fetch(expr, temp_reg, func)
-          if in_reg then
-            func.instructions[#func.instructions+1] = {
-              op = opcodes.testset, a = in_reg, b = expr_reg, c = node.op == "and" and 0 or 1,
-              line = node.op_token and node.op_token.line,
-              column = node.op_token and node.op_token.column,
+          if expr then
+            local temp_reg = peek_next_reg(func)
+            local expr_reg = local_or_fetch(expr, temp_reg, func)
+            if in_reg then
+              func.instructions[#func.instructions+1] = {
+                op = opcodes.testset, a = in_reg, b = expr_reg, c = node.op == "and" and 0 or 1,
+                line = line, column = column,
+              }
+            else
+              func.instructions[#func.instructions+1] = {
+                op = opcodes.test, a = expr_reg, c = node.op == "and" and 0 or 1,
+                line = line, column = column,
+              }
+            end
+            jump = {
+              op = opcodes.jmp, a = 0, sbx = nil,
+              line = line, column = column,
             }
+            jumps[#jumps+1] = jump
+            func.instructions[#func.instructions+1] = jump
+            jump.pc = #func.instructions
           else
-            func.instructions[#func.instructions+1] = {
-              op = opcodes.test, a = expr_reg, c = node.op == "and" and 0 or 1,
-              line = node.op_token and node.op_token.line,
-              column = node.op_token and node.op_token.column,
-            }
+            if node.op == "and" then
+              test.a = test.a == 1 and 0 or 1 -- invert
+            end
+            jump.jump_to_loadbool_true = in_reg and true or nil
+            jumps[#jumps+1] = jump
           end
-          local jump = {
-            op = opcodes.jmp, a = 0, sbx = nil,
-            line = node.op_token and node.op_token.line,
-            column = node.op_token and node.op_token.column,
-          }
-          jumps[#jumps+1] = jump
-          func.instructions[#func.instructions+1] = jump
-          jump.pc = #func.instructions
         end
 
         jump_here(inner_jumps, func)
-
         return chain[#chain], jumps
+
       elseif logical_binop_lut[node.op] then
-        error("-- TODO")
+        local original_top = get_top(func)
+        local temp_reg = peek_next_reg(func)
+        local left_reg = const_or_local_or_fetch(node.left,temp_reg,func)
+        -- if left_reg used temp_reg, eval next expression into next_reg if needed
+        temp_reg = left_reg == temp_reg and peek_next_reg(func) or temp_reg
+        local right_reg = const_or_local_or_fetch(node.right,temp_reg,func)
+        local test = {
+          op = logical_binop_lut[node.op], a = logical_invert_lut[node.op] and 0 or 1,
+          b = left_reg, c = right_reg,
+          line = line, column = column,
+        }
+        local jump = {
+          op = opcodes.jmp, a = 0, sbx = nil,
+          line = line, column = column,
+        }
+        func.instructions[#func.instructions+1] = test
+        func.instructions[#func.instructions+1] = jump
+        jump.pc = #func.instructions
+        release_down_to(original_top, func)
+        return nil, test, jump
       end
     end
     return node
@@ -492,13 +521,57 @@ do
 
   ---TODO: use this for all the conditional control structures
   local function test_expr(expr, in_reg, func)
-    local last_expr, jumps = branch(expr, in_reg, func)
-    while is_branchy(last_expr) do
-      last_expr = branch_last_expr(last_expr, in_reg, jumps, func)
+    local last_expr, jumps, logical_jump = branch(expr, in_reg, func)
+    while last_expr and is_branchy(last_expr) do
+      local _
+      last_expr, _, logical_jump = branch_last_expr(last_expr, in_reg, jumps, func)
+    end
+    if not last_expr then
+      jumps[#jumps+1] = logical_jump
+      logical_jump.jump_to_loadbool_true = in_reg and true or nil
     end
     if in_reg then
-      generate_expr(last_expr, in_reg, func, 1)
-      jump_here(jumps, func)
+      local have_to_loadbool = not last_expr
+      if not have_to_loadbool then
+        for _, jump in ipairs(jumps) do
+          if jump.jump_to_loadbool_true then
+            have_to_loadbool = true
+            break
+          end
+        end
+      end
+      if last_expr then
+        generate_expr(last_expr, in_reg, func, 1)
+        if have_to_loadbool then
+          func.instructions[#func.instructions+1] = {
+            op = opcodes.jmp, a = 0, sbx = 2,
+            line = get_last_used_line(func),
+            column = get_last_used_column(func),
+          }
+        end
+      end
+      if have_to_loadbool then
+        func.instructions[#func.instructions+1] = {
+          op = opcodes.loadbool, a = in_reg, b = 0, c = 1,
+          line = get_last_used_line(func),
+          column = get_last_used_column(func),
+        }
+        func.instructions[#func.instructions+1] = {
+          op = opcodes.loadbool, a = in_reg, b = 1, c = 0,
+          line = get_last_used_line(func),
+          column = get_last_used_column(func),
+        }
+        for _, jump in ipairs(jumps) do
+          jump.sbx = #func.instructions - jump.pc
+          if jump.jump_to_loadbool_true then
+            jump.sbx = jump.sbx - 1
+          end
+          jump.pc = nil
+          jump.jump_to_loadbool_true = nil
+        end
+      else
+        jump_here(jumps, func)
+      end
     else
       return jumps
     end
@@ -529,45 +602,20 @@ do
       -- else fetch them into temporaries
       --   first temporary is in_reg, second is next_reg()
 
-      -- TODO: some of the instructions should probably use a different token for their line/column
-      local line = expr.op_token and expr.op_token.line
-      local column = expr.op_token and expr.op_token.column
-
-      if expr.op == "and" or expr.op == "or" then
+      if logical_binop_lut[expr.op] or expr.op == "and" or expr.op == "or" then
         test_expr(expr, in_reg, func)
-      else
+      elseif bin_opcode_lut[expr.op] then
         local left_reg = const_or_local_or_fetch(expr.left,in_reg,func)
         -- if left_reg used in_reg, eval next expression into next_reg if needed
         local temp_reg = left_reg == in_reg and peek_next_reg(func) or in_reg
         local right_reg = const_or_local_or_fetch(expr.right,temp_reg,func)
-
-        if bin_opcode_lut[expr.op] then
-          func.instructions[#func.instructions+1] = {
-            op = bin_opcode_lut[expr.op], a = in_reg, b = left_reg, c = right_reg,
-            line = line, column = column,
-          }
-        elseif logical_binop_lut[expr.op] then
-          -- TODO: use test_expr
-          func.instructions[#func.instructions+1] = {
-            op = logical_binop_lut[expr.op], a = logical_invert_lut[expr.op] and 1 or 0,
-            b = left_reg, c = right_reg,
-            line = line, column = column,
-          }
-          func.instructions[#func.instructions+1] = {
-            op = opcodes.jmp, a = 0, sbx = 1,
-            line = line, column = column,
-          }
-          func.instructions[#func.instructions+1] = {
-            op = opcodes.loadbool, a = in_reg, b = 1, c = 1,
-            line = line, column = column,
-          }
-          func.instructions[#func.instructions+1] = {
-            op = opcodes.loadbool, a = in_reg, b = 0, c = 0,
-            line = line, column = column,
-          }
-        else
-          error("Invalid binop operator '"..expr.op.."'.")
-        end
+        func.instructions[#func.instructions+1] = {
+          op = bin_opcode_lut[expr.op], a = in_reg, b = left_reg, c = right_reg,
+          line = expr.op_token and expr.op_token.line,
+          column = expr.op_token and expr.op_token.column,
+        }
+      else
+        error("Invalid binop operator '"..expr.op.."'.")
       end
       -- release temporaries if they were used
       release_down_to(in_reg, func)
