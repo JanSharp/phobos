@@ -400,6 +400,110 @@ do
     end
   end
 
+  local function is_branchy(node)
+    -- TODO: add `not` unop? well probably look into the sub expression for `not` and decide on that
+    return node.node_type == "binop"
+      and (
+        logical_binop_lut[node.op]
+        or node.op == "and"
+        or node.op == "or"
+      )
+  end
+
+  local branch
+  local function branch_last_expr(last_expr, in_reg, jumps, func)
+    local inner_jumps
+    last_expr, inner_jumps = branch(last_expr, in_reg, func)
+    if inner_jumps then
+      for _, jump in ipairs(inner_jumps) do
+        jumps[#jumps+1] = jump
+      end
+    end
+    return last_expr
+  end
+
+  local function jump_here(jumps, func)
+    for _, jump in ipairs(jumps) do
+      jump.sbx = #func.instructions - jump.pc
+      jump.pc = nil
+    end
+  end
+
+  function branch(node, in_reg, func)
+    if node.node_type == "binop" then
+      if node.op == "and" or node.op == "or" then
+        local chain = {}
+        local function add(sub_node)
+          if sub_node.node_type == "binop" and sub_node.op == node.op then
+            add(sub_node.left)
+            add(sub_node.right)
+          else
+            chain[#chain+1] = sub_node
+          end
+        end
+        add(node)
+
+        local jumps = {}
+        local inner_jumps = {}
+        for i = 1, #chain - 1 do
+          local expr = chain[i]
+          while is_branchy(expr) do
+            if expr.node_type == "binop" and expr.op == node.op then
+              expr = branch_last_expr(expr, in_reg, jumps, func)
+            else
+              expr = branch_last_expr(expr, nil, inner_jumps, func)
+            end
+          end
+
+          local temp_reg = peek_next_reg(func)
+          local expr_reg = local_or_fetch(expr, temp_reg, func)
+          if in_reg then
+            func.instructions[#func.instructions+1] = {
+              op = opcodes.testset, a = in_reg, b = expr_reg, c = node.op == "and" and 0 or 1,
+              line = node.op_token and node.op_token.line,
+              column = node.op_token and node.op_token.column,
+            }
+          else
+            func.instructions[#func.instructions+1] = {
+              op = opcodes.test, a = expr_reg, c = node.op == "and" and 0 or 1,
+              line = node.op_token and node.op_token.line,
+              column = node.op_token and node.op_token.column,
+            }
+          end
+          local jump = {
+            op = opcodes.jmp, a = 0, sbx = nil,
+            line = node.op_token and node.op_token.line,
+            column = node.op_token and node.op_token.column,
+          }
+          jumps[#jumps+1] = jump
+          func.instructions[#func.instructions+1] = jump
+          jump.pc = #func.instructions
+        end
+
+        jump_here(inner_jumps, func)
+
+        return chain[#chain], jumps
+      elseif logical_binop_lut[node.op] then
+        error("-- TODO")
+      end
+    end
+    return node
+  end
+
+  ---TODO: use this for all the conditional control structures
+  local function test_expr(expr, in_reg, func)
+    local last_expr, jumps = branch(expr, in_reg, func)
+    while is_branchy(last_expr) do
+      last_expr = branch_last_expr(last_expr, in_reg, jumps, func)
+    end
+    if in_reg then
+      generate_expr(last_expr, in_reg, func, 1)
+      jump_here(jumps, func)
+    else
+      return jumps
+    end
+  end
+
   generate_expr_code = {
     local_ref = function(expr,in_reg,func)
       func.instructions[#func.instructions+1] = {
@@ -425,42 +529,12 @@ do
       -- else fetch them into temporaries
       --   first temporary is in_reg, second is next_reg()
 
-      -- TODO: this ends up using way too many registers and instructions [...]
-      -- bin_opcode_lut is fine, logical_binop_lut on it's own as well.
-      -- but "and" and "or" are horrible, and combining them with logical binops is also bad
-
       -- TODO: some of the instructions should probably use a different token for their line/column
       local line = expr.op_token and expr.op_token.line
       local column = expr.op_token and expr.op_token.column
 
       if expr.op == "and" or expr.op == "or" then
-
-        -- in_reg can be the register of a local in which case we are not allowed
-        -- to set a value to it yet, so to be safe just always use a temporary reg
-        local temp_reg = peek_next_reg(func)
-        local left_reg = local_or_fetch(expr.left, temp_reg, func)
-        func.instructions[#func.instructions+1] = {
-          op = opcodes.testset, a = in_reg, b = left_reg, c = expr.op == "or" and 1 or 0,
-          line = line, column = column,
-        }
-        local jump = {
-          op = opcodes.jmp, a = 0, sbx = nil,
-          line = line, column = column,
-        }
-        func.instructions[#func.instructions+1] = jump
-        local jump_pc = #func.instructions
-
-        if left_reg == temp_reg then
-          release_reg(temp_reg, func)
-        end
-        local right_reg = local_or_fetch(expr.right,in_reg,func)
-        if right_reg ~= in_reg then
-          func.instructions[#func.instructions+1] = {
-            op = opcodes.move, a = in_reg, b = right_reg,
-            line = line, column = column,
-          }
-        end
-        jump.sbx = #func.instructions - jump_pc
+        test_expr(expr, in_reg, func)
       else
         local left_reg = const_or_local_or_fetch(expr.left,in_reg,func)
         -- if left_reg used in_reg, eval next expression into next_reg if needed
@@ -473,6 +547,7 @@ do
             line = line, column = column,
           }
         elseif logical_binop_lut[expr.op] then
+          -- TODO: use test_expr
           func.instructions[#func.instructions+1] = {
             op = logical_binop_lut[expr.op], a = logical_invert_lut[expr.op] and 1 or 0,
             b = left_reg, c = right_reg,
