@@ -488,7 +488,10 @@ do
             if node.op == "and" then
               test.a = test.a == 1 and 0 or 1 -- invert
             end
-            jump.jump_to_loadbool_true = in_reg and true or nil
+            if in_reg then
+              jump.jump_to_loadbool = true
+              jump.loadbool_value = node.op == "or"
+            end
             jumps[#jumps+1] = jump
           end
         end
@@ -531,13 +534,16 @@ do
     end
     if not last_expr then
       jumps[#jumps+1] = logical_jump
-      logical_jump.jump_to_loadbool_true = in_reg and true or nil
+      if in_reg then
+        logical_jump.jump_to_loadbool = true
+        logical_jump.loadbool_value = true
+      end
     end
     if in_reg then
       local have_to_loadbool = not last_expr
       if not have_to_loadbool then
         for _, jump in ipairs(jumps) do
-          if jump.jump_to_loadbool_true then
+          if jump.jump_to_loadbool then
             have_to_loadbool = true
             break
           end
@@ -566,11 +572,12 @@ do
         }
         for _, jump in ipairs(jumps) do
           jump.sbx = #func.instructions - jump.pc
-          if jump.jump_to_loadbool_true then
-            jump.sbx = jump.sbx - 1
+          if jump.jump_to_loadbool then
+            jump.sbx = jump.sbx - (jump.loadbool_value and 1 or 2)
           end
           jump.pc = nil
-          jump.jump_to_loadbool_true = nil
+          jump.jump_to_loadbool = nil
+          jump.loadbool_value = nil
         end
       else
         jump_here(jumps, func)
