@@ -448,10 +448,10 @@ do
         add(node)
 
         local jumps = {}
-        local inner_jumps = {}
         for i = 1, #chain - 1 do
           local expr = chain[i]
           local test, jump
+          local inner_jumps = {}
           while expr and is_branchy(expr) do
             if expr.node_type == "binop" and expr.op == node.op then
               expr, test, jump = branch_last_expr(expr, in_reg, jumps, func)
@@ -494,9 +494,11 @@ do
             end
             jumps[#jumps+1] = jump
           end
+
+          -- uh, why do they need to jump here and not to the end of the chain?
+          jump_here(inner_jumps, func)
         end
 
-        jump_here(inner_jumps, func)
         return chain[#chain], jumps
 
       elseif logical_binop_lut[node.op] then
