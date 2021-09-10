@@ -481,6 +481,9 @@ do
             jumps[#jumps+1] = jump
             func.instructions[#func.instructions+1] = jump
             jump.pc = #func.instructions
+            if expr_reg == temp_reg then
+              release_reg(temp_reg, func)
+            end
           else
             if node.op == "and" then
               test.a = test.a == 1 and 0 or 1 -- invert
@@ -605,6 +608,7 @@ do
       if logical_binop_lut[expr.op] or expr.op == "and" or expr.op == "or" then
         test_expr(expr, in_reg, func)
       elseif bin_opcode_lut[expr.op] then
+        local original_top = get_top(func)
         local left_reg = const_or_local_or_fetch(expr.left,in_reg,func)
         -- if left_reg used in_reg, eval next expression into next_reg if needed
         local temp_reg = left_reg == in_reg and peek_next_reg(func) or in_reg
@@ -614,11 +618,10 @@ do
           line = expr.op_token and expr.op_token.line,
           column = expr.op_token and expr.op_token.column,
         }
+        release_down_to(original_top, func)
       else
         error("Invalid binop operator '"..expr.op.."'.")
       end
-      -- release temporaries if they were used
-      release_down_to(in_reg, func)
     end,
     unop = function(expr,in_reg,func)
       -- if expr.ex is a local use that directly,
