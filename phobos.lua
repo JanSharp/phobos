@@ -527,18 +527,64 @@ do
     return node
   end
 
-  ---TODO: use this for all the conditional control structures
+  ---jumps if false
+  local function simple_test_expr(expr, func)
+    local inverted = false
+    if expr.node_type == "unop" and expr.op == "not" then
+      expr = expr.ex
+      inverted = true
+    end
+    local original_top = get_top(func)
+    local temp_reg = peek_next_reg(func)
+    local condition_reg = local_or_fetch(expr, temp_reg, func)
+
+    local position = temp_reg ~= condition_reg
+      and expr -- if it is a local use it for the position of the test and jump instruction
+      or func.instructions[#func.instructions] -- otherwise use the last used position for expr
+
+    func.instructions[#func.instructions+1] = {
+      op = opcodes.test, a = condition_reg, c = inverted and 1 or 0,
+      line = position.line,
+      column = position.column,
+    }
+    local jump = {
+      op = opcodes.jmp, a = 0, sbx = nil,
+      line = position.line,
+      column = position.column,
+    }
+    func.instructions[#func.instructions+1] = jump
+    jump.pc = #func.instructions
+    release_down_to(original_top, func)
+    return jump
+  end
+
   local function test_expr(expr, in_reg, func)
+    if not is_branchy(expr) then
+      if in_reg then
+        error("No reason to try to branch off of an expression that isn't 'branchy' \z
+          and expecting a result from it. Just generate the expression into that register.")
+      end
+      return {simple_test_expr(expr, func)}
+    end
+
+    local logical_test
     local last_expr, jumps, logical_jump = branch(expr, in_reg, func)
+    if not last_expr then
+      logical_test = jumps
+      jumps = {}
+    end
     while last_expr and is_branchy(last_expr) do
-      local _
-      last_expr, _, logical_jump = branch_last_expr(last_expr, in_reg, jumps, func)
+      last_expr, logical_test, logical_jump = branch_last_expr(last_expr, in_reg, jumps, func)
     end
     if not last_expr then
       jumps[#jumps+1] = logical_jump
       if in_reg then
         logical_jump.jump_to_loadbool = true
         logical_jump.loadbool_value = true
+      else
+        logical_test.a = logical_test.a == 1 and 0 or 1 -- invert
+        logical_jump.jump_to_loadbool = true
+        logical_jump.loadbool_value = false -- so it ends up being a jump to false
       end
     end
     if in_reg then
@@ -585,6 +631,35 @@ do
         jump_here(jumps, func)
       end
     else
+      local last_jump
+      if last_expr then
+        last_jump = simple_test_expr(last_expr, func)
+      end
+      local i = 1
+      local c = #jumps
+      local function jump_here_and_remove()
+        local jump = jumps[i]
+        jump.sbx = #func.instructions - jump.pc
+        jump.pc = nil
+        jumps[i] = jumps[c]
+        jumps[c] = nil
+        c = c - 1
+        i = i - 1
+      end
+      while i <= c do
+        local jump = jumps[i]
+        if jump.jump_to_loadbool then
+          if jump.loadbool_value then
+            jump_here_and_remove()
+          end
+          jump.jump_to_loadbool = nil
+          jump.loadbool_value = nil
+        elseif expr.node_type == "binop" and expr.op == "or" then
+          jump_here_and_remove()
+        end
+        i = i + 1
+      end
+      jumps[#jumps+1] = last_jump
       return jumps
     end
   end
@@ -928,59 +1003,6 @@ do
     end,
   }
 
-  local function generate_test_code(condition, func)
-    --[[
-      binop
-        eq -> eq
-        lt -> lt
-        le -> le
-        ne -> !eq
-        gt -> !le
-        ge -> !lt
-        and -> [repeat]
-        or -> [repeat]
-      unop
-        not -> !test
-      * -> test
-    ]]
-    if condition.node_type == "binop" and logical_binop_lut[condition.op] then
-      local original_top = get_top(func)
-      local temp_reg = peek_next_reg(func)
-      local left_reg = const_or_local_or_fetch(condition.left,temp_reg,func)
-      -- if left_reg used in_reg, eval next expression into next_reg if needed
-      temp_reg = left_reg == temp_reg and peek_next_reg(func) or temp_reg
-      local right_reg = const_or_local_or_fetch(condition.right,temp_reg,func)
-
-      func.instructions[#func.instructions+1] = {
-        op = logical_binop_lut[condition.op], a = logical_invert_lut[condition.op] and 1 or 0,
-        b = left_reg, c = right_reg,
-        line = condition.op_token and condition.op_token.line,
-        column = condition.op_token and condition.op_token.column,
-      }
-      release_down_to(original_top, func)
-    -- TODO: impl "and" and "or" test code
-    -- elseif condition.node_type == "binop" and (condition.op == "and" or condition.op == "or") then
-    --   error()
-    else
-      local exp = condition
-      local inverted = false
-      if condition.node_type == "unop" and condition.op == "not" then
-        exp = condition.ex
-        inverted = true
-      end
-      local original_top = get_top(func)
-      local temp_reg = peek_next_reg(func)
-      local condition_reg = local_or_fetch(exp, temp_reg, func)
-
-      func.instructions[#func.instructions+1] = {
-        op = opcodes.test, a = condition_reg, c = inverted and 1 or 0,
-        line = get_last_used_line(func),
-        column = get_last_used_column(func),
-      }
-      release_down_to(original_top, func)
-    end
-  end
-
   ---go means goto
   local function get_a_for_jump(go, label_position, func)
     local is_backwards = label_position.pc < go.pc
@@ -1185,7 +1207,7 @@ do
     end,
     dostat = generate_scope,
     ifstat = function(stat,func)
-      local prev_failure_jump
+      local prev_failure_jumps
       local finish_jumps = {}
       local condition_is_always_truthy = false
       for i,if_block in ipairs(stat.ifs) do
@@ -1198,7 +1220,7 @@ do
           goto continue
         elseif const_node_types[condition_node_type] then
           -- always true, stop after this block
-          prev_failure_jump = nil
+          prev_failure_jumps = nil
           condition_is_always_truthy = true
 
           -- TODO: include table constructors and closures here
@@ -1206,14 +1228,7 @@ do
           -- but those still need to eval it if captured to a block local
         else
           -- generate a value and `test` it...
-          generate_test_code(condition_node, func)
-          prev_failure_jump = {
-            op = opcodes.jmp, a = 0, sbx = nil,
-            line = if_block.then_token and if_block.then_token.line or get_last_used_line(func),
-            column = if_block.then_token and if_block.then_token.column or get_last_used_column(func),
-          }
-          func.instructions[#func.instructions+1] = prev_failure_jump
-          prev_failure_jump.pc = #func.instructions
+          prev_failure_jumps = test_expr(condition_node, nil, func)
         end
 
         -- generate body
@@ -1228,9 +1243,8 @@ do
         func.instructions[#func.instructions+1] = finish_jump
         finish_jump.pc = #func.instructions
 
-        if prev_failure_jump then
-          prev_failure_jump.sbx = #func.instructions - prev_failure_jump.pc
-          prev_failure_jump.pc = nil
+        if prev_failure_jumps then
+          jump_here(prev_failure_jumps, func)
         end
 
         if condition_is_always_truthy then
@@ -1248,8 +1262,10 @@ do
         if finish_jumps[#finish_jumps] then
           func.instructions[#func.instructions] = nil
           finish_jumps[#finish_jumps] = nil
-          if prev_failure_jump then
-            prev_failure_jump.sbx = prev_failure_jump.sbx - 1
+          if prev_failure_jumps then
+            for _, jump in ipairs(prev_failure_jumps) do
+              jump.sbx = jump.sbx - 1
+            end
           end
         end
       end
@@ -1392,8 +1408,7 @@ do
     end,
     whilestat = function(stat,func)
       local start_pc = #func.instructions
-      local failure_jump
-      local failure_jump_pc
+      local failure_jumps
       -- TODO: this optimization should probably be moved out
       if is_falsy(stat.condition) then
         -- always false, no need to generate anything
@@ -1402,15 +1417,7 @@ do
         -- always true, no need to check the condition
       else
         -- generate condition and test
-        generate_test_code(stat.condition, func)
-        -- jump over everything and leave
-        failure_jump = {
-          op = opcodes.jmp, a = 0, sbx = nil,
-          line = stat.do_token and stat.do_token.line,
-          column = stat.do_token and stat.do_token.column,
-        }
-        func.instructions[#func.instructions+1] = failure_jump
-        failure_jump_pc = #func.instructions
+        failure_jumps = test_expr(stat.condition, nil, func)
       end
       -- generate body
       generate_scope(stat, func)
@@ -1421,8 +1428,8 @@ do
         column = stat.end_token and stat.end_token.column,
       }
       -- patch failure_jump to jump here
-      if failure_jump then
-        failure_jump.sbx = #func.instructions - failure_jump_pc
+      if failure_jumps then
+        jump_here(failure_jumps, func)
       end
       -- patch breaks to jump here as well
       patch_breaks_to_jump_here(stat, func)
@@ -1432,26 +1439,23 @@ do
       -- generate body
       generate_scope(stat, func)
 
-      local do_jump_back
       -- TODO: this optimization should probably be moved out
       if is_falsy(stat.condition) then
         -- always false, always jump
-        do_jump_back = true
-      elseif const_node_types[stat.condition.node_type] then
-        -- always true, always leave
-        do_jump_back = false
-      else
-        -- generate condition and test
-        generate_test_code(stat.condition, func)
-        -- jump back if it failed
-        do_jump_back = true
-      end
-      if do_jump_back then
         func.instructions[#func.instructions+1] = {
           op = opcodes.jmp, a = 0, sbx = start_pc - (#func.instructions + 1),
           line = stat.until_token and stat.until_token.line,
           column = stat.until_token and stat.until_token.column,
         }
+      elseif const_node_types[stat.condition.node_type] then
+        -- always true, always leave
+      else
+        -- generate condition and test
+        for _, jump in ipairs(test_expr(stat.condition, nil, func)) do
+          -- jump back if it failed
+          jump.sbx = start_pc - jump.pc
+          jump.pc = nil
+        end
       end
       patch_breaks_to_jump_here(stat, func)
     end,
