@@ -363,9 +363,11 @@ do
     end
   end
 
+  --[[
   local function is_falsy(node)
     return node.node_type == "nil" or (node.node_type == "boolean" and node.value == false)
   end
+  ]]
 
   local const_node_types = invert{"boolean","nil","string","number"}
   local function const_or_local_or_fetch(expr,in_reg,func)
@@ -1215,7 +1217,12 @@ do
         local condition_node = if_block.condition
         local condition_node_type = condition_node.node_type
 
-        if is_falsy(condition_node) then -- TODO: imo this should be moved out to be an optimization
+        -- TODO: move this optimization out [...]
+        -- because any func protos that have their
+        -- closure in the removed block have to be removed
+        -- otherwise they can't resolve their upval indexes
+        --[[
+        if is_falsy(condition_node) then
           -- always false, skip this block
           goto continue
         elseif const_node_types[condition_node_type] then
@@ -1227,9 +1234,10 @@ do
           -- maybe function calls of known truthy return types too?
           -- but those still need to eval it if captured to a block local
         else
+        ]]
           -- generate a value and `test` it...
           prev_failure_jumps = test_expr(condition_node, nil, func)
-        end
+        -- end
 
         -- generate body
         generate_scope(if_block, func)
@@ -1409,16 +1417,18 @@ do
     whilestat = function(stat,func)
       local start_pc = #func.instructions
       local failure_jumps
-      -- TODO: this optimization should probably be moved out
+      -- TODO: move this optimization out
+      --[[
       if is_falsy(stat.condition) then
         -- always false, no need to generate anything
         return
       elseif const_node_types[stat.condition.node_type] then
         -- always true, no need to check the condition
       else
+        ]]
         -- generate condition and test
         failure_jumps = test_expr(stat.condition, nil, func)
-      end
+      -- end
       -- generate body
       generate_scope(stat, func)
       -- jump back
@@ -1439,7 +1449,8 @@ do
       -- generate body
       generate_scope(stat, func)
 
-      -- TODO: this optimization should probably be moved out
+      -- TODO: move this optimization out
+      --[[
       if is_falsy(stat.condition) then
         -- always false, always jump
         func.instructions[#func.instructions+1] = {
@@ -1450,13 +1461,14 @@ do
       elseif const_node_types[stat.condition.node_type] then
         -- always true, always leave
       else
+      ]]
         -- generate condition and test
         for _, jump in ipairs(test_expr(stat.condition, nil, func)) do
           -- jump back if it failed
           jump.sbx = start_pc - jump.pc
           jump.pc = nil
         end
-      end
+      -- end
       patch_breaks_to_jump_here(stat, func)
     end,
 

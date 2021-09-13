@@ -206,7 +206,7 @@ local fold_binop = {
     -- any type
     if exp.left.node_type == exp.right.node_type and is_const_node[exp.left.node_type] then
       local res = exp.left.value == exp.right.value
-      fold_exp(exp, tostring(res), exp.left, res)
+      fold_exp(exp, "boolean", exp.left, res)
     elseif is_const_node[exp.left.node_type] and is_const_node[exp.right.node_type] then
       -- different types of constants
       fold_exp(exp, "boolean", exp.left, false)
@@ -216,7 +216,7 @@ local fold_binop = {
     -- any type
     if exp.left.node_type == exp.right.node_type and is_const_node[exp.left.node_type] then
       local res = exp.left.value ~= exp.right.value
-      fold_exp(exp, tostring(res), exp.left, res)
+      fold_exp(exp, "boolean", exp.left, res)
     elseif is_const_node[exp.left.node_type] and is_const_node[exp.right.node_type] then
       -- different types of constants
       fold_exp(exp, "boolean", exp.left, true)

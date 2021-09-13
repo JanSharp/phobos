@@ -202,8 +202,10 @@ local function read_string(str,index,quote,state)
   end
 end
 
+local block_string_open_bracket_patter = "^%[(=*)%["
+
 local function read_block_string(str,index,state)
-  local _,open_end,pad = str:find("^%[(=*)%[",index)
+  local _,open_end,pad = str:find(block_string_open_bracket_patter,index)
   if not pad then
     error("Invalid string open bracket")
   end
@@ -241,6 +243,57 @@ local function read_block_string(str,index,state)
   token.src_pad = pad
 
   return bracket_end+1,token
+end
+
+-- TODO: remove code duplication and double check if this can really read all formats of numbers
+local function try_read_number(str, index, state)
+  -- hex numbers: "0x%x+" followed by "%.%x+" followed by "[pP][+-]?%x+"
+  local hex_start,hex_end,integer_part = str:find("^0[xX](%x*)",index) -- "integer part"
+  if hex_start then
+    local omitted_integer_part = integer_part == ""
+    local _,fractional_end = str:find("^%.%x+",hex_end+1)
+    if fractional_end then
+      hex_end = fractional_end
+    elseif omitted_integer_part then
+      error("Malformed number")
+    else
+      -- consume trailing dot
+      _, fractional_end = str:find("^%.", hex_end + 1)
+      hex_end = fractional_end or hex_end
+    end
+    local exponent_start,exponent_end = str:find("^[pP][%-%+]?%x+",hex_end+1)
+    if exponent_start then
+      hex_end = exponent_end
+    end
+    local token = new_token("number",index,state.line,index - state.line_offset)
+    token.src_value = str:sub(hex_start,hex_end)
+    token.value = tonumber(token.src_value)
+    return hex_end+1,token
+  end
+
+  -- decimal numbers: "%d+" followed by "%.%d+" followed by "[eE][+-]?%d+"
+  local num_start,num_end = str:find("^%d*",index) -- "integer part"
+  if num_start then
+    local omitted_integer_part = num_start > num_end
+    local _,fractional_end = str:find("^%.%d+",num_end+1)
+    if fractional_end then
+      num_end = fractional_end
+    elseif omitted_integer_part then
+      return
+    else
+      -- consume trailing dot
+      _, fractional_end = str:find("^%.", num_end + 1)
+      num_end = fractional_end or num_end
+    end
+    local exponent_start,exponent_end = str:find("^[eE][%-%+]?%d+",num_end+1)
+    if exponent_start then
+      num_end = exponent_end
+    end
+    local token = new_token("number",index,state.line,index - state.line_offset)
+    token.src_value = str:sub(num_start,num_end)
+    token.value = tonumber(token.src_value)
+    return num_end+1,token
+  end
 end
 
 ---@param state TokenizeState
@@ -284,7 +337,7 @@ local function next_token(state,index)
     end
   elseif next_char == "-" then
     if str:sub(index+1,index+1) == "-" then
-      if str:sub(index+2,index+2) == "[" then
+      if str:find(block_string_open_bracket_patter, index + 2) then
         --[[
           read block string, build a token from that
           ]]
@@ -321,6 +374,10 @@ local function next_token(state,index)
         return index+2,new_token("..",index,state.line,index - state.line_offset)
       end
     else
+      local number_end, token = try_read_number(str, index, state)
+      if number_end then
+        return number_end, token
+      end
       return index+1,new_token(".",index,state.line,index - state.line_offset)
     end
   elseif next_char == '"' then
@@ -328,44 +385,15 @@ local function next_token(state,index)
   elseif next_char == "'" then
     return read_string(str,index,next_char,state)
   else
-    -- hex numbers: "0x%x+" followed by "%.%x+" followed by "[pP][+-]?%x+"
-    local hex_start,hex_end = str:find("^0x%x+",index) -- "integer part"
-    if hex_start then
-      local fractional_start,fractional_end = str:find("^%.%x+",hex_end+1)
-      if fractional_start then
-        hex_end = fractional_end
-      end
-      local exponent_start,exponent_end = str:find("^[pP]%x+",hex_end+1)
-      if exponent_start then
-        hex_end = exponent_end
-      end
-      local token = new_token("number",index,state.line,index - state.line_offset)
-      token.src_value = str:sub(hex_start,hex_end)
-      token.value = tonumber(token.src_value)
-      return hex_end+1,token
-    end
-
-    -- decimal numbers: "%d+" followed by "%.%d+" followed by "[eE][+-]?%d+"
-    local num_start,num_end = str:find("^%d+",index) -- "integer part"
-    if num_start then
-      local fractional_start,fractional_end = str:find("^%.%d+",num_end+1)
-      if fractional_start then
-        num_end = fractional_end
-      end
-      local exponent_start,exponent_end = str:find("^[eE]%d+",num_end+1)
-      if exponent_start then
-        num_end = exponent_end
-      end
-      local token = new_token("number",index,state.line,index - state.line_offset)
-      token.src_value = str:sub(num_start,num_end)
-      token.value = tonumber(token.src_value)
-      return num_end+1,token
+    local number_end, token = try_read_number(str, index, state)
+    if number_end then
+      return number_end, token
     end
 
     -- try to match keywords/identifiers
     local match_start,match_end,ident = str:find("^([_%a][_%w]*)",index)
     if match_start == index then
-      local token = new_token(
+      token = new_token(
         keywords[ident] and ident or "ident",
         index,state.line,index - state.line_offset)
       if not keywords[ident] then
@@ -394,12 +422,17 @@ end
 ---@return TokenizeState state
 ---@return nil index
 local function tokenize(str)
+  local index
   local state = {
     str = str,
     line = 1,
     line_offset = 0, -- pretend the previous character was a newline. not too far fetched
   }
-  return next_token,state
+  if str:find("^\xef\xbb\xbf") then -- ignore utf8 byte-order mark (BOM)
+    state.line_offset = 3
+    index = 4
+  end
+  return next_token,state,index
 end
 
 return tokenize
