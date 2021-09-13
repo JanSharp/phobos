@@ -38,7 +38,7 @@ local args_config = {
       field = "ignore_paths",
       long = "ignore",
       short = "i",
-      description = "Directories to ignore. Relative to source dir.",
+      description = "Paths to ignore (files and or directories). Relative to source dir.",
       min_params = 0,
       type = "path",
       optional = true,
@@ -123,22 +123,22 @@ local dir_paths = {}
 ---relative
 local filename_lut = {}
 
-local ignore_dirs = {
+local ignore_paths = {
   [args.temp_path:str()] = true,
 }
 if args.output_path then
-  ignore_dirs[args.output_path:str()] = true
+  ignore_paths[args.output_path:str()] = true
 end
 
 for _, ignore_dir_path in ipairs(args.ignore_paths) do
-  ignore_dirs[ignore_dir_path:str()] = true
+  ignore_paths[ignore_dir_path:str()] = true
 end
 
 -- search for source files
 
 local function search_dir(dir, relative_dir)
   relative_dir = relative_dir or Path.new()
-  if ignore_dirs[relative_dir:str()] then
+  if ignore_paths[relative_dir:str()] then
     return
   end
   dir_paths[#dir_paths+1] = relative_dir
@@ -153,7 +153,9 @@ local function search_dir(dir, relative_dir)
     if mode == "directory" then
       search_dir(entry_path, relative_dir / entry)
     elseif mode == "file" then
-      if entry_path:extension() == args.pho_extension then
+      if (not ignore_paths[(relative_dir / entry):str()])
+        and entry_path:extension() == args.pho_extension
+      then
         source_file_paths[#source_file_paths+1] = relative_dir / entry
         filename_lut[(relative_dir / entry_path:filename()):str()] = true
       end
