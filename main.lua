@@ -227,9 +227,13 @@ for _, source_file_path in ipairs(source_file_paths) do
   local dir = output_file_path:sub(1, -2)
   output_file_path = dir / (output_file_path:filename()..args.lua_extension)
   if not dir:exists() then
+    -- i thought for sure you could just mkdir multiple dir levels at once... but i guess not?
     for i = 1, #dir do
       if not dir:sub(1, i):exists() then
-        assert(lfs.mkdir(dir:sub(1, i):str()))
+        -- this might fail, for example for drive letters,
+        -- but that doesn't matter, as long as the output file
+        -- can get created (=> asserted)
+        lfs.mkdir(dir:sub(1, i):str())
       end
     end
   end
