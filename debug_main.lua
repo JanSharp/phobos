@@ -12,11 +12,13 @@ local eval_instruction_count = true
 local eval_byte_count = true
 local create_disassembly = true
 local show_keys_in_disassembly = false
-local load_and_run_compiled_funcs = true
+local load_and_run_compiled_funcs = false
 local run_count = 1
 
-local total_inst_diff = 0
-local total_byte_diff = 0
+local total_lua_inst_count = 0
+local total_pho_inst_count = 0
+local total_lua_byte_count = 0
+local total_pho_byte_count = 0
 
 local function compile(filename)
   if print_progress then
@@ -26,9 +28,9 @@ local function compile(filename)
   local file = assert(io.open(filename,"r"))
   local text = file:read("*a")
 
-  file:seek("set")
   local lines
   if create_disassembly then
+    file:seek("set")
     lines = {}
     for line in file:lines() do
       lines[#lines+1] = {line = line}
@@ -202,9 +204,8 @@ local function compile(filename)
       and instruction_count.pho - instruction_count.lua
       or nil
     print(" #instructions: "..serpent.line(instruction_count)..(diff and (" diff: "..diff) or ""))
-    if diff then
-      total_inst_diff = total_inst_diff + diff
-    end
+    total_lua_inst_count = total_lua_inst_count + (instruction_count.lua or 0)
+    total_pho_inst_count = total_pho_inst_count + (instruction_count.pho or 0)
   end
   if eval_byte_count then
     local lua = use_regular_lua_compiler and lua_dumped and #lua_dumped or nil
@@ -213,9 +214,8 @@ local function compile(filename)
     print(" #bytes:        "..serpent.line{lua = lua, pho = pho}
       ..(diff and (" diff: "..diff) or "")
     )
-    if diff then
-      total_byte_diff = total_byte_diff + diff
-    end
+    total_lua_byte_count = total_lua_byte_count + (lua or 0)
+    total_pho_byte_count = total_pho_byte_count + (pho or 0)
   end
 
   if create_disassembly then
@@ -233,14 +233,22 @@ local function compile(filename)
   end
 end
 
+local filenames
+if ... then
+  filenames = {...}
+else
+  filenames = require("debug_util").find_lua_source_files()
+end
+
+local start_time = os.clock()
 for i = 1, run_count do
-  for _, filename in ipairs{...} do
+  for _, filename in ipairs(filenames) do
     compile(filename)
     if print_progress then
       print()
     end
   end
-  print(os.clock() / i)
+  print((os.clock() - start_time) / i)
   if print_progress then
     print()
     print()
@@ -248,8 +256,14 @@ for i = 1, run_count do
 end
 
 if eval_instruction_count and use_regular_lua_compiler and use_phobos_compiler then
-  print("total instruction count diff: "..total_inst_diff)
+  print("total instruction count diff: "..(total_pho_inst_count - total_lua_inst_count)
+    .." ("..total_lua_inst_count.." => "..total_pho_inst_count.."; "
+    ..string.format("%0.00d", (total_pho_inst_count / total_lua_inst_count) * 100).."%)"
+  )
 end
 if eval_byte_count and use_regular_lua_compiler and use_phobos_compiler then
-  print("total byte count diff:        "..total_byte_diff)
+  print("total byte count diff: "..(total_pho_byte_count - total_lua_byte_count)
+    .." ("..total_lua_byte_count.." => "..total_pho_byte_count.."; "
+    ..string.format("%0.00d", (total_pho_byte_count / total_lua_byte_count) * 100).."%)"
+  )
 end
