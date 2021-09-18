@@ -10,7 +10,7 @@
             "request": "launch",
             "program": {
                 "lua": "lua52",
-                "file": "debugger_entrypoint.lua", // a hacky entry_point
+                "file": "debugger_entry_point.lua", // a hacky entry_point
             },
             "args": [
                 "debug", // which bin folder to run
