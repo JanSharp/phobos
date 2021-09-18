@@ -46,7 +46,7 @@
         // phobos enough yet
         // this will probably change soon though
         "--pho-extension", ".lua",
-        "--use-load",
+        // "--use-load",
       ],
       "presentation": {
         "reveal": "silent",

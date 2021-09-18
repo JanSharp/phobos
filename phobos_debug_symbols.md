@@ -44,3 +44,5 @@ Phobos debug symbols are between this signature and trailing `\0` in binary form
     0 stands for the regular Lua `source`, 1 is the 0th entry in `sources`
 
 there is an implied first section with instruction_index and source_index both being `0`.
+
+-- TODO: Phobos debug symbols will always be the last constant
