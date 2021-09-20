@@ -33,6 +33,13 @@ local args_config = {
       flag = true,
     },
     {
+      field = "test_formatter",
+      long = "test-formatter",
+      short = "r",
+      description = "Ensure code => AST => code conversion preserves code structure",
+      flag = true,
+    },
+    {
       field = "diff_files",
       long = "diff-files",
       short = "f",
@@ -90,6 +97,7 @@ local fold_const
 local phobos
 local dump
 local disassembler
+local formatter
 
 local compiled
 local raw_compiled
@@ -103,6 +111,7 @@ local function init()
   phobos = req("phobos")
   dump = req("dump")
   disassembler = req("disassembler")
+  formatter = req("formatter")
 end
 
 local serpent = require("serpent")
@@ -113,6 +122,22 @@ local function compile(filename)
   file:close()
 
   local ast = parser(text, "@"..filename)
+
+  if args.test_formatter then
+    local formatted = formatter(ast)
+    if text ~= formatted then
+      if args.diff_files then
+        assert(io.open("E:/Temp/.Compare/temp1.txt", "w"))
+          :write(text)
+          :close()
+        assert(io.open("E:/Temp/.Compare/temp2.txt", "w"))
+          :write(formatted)
+          :close()
+      end
+      error("Formatter has different output.")
+    end
+  end
+
   jump_linker(ast)
   fold_const(ast)
   local prev_ast_str
@@ -120,6 +145,7 @@ local function compile(filename)
     prev_ast_str = serpent.block(ast)
   end
   local compiled_data = phobos(ast)
+
   if args.ensure_clean_data then
     local ast_str = serpent.block(ast)
     if ast_str ~= prev_ast_str then
@@ -134,7 +160,9 @@ local function compile(filename)
       error("Compiler left a mess behind.")
     end
   end
+
   local bytecode = dump(compiled_data)
+
   if args.test_disassembler then
     local disassembled = disassembler.disassemble(bytecode)
     disassembler.get_disassembly(compiled_data, function() end, function() end)
@@ -151,6 +179,7 @@ local function compile(filename)
       error("Disassembler has different output.")
     end
   end
+
   compiled[filename] = assert(load(bytecode, nil, "b", phobos_env))
   raw_compiled[filename] = bytecode
 end

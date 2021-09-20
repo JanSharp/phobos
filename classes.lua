@@ -68,6 +68,8 @@
 ---should the expression be forced to evaluate to only one result
 ---caused by the expression being wrapped in `()`
 ---@field force_single_result boolean|nil
+---similar to index expressions, the last one to close/most right one is
+---the first one in the list/first one you encounter when processing the data
 ---@field src_paren_wrappers AstParenWrapper[]|nil
 
 -- since every scope inherits AstNode and AstBody, AstScope now does as well
@@ -89,7 +91,9 @@
 ---@field func_protos AstFunctionDef[]
 ---@field upvals AstUpvalDef[]
 ---@field is_vararg boolean
----@field num_params integer
+---@field vararg_token AstTokenNode|nil @ used when `is_vararg == true`
+---@field num_params integer @ -- TODO: deprecated by params
+---@field params AstLocalReference[]
 ---all parameters are `whole_block = true` locals, except vararg
 ---@field param_comma_tokens AstTokenNode[] @ max length is `num_params - 1`, min `0`
 ---@field open_paren_token AstTokenNode
@@ -156,7 +160,6 @@
 ---@field stop AstExpression
 ---@field step AstExpression|nil
 ---`var` is referring to a `whole_block = true` local
----@field locals AstLocalDef[]
 ---@field for_token AstTokenNode @ position for the `forloop` instruction
 ---@field eq_token AstTokenNode
 ---@field first_comma_token AstTokenNode
@@ -170,7 +173,6 @@
 ---@field exp_list AstExpression[]
 ---@field exp_list_comma_tokens AstTokenNode[]
 ---all `name_list` names are used for a `whole_block = true` local
----@field locals AstLocalDef[]
 ---@field for_token AstTokenNode @ position for the `tforcall` and `tforloop` instructions
 ---@field comma_tokens AstTokenNode[] @ max length is `#name_list - 1`
 ---@field in_token AstTokenNode
@@ -293,7 +295,7 @@
 ---`]` node_type if it is not a literal identifier
 ---@field suffix_close_token AstTokenNode|nil
 ---if this is an index into `_ENV` where `_ENV.` did not exist in source
----@field scr_ex_did_not_exist boolean|nil
+---@field src_ex_did_not_exist boolean|nil
 
 ---uses line, column and leading
 ---@class AstString : AstExpression
@@ -430,7 +432,6 @@
 ---@field end_column '0'
 ---@field is_vararg 'true'
 ---@field num_params '0'
----@field locals AstLocalDef[]
 ---@field eof_token AstTokenNode @ to store trailing blank and comment tokens
 
 ---@class AstENVScope : AstBody, AstScope

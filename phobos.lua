@@ -21,7 +21,7 @@ do
 
   local function get_position_for_index(index_node)
     if index_node.suffix.node_type == "string" and index_node.suffix.src_is_ident then
-      if index_node.scr_ex_did_not_exist then
+      if index_node.src_ex_did_not_exist then
         return index_node.suffix
       else
         return index_node.dot_token

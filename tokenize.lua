@@ -117,6 +117,8 @@ local function read_string(str,index,quote,state)
     -- empty string
     local token = new_token("string",index,state.line,index - state.line_offset)
     token.value = ""
+    token.src_quote = quote
+    token.src_value = ""
     return i+1,token
   end
 
@@ -141,7 +143,7 @@ local function read_string(str,index,quote,state)
     token.src_value = str:sub(index+1,i-1)
     token.value = table.concat(parts)
 
-    token.src_is_block_str = false
+    -- token.src_is_block_str = false -- why bother setting quite literally anything to false :P
     token.src_quote = quote
 
     return i+1,token
