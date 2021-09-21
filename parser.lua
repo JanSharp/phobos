@@ -175,7 +175,7 @@ do
     local node = new_node("index")
     node.ex = get_ref(scope, env_ident)
     node.suffix = suffix
-    node.scr_ex_did_not_exist = true
+    node.src_ex_did_not_exist = true
 
     return node
   end
@@ -334,18 +334,23 @@ end
 ---@return number number of parameters matched
 local function par_list(scope)
   -- param_list -> [ param { `,' param } ]
+  local params = {}
   if token.token_type == ")" then
-    return 0
+    return params
   end
   while true do
     if test_next("ident") then
-      local param_def = create_local_def(prev_token.value)
+      local ident_node = new_full_node("ident", true)
+      ident_node.value = prev_token.value
+      local param_def
+      param_def, params[#params+1] = create_local(ident_node)
       param_def.whole_block = true
       scope.locals[#scope.locals+1] = param_def
     elseif token.token_type == "..." then
       scope.is_vararg = true
+      scope.vararg_token = new_token_node()
       next_token()
-      return #scope.locals
+      return params
     else
       syntax_error("<name> or '...' expected")
     end
@@ -355,7 +360,7 @@ local function par_list(scope)
       break
     end
   end
-  return #scope.locals
+  return params
 end
 
 --- Function Definition
@@ -391,7 +396,8 @@ local function body(function_token, scope, is_method)
   local this_node = new_node("func_proto")
   this_node.func_def = func_def_node
   assert_next("(")
-  func_def_node.num_params = par_list(func_def_node)
+  func_def_node.params = par_list(func_def_node)
+  func_def_node.num_params = #func_def_node.params
   func_def_node.close_paren_token = new_token_node()
   assert_next(")")
   func_def_node.body = stat_list(func_def_node)
@@ -425,6 +431,7 @@ local function func_args(node, scope)
       node.open_paren_token = new_token_node()
       next_token()
       if token.token_type == ")" then
+        node.close_paren_token = new_token_node()
         next_token()
         return {}
       end
@@ -471,10 +478,10 @@ local function primary_exp(scope)
     assert_match(open_paren_token, ")")
     ex.force_single_result = true
     ex.src_paren_wrappers = ex.src_paren_wrappers or {}
-    table.insert(ex.src_paren_wrappers, 1, {
+    ex.src_paren_wrappers[#ex.src_paren_wrappers+1] = {
       open_paren_token = open_paren_token,
       close_paren_token = close_paren_token,
-    })
+    }
     return ex
   elseif token.token_type == "ident" then
     return get_ref(scope, assert_name())

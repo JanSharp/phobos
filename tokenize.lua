@@ -70,7 +70,10 @@ local keywords = invert{
 ---@field index number
 ---@field line number
 ---@field column number
----@field value string|number @ for `blank`, `comment`, `string`, `number` and `ident` tokens
+---for `blank`, `comment`, `string`, `number` and `ident` tokens\
+---"blank" tokens shall never contain `\n` in the middle of their value\
+---"comment" tokens with `not src_is_block_str` do not contain trailing `\n`
+---@field value string|number
 ---@field src_is_block_str boolean @ for `string` and `comment` tokens
 ---@field src_quote string @ for non block `string` and `comment` tokens
 ---@field src_value string @ for non block `string`, `comment` and `number` tokens
@@ -117,6 +120,8 @@ local function read_string(str,index,quote,state)
     -- empty string
     local token = new_token("string",index,state.line,index - state.line_offset)
     token.value = ""
+    token.src_quote = quote
+    token.src_value = ""
     return i+1,token
   end
 
@@ -141,7 +146,7 @@ local function read_string(str,index,quote,state)
     token.src_value = str:sub(index+1,i-1)
     token.value = table.concat(parts)
 
-    token.src_is_block_str = false
+    -- token.src_is_block_str = false -- why bother setting quite literally anything to false :P
     token.src_quote = quote
 
     return i+1,token
@@ -304,26 +309,20 @@ local function next_token(state,index)
   if not index then index = 1 end
   local str = state.str
   local next_char = str:sub(index,index)
-  do
-    local start_index, start_line, start_line_offset = index, state.line, state.line_offset
-    while next_char:match("%s") do
-      if next_char == "\n" then
-        -- increment line number, stash position of line start
-        state.line = state.line + 1
-        state.line_offset = index
-      end
-      index = index + 1
-      next_char = str:sub(index,index)
-    end
-    if index ~= start_index then
-      local token = new_token("blank", start_index, start_line, start_index - start_line_offset)
-      token.value = str:sub(start_index, index - 1)
-      return index, token
-    end
-  end
-
   if next_char == "" then
     return -- EOF
+  end
+
+  if next_char:match("%s") then
+    local value, line_end, value_end = str:match("([^%S\n]*()\n?)()", index)
+    local token = new_token("blank", index, state.line, index - state.line_offset)
+    token.value = value
+    index = value_end
+    if line_end ~= value_end then -- ends with newline?
+      state.line = state.line + 1
+      state.line_offset = line_end
+    end
+    return index, token
   elseif next_char:match("[+*/%%^#;,(){}%]]") then
     return index+1,new_token(next_char,index,state.line,index - state.line_offset)
   elseif next_char:match("[>=<]") then
@@ -340,7 +339,7 @@ local function next_token(state,index)
       if str:find(block_string_open_bracket_patter, index + 2) then
         --[[
           read block string, build a token from that
-          ]]
+        ]]
         local next_index,token = read_block_string(str,index+2,state)
         token.token_type = "comment"
         token.index = index
