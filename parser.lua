@@ -14,6 +14,9 @@ local peek_token
 
 local statement, expr
 
+---TODO: make the right object in the error message the focus, the thing that is actually wrong.
+---for example when an assertion of some token failed, it's most likely not that token that
+---is missing (like a closing }), but rather the actual token that was encoutered that was unexpected
 ---Throw a Syntax Error at the current location
 ---@param msg string Error message
 local function syntax_error(msg)
