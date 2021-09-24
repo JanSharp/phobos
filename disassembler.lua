@@ -1,5 +1,6 @@
 
-local opcodes = require("opcodes")
+local opcode_util = require("opcodes")
+local opcodes = opcode_util.opcode_id_lut
 local phobos_consts = require("constants")
 local util = require("util")
 

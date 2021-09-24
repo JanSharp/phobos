@@ -5,7 +5,8 @@ local util = require("util")
 ----------------------------------------------------------------------
 local generate_code
 do
-  local opcodes = require("opcodes")
+  local opcode_util = require("opcodes")
+  local opcodes = opcode_util.opcode_id_lut
 
   local function get_last_used_line(func)
     return (#func.instructions > 0)
