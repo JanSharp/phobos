@@ -245,27 +245,27 @@ local function DumpFunction(func)
   dump[#dump+1] = DumpInt(#func.instructions)
   -- Instruction[] instructions
   for _,instruction in ipairs(func.instructions) do
-    local opcode = instruction.op
+    local inst_int = instruction.op.id
     if instruction.ax then
-      opcode = opcode + bit32.lshift(instruction.ax, 6)
+      inst_int = inst_int + bit32.lshift(instruction.ax, 6)
     else
       if instruction.a then
-        opcode = opcode + bit32.lshift(instruction.a, 6)
+        inst_int = inst_int + bit32.lshift(instruction.a, 6)
       end
       if instruction.bx then
-        opcode = opcode + bit32.lshift(instruction.bx, 14)
+        inst_int = inst_int + bit32.lshift(instruction.bx, 14)
       elseif instruction.sbx then
-        opcode = opcode + bit32.lshift(instruction.sbx + 0x1ffff, 14)
+        inst_int = inst_int + bit32.lshift(instruction.sbx + 0x1ffff, 14)
       else
         if instruction.b then
-          opcode = opcode + bit32.lshift(instruction.b, 23)
+          inst_int = inst_int + bit32.lshift(instruction.b, 23)
         end
         if instruction.c then
-          opcode = opcode + bit32.lshift(instruction.c, 14)
+          inst_int = inst_int + bit32.lshift(instruction.c, 14)
         end
       end
     end
-    dump[#dump+1] = DumpInt(opcode)
+    dump[#dump+1] = DumpInt(inst_int)
   end
 
 

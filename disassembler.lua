@@ -1,6 +1,6 @@
 
-local opcode_util = require("opcodes")
-local opcodes = opcode_util.opcode_id_lut
+local opcode_util = require("opcode_util")
+local opcodes = opcode_util.opcodes
 local phobos_consts = require("constants")
 local util = require("util")
 
@@ -238,54 +238,6 @@ end
 
 local create_instruction
 do
-  local ABC = {"a", "b", "c"}
-  local ABx = {"a", "bx"}
-  local AsBx = {"a", "sbx"}
-  local Ax = {"ax"}
-
-  local instruction_arg_mode_lut = {
-    [opcodes.move] = ABC,
-    [opcodes.loadk] = ABx,
-    [opcodes.loadkx] = ABx,
-    [opcodes.loadbool] = ABC,
-    [opcodes.loadnil] = ABC,
-    [opcodes.getupval] = ABC,
-    [opcodes.gettabup] = ABC,
-    [opcodes.gettable] = ABC,
-    [opcodes.settabup] = ABC,
-    [opcodes.setupval] = ABC,
-    [opcodes.settable] = ABC,
-    [opcodes.newtable] = ABC,
-    [opcodes.self] = ABC,
-    [opcodes.add] = ABC,
-    [opcodes.sub] = ABC,
-    [opcodes.mul] = ABC,
-    [opcodes.div] = ABC,
-    [opcodes.mod] = ABC,
-    [opcodes.pow] = ABC,
-    [opcodes.unm] = ABC,
-    [opcodes["not"]] = ABC,
-    [opcodes.len] = ABC,
-    [opcodes.concat] = ABC,
-    [opcodes.jmp] = AsBx,
-    [opcodes.eq] = ABC,
-    [opcodes.lt] = ABC,
-    [opcodes.le] = ABC,
-    [opcodes.test] = ABC,
-    [opcodes.testset] = ABC,
-    [opcodes.call] = ABC,
-    [opcodes.tailcall] = ABC,
-    [opcodes["return"]] = ABC,
-    [opcodes.forloop] = AsBx,
-    [opcodes.forprep] = AsBx,
-    [opcodes.tforcall] = ABC,
-    [opcodes.tforloop] = AsBx,
-    [opcodes.setlist] = ABC,
-    [opcodes.closure] = ABx,
-    [opcodes.vararg] = ABC,
-    [opcodes.extraarg] = Ax,
-  }
-
   local instruction_part_getter_lut = {
     a = function(raw) return bit32.band(bit32.rshift(raw, 6), 0xff) end,
     b = function(raw) return bit32.band(bit32.rshift(raw, 23), 0x1ff) end,
@@ -296,9 +248,10 @@ do
   }
 
   function create_instruction(raw)
-    local op = bit32.band(raw, 0x3f)
-    local instruction = {op = op}
-    for _, part in ipairs(instruction_arg_mode_lut[op]) do
+    local op_id = bit32.band(raw, 0x3f)
+    local opcode = opcode_util.opcodes_by_id[op_id]
+    local instruction = {op = opcode}
+    for part in pairs(opcode.params) do
       instruction[part] = instruction_part_getter_lut[part](raw)
     end
     return instruction
@@ -588,24 +541,12 @@ local function get_disassembly(func, func_description_callback, instruction_call
   for i = 1, #instructions do
     local label, description = get_instruction_label(func, i, constant_labels)
     local _, description_with_keys = get_instruction_label(func, i, constant_labels, true)
-    local raw = ""
-    local first = true
-    local function conditionally_add_raw_value(key)
-      if instructions[i][key] then
-        if first then
-          first = false
-        else
-          raw = raw.." "
-        end
-        raw = raw.."["..key.." = "..instructions[i][key].."]"
+    local parts = {}
+    for _, key in ipairs{"a", "b", "c", "ax", "bx", "sbx"} do
+      if instructions[i].op.params[key] then
+        parts[#parts+1] = "["..key.." = "..instructions[i][key].."]"
       end
     end
-    conditionally_add_raw_value("a")
-    conditionally_add_raw_value("b")
-    conditionally_add_raw_value("c")
-    conditionally_add_raw_value("ax")
-    conditionally_add_raw_value("bx")
-    conditionally_add_raw_value("sbx")
     instruction_callback(
       instructions[i].line,
       instructions[i].column,
@@ -613,7 +554,7 @@ local function get_disassembly(func, func_description_callback, instruction_call
       label..string.rep(" ", max_opcode_name_length - #label),
       description,
       description_with_keys,
-      raw
+      table.concat(parts)
     )
   end
 end

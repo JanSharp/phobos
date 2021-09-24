@@ -2,12 +2,12 @@
 local invert = require("invert")
 local phobos_consts = require("constants")
 local util = require("util")
+local opcode_util = require("opcode_util")
+local opcodes = opcode_util.opcodes
+
 ----------------------------------------------------------------------
 local generate_code
 do
-  local opcode_util = require("opcodes")
-  local opcodes = opcode_util.opcode_id_lut
-
   local function get_last_used_line(func)
     return (#func.instructions > 0)
       and func.instructions[#func.instructions].line

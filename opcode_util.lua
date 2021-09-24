@@ -26,7 +26,6 @@ end
 local next_id = 0
 local opcodes = {}
 local opcodes_by_id = {}
-local opcode_name_lut = {}
 local function op(name, params, special)
   local reduce_if_not_zero = {}
   for k, v in pairs(special or {}) do
@@ -45,14 +44,13 @@ local function op(name, params, special)
 
   opcodes[name] = opcode
   opcodes_by_id[next_id] = opcode
-  opcode_name_lut[next_id] = name
 
   next_id = next_id + 1
 end
 
 op("move", {a = register, b = register})
 op("loadk", {a = register, bx = constant})
-op("loadkx", {a = register, next = {op = "extraarg", ax = constant}})
+op("loadkx", {a = register, next = {name = "extraarg", ax = constant}})
 op("loadbool", {a = register, b = bool, c = bool})
 op("loadnil", {a = register, b = other})
 
@@ -106,5 +104,4 @@ return {
   param_types = param_types,
   opcodes = opcodes,
   opcodes_by_id = opcodes_by_id,
-  opcode_name_lut = opcode_name_lut,
 }

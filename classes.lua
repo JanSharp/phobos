@@ -443,8 +443,58 @@
 --------------------------------------------------
 -- generated/bytecode stuff:
 
+---@alias OpcodeParamType
+---| '1' @ register
+---| '2' @ constant
+---| '3' @ register_or_constant
+---| '4' @ upval
+---| '5' @ bool
+---| '6' @ floating_byte
+---| '7' @ jump_pc_offset
+---| '8' @ other
+---| 'nil' @ unused
+
+---@class OpcodeParams
+---@field a OpcodeParamType
+---@field b OpcodeParamType
+---@field c OpcodeParamType
+---@field ax OpcodeParamType
+---@field bx OpcodeParamType
+---@field sbx OpcodeParamType
+
+---by how much the raw value has to be reduced to get the actual value
+---of the param if the raw value is not equal to zero.\
+---Used for a few params where 0 has a special meaning line `var`
+---@class OpcodeReduceIfNotZero
+---@field a number|nil
+---@field b number|nil
+---@field c number|nil
+---@field ax number|nil
+---@field bx number|nil
+---@field sbx number|nil
+
+---technically only used for`name == "extraarg"`\
+---these param types completely override the entire `params` of the referenced opcode
+---@class OpcodeNextOpcode
+---@field name string @ name of the opcode that has to follow this opcode
+---Under what condition this opcode has to be followed by this next opcode as defined here
+---@field condition nil|fun(inst: Instruction):boolean
+---@field a OpcodeParamType
+---@field b OpcodeParamType
+---@field c OpcodeParamType
+---@field ax OpcodeParamType
+---@field bx OpcodeParamType
+---@field sbx OpcodeParamType
+
+---@class Opcode
+---@field id integer @ **zero based**
+---@field name string @ opcode name. Commonly used as the identifier to look up opcodes
+---@field params OpcodeParams
+---@field reduce_if_not_zero OpcodeReduceIfNotZero
+---@field next_op OpcodeNextOpcode|nil
+
 ---@class Instruction
----@field op integer
+---@field op Opcode
 ---@field a integer
 ---@field b integer
 ---@field c integer
