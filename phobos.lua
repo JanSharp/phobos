@@ -340,6 +340,7 @@ do
         return lr.reg, lr
       end
     end
+    error("Could not find local with the name '"..local_name.."'.")
   end
 
   ---@param upval_name string
@@ -392,7 +393,6 @@ do
       if upval.in_stack then
         local live_reg
         upval.local_idx, live_reg = find_local(upval.name, func)
-        assert(live_reg)
         if not live_reg.upval_capture_pc then
           live_reg.upval_capture_pc = #func.instructions
         end
@@ -413,6 +413,15 @@ do
 
   local function is_branchy(node)
     node = get_real_expr(node)
+    return node.node_type == "binop"
+      and (
+        logical_binop_lut[node.op]
+        or node.op == "and"
+        or node.op == "or"
+      )
+  end
+
+  local function is_branchy_old(node)
     return node.node_type == "binop"
       and (
         logical_binop_lut[node.op]
@@ -455,155 +464,122 @@ do
   ---@field jump_to Test
   ---@field jump_past Test
 
-  local function eval_inverted_and_force_bool_result(not_count, inverted, force_bool_result)
+  local function eval_inverted(not_count, inverted)
     -- if not_count is uneven then invert `inverted`
-    inverted = inverted ~= ((not_count % 2) == 1)
-    -- if there was at least one `not` unop force_bool_result has to be `true`
-    -- otherwise fall back to the initial value
-    force_bool_result = (not_count >= 1) or force_bool_result
-    return inverted, force_bool_result
+    return inverted ~= ((not_count % 2) == 1)
   end
 
-  local function create_test(expr, op_token, jump_if_true, store_result)
+  local function eval_force_bool_result(not_count, force_bool_result)
+    -- if there was at least one `not` unop force_bool_result has to be `true`
+    -- otherwise fall back to the initial value
+    return (not_count >= 1) or force_bool_result
+  end
+
+  local function create_test(expr, op_token, jump_if_true, jump_target)
     return {
       type = "test",
       expr = expr.expr,
       line = op_token and op_token.line,
       column = op_token and op_token.column,
-      jump_if_true = jump_if_true,
-      jump_to_success = jump_if_true ~= expr.inverted,
-      store_result = store_result,
+      jump_if_true = jump_if_true ~= expr.inverted,
+      jump_to_success = jump_if_true, --~= expr.inverted,
+      jump_target = jump_target,
       force_bool_result = expr.force_bool_result,
     }
   end
 
-  local function foo(node, func, store_result, inverted, force_bool_result)
-    local original_node = node
+  local function create_expr(expr, inverted, force_bool_result)
     local not_count
-    node, not_count = get_real_expr(node)
-    inverted, force_bool_result =
-      eval_inverted_and_force_bool_result(not_count, inverted, force_bool_result)
-
-    if node.node_type == "binop" then
-      if node.op == "and" or node.op == "or" then
-        local chain = {}
-        local jump_if_true = node.op == "or"
-        local jump_to_success = jump_if_true ~= inverted
-        local expr = {
-          type = "expr",
-          expr = node.left,
-          inverted = inverted,
-          force_bool_result = force_bool_result,
-        }
-        local test
-        while expr and is_branchy(expr.expr) do
-          local real_expr = get_real_expr(expr.expr)
-          if real_expr.node_type == "binop" and real_expr.op == node.op then
-            expr, test = foo(expr.expr, func, store_result, expr.inverted, expr.force_bool_result)
-            chain[#chain+1] = test.chain[1]
-          else
-            expr, test = foo(expr.expr, func, false, expr.inverted, false)
-            if test then
-              if test.type == "logical" then
-                test.jump_if_true = jump_if_true
-                test.jump_to_success = jump_to_success ~= test.inverted
-              end
-              chain[#chain+1] = test
-            end
-          end
-        end
-        if expr then
-          chain[#chain+1] = create_test(expr, node.op_token, jump_if_true, store_result)
-        end
-        local last_expr
-        last_expr, not_count = get_real_expr(node.right)
-        local last_inverted, last_force_bool_result =
-          eval_inverted_and_force_bool_result(not_count, inverted, force_bool_result)
-        return {
-          type = "expr",
-          expr = last_expr,
-          inverted = last_inverted,
-          force_bool_result = last_force_bool_result,
-        }, {
-          type = "chain",
-          inner_success_jumps_leave = jump_to_success,
-          chain = chain,
-        }
-
-      elseif logical_binop_lut[node.op] then
-        return nil, {
-          type = "logical",
-          expr = node,
-          inverted = inverted, -- internal for chains overriding jump_if_true and jump_to_success
-          jump_if_true = not inverted,
-          jump_to_success = not inverted,
-          store_result = store_result,
-          force_bool_result = true,
-        }
-      end
-    end
-
+    expr, not_count = get_real_expr(expr)
     return {
       type = "expr",
-      expr = original_node,
-      inverted = inverted,
-      force_bool_result = force_bool_result,
+      expr = expr,
+      inverted = eval_inverted(not_count, inverted),
+      force_bool_result = eval_force_bool_result(not_count, force_bool_result),
     }
   end
 
-  local function bar(node, in_reg, func)
-    local store_result = not not in_reg
-    local jump_if_true = store_result
-    local jump_to_success = store_result
-
-    local last_expr, test = foo(node, func, store_result, false, false)
-    local last_chain
-    if last_expr then
-      last_chain = {}
-      while last_expr and is_branchy(last_expr.expr) do
-        local last_test
-        last_expr, last_test = foo(
-          last_expr.expr,
-          func,
-          store_result,
-          last_expr.inverted,
-          last_expr.force_bool_result
-        )
-        if last_test then
-          if last_test.type == "logical" then
-            last_test.jump_if_true = jump_if_true
-            last_test.jump_to_success = jump_to_success ~= last_test.inverted
-          end
-          last_chain[#last_chain+1] = last_test
-        end
-      end
-      if last_expr then
-        if (not store_result) or (last_expr.force_bool_result and (not last_expr.inverted)) then
-          -- TODO: what op_token?
-          last_chain[#last_chain+1] = create_test(last_expr, node.op_token, jump_if_true, store_result)
-        else
-          -- last_expr.type = "expr"
-          last_chain[#last_chain+1] = last_expr
-        end
-      end
+  local create_jump_target
+  do
+    ---this id is purely used for debugging
+    ---the actual algorithm uses table identity
+    local id = 0
+    function create_jump_target()
+      id = id + 1
+      return {id = id}
     end
-    return test, last_chain
-      and {
-        type = "chain",
-        inner_success_jumps_leave = jump_to_success,
-        chain = last_chain,
-      }
-      or nil
   end
 
-  local function generate_test_test(test, in_reg, func)
+  local function foo(node, chain, func, jump_if_true, jump_target, store_result)
+    local expr = node.expr
+
+    if expr.node_type == "binop" then
+      if expr.op == "and" or expr.op == "or" then
+        jump_if_true = (expr.op == "or") ~= node.inverted
+
+        local jump_here_target = create_jump_target()
+        local left = create_expr(expr.left, node.inverted, node.force_bool_result)
+
+        while left and is_branchy(left.expr) do
+          local real_expr, not_count = get_real_expr(left.expr)
+          local inverted = eval_inverted(not_count, left.inverted)
+          local inner_jump_target
+          if real_expr.node_type == "binop" -- is the inner expr part of this "chain"?
+            and (
+              logical_binop_lut[real_expr.op]
+              or (
+                (real_expr.op == "and" or real_expr.op == "or")
+                and (
+                  (real_expr.op == expr.op and inverted == node.inverted)
+                  or (real_expr.op ~= expr.op and inverted ~= node.inverted)
+                )
+              )
+            )
+          then -- if so jump to the same target this test will
+            inner_jump_target = jump_target
+          else -- otherwise jump to (just past) this test
+            inner_jump_target = jump_here_target
+          end
+          left = foo(left, chain, func, jump_if_true, inner_jump_target, store_result)
+        end
+
+        if left then
+          chain[#chain+1] = create_test(left, expr.op_token, jump_if_true, jump_target)
+        end
+
+        -- tell inner chains to jump to right after this test (or logical test)
+        if left or chain[#chain].type == "logical" then
+          chain[#chain].jump_here_target = jump_here_target
+        end
+
+        return create_expr(expr.right, node.inverted, node.force_bool_result)
+      elseif logical_binop_lut[expr.op] then
+
+        local test = create_test(node, expr.op_token, jump_if_true, jump_target)
+        test.type = "logical"
+        test.expr = expr
+        test.force_bool_result = true
+        chain[#chain+1] = test
+        return
+      end
+    end
+
+    if jump_target.is_main and store_result and ((not node.force_bool_result) or node.inverted) then
+      chain[#chain+1] = create_expr(expr, node.inverted, node.force_bool_result)
+      chain[#chain].jump_target = jump_target
+    else
+      chain[#chain+1] = create_test(node, {}, jump_if_true, jump_target)
+    end
+  end
+
+  local function generate_test_test(test, in_reg, store_result, func)
     local expr = test.expr
-    local line = test.line
-    local column = test.column
+    local line = test.line or get_last_used_line(func)
+    local column = test.column or get_last_used_column(func)
 
     local temp_reg = peek_next_reg(func)
     local expr_reg = local_or_fetch(expr, temp_reg, func)
-    if test.store_result and (not test.force_bool_result) then
+    if store_result and test.jump_target.is_main and (not test.force_bool_result) then
       func.instructions[#func.instructions+1] = {
         op = opcodes.testset, a = in_reg, b = expr_reg, c = test.jump_if_true and 1 or 0,
         line = line, column = column,
@@ -617,8 +593,8 @@ do
     local jump = {
       op = opcodes.jmp, a = 0, sbx = nil,
       line = line, column = column,
-      jump_to_success = test.jump_to_success,
       force_bool_result = test.force_bool_result,
+      jump_to_success = test.jump_to_success,
     }
     func.instructions[#func.instructions+1] = jump
     jump.pc = #func.instructions
@@ -647,8 +623,8 @@ do
     local jump = {
       op = opcodes.jmp, a = 0, sbx = nil,
       line = line, column = column,
-      jump_to_success = test.jump_to_success,
       force_bool_result = test.force_bool_result,
+      jump_to_success = test.jump_to_success,
     }
     func.instructions[#func.instructions+1] = jump
     jump.pc = #func.instructions
@@ -656,93 +632,70 @@ do
     return jump
   end
 
-  local function generate_expr_test(test, in_reg, func)
-    if test.force_bool_result then
-      assert(test.inverted)
-      local temp_reg = peek_next_reg(func)
-      local expr_reg = const_or_local_or_fetch(test.expr, temp_reg, func)
-      func.instructions[#func.instructions+1] = {
-        op = opcodes["not"], a = in_reg, b = expr_reg,
-        -- TODO: somehow get the position of a `not` token here
-        line = get_last_used_line(func),
-        column = get_last_used_column(func),
-      }
-      if expr_reg == temp_reg then
-        release_reg(temp_reg, func)
-      end
-    else
-      generate_expr(test.expr, in_reg, func, 1)
+  local function bar(node, in_reg, func)
+    local store_result = not not in_reg
+    local chain = {}
+    local leave_jump_target = create_jump_target()
+    leave_jump_target.is_main = true
+    local function foo2(expr)
+      return foo(expr, chain, func, not store_result, leave_jump_target, store_result)
     end
-  end
-
-  local generate_chain
-  local function generate_test(test, in_reg, func)
-    if test.type == "test" then
-      return {generate_test_test(test, in_reg, func)}
-    elseif test.type == "chain" then
-      return generate_chain(test, in_reg, func)
-    elseif test.type == "logical" then
-      return {generate_logical_test(test, in_reg, func)}
-    elseif test.type == "expr" then
-      generate_expr_test(test, in_reg, func)
-      return {}
+    local last_expr = foo2(create_expr(node, false, false))
+    while last_expr do
+      last_expr = foo2(last_expr)
     end
-  end
 
-  function generate_chain(chain, in_reg, func)
-    assert(chain.type == "chain")
     local jumps = {}
-    local inner_jumps
-    local prev_inner_jumps
-    for _, test in ipairs(chain.chain) do
-      if test.type == "chain" then
-        inner_jumps = generate_chain(test, in_reg, func)
+    for _, test in ipairs(chain) do
+      local function add_jump(jump)
+        local jumps_to_jump_target = jumps[test.jump_target]
+        if not jumps_to_jump_target then
+          jumps_to_jump_target = {}
+          jumps[test.jump_target] = jumps_to_jump_target
+        end
+        jumps_to_jump_target[#jumps_to_jump_target+1] = jump
+      end
+
+      if test.type == "expr" then
+        if test.inverted then
+          generate_expr({
+            node_type = "unop",
+            op = "not",
+            op_token = {
+              line = get_last_used_line(func),
+              column = get_last_used_column(func),
+            },
+            ex = test.expr,
+          }, in_reg, func, 1)
+        else
+          generate_expr(test.expr, in_reg, func, 1)
+        end
       else
-        local test_jumps = generate_test(test, in_reg, func)
-        for _, jump in ipairs(test_jumps) do
-          jumps[#jumps+1] = jump
+        if test.type == "test" then
+          add_jump(generate_test_test(test, in_reg, store_result, func))
+        elseif test.type == "logical" then
+          add_jump(generate_logical_test(test, in_reg, func))
+        else
+          error("Invalid test type '"..test.type.."'.")
         end
-      end
-      if prev_inner_jumps then -- not sure if this is right either
-        for _, jump in ipairs(prev_inner_jumps) do
-          if jump.jump_to_success == chain.inner_success_jumps_leave then
-            jumps[#jumps+1] = jump
-          else
-            jump.sbx = #func.instructions - jump.pc
-            jump.pc = nil
-            jump.jump_to_success = nil
-            -- assert(not jump.force_bool_result)
-            jump.force_bool_result = nil
-          end
-        end
-      end
-      prev_inner_jumps = inner_jumps
-      inner_jumps = nil
-    end
-    -- really? i don't think this is right
-    if prev_inner_jumps then
-      jump_here(prev_inner_jumps, func)
-    end
-    return jumps
-  end
 
-  local function baz(test_tree, last_chain, in_reg, func)
-    local jumps
-    if test_tree then
-      jumps = generate_test(test_tree, in_reg, func)
-    end
-    if last_chain then
-      local last_jumps = generate_chain(last_chain, in_reg, func)
-      if last_jumps then
-        for _, jump in ipairs(last_jumps) do
-          jumps[#jumps+1] = jump
+        for _, jump in ipairs(jumps[test.jump_here_target] or {}) do
+          jump.sbx = #func.instructions - jump.pc
+          jump.pc = nil
+          jump.force_bool_result = nil
         end
       end
     end
 
-    if in_reg then
-      local load_false = true -- for now. only needs to be forced to exist if there is fallthrough
-      local load_true
+    jumps = jumps[leave_jump_target] or {}
+
+    local load_false = false
+    local load_true = false
+
+    if chain[#chain].type ~= "expr" and chain[#chain].force_bool_result then
+      load_false = true
+      load_true = true
+    else
       for _, jump in ipairs(jumps) do
         if jump.force_bool_result then
           if jump.jump_to_success then
@@ -752,49 +705,64 @@ do
           end
         end
       end
-      local false_pc
-      local true_pc
+    end
+
+    if (load_true or load_false) and chain[#chain].type == "expr" then
+      local jump = {
+        op = opcodes.jmp, a = 0, sbx = nil,
+        line = get_last_used_line(func),
+        column = get_last_used_column(func),
+        force_bool_result = false,
+        jump_to_success = true,
+      }
+      jumps[#jumps+1] = jump
+      func.instructions[#func.instructions+1] = jump
+      jump.pc = #func.instructions
+    end
+
+    local true_pc
+    local false_pc
+
+    local function generate_loadbool(value, skip_next)
+      func.instructions[#func.instructions+1] = {
+        op = opcodes.loadbool, a = in_reg, b = value and 1 or 0, c = skip_next and 1 or 0,
+        line = get_last_used_line(func),
+        column = get_last_used_column(func),
+      }
+    end
+    local function generate_false(skip_next)
       if load_false then
         false_pc = #func.instructions
-        func.instructions[#func.instructions+1] = {
-          op = opcodes.loadbool, a = in_reg, b = 0, c = load_true and 1 or 0,
-          line = get_last_used_line(func),
-          column = get_last_used_column(func),
-        }
+        generate_loadbool(false, skip_next)
       end
+    end
+    local function generate_true(skip_next)
       if load_true then
         true_pc = #func.instructions
-        func.instructions[#func.instructions+1] = {
-          op = opcodes.loadbool, a = in_reg, b = 1, c = 0,
-          line = get_last_used_line(func),
-          column = get_last_used_column(func),
-        }
+        generate_loadbool(true, skip_next)
       end
-      for _, jump in ipairs(jumps) do
-        if jump.force_bool_result then
-          if jump.jump_to_success then
-            jump.sbx = true_pc - jump.pc
-          else
-            jump.sbx = false_pc - jump.pc
-          end
-        else
-          jump.sbx = #func.instructions - jump.pc
-        end
-        jump.pc = nil
-        jump.jump_to_success = nil
-        jump.force_bool_result = nil
-      end
+    end
+
+    if chain[#chain].type ~= "expr" and chain[#chain].jump_to_success then
+      generate_false(load_true)
+      generate_true()
     else
-      local success_jumps = {}
-      local failure_jumps = {}
-      for _, jump in ipairs(jumps) do
+      generate_true(load_false)
+      generate_false()
+    end
+
+    for _, jump in ipairs(jumps) do
+      if store_result and jump.force_bool_result then
         if jump.jump_to_success then
-          success_jumps[#success_jumps+1] = jump
+          jump.sbx = true_pc - jump.pc
         else
-          failure_jumps[#failure_jumps+1] = jump
+          jump.sbx = false_pc - jump.pc
         end
+      else
+        jump.sbx = #func.instructions - jump.pc
       end
-      return success_jumps, failure_jumps
+      jump.pc = nil
+      jump.force_bool_result = nil
     end
   end
 
@@ -820,7 +788,7 @@ do
           local expr = chain[i]
           local test, jump
           local inner_jumps = {}
-          while expr and is_branchy(expr) do
+          while expr and is_branchy_old(expr) do
             if expr.node_type == "binop" and expr.op == node.op then
               expr, test, jump = branch_last_expr(expr, in_reg, jumps, func)
             else
@@ -927,7 +895,7 @@ do
   end
 
   local function test_expr(expr, in_reg, func)
-    if not is_branchy(expr) then
+    if not is_branchy_old(expr) then
       if in_reg then
         error("No reason to try to branch off of an expression that isn't 'branchy' \z
           and expecting a result from it. Just generate the expression into that register.")
@@ -941,7 +909,7 @@ do
       logical_test = jumps
       jumps = {}
     end
-    while last_expr and is_branchy(last_expr) do
+    while last_expr and is_branchy_old(last_expr) do
       last_expr, logical_test, logical_jump = branch_last_expr(last_expr, in_reg, jumps, func)
     end
     if not last_expr then
@@ -1058,8 +1026,8 @@ do
       --   first temporary is in_reg, second is next_reg()
 
       if logical_binop_lut[expr.op] or expr.op == "and" or expr.op == "or" then
-        local test_tree, last_chain = bar(expr, in_reg, func)
-        baz(test_tree, last_chain, in_reg, func)
+        bar(expr, in_reg, func)
+
         -- test_expr(expr, in_reg, func)
       elseif bin_opcode_lut[expr.op] then
         local original_top = get_top(func)
@@ -1078,14 +1046,19 @@ do
       end
     end,
     unop = function(expr,in_reg,func)
-      -- if expr.ex is a local use that directly,
-      -- else fetch into in_reg
-      local scr_reg = local_or_fetch(expr.ex,in_reg,func)
-      func.instructions[#func.instructions+1] = {
-        op = un_opcodes[expr.op], a = in_reg, b = scr_reg,
-        line = expr.op_token and expr.op_token.line,
-        column = expr.op_token and expr.op_token.column,
-      }
+      local real_expr, not_count = get_real_expr(expr)
+      if not_count > 1 or is_branchy(real_expr) then
+        bar(expr, in_reg, func)
+      else
+        -- if expr.ex is a local use that directly,
+        -- else fetch into in_reg
+        local scr_reg = local_or_fetch(expr.ex,in_reg,func)
+        func.instructions[#func.instructions+1] = {
+          op = un_opcodes[expr.op], a = in_reg, b = scr_reg,
+          line = expr.op_token and expr.op_token.line,
+          column = expr.op_token and expr.op_token.column,
+        }
+      end
     end,
     concat = function(expr,in_reg,func)
       local original_top = get_top(func)
