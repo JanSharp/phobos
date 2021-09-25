@@ -65,10 +65,6 @@ local keywords = invert{
 ---| '"while"'
 ---| '"goto"'
 
-local function syntax_error(msg)
-  return -1, nil, msg
-end
-
 ---@class Token
 ---@field token_type TokenType
 ---@field index number
@@ -155,9 +151,9 @@ local function read_string(str,index,quote,state)
 
     return i+1,token
   elseif next_char == "" then
-    return syntax_error("Unterminated string at EOF")
+    error("Unterminated string at EOF")
   elseif next_char == "\n" then
-    return syntax_error("Unterminated string at end of line " .. state.line)
+    error("Unterminated string at end of line " .. state.line)
   elseif next_char == "\\" then
     -- advance past an escape sequence...
     i = i + 1
@@ -165,7 +161,7 @@ local function read_string(str,index,quote,state)
     if next_char == "x" then
       local digits = str:match("^%x%x", i + 1)
       if not digits then
-        return syntax_error("Invalid escape sequence `\\x"..str:sub(i + 1, i + 2)
+        error("Invalid escape sequence `\\x"..str:sub(i + 1, i + 2)
           .."`, `\\x` must be followed by 2 hexadecimal digits."
         )
       end
@@ -205,7 +201,7 @@ local function read_string(str,index,quote,state)
         i = skip + 1
         goto matching
       else
-        return syntax_error("Unrecognized escape '\\".. next_char .. "'")
+        error("Unrecognized escape '\\".. next_char .. "'")
       end
     end
   end
@@ -216,7 +212,7 @@ local block_string_open_bracket_patter = "^%[(=*)%["
 local function read_block_string(str,index,state)
   local _,open_end,pad = str:find(block_string_open_bracket_patter,index)
   if not pad then
-    return syntax_error("Invalid string open bracket")
+    error("Invalid string open bracket")
   end
 
   local has_leading_newline = false
@@ -232,7 +228,7 @@ local function read_block_string(str,index,state)
 
   local bracket,bracket_end = str:find("%]"..pad.."%]",index)
   if not bracket then
-    return syntax_error("Unterminated block string at EOF")
+    error("Unterminated block string at EOF")
   end
 
   local token = new_token("string",index,token_line,token_col)
@@ -264,7 +260,7 @@ local function try_read_number(str, index, state)
     if fractional_end then
       hex_end = fractional_end
     elseif omitted_integer_part then
-      return syntax_error("Malformed number")
+      error("Malformed number")
     else
       -- consume trailing dot
       _, fractional_end = str:find("^%.", hex_end + 1)
@@ -310,9 +306,6 @@ end
 ---@return number
 ---@return Token
 local function next_token(state,index)
-  if index == -1 then
-    error("Unable to continue reading tokens after a syntax error.")
-  end
   if not index then index = 1 end
   local str = state.str
   local next_char = str:sub(index,index)
@@ -364,7 +357,7 @@ local function next_token(state,index)
     if str:sub(index+1,index+1) == "=" then
       return index+2,new_token("~=",index,state.line,index - state.line_offset)
     else
-      return syntax_error("Invalid token '~' at " .. state.line .. ":" .. index - state.line_offset)
+      error("Invalid token '~' at " .. state.line .. ":" .. index - state.line_offset)
     end
   elseif next_char == ":" then
     if str:sub(index+1,index+1) == ":" then
@@ -411,7 +404,7 @@ local function next_token(state,index)
       end
       return match_end+1,token
     else
-      return syntax_error("Invalid token at " .. state.line .. ":" .. index - state.line_offset)
+      error("Invalid token at " .. state.line .. ":" .. index - state.line_offset)
     end
   end
 end
