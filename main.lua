@@ -74,7 +74,13 @@ local args_config = {
       single_param = true,
       type = "string",
       default_value = "@?",
-    }
+    },
+    {
+      field = "ignore_syntax_errors",
+      long = "ignore-syntax-errors",
+      description = "Continue and ignore a file after encountering a syntax error and print it to std out.",
+      flag = true,
+    },
   },
   positional = {},
 }
@@ -211,7 +217,12 @@ for _, source_file_path in ipairs(source_file_paths) do
   local text = file:read("*a")
   file:close()
 
-  local ast = parser(text, args.source_name:gsub("%?", source_file_path:str()))
+  local source_name = args.source_name:gsub("%?", source_file_path:str())
+  local ast, err = parser(text, source_name, args.ignore_syntax_errors)
+  if not ast then
+    print(err.." in "..source_name)
+    goto continue
+  end
   jump_linker(ast)
   fold_const(ast)
   local compiled = phobos(ast)
@@ -241,4 +252,5 @@ for _, source_file_path in ipairs(source_file_paths) do
   file = assert(io.open(output_file_path:str(), args.use_load and "w" or "wb"))
   file:write(output)
   file:close()
+  ::continue::
 end
