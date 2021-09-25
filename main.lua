@@ -269,7 +269,7 @@ for _, source_file_path in ipairs(source_file_paths) do
     if (compiled_file_count % 8) == 0 then
       local c = collectgarbage("count")
       if c > 4 * 1000 * 1000 then
-        print(collectgarbage("collect"))
+        collectgarbage("collect")
         total_memory_allocated = total_memory_allocated + (c - collectgarbage("count"))
       end
     end
