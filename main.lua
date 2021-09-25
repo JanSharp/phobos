@@ -280,13 +280,19 @@ for _, source_file_path in ipairs(source_file_paths) do
   file:close()
 
   local source_name = args.source_name:gsub("%?", source_file_path:str())
-  local ast, err = parser(text, source_name, args.ignore_syntax_errors)
-  if not ast then
-    err_count = err_count + 1
-    if not args.hide_syntax_error_messages then
-      print(err.." in "..source_name)
+  local ast
+  if args.ignore_syntax_errors then
+    local success
+    success, ast = pcall(parser, text, source_name)
+    if not success then
+      err_count = err_count + 1
+      if not args.hide_syntax_error_messages then
+        print(ast:gsub("^[^:]+:%d+: ", "").." in "..source_name)
+      end
+      goto continue
     end
-    goto continue
+  else
+    ast = parser(text, source_name)
   end
   jump_linker(ast)
   fold_const(ast)
@@ -320,7 +326,7 @@ for _, source_file_path in ipairs(source_file_paths) do
   ::continue::
 end
 
-if args.verbose and err_count > 0 then
+if args.verbose and args.ignore_syntax_errors then
   print(err_count.." files with syntax errors")
 end
 
