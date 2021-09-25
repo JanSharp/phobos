@@ -94,6 +94,15 @@ local args_config = {
       description = "Print more information to std out.",
       flag = true,
     },
+    {
+      field = "monitor_memory_allocation",
+      long = "monitor-memory",
+      description = "Monitors total memory allocated during the entire compilation \z
+        process at the cost of ~10% longer compilation times.\n\z
+        (Stops incremental GC. Instead runs full garbage collection whenever it \z
+        exceeds 4GB current memory usage. May overshoot by quite a bit.)",
+      flag = true,
+    },
   },
   positional = {},
 }
@@ -110,6 +119,10 @@ do
     print(arg_parser.get_help_string(args_config))
     return
   end
+end
+
+if args.monitor_memory_allocation then
+  collectgarbage("stop")
 end
 
 local function exists_and_is_dir(path)
@@ -247,7 +260,21 @@ if args.verbose then
   print("started compilation of "..(#source_file_paths).." files at ~ "..start_time.."s")
 end
 
+local total_memory_allocated = 0
+local compiled_file_count = 0
+
 for _, source_file_path in ipairs(source_file_paths) do
+  if args.monitor_memory_allocation then
+    compiled_file_count = compiled_file_count + 1
+    if (compiled_file_count % 8) == 0 then
+      local c = collectgarbage("count")
+      if c > 4 * 1000 * 1000 then
+        print(collectgarbage("collect"))
+        total_memory_allocated = total_memory_allocated + (c - collectgarbage("count"))
+      end
+    end
+  end
+
   local file = assert(io.open((args.source_path / source_file_path):str(), "r"))
   local text = file:read("*a")
   file:close()
@@ -295,6 +322,11 @@ end
 
 if args.verbose and err_count > 0 then
   print(err_count.." files with syntax errors")
+end
+
+if args.monitor_memory_allocation then
+  total_memory_allocated = total_memory_allocated + collectgarbage("count")
+  print("total memory allocated "..(total_memory_allocated / (1000 * 1000)).." G-bytes")
 end
 
 local end_time = os.clock()
