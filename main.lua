@@ -81,6 +81,19 @@ local args_config = {
       description = "Continue and ignore a file after encountering a syntax error and print it to std out.",
       flag = true,
     },
+    {
+      field = "hide_syntax_error_messages",
+      long = "hide-syntax-error-messages",
+      description = "Used if `--ignore-syntax-errors` is set stops printing error messages to std out.",
+      flag = true,
+    },
+    {
+      field = "verbose",
+      long = "verbose",
+      short = "v",
+      description = "Print more information to std out.",
+      flag = true,
+    },
   },
   positional = {},
 }
@@ -142,6 +155,8 @@ end
 
 -- search for source files
 
+local visited_file_count = 0
+
 local function search_dir(dir, relative_dir)
   relative_dir = relative_dir or Path.new()
   if ignore_paths[relative_dir:str()] then
@@ -159,6 +174,7 @@ local function search_dir(dir, relative_dir)
     if mode == "directory" then
       search_dir(entry_path, relative_dir / entry)
     elseif mode == "file" then
+      visited_file_count = visited_file_count + 1
       if (not ignore_paths[(relative_dir / entry):str()])
         and entry_path:extension() == args.pho_extension
       then
@@ -173,7 +189,13 @@ end
 
 search_dir(args.source_path)
 
+if args.verbose then
+  print("visited "..visited_file_count.." files in source dir")
+end
+
 -- delete files from output
+
+visited_file_count = 0
 
 local output_path = Path.combine(args.source_path, args.output_path)
 
@@ -191,17 +213,24 @@ if args.output_path then
         end
 
         local entry_path = output_dir_path / entry
-        if entry_path:attr("mode") == "file"
-          and (not filename_lut[(relative_dir_path / entry_path:filename()):str()])
-        then
-          print("Deleting '"..entry_path:str().."'.")
-          os.remove(entry_path:str())
+        if entry_path:attr("mode") == "file" then
+          visited_file_count = visited_file_count + 1
+          if not filename_lut[(relative_dir_path / entry_path:filename()):str()] then
+            if args.verbose then
+              print("Deleting '"..entry_path:str().."'.")
+            end
+            os.remove(entry_path:str())
+          end
         end
 
         ::continue::
       end
     end
   end
+end
+
+if args.verbose then
+  print("visited "..visited_file_count.." files in output dir")
 end
 
 -- compile
@@ -212,6 +241,12 @@ local fold_const = require("optimize.fold_const")
 local phobos = require("phobos")
 local dump = require("dump")
 
+local err_count = 0
+local start_time = os.clock()
+if args.verbose then
+  print("started compilation of "..(#source_file_paths).." files at ~ "..start_time.."s")
+end
+
 for _, source_file_path in ipairs(source_file_paths) do
   local file = assert(io.open((args.source_path / source_file_path):str(), "r"))
   local text = file:read("*a")
@@ -220,7 +255,10 @@ for _, source_file_path in ipairs(source_file_paths) do
   local source_name = args.source_name:gsub("%?", source_file_path:str())
   local ast, err = parser(text, source_name, args.ignore_syntax_errors)
   if not ast then
-    print(err.." in "..source_name)
+    err_count = err_count + 1
+    if not args.hide_syntax_error_messages then
+      print(err.." in "..source_name)
+    end
     goto continue
   end
   jump_linker(ast)
@@ -254,3 +292,13 @@ for _, source_file_path in ipairs(source_file_paths) do
   file:close()
   ::continue::
 end
+
+if args.verbose and err_count > 0 then
+  print(err_count.." files with syntax errors")
+end
+
+local end_time = os.clock()
+if args.verbose then
+  print("compilation took ~ "..(end_time - start_time).."s")
+end
+print("total time elapsed ~ "..end_time.."s")
