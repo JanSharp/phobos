@@ -7,25 +7,41 @@ local token ---@type Token
 local prev_leading ---@type Token[]
 ---set by test_next() and therefore also assert_next() and assert_match()
 local prev_token ---@type Token
-local next_token
-local peek_token
+
+local throw_on_error
+local syntax_error_msg
 ----------------------------------------------------------------------
 
-
+local next_token
+local peek_token
 local statement, expr
+
+local function new_invalid_node()
+  return {}
+end
 
 ---TODO: make the right object in the error message the focus, the thing that is actually wrong.
 ---for example when an assertion of some token failed, it's most likely not that token that
----is missing (like a closing }), but rather the actual token that was encoutered that was unexpected
+---is missing (like a closing }), but rather the actual token that was encountered that was unexpected
 ---Throw a Syntax Error at the current location
 ---@param msg string Error message
 local function syntax_error(msg)
-  error(msg.." near '"..token.token_type.."'"..(
-    token.token_type ~= "eof"
-      and (" at "..token.line..":"..token.column)
-      or ""
+  if token then
+    msg = msg.." near '"..token.token_type.."'"..(
+      token.token_type ~= "eof"
+        and (" at "..token.line..":"..token.column)
+        or ""
     )
-  )
+  end
+
+  if throw_on_error then
+    error(msg)
+  elseif not syntax_error_msg then
+    syntax_error_msg = msg
+    leading = {}
+    token = {token_type = "eof"}
+  end
+  return new_invalid_node()
 end
 
 ---@param node_type AstNodeType
@@ -59,7 +75,7 @@ end
 ---@return AstIdent name
 local function assert_name()
   if token.token_type ~= "ident" then
-    syntax_error("<name> expected")
+    return syntax_error("<name> expected")
   end
   local name_node = new_full_node("ident")
   name_node.value = token.value
@@ -353,9 +369,10 @@ local function par_list(scope)
       scope.is_vararg = true
       scope.vararg_token = new_token_node()
       next_token()
-      return params
+      break
     else
       syntax_error("<name> or '...' expected")
+      break
     end
     if test_next(",") then
       scope.param_comma_tokens[#scope.param_comma_tokens+1] = new_token_node(true)
@@ -459,7 +476,7 @@ local function func_args(node, scope)
       return {(constructor(scope))}, {}
     end,
   })[token.token_type] or function()
-    syntax_error("Expected function arguments")
+    return syntax_error("Expected function arguments")
   end)(scope)
 end
 
@@ -489,7 +506,7 @@ local function primary_exp(scope)
   elseif token.token_type == "ident" then
     return get_ref(scope, assert_name())
   else
-    syntax_error("Unexpected symbol '" .. token.token_type .. "'")
+    return syntax_error("Unexpected symbol '" .. token.token_type .. "'")
   end
 end
 
@@ -589,7 +606,7 @@ local simple_lut = {
       scope = scope.parent_scope
     end
     if not scope.is_vararg then
-      syntax_error("Cannot use '...' outside a vararg function")
+      return syntax_error("Cannot use '...' outside a vararg function")
     end
     return new_full_node("vararg")
   end,
@@ -864,7 +881,7 @@ local function for_stat(scope)
   elseif t == "," or t == "in" then
     for_node = for_list(first_name,scope)
   else
-    syntax_error("'=', ',' or 'in' expected")
+    return syntax_error("'=', ',' or 'in' expected")
   end
   for_node.for_token = for_token
   for_node.end_token = new_token_node()
@@ -995,7 +1012,7 @@ local function expr_stat(scope)
     if first_exp.node_type == "call" or first_exp.node_type == "selfcall" then
       return first_exp
     else
-      syntax_error("Unexpected <exp>")
+      return syntax_error("Unexpected <exp>")
     end
   end
 end
@@ -1129,16 +1146,22 @@ local function main_func(chunk_name)
 end
 
 local tokenize = require("tokenize")
-local function parse(text,source_name)
+local function parse(text, source_name, do_not_throw)
   local token_iter,str,index = tokenize(text)
-
+  throw_on_error = not do_not_throw
+  syntax_error_msg = nil
 
   function next_token()
     leading = {}
+    local err
     while true do
-      index,token = token_iter(str,index)
-      if not token then
+      index,token,err = token_iter(str,index)
+      if not index then
         token = {token_type="eof"}
+        break
+      end
+      if not token then
+        syntax_error(err)
         break
       end
       if token.token_type == "comment" then
@@ -1173,7 +1196,12 @@ local function parse(text,source_name)
 
   next_token()
 
-  return main_func(source_name)
+  local main = main_func(source_name)
+  if syntax_error_msg then
+    return nil, syntax_error_msg
+  else
+    return main
+  end
 end
 
 return parse
