@@ -544,6 +544,9 @@
 ---temporary data during compilation
 ---@field live_regs CompiledRegister[]
 ---@field next_reg integer @ **zero based** index of next register to use
+---@field constant_lut table<any, CompiledConstant> @ mapping from any value to it's CompiledConstant
+---@field nil_constant_idx number|nil @ **zero based** index of the `nil` CompiledConstant
+---@field nan_constant_idx number|nil @ **zero based** index of the nan (`0/0`) CompiledConstant
 ---@field level integer? @ only available during generation process
 ---@field scope_levels? table<AstScope, integer> @ only available during generation process
 ---@field current_scope? AstScope @ only available during generation process

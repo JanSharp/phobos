@@ -221,6 +221,18 @@ do
     generate_statement_code[stat.node_type](stat, func)
   end
 
+  local function get_lowest_captured_reg(scope, func)
+    local lowest_captured_reg
+    for _, live in ipairs(func.live_regs) do
+      if live.scope == scope and live.upval_capture_pc then
+        if (not lowest_captured_reg) or live.reg < lowest_captured_reg then
+          lowest_captured_reg = live.reg
+        end
+      end
+    end
+    return lowest_captured_reg
+  end
+
   local function generate_scope(scope, func, pre_block, post_block)
     func.level = func.level + 1
     func.scope_levels[scope] = func.level
@@ -243,14 +255,7 @@ do
       -- TODO: this condition can be improved once the compiler knows that [...]
       -- the given location (the end of the scope) is unreachable
       -- note that the root scope might still be an exception at that point
-      local lowest_captured_reg
-      for _, live in ipairs(func.live_regs) do
-        if live.scope == scope and live.upval_capture_pc then
-          if (not lowest_captured_reg) or live.reg < lowest_captured_reg then
-            lowest_captured_reg = live.reg
-          end
-        end
-      end
+      local lowest_captured_reg = get_lowest_captured_reg(scope, func)
       if lowest_captured_reg then
         func.instructions[#func.instructions+1] = {
           op = opcodes.jmp, a = lowest_captured_reg + 1, sbx = 0,
@@ -268,16 +273,33 @@ do
 
 
   local function add_constant(new_constant,func)
-    for i,constant in ipairs(func.constants) do
-      if new_constant.value == constant.value then
-        return i - 1
+    if new_constant.value == nil then
+      if func.nil_constant_idx then
+        return func.nil_constant_idx
       end
+      func.nil_constant_idx = #func.constants
+      func.constants[func.nil_constant_idx+1] = {node_type = "nil"}
+      return func.nil_constant_idx
+    end
+
+    if new_constant.value ~= new_constant.value then
+      if func.nan_constant_idx then
+        return func.nan_constant_idx
+      end
+      func.nan_constant_idx = #func.constants
+      func.constants[func.nan_constant_idx+1] = {node_type = "number", value = 0/0}
+      return func.nan_constant_idx
+    end
+
+    if func.constant_lut[new_constant.value] then
+      return func.constant_lut[new_constant.value]
     end
     local i = #func.constants
     func.constants[i+1] = {
       node_type = new_constant.node_type,
       value = new_constant.value,
     }
+    func.constant_lut[new_constant.value] = i
     return i
   end
 
@@ -1553,29 +1575,42 @@ do
     repeatstat = function(stat,func)
       local start_pc = #func.instructions
       -- generate body
-      generate_scope(stat, func)
-
-      -- TODO: move this optimization out
-      --[[
-      if is_falsy(stat.condition) then
-        -- always false, always jump
-        func.instructions[#func.instructions+1] = {
-          op = opcodes.jmp, a = 0, sbx = start_pc - (#func.instructions + 1),
-          line = stat.until_token and stat.until_token.line,
-          column = stat.until_token and stat.until_token.column,
-        }
-      elseif const_node_types[stat.condition.node_type] then
-        -- always true, always leave
-      else
-      ]]
-        -- generate condition and test
+      generate_scope(stat, func, nil, function()
+        local lowest_captured_reg = get_lowest_captured_reg(stat, func)
         for _, jump in ipairs(test_expr_and_jump(stat.condition, false, func)) do
           -- jump back if it failed
           jump.sbx = start_pc - jump.pc
           jump.pc = nil
+
+          if lowest_captured_reg then
+            jump.a = lowest_captured_reg + 1
+          end
         end
-      -- end
-      patch_breaks_to_jump_here(stat, func)
+        patch_breaks_to_jump_here(stat, func)
+      end)
+
+      -- note that the code below is just kept around to understand the TODO
+      -- -- TODO: move this optimization out
+      -- --[[
+      -- if is_falsy(stat.condition) then
+      --   -- always false, always jump
+      --   func.instructions[#func.instructions+1] = {
+      --     op = opcodes.jmp, a = 0, sbx = start_pc - (#func.instructions + 1),
+      --     line = stat.until_token and stat.until_token.line,
+      --     column = stat.until_token and stat.until_token.column,
+      --   }
+      -- elseif const_node_types[stat.condition.node_type] then
+      --   -- always true, always leave
+      -- else
+      -- ]]
+      --   -- generate condition and test
+      --   for _, jump in ipairs(test_expr_and_jump(stat.condition, false, func)) do
+      --     -- jump back if it failed
+      --     jump.sbx = start_pc - jump.pc
+      --     jump.pc = nil
+      --   end
+      -- -- end
+      -- patch_breaks_to_jump_here(stat, func)
     end,
 
     ---@param stat AstRetStat
@@ -1714,6 +1749,9 @@ do
       ---temporary data during compilation
       live_regs = debug_registers,
       next_reg = 0,
+      constant_lut = {},
+      nil_constant_idx = nil,
+      nan_constant_idx = nil,
       level = 0,
       scope_levels = {},
       label_positions = {}, -- `pc` and `scope` labels are in, needed for backwards jmp `a` and `sbx`
@@ -1792,6 +1830,9 @@ do
 
     func.live_regs = nil
     func.next_reg = nil
+    func.constant_lut = nil
+    func.nil_constant_idx = nil
+    func.nan_constant_idx = nil
     func.level = nil
     func.scope_levels = nil
     func.label_positions = nil
