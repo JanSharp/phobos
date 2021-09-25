@@ -223,13 +223,6 @@ do
     return (
       instruction_label_getter_lut[current.op]
       or function()
-        local _
-        _ = current.a
-        _ = current.b
-        _ = current.c
-        _ = current.ax
-        _ = current.bx
-        _ = current.sbx
         return "UNKNOWN", "OP("..current.op..")"
       end
     )()
@@ -554,7 +547,7 @@ local function get_disassembly(func, func_description_callback, instruction_call
       label..string.rep(" ", max_opcode_name_length - #label),
       description,
       description_with_keys,
-      table.concat(parts)
+      table.concat(parts, " ")
     )
   end
 end
