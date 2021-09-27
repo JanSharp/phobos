@@ -132,6 +132,17 @@
             ],
         },
         {
+            "name": "Jan# Standard Lua (run scripts/publish)",
+            "type": "lua-local",
+            "request": "launch",
+            "program": {
+                "lua": "lua52",
+                "file": "scripts/publish.lua",
+            },
+            "args": [
+            ],
+        },
+        {
             "name": "Standard Lua",
             "type": "lua-local",
             "request": "launch",
