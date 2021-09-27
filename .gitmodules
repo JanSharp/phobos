@@ -1,12 +1,16 @@
 [submodule ".vscode/lua"]
-	path = .vscode/lua
+	path = .vscode/sumneko_lua_plugin
 	url = https://github.com/JanSharp/FactorioSumnekoLuaPlugin.git
+	branch = master
 [submodule "lib/LuaPath"]
-	path = lib/LuaPath
+	path = src/lib/LuaPath
 	url = https://github.com/JanSharp/LuaPath.git
+	branch = master
 [submodule "lib/LFSClasses"]
-	path = lib/LFSClasses
+	path = src/lib/LFSClasses
 	url = https://github.com/JanSharp/LFSClasses.git
+	branch = master
 [submodule "lib/LuaArgParser"]
-	path = lib/LuaArgParser
+	path = src/lib/LuaArgParser
 	url = https://github.com/JanSharp/LuaArgParser.git
+	branch = master
