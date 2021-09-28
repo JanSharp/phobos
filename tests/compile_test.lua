@@ -117,7 +117,7 @@ local function init()
   formatter = req("formatter")
 end
 
-local serpent = require("serpent")
+local serpent = require("lib.serpent")
 
 local function compile(filename)
   local file = assert(io.open(filename,"r"))

@@ -1,5 +1,5 @@
 
-local serpent = require("serpent")
+local serpent = require("lib.serpent")
 local disassembler = require("disassembler")
 
 local unsafe = true
