@@ -1,173 +1,202 @@
 {
-    // Use IntelliSense to learn about possible attributes.
-    // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
-    "version": "0.2.0",
-    "configurations": [
-        {
-            "name": "Jan# Standard Lua (run debug_formatter)",
-            "type": "lua-local",
-            "request": "launch",
-            "program": {
-                "lua": "lua52",
-                "file": "debug_formatter.lua",
-            },
-            "args": [
-                "test.lua",
-            ],
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    // entry_point.lua args (copy paste from entry_point.lua itself)
+    // arg 1: main dir path (src or when desired the path to some bin/** sub dir)
+    // arg 2: actual entry point. may be binary or text
+    // the rest: passed along to the actual entry point as vararg. the global `arg` remains broken
+    {
+      "name": "Lua debugging/main",
+      "args": [
+        "src",
+        "debugging/main.lua",
+        "temp/test.lua",
+      ],
+      // copy paste
+      "type": "lua-local",
+      "request": "launch",
+      "program": {"lua": "", "file": ""}, // uh, i guess?
+      "windows": {
+        "program": {
+          "lua": "bin/windows/lua52.exe",
+          "file": "entry_point.lua",
         },
-        {
-            "name": "Jan# Standard Lua (run debug compiled debug_formatter compiled using phobos)",
-            "type": "lua-local",
-            "request": "launch",
-            "program": {
-                "lua": "lua52",
-                "file": "debugger_entry_point.lua", // a hacky entry_point
-            },
-            "args": [
-                "debug", // which bin folder to run
-                "debug_formatter.lua", // which file is the entry_point
-                "binary", // is that file "binary" or "text"
+      },
+      "linux": {
+        "program": {
+          "lua": "bin/linux/?", // TODO set right name for linux lua binaries
+          "file": "entry_point.lua",
+        },
+      },
+      "osx": {
+        "program": {
+          "lua": "bin/osx/?", // TODO set right name for osx lua binaries
+          "file": "entry_point.lua",
+        },
+      },
+    },
+    {
+      "name": "Lua debugging/formatter",
+      "args": [
+        "src",
+        "debugging/formatter.lua",
+        "temp/test.lua",
+      ],
+      // copy paste
+      "type": "lua-local",
+      "request": "launch",
+      "program": {"lua": "", "file": ""}, // uh, i guess?
+      "windows": {
+        "program": {
+          "lua": "bin/windows/lua52.exe",
+          "file": "entry_point.lua",
+        },
+      },
+      "linux": {
+        "program": {
+          "lua": "bin/linux/?", // TODO set right name for linux lua binaries
+          "file": "entry_point.lua",
+        },
+      },
+      "osx": {
+        "program": {
+          "lua": "bin/osx/?", // TODO set right name for osx lua binaries
+          "file": "entry_point.lua",
+        },
+      },
+    },
+    {
+      "name": "Lua src/main",
+      "args": [
+        "src",
+        "src/main.lua",
+        "--source", "src",
+        "--output", "../out/debug",
+        "--pho-extension", ".lua",
+      ],
+      // copy paste
+      "type": "lua-local",
+      "request": "launch",
+      "program": {"lua": "", "file": ""}, // uh, i guess?
+      "windows": {
+        "program": {
+          "lua": "bin/windows/lua52.exe",
+          "file": "entry_point.lua",
+        },
+      },
+      "linux": {
+        "program": {
+          "lua": "bin/linux/?", // TODO set right name for linux lua binaries
+          "file": "entry_point.lua",
+        },
+      },
+      "osx": {
+        "program": {
+          "lua": "bin/osx/?", // TODO set right name for osx lua binaries
+          "file": "entry_point.lua",
+        },
+      },
+    },
 
-                // the rest get passed along to the defined entry_point
-                "test.lua",
-            ],
-            // and make sure the debug binaries are up to date
-            "preLaunchTask": "Compile Debug",
+    // copy paste except it's using `out/debug` as the source dir
+    // and it compiles src before as a prelaunch task
+    {
+      "name": "Pho debugging/main",
+      "args": [
+        "out/debug",
+        "debugging/main.lua",
+        "temp/test.lua",
+      ],
+      // copy paste
+      "preLaunchTask": "Compile Debug",
+      "type": "lua-local",
+      "request": "launch",
+      "program": {"lua": "", "file": ""}, // uh, i guess?
+      "windows": {
+        "program": {
+          "lua": "bin/windows/lua52.exe",
+          "file": "entry_point.lua",
         },
-        {
-            "name": "Jan# Standard Lua (run debug compiled debug_main compiled using phobos)",
-            "type": "lua-local",
-            "request": "launch",
-            "program": {
-                "lua": "lua52",
-                "file": "debugger_entry_point.lua", // a hacky entry_point
-            },
-            "args": [
-                "debug", // which bin folder to run
-                "debug_main.lua", // which file is the entry_point
-                "binary", // is that file "binary" or "text"
-
-                // the rest get passed along to the defined entry_point
-                "test.lua",
-            ],
-            // and make sure the debug binaries are up to date
-            "preLaunchTask": "Compile Debug",
+      },
+      "linux": {
+        "program": {
+          "lua": "bin/linux/?", // TODO set right name for linux lua binaries
+          "file": "entry_point.lua",
         },
-        {
-            "name": "Jan# Standard Lua (run debug compiled debug_main compiled using regular lua)",
-            "type": "lua-local",
-            "request": "launch",
-            "program": {
-                "lua": "lua52",
-                "file": "debugger_entry_point.lua", // a hacky entry_point
-            },
-            "args": [
-                "debug", // which bin folder to run
-                "debug_main.lua", // which file is the entry_point
-                "binary", // is that file "binary" or "text"
-
-                // the rest get passed along to the defined entry_point
-                "test.lua",
-            ],
-            // and make sure the debug binaries are up to date
-            "preLaunchTask": "Compile Debug Using Regular Lua",
+      },
+      "osx": {
+        "program": {
+          "lua": "bin/osx/?", // TODO set right name for osx lua binaries
+          "file": "entry_point.lua",
         },
-        {
-            "name": "Jan# Standard Lua (run debug_main)",
-            "type": "lua-local",
-            "request": "launch",
-            "program": {
-                "lua": "lua52",
-                "file": "./debug_main.lua",
-            },
-            "args": [
-                "test.lua",
-            ],
+      },
+    },
+    {
+      "name": "Pho debugging/formatter",
+      "args": [
+        "out/debug",
+        "debugging/formatter.lua",
+        "temp/test.lua",
+      ],
+      // copy paste
+      "preLaunchTask": "Compile Debug",
+      "type": "lua-local",
+      "request": "launch",
+      "program": {"lua": "", "file": ""}, // uh, i guess?
+      "windows": {
+        "program": {
+          "lua": "bin/windows/lua52.exe",
+          "file": "entry_point.lua",
         },
-        {
-            "name": "Jan# VS Build Standard Lua (run debug_main)",
-            "type": "lua-local",
-            "request": "launch",
-            "program": {
-                "lua": "E:/Dev/Lua52/x64/Debug/Lua52.exe",
-                "file": "./debug_main.lua",
-            },
-            "args": [
-                "dump.lua",
-            ],
+      },
+      "linux": {
+        "program": {
+          "lua": "bin/linux/?", // TODO set right name for linux lua binaries
+          "file": "entry_point.lua",
         },
-        {
-            "name": "Jan# VS Build Standard Lua (run compile_test)",
-            "type": "lua-local",
-            "request": "launch",
-            "program": {
-                "lua": "E:/Dev/Lua52/x64/Debug/Lua52.exe",
-                "file": "./compile_test.lua",
-            },
-            "args": [
-                "-c", "temp/debug_test_filename_cache.lua",
-            ],
+      },
+      "osx": {
+        "program": {
+          "lua": "bin/osx/?", // TODO set right name for osx lua binaries
+          "file": "entry_point.lua",
         },
-        {
-            "name": "Jan# Standard Lua (run compile_test)",
-            "type": "lua-local",
-            "request": "launch",
-            "program": {
-                "lua": "lua52",
-                "file": "./compile_test.lua",
-            },
-            "args": [
-            ],
+      },
+    },
+    {
+      "name": "Pho src/main",
+      "args": [
+        "out/debug",
+        "src/main.lua",
+        "--source", "src",
+        "--output", "../out/debug",
+        "--pho-extension", ".lua",
+      ],
+      // copy paste
+      "preLaunchTask": "Compile Debug",
+      "type": "lua-local",
+      "request": "launch",
+      "program": {"lua": "", "file": ""}, // uh, i guess?
+      "windows": {
+        "program": {
+          "lua": "bin/windows/lua52.exe",
+          "file": "entry_point.lua",
         },
-        {
-            "name": "Jan# Standard Lua (run debug_compile_test_create_cache)",
-            "type": "lua-local",
-            "request": "launch",
-            "program": {
-                "lua": "lua52",
-                "file": "./debug_compile_test_create_cache.lua",
-            },
-            "args": [
-            ],
+      },
+      "linux": {
+        "program": {
+          "lua": "bin/linux/?", // TODO set right name for linux lua binaries
+          "file": "entry_point.lua",
         },
-        {
-            "name": "Jan# Standard Lua (run scripts/publish)",
-            "type": "lua-local",
-            "request": "launch",
-            "program": {
-                "lua": "lua52",
-                "file": "scripts/publish.lua",
-            },
-            "args": [
-            ],
+      },
+      "osx": {
+        "program": {
+          "lua": "bin/osx/?", // TODO set right name for osx lua binaries
+          "file": "entry_point.lua",
         },
-        {
-            "name": "Standard Lua",
-            "type": "lua-local",
-            "request": "launch",
-            "program": {
-                "lua": "c:/Users/Thomas/bin/lua52.exe",
-                "file": "./phobos.lua",
-            },
-        },
-        {
-            "name": "Factorio Lua",
-            "type": "lua-local",
-            "request": "launch",
-            "program": {
-                "lua": "${workspaceFolder}/lua-factorio.exe",
-                "file": "./phobos.lua",
-            },
-        },
-        {
-            "name": "Factorio Lua (test.lua)",
-            "type": "lua-local",
-            "request": "launch",
-            "program": {
-                "lua": "${workspaceFolder}/lua-factorio.exe",
-                "file": "./test.lua",
-            },
-        },
-    ],
+      },
+    },
+  ],
 }

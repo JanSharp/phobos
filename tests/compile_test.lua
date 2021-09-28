@@ -85,7 +85,10 @@ function phobos_env.require(module)
     module = module:gsub("%.", "/")..".lua"
   end
 
-  local chunk = assert(compiled_modules[module], "No module '"..module.."'.")
+  local chunk = assert(
+    compiled_modules[module] or compiled_modules["src/"..module],
+    "No module '"..module.."'."
+  )
   local result = {chunk()}
   cached_modules[original_module] = result[1] == nil and true or result[1]
   return table.unpack(result)
@@ -197,7 +200,7 @@ local filenames = {}
 if args.cache_filename then
   filenames = assert(pcall_with_one_result(assert(loadfile(args.cache_filename, "t", {}))))
 else
-  filenames = require("debug_util").find_lua_source_files()
+  filenames = require("debugging.util").find_lua_source_files()
 end
 
 local function main()

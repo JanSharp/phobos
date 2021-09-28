@@ -7,46 +7,28 @@
       "isBuildCommand": true,
       "label": "Compile Debug",
       "type": "process",
-      "options": {
-        // currently binaries that are considered stable enough
-        // get copied into the /bin/publish/v1 dir manually
-        "cwd": "${workspaceFolder}/bin/publish/v1",
+      "command": "",
+      "windows": {
+        "command": "bin/windows/lua52.exe",
       },
-      "command": "lua52",
+      "linux": {
+        "command": "bin/linux/?", // TODO set right name for linux lua binaries
+      },
+      "osx": {
+        "command": "bin/osx/?", // TODO set right name for osx lua binaries
+      },
       "args": [
-        "--", "main.lua",
+        "--", "entry_point.lua",
+        "src", "src/main.lua",
         // can't use ${workspaseFolder} because that results in
         // backslashes on windows, and those are not supported as of now
-        "--source", "../../..",
-        "--output", "bin/debug",
-        "--ignore", ".vscode", "bin",
+        "--source", "src",
+        "--output", "../out/debug",
         // for now source files are still `.lua` files because they
         // do compile with regular lua compilers and i do not trust
         // phobos enough yet
         // this will probably change soon though
         "--pho-extension", ".lua",
-      ],
-      "presentation": {
-        "reveal": "silent",
-        "clear": true,
-      },
-    },
-    {
-      "isBuildCommand": true,
-      "label": "Compile Debug Using Regular Lua",
-      "type": "process",
-      "command": "lua52",
-      "args": [
-        "--", "main.lua",
-        "--source", ".",
-        "--output", "bin/debug",
-        "--ignore", ".vscode", "bin",
-        // for now source files are still `.lua` files because they
-        // do compile with regular lua compilers and i do not trust
-        // phobos enough yet
-        // this will probably change soon though
-        "--pho-extension", ".lua",
-        // "--use-load",
       ],
       "presentation": {
         "reveal": "silent",

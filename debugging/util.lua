@@ -10,6 +10,8 @@ local function find_lua_source_files()
       if entry_name ~= "." and entry_name ~= ".."
         and entry_name:sub(1, 1) ~= "."
         and entry_name ~= "bin"
+        and entry_name ~= "out"
+        and entry_name ~= "temp"
       then
         local relative_path = dir
           and dir:combine(entry_name)
