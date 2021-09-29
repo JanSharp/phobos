@@ -157,7 +157,7 @@ local function compile(filename)
     end
 
     local compiled
-    success, compiled = pcall(require("phobos"), main)
+    success, compiled = pcall(require("compiler"), main)
     if not success then print(compiled) goto finish end
     -- print(serpent.dump(main,{indent = '  ', sparse = true, sortkeys = false, comment=true}))
     if eval_byte_count or create_disassembly then

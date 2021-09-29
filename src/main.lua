@@ -251,7 +251,7 @@ end
 local parser = require("parser")
 local jump_linker = require("jump_linker")
 local fold_const = require("optimize.fold_const")
-local phobos = require("phobos")
+local compiler = require("compiler")
 local dump = require("dump")
 
 local err_count = 0
@@ -296,7 +296,7 @@ for _, source_file_path in ipairs(source_file_paths) do
   end
   jump_linker(ast)
   fold_const(ast)
-  local compiled = phobos(ast)
+  local compiled = compiler(ast)
   local bytecode = dump(compiled)
   local output
   if args.use_load then
