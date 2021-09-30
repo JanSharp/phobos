@@ -5,7 +5,7 @@
   "tasks": [
     {
       "isBuildCommand": true,
-      "label": "Compile Debug",
+      "label": "Build Debug",
       "type": "process",
       "command": "",
       "windows": {
@@ -29,6 +29,30 @@
         // phobos enough yet
         // this will probably change soon though
         "--pho-extension", ".lua",
+      ],
+      "presentation": {
+        "reveal": "silent",
+        "clear": true,
+      },
+    },
+    {
+      "isBuildCommand": true,
+      "label": "Build Factorio Mod Debug",
+      "type": "process",
+      "command": "",
+      "windows": {
+        "command": "bin/windows/lua52.exe",
+      },
+      "linux": {
+        "command": "bin/linux/?", // TODO set right name for linux lua binaries
+      },
+      "osx": {
+        "command": "bin/osx/?", // TODO set right name for osx lua binaries
+      },
+      "args": [
+        "--", "entry_point.lua",
+        "src", "scripts/build_factorio_mod.lua",
+        "debug", "--include-src-in-source-name",
       ],
       "presentation": {
         "reveal": "silent",

@@ -1,0 +1,10 @@
+{
+  "name": "phobos",
+  "title": "Phobos",
+  "factorio_version": "1.1",
+  "version": "0.0.1",
+  "author": "JanSharp",
+  "description": "Phobos is an optimizing bytecode compiler for Lua with some language extensions and a type system.\n\nFor more info check the readme (on the homepage or in the mod files), especially the section about the 'Factorio Mod'.",
+  "homepage": "http://github.com/JanSharp/phobos",
+  "dependencies": []
+}

@@ -1,7 +1,7 @@
 
 # Phobos
 
-Phobos is (supposed to be) an optimizing bytecode compiler for Lua with minor language extensions and a type system.
+Phobos is (supposed to be) an optimizing bytecode compiler for Lua with some language extensions and a type system.
 
 It's currently for Lua 5.2 (and limited to a specific Lua configuration. I think it's default though. See [constants.lua](src/constants.lua) for what Lua header it's using.)
 

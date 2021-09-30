@@ -97,7 +97,7 @@ end
 local parser
 local jump_linker
 local fold_const
-local phobos
+local compiler
 local dump
 local disassembler
 local formatter
@@ -111,7 +111,7 @@ local function init()
   parser = req("parser")
   jump_linker = req("jump_linker")
   fold_const = req("optimize.fold_const")
-  phobos = req("phobos")
+  compiler = req("compiler")
   dump = req("dump")
   disassembler = req("disassembler")
   formatter = req("formatter")
@@ -147,7 +147,7 @@ local function compile(filename)
   if args.ensure_clean_data then
     prev_ast_str = serpent.block(ast)
   end
-  local compiled_data = phobos(ast)
+  local compiled_data = compiler(ast)
 
   if args.ensure_clean_data then
     local ast_str = serpent.block(ast)

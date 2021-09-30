@@ -33,6 +33,7 @@ local b
 -- ensure git is clean and on master
 -- run all tests (currently testing is very crude, so just `tests/compile_test.lua`)
 -- compile src to `out/release`
+-- set the date for the latest changelog entry
 -- extract the latest changelog entry into a file (for the github release)
 --   also remember what version the latest is
 -- create `phobos_{os}_{version}.zip`

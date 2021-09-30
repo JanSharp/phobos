@@ -4,6 +4,21 @@
   // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
   "version": "0.2.0",
   "configurations": [
+    {
+      "type": "factoriomod",
+      "request": "launch",
+      "name": "Factorio Mod",
+      "factorioPath": "${env:PHOBOS_FACTORIO_PATH}",
+      "modsPath": "${workspaceFolder}/out/factorio/debug",
+      "preLaunchTask": "Build Factorio Mod Debug",
+      "allowDisableBaseMod": true,
+      "adjustMods": {
+        "base": true,
+        "phobos": true,
+      },
+      "disableExtraMods": true,
+    },
+
     // entry_point.lua args (copy paste from entry_point.lua itself)
     // arg 1: main dir path (src or when desired the path to some bin/** sub dir)
     // arg 2: actual entry point. may be binary or text
@@ -76,6 +91,35 @@
         "--source", "src",
         "--output", "../out/debug",
         "--pho-extension", ".lua",
+      ],
+      // copy paste
+      "type": "lua-local",
+      "request": "launch",
+      "program": {"lua": "", "file": ""}, // uh, i guess?
+      "windows": {
+        "program": {
+          "lua": "bin/windows/lua52.exe",
+          "file": "entry_point.lua",
+        },
+      },
+      "linux": {
+        "program": {
+          "lua": "bin/linux/?", // TODO set right name for linux lua binaries
+          "file": "entry_point.lua",
+        },
+      },
+      "osx": {
+        "program": {
+          "lua": "bin/osx/?", // TODO set right name for osx lua binaries
+          "file": "entry_point.lua",
+        },
+      },
+    },
+    {
+      "name": "Lua tests/compile_test",
+      "args": [
+        "src",
+        "tests/compile_test.lua",
       ],
       // copy paste
       "type": "lua-local",
@@ -173,6 +217,36 @@
         "--source", "src",
         "--output", "../out/debug",
         "--pho-extension", ".lua",
+      ],
+      // copy paste
+      "preLaunchTask": "Compile Debug",
+      "type": "lua-local",
+      "request": "launch",
+      "program": {"lua": "", "file": ""}, // uh, i guess?
+      "windows": {
+        "program": {
+          "lua": "bin/windows/lua52.exe",
+          "file": "entry_point.lua",
+        },
+      },
+      "linux": {
+        "program": {
+          "lua": "bin/linux/?", // TODO set right name for linux lua binaries
+          "file": "entry_point.lua",
+        },
+      },
+      "osx": {
+        "program": {
+          "lua": "bin/osx/?", // TODO set right name for osx lua binaries
+          "file": "entry_point.lua",
+        },
+      },
+    },
+    {
+      "name": "Pho tests/compile_test",
+      "args": [
+        "src",
+        "tests/compile_test.lua",
       ],
       // copy paste
       "preLaunchTask": "Compile Debug",

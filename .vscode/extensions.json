@@ -2,6 +2,7 @@
   "recommendations": [
     "streetsidesoftware.code-spell-checker",
     "sumneko.lua",
+    "justarandomgeek.factoriomod-debug",
     "tomblind.local-lua-debugger-vscode",
   ],
 }
