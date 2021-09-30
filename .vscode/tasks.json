@@ -19,16 +19,9 @@
       },
       "args": [
         "--", "entry_point.lua",
-        "src", "src/main.lua",
-        // can't use ${workspaseFolder} because that results in
-        // backslashes on windows, and those are not supported as of now
-        "--source", "src",
-        "--output", "../out/debug",
-        // for now source files are still `.lua` files because they
-        // do compile with regular lua compilers and i do not trust
-        // phobos enough yet
-        // this will probably change soon though
-        "--pho-extension", ".lua",
+        "src", "scripts/build_src.lua",
+        "--profile", "debug",
+        "--include-src-in-source-name",
       ],
       "presentation": {
         "reveal": "silent",
