@@ -254,6 +254,8 @@ local fold_const = require("optimize.fold_const")
 local compiler = require("compiler")
 local dump = require("dump")
 
+local io_util = require("io_util")
+
 local err_count = 0
 local start_time = os.clock()
 if args.verbose then
@@ -307,18 +309,10 @@ for _, source_file_path in ipairs(source_file_paths) do
 
   local output_file_path = output_path / source_file_path
   local dir = output_file_path:sub(1, -2)
-  output_file_path = dir / (output_file_path:filename()..args.lua_extension)
   if not dir:exists() then
-    -- i thought for sure you could just mkdir multiple dir levels at once... but i guess not?
-    for i = 1, #dir do
-      if not dir:sub(1, i):exists() then
-        -- this might fail, for example for drive letters,
-        -- but that doesn't matter, as long as the output file
-        -- can get created (=> asserted)
-        lfs.mkdir(dir:sub(1, i):str())
-      end
-    end
+    io_util.mkdir_recursive(dir)
   end
+  output_file_path = dir / (output_file_path:filename()..args.lua_extension)
 
   file = assert(io.open(output_file_path:str(), args.use_load and "w" or "wb"))
   file:write(output)

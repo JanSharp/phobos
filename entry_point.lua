@@ -22,7 +22,9 @@ local operating_system = lua_executable_path:match("bin[\\/](%w+)")
 -- TODO: is it also .dll on linux and osx?
 package.cpath = package.cpath..";bin/"..operating_system.."/?.dll"
 
-package.path = package.path..";"..arg[1].."/?.lua"
+---for scripts to know what the currently used source dir is
+__source_dir = arg[1]
+package.path = package.path..";"..__source_dir.."/?.lua"
 
 local file = assert(io.open(arg[2], "rb"))
 local is_binary = not not file:read("*l"):find("^\x1bLua") -- check for lua bytecode signature
