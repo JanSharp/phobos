@@ -155,7 +155,7 @@
         "temp/test.lua",
       ],
       // copy paste
-      "preLaunchTask": "Compile Debug",
+      "preLaunchTask": "Build Debug",
       "type": "lua-local",
       "request": "launch",
       "program": {"lua": "", "file": ""}, // uh, i guess?
@@ -186,7 +186,7 @@
         "temp/test.lua",
       ],
       // copy paste
-      "preLaunchTask": "Compile Debug",
+      "preLaunchTask": "Build Debug",
       "type": "lua-local",
       "request": "launch",
       "program": {"lua": "", "file": ""}, // uh, i guess?
@@ -219,7 +219,7 @@
         "--pho-extension", ".lua",
       ],
       // copy paste
-      "preLaunchTask": "Compile Debug",
+      "preLaunchTask": "Build Debug",
       "type": "lua-local",
       "request": "launch",
       "program": {"lua": "", "file": ""}, // uh, i guess?
@@ -249,7 +249,7 @@
         "tests/compile_test.lua",
       ],
       // copy paste
-      "preLaunchTask": "Compile Debug",
+      "preLaunchTask": "Build Debug",
       "type": "lua-local",
       "request": "launch",
       "program": {"lua": "", "file": ""}, // uh, i guess?
