@@ -30,7 +30,7 @@ if not args then return end
 
 loadfile(assert(__source_dir).."/main.lua")(table.unpack{
   "--source", "src",
-  "--output", "../out/"..script_util.get_dir_name(args.profile),
+  "--output", "../out/src/"..script_util.get_dir_name(args.profile),
   -- for now source files are still `.lua` files because they
   -- do compile with regular lua compilers and i do not trust
   -- phobos enough yet

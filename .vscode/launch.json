@@ -42,13 +42,13 @@
       },
       "linux": {
         "program": {
-          "lua": "bin/linux/?", // TODO set right name for linux lua binaries
+          "lua": "bin/linux/?", // TODO: set right name for linux lua binaries
           "file": "entry_point.lua",
         },
       },
       "osx": {
         "program": {
-          "lua": "bin/osx/?", // TODO set right name for osx lua binaries
+          "lua": "bin/osx/?", // TODO: set right name for osx lua binaries
           "file": "entry_point.lua",
         },
       },
@@ -72,13 +72,13 @@
       },
       "linux": {
         "program": {
-          "lua": "bin/linux/?", // TODO set right name for linux lua binaries
+          "lua": "bin/linux/?", // TODO: set right name for linux lua binaries
           "file": "entry_point.lua",
         },
       },
       "osx": {
         "program": {
-          "lua": "bin/osx/?", // TODO set right name for osx lua binaries
+          "lua": "bin/osx/?", // TODO: set right name for osx lua binaries
           "file": "entry_point.lua",
         },
       },
@@ -89,7 +89,7 @@
         "src",
         "src/main.lua",
         "--source", "src",
-        "--output", "../out/debug",
+        "--output", "../out/src/debug",
         "--pho-extension", ".lua",
       ],
       // copy paste
@@ -104,13 +104,13 @@
       },
       "linux": {
         "program": {
-          "lua": "bin/linux/?", // TODO set right name for linux lua binaries
+          "lua": "bin/linux/?", // TODO: set right name for linux lua binaries
           "file": "entry_point.lua",
         },
       },
       "osx": {
         "program": {
-          "lua": "bin/osx/?", // TODO set right name for osx lua binaries
+          "lua": "bin/osx/?", // TODO: set right name for osx lua binaries
           "file": "entry_point.lua",
         },
       },
@@ -133,24 +133,24 @@
       },
       "linux": {
         "program": {
-          "lua": "bin/linux/?", // TODO set right name for linux lua binaries
+          "lua": "bin/linux/?", // TODO: set right name for linux lua binaries
           "file": "entry_point.lua",
         },
       },
       "osx": {
         "program": {
-          "lua": "bin/osx/?", // TODO set right name for osx lua binaries
+          "lua": "bin/osx/?", // TODO: set right name for osx lua binaries
           "file": "entry_point.lua",
         },
       },
     },
 
-    // copy paste except it's using `out/debug` as the source dir
+    // copy paste except it's using `out/src/debug` as the source dir
     // and it compiles src before as a prelaunch task
     {
       "name": "Pho debugging/main",
       "args": [
-        "out/debug",
+        "out/src/debug",
         "debugging/main.lua",
         "temp/test.lua",
       ],
@@ -167,13 +167,13 @@
       },
       "linux": {
         "program": {
-          "lua": "bin/linux/?", // TODO set right name for linux lua binaries
+          "lua": "bin/linux/?", // TODO: set right name for linux lua binaries
           "file": "entry_point.lua",
         },
       },
       "osx": {
         "program": {
-          "lua": "bin/osx/?", // TODO set right name for osx lua binaries
+          "lua": "bin/osx/?", // TODO: set right name for osx lua binaries
           "file": "entry_point.lua",
         },
       },
@@ -181,7 +181,7 @@
     {
       "name": "Pho debugging/formatter",
       "args": [
-        "out/debug",
+        "out/src/debug",
         "debugging/formatter.lua",
         "temp/test.lua",
       ],
@@ -198,13 +198,13 @@
       },
       "linux": {
         "program": {
-          "lua": "bin/linux/?", // TODO set right name for linux lua binaries
+          "lua": "bin/linux/?", // TODO: set right name for linux lua binaries
           "file": "entry_point.lua",
         },
       },
       "osx": {
         "program": {
-          "lua": "bin/osx/?", // TODO set right name for osx lua binaries
+          "lua": "bin/osx/?", // TODO: set right name for osx lua binaries
           "file": "entry_point.lua",
         },
       },
@@ -212,10 +212,10 @@
     {
       "name": "Pho src/main",
       "args": [
-        "out/debug",
+        "out/src/debug",
         "src/main.lua",
         "--source", "src",
-        "--output", "../out/debug",
+        "--output", "../out/src/debug",
         "--pho-extension", ".lua",
       ],
       // copy paste
@@ -231,13 +231,13 @@
       },
       "linux": {
         "program": {
-          "lua": "bin/linux/?", // TODO set right name for linux lua binaries
+          "lua": "bin/linux/?", // TODO: set right name for linux lua binaries
           "file": "entry_point.lua",
         },
       },
       "osx": {
         "program": {
-          "lua": "bin/osx/?", // TODO set right name for osx lua binaries
+          "lua": "bin/osx/?", // TODO: set right name for osx lua binaries
           "file": "entry_point.lua",
         },
       },
@@ -261,13 +261,13 @@
       },
       "linux": {
         "program": {
-          "lua": "bin/linux/?", // TODO set right name for linux lua binaries
+          "lua": "bin/linux/?", // TODO: set right name for linux lua binaries
           "file": "entry_point.lua",
         },
       },
       "osx": {
         "program": {
-          "lua": "bin/osx/?", // TODO set right name for osx lua binaries
+          "lua": "bin/osx/?", // TODO: set right name for osx lua binaries
           "file": "entry_point.lua",
         },
       },

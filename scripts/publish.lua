@@ -32,13 +32,13 @@ local b
 -- ensure git, gh (github cli) and 7z (7-zip) are available
 -- ensure git is clean and on master
 -- run all tests (currently testing is very crude, so just `tests/compile_test.lua`)
--- compile src to `out/release`
+-- compile src to `out/src/release`
 -- set the date for the latest changelog entry
 -- extract the latest changelog entry into a file (for the github release)
 --   also remember what version the latest is
 -- create `phobos_{os}_{version}.zip`
 --   add entries to all 3 zip
---     all files from `out/release`
+--     all files from `out/src/release`
 --     readme.md
 --     phobos_debug_symbols.md
 --     changelog.txt
