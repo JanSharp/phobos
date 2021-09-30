@@ -4,10 +4,20 @@ local arg_parser = require("lib.LuaArgParser.arg_parser")
 local args = arg_parser.parse_and_print_on_error_or_help({...}, {
   options = {
     {
-      field = "cache_filename",
-      long = "cache-filename",
+      field = "use_filename_cache",
+      long = "use-filename-cache",
       short = "c",
-      description = "Relative path to a cache file containing the list of files to compile",
+      description = "Use `temp/compile_test_filename_cache.lua` \z
+        instead of using LFS to find all files to compile.",
+      single_param = true,
+      type = "string",
+      optional = true,
+    },
+    {
+      field = "create_filename_cache",
+      long = "create-filename-cache",
+      short = "m",
+      description = "Create `temp/compile_test_filename_cache.lua` for future runs to use.",
       single_param = true,
       type = "string",
       optional = true,
@@ -180,10 +190,21 @@ local function pcall_with_one_result(f, ...)
 end
 
 local filenames = {}
-if args.cache_filename then
-  filenames = assert(pcall_with_one_result(assert(loadfile(args.cache_filename, "t", {}))))
+if args.use_filename_cache then
+  filenames = assert(pcall_with_one_result(assert(loadfile("temp/compile_test_filename_cache.lua", "t", {}))))
 else
   filenames = require("debugging.util").find_lua_source_files()
+  if args.create_filename_cache then
+    ---@type LFS
+    local lfs = require("lfs")
+    local Path = require("lib.LuaPath.path")
+    if not Path.new("temp"):exists() then
+      assert(lfs.mkdir("temp"))
+    end
+    local cache_file = io.open("temp/compile_test_filename_cache.lua", "w")
+    cache_file:write(serpent.dump(filenames))
+    cache_file:close()
+  end
 end
 
 local function main()
