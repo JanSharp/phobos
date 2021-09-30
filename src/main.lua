@@ -5,7 +5,7 @@ local Path = require("lib.LuaPath.path")
 local arg_parser = require("lib.LuaArgParser.arg_parser")
 arg_parser.register_type(Path.arg_parser_path_type_def)
 
-local args_config = {
+local args = arg_parser.parse_and_print_on_error_or_help({...}, {
   options = {
     {
       field = "source_path",
@@ -104,22 +104,8 @@ local args_config = {
       flag = true,
     },
   },
-  positional = {},
-}
-
-local args
-do
-  local err
-  args, err = arg_parser.parse({...}, args_config)
-  if (not args) or args.help then
-    if not args then
-      print(err)
-      print()
-    end
-    print(arg_parser.get_help_string(args_config))
-    return
-  end
-end
+})
+if not args then return end
 
 if args.monitor_memory_allocation then
   collectgarbage("stop")

@@ -1,11 +1,7 @@
 
--- args to manually run this:
--- compile_test.lua
--- or if the cache file was created using debug_compile_test_create_cache.lua:
--- compile_test.lua -c temp/debug_test_filename_cache.lua
-
 local arg_parser = require("lib.LuaArgParser.arg_parser")
-local args_config = {
+
+local args = arg_parser.parse_and_print_on_error_or_help({...}, {
   options = {
     {
       field = "cache_filename",
@@ -48,21 +44,8 @@ local args_config = {
       flag = true,
     },
   },
-}
-
-local args
-do
-  local err
-  args, err = arg_parser.parse({...}, args_config)
-  if (not args) or args.help then
-    if not args then
-      print(err)
-      print()
-    end
-    print(arg_parser.get_help_string(args_config))
-    return
-  end
-end
+})
+if not args then return end
 
 local phobos_env = {}
 for k, v in pairs(_G) do

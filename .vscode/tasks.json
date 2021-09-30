@@ -52,7 +52,8 @@
       "args": [
         "--", "entry_point.lua",
         "src", "scripts/build_factorio_mod.lua",
-        "debug", "--include-src-in-source-name",
+        "--profile", "debug",
+        "--include-src-in-source-name",
       ],
       "presentation": {
         "reveal": "silent",
