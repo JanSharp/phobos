@@ -22,9 +22,20 @@ local operating_system = lua_executable_path:match("bin[\\/](%w+)")
 -- TODO: is it also .dll on linux and osx?
 package.cpath = package.cpath..";bin/"..operating_system.."/?.dll"
 
+-- have to use `_G` because the local lua debugger... how to say this nicely...
+-- the local lua debugger does a great job at hiding itself... yea, sarcasm will do it
+
+-- the more professional explanation is that the local lua debugger only sets _ENV
+-- to the sand-boxed _ENV in the main chunk, any other file ran from the main chunk
+-- gets the real _ENV which then "hides" any globals created in the main chunk
+-- but luckily local lua debugger does not set _G in the sand boxed _ENV to the
+-- sand-boxed _ENV which means we can escape the sandbox by using _G
+-- note that this might only be an issue with `load` and `loadfile`, but i'm quite sure
+-- i've observed the same behavior when `require`ing files
+
 ---for scripts to know what the currently used source dir is
-__source_dir = arg[1]
-package.path = package.path..";"..__source_dir.."/?.lua"
+_G.__source_dir = arg[1]
+package.path = package.path..";".._G.__source_dir.."/?.lua"
 
 local file = assert(io.open(arg[2], "rb"))
 local is_binary = not not file:read("*l"):find("^\x1bLua") -- check for lua bytecode signature
