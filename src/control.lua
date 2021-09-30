@@ -3,6 +3,8 @@
 
 -- TODO: use locale for all messages, though it's pretty low priority
 
+-- i could ask for a way to set the "ran command" flag, but it's really not that important
+
 local parser = require("parser")
 local jump_linker = require("jump_linker")
 local fold_const = require("optimize.fold_const")
