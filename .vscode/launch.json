@@ -84,13 +84,12 @@
       },
     },
     {
-      "name": "Lua src/main",
+      "name": "Lua scripts/build_src",
       "args": [
         "src",
-        "src/main.lua",
-        "--source", "src",
-        "--output", "../out/src/debug",
-        "--pho-extension", ".lua",
+        "scripts/build_src.lua",
+        "--profile", "debug",
+        "--include-src-in-source-name",
       ],
       // copy paste
       "type": "lua-local",
@@ -210,13 +209,12 @@
       },
     },
     {
-      "name": "Pho src/main",
+      "name": "Pho scripts/build_src",
       "args": [
         "out/src/debug",
-        "src/main.lua",
-        "--source", "src",
-        "--output", "../out/src/debug",
-        "--pho-extension", ".lua",
+        "scripts/build_src.lua",
+        "--profile", "debug",
+        "--include-src-in-source-name",
       ],
       // copy paste
       "preLaunchTask": "Build Debug",
