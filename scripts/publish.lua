@@ -6,29 +6,42 @@ local arg_parser = require("lib.LuaArgParser.arg_parser")
 local io_util = require("io_util")
 local changelog_util = require("scripts.changelog_util")
 
+local skip_able = {
+  "skip_ensure_command_availability",
+  "skip_ensure_clean_working_tree",
+  "skip_tests",
+  "skip_build",
+  "skip_date_stamp_changelog",
+  "skip_cleanup_temp_dir",
+  "skip_package",
+  "skip_preparation_commit",
+  "skip_github_release",
+  "skip_increment_version",
+  "skip_increment_commit",
+}
+
 local args = arg_parser.parse_and_print_on_error_or_help({...}, {
   options = {
     {
-      field = "allow_dirty_working_tree",
-      long = "allow-dirty",
-      short = "d",
-      description = "allow dirty git working tree?",
-      flag = true,
-    },
-    {
-      field = "skip_tests",
-      long = "skip-tests",
-      short = "t",
-      description = "skip running tests?",
-      flag = true,
-    },
-    {
       field = "print_commands",
       long = "print-commands",
-      short = "c",
+      short = "p",
       description = "print all commands (external program calls or whatever they're really called) that get run",
       flag = true,
-    }
+    },
+    (function()
+      local result = {}
+      for i, name in ipairs(skip_able) do
+        result[i] = {
+          field = name,
+          long = string.gsub(name, "_", "-"),
+          ---cSpell:disable-next-line
+          short = string.sub("abcdefgijklmnoqrstuvwxyz", i, i), -- no h, p
+          flag = true,
+        }
+      end
+      return table.unpack(result)
+    end)(),
   },
 })
 if not args then return end
@@ -65,7 +78,22 @@ end
 
 local main_branch = "master"
 
--- TODO: ensure git, gh (github cli) and 7z (7-zip) are available
+-- ensure git, gh (github cli) and 7z (7-zip) are available
+if not args.skip_ensure_command_availability then
+  print("Ensuring 'git', 'gh' and '7z' are available")
+  local missing_commands = {}
+  local function ensure_command_is_available(command, name, arg)
+    if not os.execute(command..(arg and " "..arg or "")) then
+      missing_commands[#missing_commands+1] = "'"..command.."' ("..name..")"
+    end
+  end
+  ensure_command_is_available("git", "git", "status -s")
+  ensure_command_is_available("gh", "github cli")
+  ensure_command_is_available("7z", "7-zip")
+  if missing_commands[1] then
+    error("Missing programs "..table.concat(missing_commands, ", "))
+  end
+end
 
 -- ensure git is clean and on master
 print("Checking git status")
@@ -73,7 +101,7 @@ local foo = git("status", "--porcelain", "-b")
 if not foo[1]:find("^## "..main_branch.."%.%.%.") then
   error("git must be on branch "..main_branch..".")
 end
-if not args.allow_dirty_working_tree and foo[2] then
+if not args.skip_ensure_clean_working_tree and foo[2] then
   error("git working tree must be clean")
 end
 
@@ -92,26 +120,19 @@ if not args.skip_tests then
   end
 end
 
--- compile src to `out/src/release`
-print("Building src")
-loadfile("scripts/build_src.lua")(table.unpack{
-  "--profile", "release",
-})
+if not args.skip_build then
+  -- compile src to `out/src/release`
+  print("Building src")
+  loadfile("scripts/build_src.lua")(table.unpack{
+    "--profile", "release",
+  })
 
--- compile src to `out/factorio/release/phobos`
-print("Building Factorio Mod")
-loadfile("scripts/build_factorio_mod.lua")(table.unpack{
-  "--profile", "release",
-  "--include-src-in-source-name",
-})
-
--- prepare temp dir
-print("Creating or Cleaning up 'temp/publish' dir")
-io_util.mkdir_recursive("temp/publish")
-for entry in lfs.dir("temp/publish") do
-  if entry ~= "." and entry ~= ".." then
-    assert(os.remove("temp/publish/"..entry))
-  end
+  -- compile src to `out/factorio/release/phobos`
+  print("Building Factorio Mod")
+  loadfile("scripts/build_factorio_mod.lua")(table.unpack{
+    "--profile", "release",
+    "--include-src-in-source-name",
+  })
 end
 
 -- get version from info.json
@@ -152,7 +173,7 @@ if not current_version_block then
 end
 
 -- date stamp that version block
-do
+if not args.skip_date_stamp_changelog then
   local date = os.date("!%Y-%m-%d")
   print("Setting date for version block for version "..version_str.." to "..date.." in changelog.txt")
   current_version_block.date = date
@@ -161,8 +182,19 @@ do
   assert(file:close())
 end
 
+-- prepare temp dir
+print("Creating or Cleaning up 'temp/publish' dir")
+io_util.mkdir_recursive("temp/publish")
+if not args.skip_cleanup_temp_dir then
+  for entry in lfs.dir("temp/publish") do
+    if entry ~= "." and entry ~= ".." then
+      assert(os.remove("temp/publish/"..entry))
+    end
+  end
+end
+
 -- create zip packages
-do
+if not args.skip_package then
   ---cSpell:ignore tzip
   -- -tzip defines the zip archive type to be "zip". whatever that exactly means
 
@@ -268,14 +300,16 @@ end
 
 -- create a git commit which will be the commit tagged for the release
 -- (usually this will just be the changelog date change, but it might be any changes, including none)
-print("Creating and pushing git commit for version "..version_str)
-git("add", "*")
-git("commit", "-m", escape_arg("Prepare for version "..version_str), "--allow-empty")
-git("push")
+if not args.skip_preparation_commit then
+  print("Creating and pushing git commit for version "..version_str)
+  git("add", "*")
+  git("commit", "-m", escape_arg("Prepare for version "..version_str), "--allow-empty")
+  git("push")
+end
 
 -- generate notes for github release
-local github_release_notes_filename = "temp/publish/github_release_notes.md"
-do
+if not args.skip_github_release then
+  local github_release_notes_filename = "temp/publish/github_release_notes.md"
   print("Generating notes for github release")
   local out = {}
   local function add(str)
@@ -307,43 +341,47 @@ do
   local file = assert(io.open(github_release_notes_filename, "w"))
   assert(file:write(table.concat(out)))
   assert(file:close())
-end
 
--- create github release
-print("Creating github release v"..version_str)
-gh("release", "create", "v"..version_str,
-  escape_arg("temp/publish/phobos_windows_"..version_str..".zip#Phobos for windows"),
-  escape_arg("temp/publish/phobos_linux_"..version_str..".zip#Phobos for linux"),
-  escape_arg("temp/publish/phobos_osx_"..version_str..".zip#Phobos for osx"),
-  escape_arg("temp/publish/phobos_"..version_str..".zip#Phobos Factorio Mod"),
-  "--repo", "JanSharp/phobos",
-  "--notes-file", github_release_notes_filename,
-  "--title", "v"..version_str
-)
+  -- create github release
+  print("Creating github release v"..version_str)
+  gh("release", "create", "v"..version_str,
+    escape_arg("temp/publish/phobos_windows_"..version_str..".zip#Phobos for windows"),
+    escape_arg("temp/publish/phobos_linux_"..version_str..".zip#Phobos for linux"),
+    escape_arg("temp/publish/phobos_osx_"..version_str..".zip#Phobos for osx"),
+    escape_arg("temp/publish/phobos_"..version_str..".zip#Phobos Factorio Mod"),
+    "--repo", "JanSharp/phobos",
+    "--notes-file", github_release_notes_filename,
+    "--title", "v"..version_str
+  )
+end
 
 -- increment version in info.json
-print("Incrementing version in info.json")
-version.patch = version.patch + 1
-version_str = changelog_util.print_version(version)
-info_json = info_json:gsub(info_json_version_pattern, function(prefix)
-  return prefix..version_str..'"'
-end)
-do
-  local file = assert(io.open("info.json", "w"))
-  assert(file:write(info_json))
-  assert(file:close())
-end
+if not args.skip_increment_version then
+  print("Incrementing version in info.json")
+  version.patch = version.patch + 1
+  version_str = changelog_util.print_version(version)
+  info_json = info_json:gsub(info_json_version_pattern, function(prefix)
+    return prefix..version_str..'"'
+  end)
+  do
+    local file = assert(io.open("info.json", "w"))
+    assert(file:write(info_json))
+    assert(file:close())
+  end
 
--- add new version block in changelog.txt
-print("Adding new version block for "..version_str)
-table.insert(changelog, 1, {version = version, categories = {}})
-do
-  local file = assert(io.open("changelog.txt", "w"))
-  assert(file:write(changelog_util.encode(changelog)))
-  assert(file:close())
+  -- add new version block in changelog.txt
+  print("Adding new version block for "..version_str)
+  table.insert(changelog, 1, {version = version, categories = {}})
+  do
+    local file = assert(io.open("changelog.txt", "w"))
+    assert(file:write(changelog_util.encode(changelog)))
+    assert(file:close())
+  end
 end
 
 -- create commit for moving to new version
-print("Creating commit for moving to version "..version_str)
-git("add", "*")
-git("commit", "-m", escape_arg("Move to version "..version_str))
+if not args.skip_increment_commit then
+  print("Creating commit for moving to version "..version_str)
+  git("add", "*")
+  git("commit", "-m", escape_arg("Move to version "..version_str))
+end
