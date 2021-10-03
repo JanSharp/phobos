@@ -23,10 +23,13 @@ local skip_able = {
 local args = arg_parser.parse_and_print_on_error_or_help({...}, {
   options = {
     {
-      field = "print_commands",
-      long = "print-commands",
-      short = "p",
-      description = "print all commands (external program calls or whatever they're really called) that get run",
+      field = "verbose",
+      long = "verbose",
+      short = "v",
+      description = "print all commands (io.popen) that get run,\n\z
+        print changes of the working directory\n\z
+        and use verbose flag when building.\n\z
+        Verbose prints are indented by 2 spaces, except those from building.",
       flag = true,
     },
     (function()
@@ -36,7 +39,7 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
           field = name,
           long = string.gsub(name, "_", "-"),
           ---cSpell:disable-next-line
-          short = string.sub("abcdefgijklmnoqrstuvwxyz", i, i), -- no h, p
+          short = string.sub("abcdefgijklmnopqrstuwxyz", i, i), -- no h, v
           flag = true,
         }
       end
@@ -52,8 +55,8 @@ end
 
 local function run(...)
   local command = table.concat({...}, " ")
-  if args.print_commands then
-    print(command)
+  if args.verbose then
+    print("  "..command)
   end
   local pipe = assert(io.popen(command, "r"))
   local result = {}
@@ -125,6 +128,7 @@ if not args.skip_build then
   print("Building src")
   loadfile("scripts/build_src.lua")(table.unpack{
     "--profile", "release",
+    args.verbose and "--verbose" or nil,
   })
 
   -- compile src to `out/factorio/release/phobos`
@@ -132,6 +136,7 @@ if not args.skip_build then
   loadfile("scripts/build_factorio_mod.lua")(table.unpack{
     "--profile", "release",
     "--include-src-in-source-name",
+    args.verbose and "--verbose" or nil,
   })
 end
 
@@ -207,6 +212,13 @@ if not args.skip_package then
   -- -mx9 is the highest compression level
   -- -r means recursive
 
+  local function chdir(path)
+    if args.verbose then
+      print("  Changing working dir to "..path)
+    end
+    lfs.chdir(path)
+  end
+
   local root_path = Path.new(lfs.currentdir():gsub("\\", "/"))
   local root_filenames = {
     "README.md",
@@ -220,11 +232,11 @@ if not args.skip_package then
     local zip_path = Path.combine("temp/publish", "phobos_"..platform.."_"..version_str..".zip")
     print("Packaging "..zip_path:str())
 
-    lfs.chdir((root_path / "out/src/release"):str())
+    chdir((root_path / "out/src/release"):str())
     seven_zip("a", "-tzip", "-mx9", "-r", ("../../.." / zip_path):str(), "*.lua")
-    lfs.chdir((root_path / "bin" / platform):str())
+    chdir((root_path / "bin" / platform):str())
     seven_zip("a", "-tzip", "-mx9", "-r", ("../.." / zip_path):str(), "*")
-    lfs.chdir(root_path:str())
+    chdir(root_path:str())
 
     -- not adding src files by default because the chances of someone needing them in
     -- regular distributions is incredibly slim. It can allow for debugging, but since
@@ -246,14 +258,21 @@ if not args.skip_package then
     print("Packaging "..zip_path:str())
 
     local build_root = Path.new("out/factorio/release/phobos")
-    lfs.chdir((root_path / build_root):str())
+    chdir((root_path / build_root):str())
     -- "-m0=PPMd" because for factorio mods lua files have to be text files (for now)
     -- so this is more size efficient
     seven_zip("a", "-tzip", "-mx9", "-r", --[["-m0=PPMd",]] ("../../../.." / zip_path):str(), "*.lua")
-    lfs.chdir(root_path:str())
+    chdir(root_path:str())
 
-    -- TODO: maybe ignore (don't add) the files that were ignored for this build?
-    seven_zip("a", "-tzip", "-mx9", "-r", --[["-m0=PPMd",]] zip_path:str(), "src/*.lua")
+    seven_zip((function()
+      local result = {"a", "-tzip", "-mx9", "-r", --[["-m0=PPMd"]]}
+      for _, ignore in ipairs(require("scripts.factorio_build_ignore_list")) do
+        result[#result+1] = "-x!src/"..(ignore:find("%.lua$") and ignore or (ignore.."/"))
+      end
+      result[#result+1] = zip_path:str()
+      result[#result+1] = "src/*.lua"
+      return table.unpack(result)
+    end)())
 
     root_filenames[#root_filenames+1] = "info.json"
     seven_zip("a", "-tzip", "-mx9", zip_path:str(), table.unpack(root_filenames))

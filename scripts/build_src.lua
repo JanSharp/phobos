@@ -24,6 +24,12 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
         enable when debugging locally, disable when building for publish.",
       flag = true,
     },
+    {
+      field = "verbose",
+      long = "verbose",
+      short = "v",
+      flag = true,
+    },
   },
 })
 if not args then return end
@@ -39,4 +45,5 @@ loadfile(assert(__source_dir).."/main.lua")(table.unpack{
   "--source-name", (args.include_src and "src/" or "").."?",
   "--ignore",
   "control.lua",
+  args.verbose and "--verbose" or nil,
 })

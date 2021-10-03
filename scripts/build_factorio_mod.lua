@@ -24,6 +24,12 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
         enable when debugging locally, disable when building for publish.",
       flag = true,
     },
+    {
+      field = "verbose",
+      long = "verbose",
+      short = "v",
+      flag = true,
+    },
   },
 })
 if not args then return end
@@ -37,12 +43,16 @@ loadfile(assert(__source_dir).."/main.lua")(table.unpack{
   "--use-load",
   "--pho-extension", ".lua",
   "--source-name", "@__phobos__/"..(args.include_src and "src/" or "").."?",
-  "--ignore",
-  "io_util.lua",
-  "lib/LFSClasses",
-  "lib/LuaPath",
-  "main.lua",
-  "phobos.lua",
+  (function()
+    local function ignore()
+      return "--ignore", table.unpack(require("scripts.factorio_build_ignore_list"))
+    end
+    if args.verbose then
+      return "--verbose", ignore()
+    else
+      return ignore()
+    end
+  end)(),
 })
 
 local io_util = require("io_util")
