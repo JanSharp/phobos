@@ -1,4 +1,6 @@
 
+local very_start_time = os.clock()
+
 ---@type LFS
 local lfs = require("lfs")
 local Path = require("lib.LuaPath.path")
@@ -245,7 +247,7 @@ local io_util = require("io_util")
 local err_count = 0
 local start_time = os.clock()
 if args.verbose then
-  print("started compilation of "..(#source_file_paths).." files at ~ "..start_time.."s")
+  print("started compilation of "..(#source_file_paths).." files at ~ "..(start_time - very_start_time).."s")
 end
 
 local total_memory_allocated = 0
@@ -319,4 +321,4 @@ local end_time = os.clock()
 if args.verbose then
   print("compilation took ~ "..(end_time - start_time).."s")
 end
-print("total time elapsed ~ "..end_time.."s")
+print("total time elapsed ~ "..(end_time - very_start_time).."s")

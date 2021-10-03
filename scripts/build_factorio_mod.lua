@@ -51,7 +51,4 @@ local function copy_from_root_to_output(filename)
 end
 
 copy_from_root_to_output("info.json")
-copy_from_root_to_output("readme.md")
 copy_from_root_to_output("changelog.txt")
-copy_from_root_to_output("LICENSE.txt")
-copy_from_root_to_output("LICENSE_THIRD_PARTY.txt")

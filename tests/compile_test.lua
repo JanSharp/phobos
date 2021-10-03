@@ -260,4 +260,6 @@ end
 
 if success then
   print("No differences between compilation results - Success!")
+else
+  error("Bytecode differed for some files.")
 end
