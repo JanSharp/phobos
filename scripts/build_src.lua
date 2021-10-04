@@ -42,7 +42,7 @@ loadfile(assert(__source_dir).."/main.lua")(table.unpack{
   -- phobos enough yet
   -- this will probably change soon though
   "--pho-extension", ".lua",
-  "--source-name", (args.include_src and "src/" or "").."?",
+  "--source-name", "@"..(args.include_src and "src/" or "").."?",
   "--ignore",
   "control.lua",
   args.verbose and "--verbose" or nil,
