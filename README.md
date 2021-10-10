@@ -16,13 +16,13 @@ Download the zip for your platform from the GitHub Releases, extract all files a
 **The working directory has to be the directory containing the main.lua file.** Use the `--working-dir` argument if you wish to use relative paths to said directory. Otherwise they are relative to the `main.lua` file, as that is the working directory.
 
 <!-- cSpell:ignore cpath -->
-You could also change the `LUA_PATH` and `LUA_CPATH` environment variables to include the phobos directory but beware of name collisions.
+You could also change the `LUA_PATH` and `LUA_CPATH` environment variables to include the phobos directory but beware of name collisions. (See [package.path](https://www.lua.org/manual/5.2/manual.html#pdf-package.path) and [package.cpath](https://www.lua.org/manual/5.2/manual.html#pdf-package.cpath) and maybe [here](https://www.lua.org/manual/5.2/manual.html#7))
 
 # Factorio
 
 ## Factorio Mod
 
-There is also a Factorio mod on the Mod Portal and in the GitHub Releases.\
+There is also a Factorio mod on the [Factorio Mod Portal](https://mods.factorio.com/mod/phobos) and in the GitHub Releases.\
 It contains all files required to use phobos **at runtime**, no command line tools.\
 Additionally the mod, and only the mod, contains a `control.lua` file to register commands to run phobos in the in-game console similar to regular Lua commands. Use `/help` in-game.
 
