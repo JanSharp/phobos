@@ -1,6 +1,7 @@
 
 local arg_parser = require("lib.LuaArgParser.arg_parser")
 local Path = require("lib.LuaPath.path")
+Path.use_forward_slash_as_main_separator_on_windows()
 local script_util = require("scripts.util")
 arg_parser.register_type(Path.arg_parser_path_type_def)
 arg_parser.register_type(script_util.arg_parser_build_profile_type_def)
@@ -34,12 +35,12 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
 })
 if not args then return end
 
-local output_dir = "out/factorio/"..script_util.get_dir_name(args.profile).."/phobos"
+local output_dir = Path.combine("factorio", script_util.get_dir_name(args.profile), "phobos")
 
 loadfile(assert(__source_dir).."/main.lua")(table.unpack{
   "--source", "src",
-  "--temp", "../temp",
-  "--output", "../"..output_dir,
+  "--output", ("out" / output_dir):str(),
+  "--temp", ("temp" / output_dir):str(),
   "--use-load",
   "--pho-extension", ".lua",
   "--source-name", "@__phobos__/"..(args.include_src and "src/" or "").."?",
@@ -57,7 +58,7 @@ loadfile(assert(__source_dir).."/main.lua")(table.unpack{
 
 local io_util = require("io_util")
 local function copy_from_root_to_output(filename)
-  io_util.copy(filename, output_dir.."/"..filename)
+  io_util.copy(filename, "out" / output_dir / filename)
 end
 
 copy_from_root_to_output("info.json")
