@@ -43,7 +43,7 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
       short = "o",
       description = "Target directory path to put generated files into.\n\z
                      Defaults to '--source'. If not equal to '--source'\n\z
-                     Files with '--lua-extension' in the output dir\n\z
+                     files with '--lua-extension' in the output dir\n\z
                      will be deleted.",
       single_param = true,
       type = "path",
@@ -133,7 +133,7 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
       flag = true,
     },
   },
-})
+}, {label_length = 80 - 4 - 2 - 50})
 if not args then return end
 
 if args.monitor_memory_allocation then
