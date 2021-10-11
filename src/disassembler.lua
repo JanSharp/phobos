@@ -315,22 +315,25 @@ local function disassemble(bytecode)
       + bit32.lshift(four, 24)
   end
 
-  local function read_string()
+  local function read_size()
     -- string length is defined with a UInt64, but we only support UInt32
     -- because Lua numbers are doubles making it annoying/complicated
-    local length = read_uint32()
+    local size = read_uint32()
     if bytecode:sub(i, i + 4 - 1) ~= "\0\0\0\0" then
-      error("Unable to read string longer than `UInt32.max_value`.")
+      -- error includes string because that's the only thing using size_t
+      error("Unsupported to read (string) size greater than `UInt32.max_value`.")
     end
     i = i + 4
-    if length == 0 then -- 0 means nil
+    return size
+  end
+
+  local function read_string()
+    local size = read_size()
+    if size == 0 then -- 0 means nil
       return nil
     else
-      if length > (8 + 1) and bytecode:sub(i, i + 8 - 1) == phobos_consts.phobos_signature then
-        return nil, length
-      end
-      local result = bytecode:sub(i, i + length - 1 - 1) -- an extra -1 for the trailing \0
-      i = i + length
+      local result = bytecode:sub(i, i + size - 1 - 1) -- an extra -1 for the trailing \0
+      i = i + size
       return result
     end
   end
@@ -348,11 +351,10 @@ local function disassemble(bytecode)
       return {node_type = "number", value = value}
     end,
     [4] = function()
-      local value, is_phobos_debug_symbols = read_string()
-      if is_phobos_debug_symbols then
-        return nil, is_phobos_debug_symbols
+      local value = read_string()
+      if not value then
+        error("Strings in the constant table must not be `nil`.")
       end
-      assert(value, "Strings in the constant table must not be `nil`.")
       return {node_type = "string", value = value}
     end,
   }
@@ -388,51 +390,87 @@ local function disassemble(bytecode)
       func.instructions[j] = create_instruction(raw)
     end
 
-    for j = 1, read_uint32() do
-      local constant, is_phobos_debug_symbols = const_lut[read_uint8()]()
-      if not is_phobos_debug_symbols then
-        func.constants[j] = constant
-      else
-        read_bytes(8) -- consume signature
+    local constant_count = read_uint32()
+    if constant_count > 0 then
+      for j = 1, constant_count - 1 do
+        func.constants[j] = const_lut[read_uint8()]()
+      end
 
-        -- column_defined
-        func.column_defined = nil_if_zero(read_uint32())
-        -- last_column_defined
-        func.last_column_defined = nil_if_zero(read_uint32())
-
-        -- instruction_columns
-        for k = 1, read_uint32() do
-          func.instructions[k].column = nil_if_zero(read_uint32())
+      -- check if the last constant is phobos debug symbols
+      local last_type = read_uint8()
+      local original_i = i
+      local are_phobos_debug_symbols = false
+      local phobos_debug_symbol_version = 0
+      local phobos_debug_symbols_must_end_at
+      if last_type == 4 then
+        local size = read_size()
+        phobos_debug_symbols_must_end_at = i + size
+        if read_bytes_as_str(#phobos_consts.phobos_signature) == phobos_consts.phobos_signature then
+          size = size - #phobos_consts.phobos_signature
+          while size > 2 do
+            local byte = read_uint8()
+            phobos_debug_symbol_version = phobos_debug_symbol_version + byte
+            size = size - 1
+            if byte ~= 0xff then
+              are_phobos_debug_symbols = true
+              break
+            end
+          end
         end
+      end
 
-        -- sources
-        local sources = {}
-        for k = 1, read_uint32() do
-          sources[k] = read_string()
-        end
+      if are_phobos_debug_symbols then
+        if phobos_debug_symbol_version ~= phobos_consts.phobos_debug_symbol_version then
+          -- TODO: somehow warn that reading phobos debug symbols was skipped [...]
+          -- because of a version mismatch
+          i = phobos_debug_symbols_must_end_at
+        else
+          -- column_defined
+          func.column_defined = nil_if_zero(read_uint32())
+          -- last_column_defined
+          func.last_column_defined = nil_if_zero(read_uint32())
 
-        -- sections
-        do
-          local current_source = nil -- nil stands for the main `source`
-          local current_index = 1
-          for _ = 1, read_uint32() do
-            local instruction_index = read_uint32()
-            local source_index = read_uint32()
-            for k = current_index, (instruction_index + 1) - 1 do
+          -- instruction_columns
+          for k = 1, read_uint32() do
+            func.instructions[k].column = nil_if_zero(read_uint32())
+          end
+
+          -- sources
+          local sources = {}
+          for k = 1, read_uint32() do
+            sources[k] = read_string()
+          end
+
+          -- sections
+          do
+            local current_source = nil -- nil stands for the main `source`
+            local current_index = 1
+            for _ = 1, read_uint32() do
+              local instruction_index = read_uint32()
+              local source_index = read_uint32()
+              for k = current_index, (instruction_index + 1) - 1 do
+                func.instructions[k].source = current_source
+              end
+              if source_index == 0 then
+                current_source = nil
+              else
+                current_source = sources[source_index]
+              end
+            end
+            for k = current_index, #func.instructions do
               func.instructions[k].source = current_source
             end
-            if source_index == 0 then
-              current_source = nil
-            else
-              current_source = sources[source_index]
-            end
           end
-          for k = current_index, #func.instructions do
-            func.instructions[k].source = current_source
+
+          read_uint8() -- trailing \0
+          if i ~= phobos_debug_symbols_must_end_at then
+            error("Invalid phobos debug symbol size.")
           end
         end
-
-        assert(read_bytes(1) == 0)
+      else
+        -- wasn't phobos debug symbols
+        i = original_i
+        func.constants[constant_count] = const_lut[last_type]()
       end
     end
 

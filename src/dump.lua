@@ -93,7 +93,21 @@ local function DumpPhobosDebugSymbols(dump, func)
   end
 
   -- signature
-  add(phobos_consts.phobos_signature, 8)
+  add(phobos_consts.phobos_signature, 7)
+
+  -- version
+  do
+    local version = phobos_consts.phobos_debug_symbol_version
+    while true do
+      if version >= 255 then
+        add("\xff", 1)
+        version = version - 255
+      else
+        add(string.char(version), 1)
+        break
+      end
+    end
+  end
 
   -- uint32 column_defined (0 for unknown or main chunk)
   add(DumpInt(func.column_defined or 0))
@@ -277,6 +291,8 @@ local function DumpFunction(func)
     dump[#dump+1] = DumpConstant(constant)
   end
 
+  -- when adding an option to disable these ensure to add an extra unused `nil` constant
+  -- instead if the last constant happens to look just like phobos debug symbols
   DumpPhobosDebugSymbols(dump, func)
 
   -- [func_protos]
