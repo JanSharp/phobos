@@ -1,6 +1,10 @@
 
 local serpent = require("lib.serpent")
 local disassembler = require("disassembler")
+---@type LFS
+local lfs = require("lfs")
+local Path = require("lib.LuaPath.path")
+Path.use_forward_slash_as_main_separator_on_windows()
 
 local unsafe = true
 local print_progress = true
@@ -19,6 +23,10 @@ local total_lua_inst_count = 0
 local total_pho_inst_count = 0
 local total_lua_byte_count = 0
 local total_pho_byte_count = 0
+
+if not Path.new("temp"):exists() then
+  lfs.mkdir("temp")
+end
 
 local function compile(filename)
   if print_progress then
@@ -227,7 +235,7 @@ local function compile(filename)
       result[#result+1] = line.line
     end
 
-    file = io.open("E:/Temp/phobos-disassembly.lua", "w")
+    file = assert(io.open("temp/phobos-disassembly.lua", "w"))
     file:write(table.concat(result, "\n"))
     file:close()
   end
