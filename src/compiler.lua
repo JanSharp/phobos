@@ -1695,10 +1695,14 @@ do
       local lowest_captured_reg
       for _, live in ipairs(func.live_regs) do
         -- except this condition
-        if scopes_that_matter_lut[live.scope] and live.upval_capture_pc and live.upval_capture_pc < stat.pc then
-          if (not lowest_captured_reg) or live.reg < lowest_captured_reg then
+        if scopes_that_matter_lut[live.scope]
+          and live.upval_capture_pc
+          and live.upval_capture_pc < stat.pc
+          and (
+            (not lowest_captured_reg)
+            or live.reg < lowest_captured_reg
+          ) then
             lowest_captured_reg = live.reg
-          end
         end
       end
       inst.a = (lowest_captured_reg or -1) + 1
