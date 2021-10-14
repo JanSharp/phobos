@@ -102,8 +102,8 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
       flag = true,
     },
     {
-      field = "hide_syntax_error_messages",
-      long = "hide-syntax-error-messages",
+      field = "no_syntax_error_messages",
+      long = "no-syntax-error-messages",
       description = "Used if `--ignore-syntax-errors` is set. Stops\n\z
                      printing syntax error messages to std out.",
       flag = true,
@@ -330,7 +330,7 @@ for _, source_file in ipairs(source_files) do
     success, ast = pcall(parser, text, source_name)
     if not success then
       err_count = err_count + 1
-      if not args.hide_syntax_error_messages then
+      if not args.no_syntax_error_messages then
         print(ast:gsub("^[^:]+:%d+: ", "").." in "..source_name)
       end
       goto continue
