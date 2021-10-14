@@ -180,6 +180,16 @@ for _, ignore_path in ipairs(args.ignore_paths) do
   ignore_path_lut[ignore_path:to_fully_qualified(source_dir):normalize():str()] = true
 end
 
+local function warn_for_unhandled_entry(mode, entry_path)
+  if not args.no_warnings then
+    if mode then
+      print("WARN: unhandled entry mode '"..mode.."' for '"..entry_path:str().."'")
+    else
+      print("WARN: unsupported characters in filename '"..entry_path:str().."'")
+    end
+  end
+end
+
 -- search for source files
 
 do
@@ -206,8 +216,8 @@ do
           source_files[#source_files+1] = entry_path
           source_file_lut[entry_path:sub(#source_dir + 1):str()] = true
         end
-      elseif not args.no_warnings then
-        print("WARN: unhandled entry mode '"..mode.."' for '"..entry_path:str().."'")
+      else
+        warn_for_unhandled_entry(mode, entry_path)
       end
 
       ::continue::
@@ -257,8 +267,8 @@ if output_dir ~= source_dir then
             os.remove(entry_path:str())
           end
         end
-      elseif not args.no_warnings then
-        print("WARN: unhandled entry mode '"..mode.."' for '"..entry_path:str().."'")
+      else
+        warn_for_unhandled_entry(mode, entry_path)
       end
 
       ::continue::
