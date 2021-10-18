@@ -192,7 +192,6 @@ do
         line = get_last_used_line(func),
         column = get_last_used_column(func),
       }, num_results - 1, func, regs)
-      print()
     end
   end
 
