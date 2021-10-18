@@ -48,7 +48,7 @@
       },
       "osx": {
         "program": {
-          "lua": "bin/osx/?", // TODO: set right name for osx lua binaries
+          "lua": "bin/osx/lua",
           "file": "entry_point.lua",
         },
       },
@@ -78,7 +78,7 @@
       },
       "osx": {
         "program": {
-          "lua": "bin/osx/?", // TODO: set right name for osx lua binaries
+          "lua": "bin/osx/lua",
           "file": "entry_point.lua",
         },
       },
@@ -109,7 +109,7 @@
       },
       "osx": {
         "program": {
-          "lua": "bin/osx/?", // TODO: set right name for osx lua binaries
+          "lua": "bin/osx/lua",
           "file": "entry_point.lua",
         },
       },
@@ -138,7 +138,7 @@
       },
       "osx": {
         "program": {
-          "lua": "bin/osx/?", // TODO: set right name for osx lua binaries
+          "lua": "bin/osx/lua",
           "file": "entry_point.lua",
         },
       },
@@ -172,7 +172,7 @@
       },
       "osx": {
         "program": {
-          "lua": "bin/osx/?", // TODO: set right name for osx lua binaries
+          "lua": "bin/osx/lua",
           "file": "entry_point.lua",
         },
       },
@@ -203,7 +203,7 @@
       },
       "osx": {
         "program": {
-          "lua": "bin/osx/?", // TODO: set right name for osx lua binaries
+          "lua": "bin/osx/lua",
           "file": "entry_point.lua",
         },
       },
@@ -235,7 +235,7 @@
       },
       "osx": {
         "program": {
-          "lua": "bin/osx/?", // TODO: set right name for osx lua binaries
+          "lua": "bin/osx/lua",
           "file": "entry_point.lua",
         },
       },
@@ -265,7 +265,7 @@
       },
       "osx": {
         "program": {
-          "lua": "bin/osx/?", // TODO: set right name for osx lua binaries
+          "lua": "bin/osx/lua",
           "file": "entry_point.lua",
         },
       },

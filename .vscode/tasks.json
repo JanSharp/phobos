@@ -15,7 +15,7 @@
         "command": "bin/linux/lua",
       },
       "osx": {
-        "command": "bin/osx/?", // TODO set right name for osx lua binaries
+        "command": "bin/osx/lua",
       },
       "args": [
         "--", "entry_point.lua",
@@ -40,7 +40,7 @@
         "command": "bin/linux/lua",
       },
       "osx": {
-        "command": "bin/osx/?", // TODO set right name for osx lua binaries
+        "command": "bin/osx/lua",
       },
       "args": [
         "--", "entry_point.lua",
