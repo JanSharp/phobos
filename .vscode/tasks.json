@@ -9,10 +9,10 @@
       "type": "process",
       "command": "",
       "windows": {
-        "command": "bin/windows/lua52",
+        "command": "bin/windows/lua",
       },
       "linux": {
-        "command": "bin/linux/lua52",
+        "command": "bin/linux/lua",
       },
       "osx": {
         "command": "bin/osx/?", // TODO set right name for osx lua binaries
@@ -34,10 +34,10 @@
       "type": "process",
       "command": "",
       "windows": {
-        "command": "bin/windows/lua52",
+        "command": "bin/windows/lua",
       },
       "linux": {
-        "command": "bin/linux/lua52",
+        "command": "bin/linux/lua",
       },
       "osx": {
         "command": "bin/osx/?", // TODO set right name for osx lua binaries

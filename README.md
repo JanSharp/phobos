@@ -11,7 +11,7 @@ Phobos currently only supports bytecode for Lua 5.2 with [this](src/constants.lu
 
 Download the zip for your platform from the GitHub Releases, extract all files and run it using this command in your command line or terminal:
 ```
-./lua52 -- main.lua -h
+./lua -- main.lua -h
 ```
 **The working directory has to be the directory containing the main.lua file.** Use the `--working-dir` argument if you wish to use relative paths to said directory. Otherwise they are relative to the `main.lua` file, as that is the working directory.
 
@@ -152,12 +152,12 @@ Then to actually run src or those built "binaries" check the `.vscode/launch.jso
 <!--
 Currently there are Windows Lua and LFS binaries in the repo, so just clone the repo and try running this in the root directory. if it is successful, phobos will most likely run properly.
 ```
-bin/windows/lua52.exe -- entry_point.lua src tests/compile_test.lua
+bin/windows/lua -- entry_point.lua src tests/compile_test.lua
 ```
 (for other platforms you'll somehow have to get those binaries. LFS is on luarocks, for the record)
 
 To actually run the main.lua file you'll have to run src/main.lua like this (with additional args of course)
 ```
-bin/windows/lua52.exe -- entry_point.lua src src/main.lua
+bin/windows/lua -- entry_point.lua src src/main.lua
 ```
 -->
