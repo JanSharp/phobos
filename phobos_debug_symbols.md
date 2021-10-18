@@ -42,3 +42,11 @@ Phobos itself will always output collision free bytecode by adding an unused nil
     0 stands for the lua_Debug `source` of this function, 1 is the 0th entry in `sources` and so on.
 
 there is an implied first section with `instruction_index` and `source_index` both being `0`.
+
+<!-- Notes:
+
+If debug symbols was to support/allow for combined line information it would very most likely be 3 digits (least significant) for the column and the rest for the line, only stored in the regular line debug symbols. Phobos debug symbols would most likely just have a flag indicating wether or not these combined line numbers are used and the array of column numbers would be empty (but still exist because that's easier to consume).
+
+Phobos debug symbols should not contain duplicate data which is already in regular debug symbols.
+
+-->

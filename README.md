@@ -32,7 +32,20 @@ When compiling (see below) for a Factorio mod you currently **must** use `--use-
 
 Additionally it is recommended to use `--source-name @__mod-name__/?` to match Factorio's source name pattern (`mod-name` being your internal mod name).
 
-Lastly take note that omitting `--output` generates compiled files directly next to source files. You may want this for Factorio.
+If the your dev environment is setup such that the root of the `.pho` source files is the same as the `info.json` file then you most likely want to omit `--output` to generate compiled `.lua` files directly next to the source files.\
+An example:
+```
+MyMod
+  |- control.pho
+  |- info.json
+```
+Would look like this after compilation:
+```
+MyMod
+  |- control.lua
+  |- control.pho
+  |- info.json
+```
 
 # Compiling
 
@@ -129,6 +142,8 @@ For license details see the [LICENSE_THIRD_PARTY.txt](LICENSE_THIRD_PARTY.txt) f
 # Contributors
 
 Huge thanks to justarandomgeek for starting the project in the first place (writing the majority of the first iteration of the parser and starting on the actual compiler) and then helping me understand several parts of compilers in general, the Lua VM, Lua bytecode and Lua internals.
+
+Thanks to Therenas for providing built Lua and LuaFileSystem binaries for macOS and ensuring phobos runs properly on macOS.
 
 Thanks to the factorio modding community for providing input, ideas and discussion about phobos as a whole. Without several people wanting types and no longer wanting to micro optimize their code phobos would never have  happened.
 
