@@ -36,19 +36,19 @@
       "program": {"lua": "", "file": ""}, // uh, i guess?
       "windows": {
         "program": {
-          "lua": "bin/windows/lua52",
+          "lua": "bin/windows/lua",
           "file": "entry_point.lua",
         },
       },
       "linux": {
         "program": {
-          "lua": "bin/linux/lua52",
+          "lua": "bin/linux/lua",
           "file": "entry_point.lua",
         },
       },
       "osx": {
         "program": {
-          "lua": "bin/osx/?", // TODO: set right name for osx lua binaries
+          "lua": "bin/osx/lua",
           "file": "entry_point.lua",
         },
       },
@@ -66,19 +66,19 @@
       "program": {"lua": "", "file": ""}, // uh, i guess?
       "windows": {
         "program": {
-          "lua": "bin/windows/lua52",
+          "lua": "bin/windows/lua",
           "file": "entry_point.lua",
         },
       },
       "linux": {
         "program": {
-          "lua": "bin/linux/lua52",
+          "lua": "bin/linux/lua",
           "file": "entry_point.lua",
         },
       },
       "osx": {
         "program": {
-          "lua": "bin/osx/?", // TODO: set right name for osx lua binaries
+          "lua": "bin/osx/lua",
           "file": "entry_point.lua",
         },
       },
@@ -97,19 +97,19 @@
       "program": {"lua": "", "file": ""}, // uh, i guess?
       "windows": {
         "program": {
-          "lua": "bin/windows/lua52",
+          "lua": "bin/windows/lua",
           "file": "entry_point.lua",
         },
       },
       "linux": {
         "program": {
-          "lua": "bin/linux/lua52",
+          "lua": "bin/linux/lua",
           "file": "entry_point.lua",
         },
       },
       "osx": {
         "program": {
-          "lua": "bin/osx/?", // TODO: set right name for osx lua binaries
+          "lua": "bin/osx/lua",
           "file": "entry_point.lua",
         },
       },
@@ -126,19 +126,19 @@
       "program": {"lua": "", "file": ""}, // uh, i guess?
       "windows": {
         "program": {
-          "lua": "bin/windows/lua52",
+          "lua": "bin/windows/lua",
           "file": "entry_point.lua",
         },
       },
       "linux": {
         "program": {
-          "lua": "bin/linux/lua52",
+          "lua": "bin/linux/lua",
           "file": "entry_point.lua",
         },
       },
       "osx": {
         "program": {
-          "lua": "bin/osx/?", // TODO: set right name for osx lua binaries
+          "lua": "bin/osx/lua",
           "file": "entry_point.lua",
         },
       },
@@ -160,19 +160,19 @@
       "program": {"lua": "", "file": ""}, // uh, i guess?
       "windows": {
         "program": {
-          "lua": "bin/windows/lua52",
+          "lua": "bin/windows/lua",
           "file": "entry_point.lua",
         },
       },
       "linux": {
         "program": {
-          "lua": "bin/linux/lua52",
+          "lua": "bin/linux/lua",
           "file": "entry_point.lua",
         },
       },
       "osx": {
         "program": {
-          "lua": "bin/osx/?", // TODO: set right name for osx lua binaries
+          "lua": "bin/osx/lua",
           "file": "entry_point.lua",
         },
       },
@@ -191,19 +191,19 @@
       "program": {"lua": "", "file": ""}, // uh, i guess?
       "windows": {
         "program": {
-          "lua": "bin/windows/lua52",
+          "lua": "bin/windows/lua",
           "file": "entry_point.lua",
         },
       },
       "linux": {
         "program": {
-          "lua": "bin/linux/lua52",
+          "lua": "bin/linux/lua",
           "file": "entry_point.lua",
         },
       },
       "osx": {
         "program": {
-          "lua": "bin/osx/?", // TODO: set right name for osx lua binaries
+          "lua": "bin/osx/lua",
           "file": "entry_point.lua",
         },
       },
@@ -223,19 +223,19 @@
       "program": {"lua": "", "file": ""}, // uh, i guess?
       "windows": {
         "program": {
-          "lua": "bin/windows/lua52",
+          "lua": "bin/windows/lua",
           "file": "entry_point.lua",
         },
       },
       "linux": {
         "program": {
-          "lua": "bin/linux/lua52",
+          "lua": "bin/linux/lua",
           "file": "entry_point.lua",
         },
       },
       "osx": {
         "program": {
-          "lua": "bin/osx/?", // TODO: set right name for osx lua binaries
+          "lua": "bin/osx/lua",
           "file": "entry_point.lua",
         },
       },
@@ -253,19 +253,19 @@
       "program": {"lua": "", "file": ""}, // uh, i guess?
       "windows": {
         "program": {
-          "lua": "bin/windows/lua52",
+          "lua": "bin/windows/lua",
           "file": "entry_point.lua",
         },
       },
       "linux": {
         "program": {
-          "lua": "bin/linux/lua52",
+          "lua": "bin/linux/lua",
           "file": "entry_point.lua",
         },
       },
       "osx": {
         "program": {
-          "lua": "bin/osx/?", // TODO: set right name for osx lua binaries
+          "lua": "bin/osx/lua",
           "file": "entry_point.lua",
         },
       },

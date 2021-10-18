@@ -11,7 +11,7 @@ Phobos currently only supports bytecode for Lua 5.2 with [this](src/constants.lu
 
 Download the zip for your platform from the GitHub Releases, extract all files and run it using this command in your command line or terminal:
 ```
-./lua52 -- main.lua -h
+./lua -- main.lua -h
 ```
 **The working directory has to be the directory containing the main.lua file.** Use the `--working-dir` argument if you wish to use relative paths to said directory. Otherwise they are relative to the `main.lua` file, as that is the working directory.
 
@@ -32,7 +32,20 @@ When compiling (see below) for a Factorio mod you currently **must** use `--use-
 
 Additionally it is recommended to use `--source-name @__mod-name__/?` to match Factorio's source name pattern (`mod-name` being your internal mod name).
 
-Lastly take note that omitting `--output` generates compiled files directly next to source files. You may want this for Factorio.
+If the your dev environment is setup such that the root of the `.pho` source files is the same as the `info.json` file then you most likely want to omit `--output` to generate compiled `.lua` files directly next to the source files.\
+An example:
+```
+MyMod
+  |- control.pho
+  |- info.json
+```
+Would look like this after compilation:
+```
+MyMod
+  |- control.lua
+  |- control.pho
+  |- info.json
+```
 
 # Compiling
 
@@ -130,6 +143,8 @@ For license details see the [LICENSE_THIRD_PARTY.txt](LICENSE_THIRD_PARTY.txt) f
 
 Huge thanks to justarandomgeek for starting the project in the first place (writing the majority of the first iteration of the parser and starting on the actual compiler) and then helping me understand several parts of compilers in general, the Lua VM, Lua bytecode and Lua internals.
 
+Thanks to Therenas for providing built Lua and LuaFileSystem binaries for macOS and ensuring phobos runs properly on macOS.
+
 Thanks to the factorio modding community for providing input, ideas and discussion about phobos as a whole. Without several people wanting types and no longer wanting to micro optimize their code phobos would never have  happened.
 
 # Contributing
@@ -152,12 +167,12 @@ Then to actually run src or those built "binaries" check the `.vscode/launch.jso
 <!--
 Currently there are Windows Lua and LFS binaries in the repo, so just clone the repo and try running this in the root directory. if it is successful, phobos will most likely run properly.
 ```
-bin/windows/lua52.exe -- entry_point.lua src tests/compile_test.lua
+bin/windows/lua -- entry_point.lua src tests/compile_test.lua
 ```
 (for other platforms you'll somehow have to get those binaries. LFS is on luarocks, for the record)
 
 To actually run the main.lua file you'll have to run src/main.lua like this (with additional args of course)
 ```
-bin/windows/lua52.exe -- entry_point.lua src src/main.lua
+bin/windows/lua -- entry_point.lua src src/main.lua
 ```
 -->

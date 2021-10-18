@@ -2,7 +2,7 @@
 -- when running Lua files in this repository you have to use this entry_point.lua file
 -- in order for package.path and package.cpath to be setup for `lfs` and `src` files to be found
 -- example:
--- bin/windows/lua52.exe -- entry_point.lua src debugging/main.lua temp/test.lua
+-- bin/windows/lua -- entry_point.lua src debugging/main.lua temp/test.lua
 
 -- arg 1: main dir path (src or when desired the path to some bin/** sub dir)
 -- arg 2: actual entry point. may be binary or text
