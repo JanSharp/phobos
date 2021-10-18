@@ -1536,7 +1536,8 @@ do
           jump.pc = nil
 
           if lowest_captured_reg then
-            jump.a = lowest_captured_reg + 1
+            -- the +1 for `a` is handled after generating all code for this function
+            jump.a = lowest_captured_reg
           end
         end
         patch_breaks_to_jump_here(stat, func)
