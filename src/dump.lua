@@ -145,7 +145,11 @@ local function GetLocalDebugSymbols(func)
     return top_reg + 1
   end
   local function replace_reg_stack_entry(reg, new_entry)
-    assert(reg < top_reg)
+    assert(reg < top_reg, "\z
+      Attempt to replace entry in stack at register at or above top. \z
+      Impossible as long as all debug registers have valid start and stop indexes \z
+      (start_at <= stop_at, start_at and stop_at are 1 based including-including).\z
+    ")
     local popped = {}
     for j = reg + 1, top_reg do
       popped[#popped+1] = reg_stack[j]
@@ -178,8 +182,8 @@ local function GetLocalDebugSymbols(func)
       end
 
       if reg_name.start_at == i then
-        if reg_name.reg >= next_reg() then
-          for j = next_reg(), reg_name.reg - 1 do
+        if reg_name.index >= next_reg() then
+          for j = next_reg(), reg_name.index - 1 do
             local entry = {
               unnamed = true,
               name = phobos_consts.unnamed_register_name,
@@ -188,15 +192,15 @@ local function GetLocalDebugSymbols(func)
             reg_stack[j] = entry
             locals[#locals+1] = entry
           end
-          top_reg = reg_name.reg
+          top_reg = reg_name.index
           local entry = {
             name = reg_name.name,
             start_at = reg_name.start_at,
           }
           reg_stack[top_reg] = entry
           locals[#locals+1] = entry
-        else -- live.reg < next_reg()
-          replace_reg_stack_entry(reg_name.reg, {
+        else -- live.index < next_reg()
+          replace_reg_stack_entry(reg_name.index, {
             name = reg_name.name,
             start_at = reg_name.start_at,
           })
@@ -215,8 +219,8 @@ local function GetLocalDebugSymbols(func)
     -- _after_ **all** registers that started have been processed
     for j = 1, stopped_count do
       local reg_name = stopped[j]
-      if reg_name.reg ~= top_reg then
-        replace_reg_stack_entry(reg_name.reg, {
+      if reg_name.index ~= top_reg then
+        replace_reg_stack_entry(reg_name.index, {
           unnamed = true,
           name = phobos_consts.unnamed_register_name,
           -- + 1 because this is for the new unnamed entry, not the actual one we are "stopping"
