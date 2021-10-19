@@ -1810,8 +1810,11 @@ do
       func_proto.index = nil
     end
 
-    for _, loc in ipairs(functiondef.locals) do
-      loc.register = nil
+    -- this is a bit of a hack to use scope_levels to get all scopes, but it works
+    for scope in pairs(func.scope_levels) do
+      for _, loc in ipairs(scope.locals) do
+        loc.register = nil
+      end
     end
 
     for _,upval in ipairs(func.upvals) do
