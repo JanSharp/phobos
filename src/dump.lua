@@ -171,70 +171,77 @@ local function GetLocalDebugSymbols(func)
     end
   end
 
-  local stopped = {}
-  local stopped_count = 0
-  for i = 1, #func.instructions do
-    for _, reg_name in ipairs(func.debug_registers) do
-      -- start_at being bigger than stop_at is valid and means the live_reg lasts for 0 instructions
-      -- however they break this algorithm so we just ignore them, which is correct anyway
-      if (not reg_name.name) or (reg_name.start_at > reg_name.stop_at) then
-        goto continue
-      end
+  local start_at_lut = {}
+  local stop_at_lut = {}
 
-      if reg_name.start_at == i then
-        if reg_name.index >= next_reg() then
-          for j = next_reg(), reg_name.index - 1 do
+  local function add_to_lut(lut, index, reg)
+    local regs = lut[index]
+    if not regs then
+      regs = {}
+      lut[index] = regs
+    end
+    regs[#regs+1] = reg
+  end
+
+  for _, reg in ipairs(func.debug_registers) do
+    if reg.name then
+      add_to_lut(start_at_lut, reg.start_at, reg)
+      add_to_lut(stop_at_lut, reg.stop_at, reg)
+    end
+  end
+
+  for i = 1, #func.instructions do
+    local regs = start_at_lut[i]
+    if regs then
+      for _, reg in ipairs(regs) do
+        if reg.index >= next_reg() then
+          for j = next_reg(), reg.index - 1 do
             local entry = {
               unnamed = true,
               name = phobos_consts.unnamed_register_name,
-              start_at = reg_name.start_at,
+              start_at = reg.start_at,
             }
             reg_stack[j] = entry
             locals[#locals+1] = entry
           end
-          top_reg = reg_name.index
+          top_reg = reg.index
           local entry = {
-            name = reg_name.name,
-            start_at = reg_name.start_at,
+            name = reg.name,
+            start_at = reg.start_at,
           }
           reg_stack[top_reg] = entry
           locals[#locals+1] = entry
         else -- live.index < next_reg()
-          replace_reg_stack_entry(reg_name.index, {
-            name = reg_name.name,
-            start_at = reg_name.start_at,
+          replace_reg_stack_entry(reg.index, {
+            name = reg.name,
+            start_at = reg.start_at,
           })
         end
       end
-
-      if reg_name.stop_at == i then
-        stopped_count = stopped_count + 1
-        stopped[stopped_count] = reg_name
-      end
-
-      ::continue::
     end
 
     -- processing of registers that stopped has to be done
     -- _after_ **all** registers that started have been processed
-    for j = 1, stopped_count do
-      local reg_name = stopped[j]
-      if reg_name.index ~= top_reg then
-        replace_reg_stack_entry(reg_name.index, {
-          unnamed = true,
-          name = phobos_consts.unnamed_register_name,
-          -- + 1 because this is for the new unnamed entry, not the actual one we are "stopping"
-          start_at = reg_name.stop_at + 1
-        })
-      else
-        reg_stack[top_reg].stop_at = reg_name.stop_at
-        top_reg = top_reg - 1
-        for j = top_reg, 0, -1 do
-          if not reg_stack[j].unnamed then
-            break
+    regs = stop_at_lut[i]
+    if regs then
+      for _, reg in ipairs(regs) do
+        if reg.index ~= top_reg then
+          replace_reg_stack_entry(reg.index, {
+            unnamed = true,
+            name = phobos_consts.unnamed_register_name,
+            -- + 1 because this is for the new unnamed entry, not the actual one we are "stopping"
+            start_at = reg.stop_at + 1
+          })
+        else
+          reg_stack[top_reg].stop_at = reg.stop_at
+          top_reg = top_reg - 1
+          for j = top_reg, 0, -1 do
+            if not reg_stack[j].unnamed then
+              break
+            end
+            reg_stack[j].stop_at = reg.stop_at
+            top_reg = j - 1
           end
-          reg_stack[j].stop_at = reg_name.stop_at
-          top_reg = j - 1
         end
       end
     end
