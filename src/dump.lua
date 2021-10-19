@@ -245,7 +245,6 @@ local function GetLocalDebugSymbols(func)
         end
       end
     end
-    stopped_count = 0
   end
   return locals
 end
