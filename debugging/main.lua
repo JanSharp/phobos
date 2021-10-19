@@ -266,12 +266,12 @@ end
 if eval_instruction_count and use_regular_lua_compiler and use_phobos_compiler then
   print("total instruction count diff: "..(total_pho_inst_count - total_lua_inst_count)
     .." ("..total_lua_inst_count.." => "..total_pho_inst_count.."; "
-    ..string.format("%0.00d", (total_pho_inst_count / total_lua_inst_count) * 100).."%)"
+    ..string.format("%.2f", (total_pho_inst_count / total_lua_inst_count) * 100).."%)"
   )
 end
 if eval_byte_count and use_regular_lua_compiler and use_phobos_compiler then
   print("total byte count diff: "..(total_pho_byte_count - total_lua_byte_count)
     .." ("..total_lua_byte_count.." => "..total_pho_byte_count.."; "
-    ..string.format("%0.00d", (total_pho_byte_count / total_lua_byte_count) * 100).."%)"
+    ..string.format("%.2f", (total_pho_byte_count / total_lua_byte_count) * 100).."%)"
   )
 end
