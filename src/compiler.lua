@@ -83,15 +83,12 @@ do
     return true
   end
 
-  local temp_id = 0
   local function create_temp_reg(func, index)
-    temp_id = temp_id + 1
     return {
       index = index or peek_next_reg_index(func),
       level = get_current_level(func), -- TODO: what are these even for
       scope = func.current_scope, -- TODO: what are these even for
       temporary = true,
-      name = "("..temp_id..")",
     }
   end
 
