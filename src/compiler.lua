@@ -69,18 +69,25 @@ do
     return reg.index >= get_top(func)
   end
 
-  local function regs_are_at_top_in_order(regs, num_results, func)
-    local top = func.stack.next_reg_index
-    if regs[num_results].index ~= top then
-      return false
+  local function regs_are_in_order(regs, num_results, first_index)
+    if first_index then
+      if regs[num_results].index ~= first_index then
+        return false
+      end
+    else
+      first_index = regs[num_results].index
     end
     for i = num_results - 1, 1, -1 do
-      top = top + 1
-      if regs[i].index ~= top then
+      first_index = first_index + 1
+      if regs[i].index ~= first_index then
         return false
       end
     end
     return true
+  end
+
+  local function regs_are_at_top_in_order(regs, num_results, func)
+    return regs_are_in_order(regs, num_results, func.stack.next_reg_index)
   end
 
   local function create_temp_reg(func, index)
@@ -1565,22 +1572,45 @@ do
 
     ---@param stat AstRetStat
     retstat = function(stat,func)
-      local temp_reg = 0
+      local first_reg = 0
       local temp_regs = {}
       local num_results = 0
-      if stat.exp_list then
+
+      if stat.exp_list and stat.exp_list[1] then
         num_results = #stat.exp_list
-        for i = 1, num_results do
-          temp_regs[num_results - i + 1] = create_temp_reg(func, get_top(func) + i)
+        local are_sequential_locals = true
+        local first_local_reg
+        for i, expr in ipairs(stat.exp_list) do
+          if expr.node_type == "local_ref" then
+            if i == 1 then
+              first_local_reg = find_local(expr)
+            elseif find_local(expr).index ~= first_local_reg.index + i - 1 then
+              are_sequential_locals = false
+              break
+            end
+          else
+            are_sequential_locals = false
+            break
+          end
         end
-        temp_reg = temp_regs[num_results]
-        if num_results > 0 and is_vararg(stat.exp_list[num_results]) then
-          num_results = -1
+
+        if are_sequential_locals then
+          first_reg = first_local_reg
+        else
+          -- have to use temporaries and actually generate the expression list
+          for i = 1, num_results do
+            temp_regs[num_results - i + 1] = create_temp_reg(func, get_top(func) + i)
+          end
+          first_reg = temp_regs[num_results]
+          if is_vararg(stat.exp_list[num_results]) then
+            num_results = -1
+          end
+          generate_exp_list(stat.exp_list, num_results, func, temp_regs)
         end
-        generate_exp_list(stat.exp_list, num_results, func, temp_regs)
       end
+
       func.instructions[#func.instructions+1] = {
-        op = opcodes["return"], a = temp_reg, b = num_results + 1,
+        op = opcodes["return"], a = first_reg, b = num_results + 1,
         line = stat.return_token and stat.return_token.line,
         column = stat.return_token and stat.return_token.column,
       }
