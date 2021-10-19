@@ -34,7 +34,7 @@ do
 
   local function get_level(scope, func)
     return func.scope_levels[scope]
-      or error("Trying to get the level for a scope that has not been reached yet")
+      or assert(false, "Trying to get the level for a scope that has not been reached yet")
   end
   local function get_current_level(func)
     -- technically this could just return `func.level`, but i wanted to follow
@@ -176,12 +176,11 @@ do
   local generate_expr_code
   local function generate_expr(expr,num_results,func,regs)
     if (num_results == -1 or num_results == 0) and not reg_is_top_or_above(regs[num_results], func) then
-      error("Attempt to generate '"..expr.node_type.."' expression with "
+      assert(false, "Attempt to generate '"..expr.node_type.."' expression with "
         ..(num_results == -1 and "var" or "no").." results into register "
         ..regs[-1].index.." when top was "..get_top(func)
       )
     end
-    -- assert((num_results == -1) == (not regs))
     generate_expr_code[expr.node_type](expr,num_results,func,regs)
     if num_results > 1
       and not is_vararg(expr)
@@ -1035,7 +1034,7 @@ do
     vararg = function(expr,num_results,func,regs)
       if not func.is_vararg then
         -- the parser also validates this, but AST can be transformed incorrectly
-        error("Cannot generate vararg expression ('...') outside a vararg function.")
+        assert(false, "Cannot generate vararg expression ('...') outside a vararg function.")
       end
       -- TODO: this is technically an optimization, so it probably shouldn't be here
       if num_results == 0 then
@@ -1239,7 +1238,7 @@ do
             line = stat.lhs[i].line, column = stat.lhs[i].column,
           }
         else
-          error("Impossible left type "..left.type)
+          assert(false, "Impossible left type "..left.type)
         end
       end
       release_down_to(original_top, func)
@@ -1310,7 +1309,7 @@ do
           line = stat.name.line, column = stat.name.column,
         }
       else
-        error("Impossible left type "..left.type)
+        assert(false, "Impossible left type "..left.type)
       end
       release_down_to(original_top, func)
     end,
