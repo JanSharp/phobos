@@ -24,9 +24,9 @@ do
 
   local function get_register_label(key, idx)
     idx = idx or current[key]
-    for _, reg_name in ipairs(func.debug_registers) do
-      if reg_name.index == idx and reg_name.start_at <= pc and reg_name.stop_at >= pc then
-        return "R("..(display_keys and (key..": ") or "")..idx.."|"..reg_name.name..")"
+    for _, reg in ipairs(func.debug_registers) do
+      if reg.index == idx and reg.start_at <= pc and reg.stop_at >= pc then
+        return "R("..(display_keys and (key..": ") or "")..idx..(reg.name and ("|"..reg.name) or "")..")"
       end
     end
     return "R("..(display_keys and (key..": ") or "")..idx..")"
