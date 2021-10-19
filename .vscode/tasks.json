@@ -9,7 +9,7 @@
       "type": "process",
       "command": "",
       "windows": {
-        "command": "bin/windows/lua",
+        "command": "bin/windows/lua.exe",
       },
       "linux": {
         "command": "bin/linux/lua",
@@ -34,7 +34,7 @@
       "type": "process",
       "command": "",
       "windows": {
-        "command": "bin/windows/lua",
+        "command": "bin/windows/lua.exe",
       },
       "linux": {
         "command": "bin/linux/lua",
