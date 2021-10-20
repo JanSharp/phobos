@@ -555,9 +555,14 @@ do
       local column = test.column or get_last_used_column(func)
 
       local expr_reg = local_or_fetch(expr, func)
-      if store_result and test.jump_target.is_main and (not test.force_bool_result) then
+      if store_result
+        and test.jump_target.is_main
+        and (not test.force_bool_result)
+        -- TODO: this index comparison will have to change once stack merging is implemented
+        and (use_reg(reg, func).index ~= expr_reg.index)
+      then
         func.instructions[#func.instructions+1] = {
-          op = opcodes.testset, a = use_reg(reg, func), b = expr_reg, c = test.jump_if_true and 1 or 0,
+          op = opcodes.testset, a = reg, b = expr_reg, c = test.jump_if_true and 1 or 0,
           line = line, column = column,
         }
       else
