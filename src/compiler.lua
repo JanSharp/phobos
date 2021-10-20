@@ -1729,7 +1729,7 @@ do
         end
       end
       inst.a = (lowest_captured_reg or -1) + 1
-      -- whilestat, fornum, forlist and repeatstat set sbx
+      -- whilestat, fornum, forlist, repeatstat and loopstat set sbx
     end,
 
     empty = function(stat,func)
@@ -1757,6 +1757,16 @@ do
       -- end
       error("-- TODO: refactor me!")
     end,
+    loopstat = function(stat,func)
+      local start_pc = #func.instructions
+      generate_scope(stat, func)
+      func.instructions[#func.instructions+1] = {
+        op = opcodes.jmp, a = 0, sbx = start_pc - (#func.instructions + 1),
+        line = stat.close_token and stat.close_token.line,
+        column = stat.close_token and stat.close_token.column,
+      }
+      patch_breaks_to_jump_here(stat, func)
+    end
   }
   function generate_code(functiondef)
     local stack = create_stack()
