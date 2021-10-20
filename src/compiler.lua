@@ -179,13 +179,20 @@ do
 
   local generate_expr_code
   local function generate_expr(expr,num_results,func,regs)
-    if (num_results == -1 or num_results == 0) and not reg_is_top_or_above(regs[num_results], func) then
-      assert(false, "Attempt to generate '"..expr.node_type.."' expression with "
-        ..(num_results == -1 and "var" or "no").." results into register "
+    if num_results == -1 and not reg_is_top_or_above(regs[num_results], func) then
+      assert(false, "Attempt to generate '"..expr.node_type
+        .."' expression with var results into register "
         ..regs[-1].index.." when top was "..get_top(func)
       )
     end
+    local manage_temp = num_results == 0 and not regs
+    if manage_temp then
+      regs = {[0] = create_temp_reg(func)}
+    end
     generate_expr_code[expr.node_type](expr,num_results,func,regs)
+    if manage_temp then
+      release_temp_reg(regs[0], func)
+    end
     if num_results > 1
       and not is_vararg(expr)
       and expr.node_type ~= "nil"
@@ -213,10 +220,7 @@ do
     local num_exp = #exp_list
     for i,expr in ipairs(exp_list) do
       if num_results ~= -1 and i > num_results then
-        expr_regs[0] = create_temp_reg(func)
-        generate_expr(expr, 0, func, expr_regs)
-        release_reg(expr_regs[0], func)
-        expr_regs[0] = nil
+        generate_expr(expr, 0, func)
       elseif i == num_exp then
         local this_expr_regs
         local expr_num_results
@@ -1188,10 +1192,6 @@ do
       end
     end,
     assignment = function(stat,func)
-      -- evaluate all expressions (assignment parent/key, values) into temporaries, left to right
-      -- last expr in value list is for enough values to fill the list
-      -- emit warning and drop extra values with no targets
-      -- move/settable/settabup from temporary to target, right to left
       local original_top = get_top(func)
       local lefts = {}
       for i,left in ipairs(stat.lhs) do
@@ -1211,51 +1211,128 @@ do
             type = "index",
           }
           new_left.ex_reg, new_left.ex_is_upval = upval_or_local_or_fetch(left.ex, func)
-          new_left.suffix_reg = const_or_local_or_fetch(left.suffix, func)
+          new_left.suffix_reg, new_left.suffix_is_const = const_or_local_or_fetch(left.suffix, func)
           lefts[i] = new_left
         else
           error("Attempted to assign to "..left.node_type)
         end
       end
-      local temp_regs = {}
-      for i = 1, #stat.lhs - 1 do
-        temp_regs[#stat.lhs - i + 1] = create_temp_reg(func, get_top(func) + i)
+
+      local function generate_settabup_or_settable(left, lhs_expr, right_reg)
+        local position = get_position_for_index(lhs_expr)
+        func.instructions[#func.instructions+1] = {
+          op = left.ex_is_upval and opcodes.settabup or opcodes.settable,
+          a = left.ex_reg, b = left.suffix_reg, c = right_reg,
+          line = position and position.line, column = position and position.column,
+        }
       end
-      if lefts[#stat.lhs].type == "local" then
-        -- for the most right lhs - if it's a local - directly assign to its reg
-        temp_regs[1] = lefts[#stat.lhs].reg
-      else
-        temp_regs[1] = create_temp_reg(func, get_top(func) + #stat.lhs)
+
+      local function generate_setupval(left, lhs_expr, right_reg)
+        func.instructions[#func.instructions+1] = {
+          op = opcodes.setupval, a = right_reg, b = left.upval_idx, -- up(b) := r(a)
+          line = lhs_expr.line, column = lhs_expr.column,
+        }
       end
-      generate_exp_list(stat.rhs,#stat.lhs,func,temp_regs)
-      -- copy rights to lefts
-      for i = #stat.lhs,1,-1 do
-        local left = lefts[i]
-        local right_reg = temp_regs[#stat.lhs - i + 1]
-        if left.type == "index" then
-          local position = get_position_for_index(stat.lhs[i])
-          func.instructions[#func.instructions+1] = {
-            op = left.ex_is_upval and opcodes.settabup or opcodes.settable,
-            a = left.ex_reg, b = left.suffix_reg, c = right_reg,
-            line = position and position.line, column = position and position.column,
-          }
-        elseif left.type == "local" then
-          if i ~= #stat.lhs then
-            func.instructions[#func.instructions+1] = {
-              op = opcodes.move, a = left.reg, b = right_reg,
-              line = stat.lhs[i].line, column = stat.lhs[i].column,
-            }
+
+      local function assign_from_temps(temp_regs, num_lhs, move_last_local)
+        for i = num_lhs, 1, -1 do
+          local left = lefts[i]
+          local right_reg = temp_regs[num_lhs - i + 1]
+          if left.type == "index" then
+            generate_settabup_or_settable(left, stat.lhs[i], right_reg)
+          elseif left.type == "local" then
+            if move_last_local or i ~= num_lhs then
+              func.instructions[#func.instructions+1] = {
+                op = opcodes.move, a = left.reg, b = right_reg,
+                line = stat.lhs[i].line, column = stat.lhs[i].column,
+              }
+            end
+          elseif left.type == "upval" then
+            generate_setupval(left, stat.lhs[i], right_reg)
+          else
+            assert(false, "Impossible left type "..left.type)
           end
-        elseif left.type == "upval" then
-          func.instructions[#func.instructions+1] = {
-            op = opcodes.setupval, a = right_reg, b = left.upval_idx, -- up(b) := r(a)
-            line = stat.lhs[i].line, column = stat.lhs[i].column,
-          }
-        else
-          assert(false, "Impossible left type "..left.type)
         end
       end
-      release_down_to(original_top, func)
+
+      -- if #rhs >= #lhs then
+      --   1) generate rhs into temporaries, up to second last left hand side
+      --   2) generate next expression directly into most right left hand side
+      --   3) generate the rest of the right hand side with 0 results
+      --   4) assign from temps to lhs right to left
+      -- if #rhs < #lhs then
+      --   1) generate rhs into temporaries.
+      --      most right reg may not be a temporary if most right lhs is a local ref
+      --   2) assign from temps to lhs right to left
+
+      local num_lhs = #stat.lhs
+      local num_rhs = #stat.rhs
+      local temp_regs = {}
+      if num_rhs >= num_lhs then
+        -- 1) generate rhs into temporaries, up to second last left hand side
+        local exp_list = {}
+        for i = 1, num_lhs - 1 do
+          temp_regs[num_lhs - 1 - i + 1] = create_temp_reg(func, get_top(func) + i)
+          exp_list[i] = stat.rhs[i]
+        end
+        generate_exp_list(exp_list, num_lhs - 1, func, temp_regs)
+
+        -- 2) generate next expression directly into most right left hand side
+        local last_left = lefts[num_lhs]
+        local last_expr = stat.rhs[num_lhs]
+        if last_left.type == "index" then
+          local reg, is_const = const_or_local_or_fetch(last_expr, func)
+          generate_settabup_or_settable(last_left, stat.lhs[#stat.lhs], reg)
+          if not is_const then release_temp_reg(reg, func) end
+        elseif last_left.type == "local" then
+          generate_expr(last_expr, 1, func, {last_left.reg})
+        elseif last_left.type == "upval" then
+          local reg = local_or_fetch(last_expr, func)
+          generate_setupval(last_left, stat.lhs[#stat.lhs], reg)
+          release_temp_reg(reg, func)
+        else
+          assert(false, "Impossible left type "..last_left.type)
+        end
+
+        -- 3) generate the rest of the right hand side with 0 results
+        for i = num_lhs + 1, num_rhs do
+          generate_expr(stat.rhs[i], 0, func)
+        end
+
+        -- 4) assign from temps to lhs right to left
+        assign_from_temps(temp_regs, num_lhs - 1, true)
+      else
+        -- 1) generate rhs into temporaries.
+        --    most right reg may not be a temporary if most right lhs is a local ref
+        for i = 1, num_lhs - 1 do
+          temp_regs[num_lhs - i + 1] = create_temp_reg(func, get_top(func) + i)
+        end
+        if lefts[num_lhs].type == "local" then
+          temp_regs[1] = lefts[num_lhs].reg
+        else
+          temp_regs[1] = create_temp_reg(func, get_top(func) + num_lhs)
+        end
+        generate_exp_list(stat.rhs, num_lhs, func, temp_regs)
+
+        -- 2) assign from temps to lhs right to left
+        assign_from_temps(temp_regs, num_lhs, false)
+      end
+
+      -- release all temporary registers
+      -- this can easily be optimized by just using release_down_to
+      -- but doing it manually like this makes it clear what temps were used
+      release_temp_regs(temp_regs, func)
+      for i = num_lhs, 1, -1 do
+        if lefts[i].type == "index" then
+          if not lefts[i].suffix_is_const then
+            release_temp_reg(lefts[i].suffix_reg, func)
+          end
+          if not lefts[i].ex_is_upval then
+            release_temp_reg(lefts[i].ex_reg, func)
+          end
+        end
+      end
+      assert(get_top(func) == original_top, "Didn't release some temp regs")
     end,
     localfunc = function(stat,func)
       local func_reg = create_local_reg(stat.name.reference_def, func)
@@ -1358,15 +1435,11 @@ do
     end,
     call = function(stat,func)
       -- evaluate as a call expression for zero results
-      local temp_reg = create_temp_reg(func)
-      generate_expr(stat,0,func,{[0] = temp_reg})
-      release_reg(temp_reg, func)
+      generate_expr(stat,0,func)
     end,
     selfcall = function(stat,func)
       -- evaluate as a selfcall expression for zero results
-      local temp_reg = create_temp_reg(func)
-      generate_expr(stat,0,func,{[0] = temp_reg})
-      release_reg(temp_reg, func)
+      generate_expr(stat,0,func)
     end,
     forlist = function(stat,func)
       local regs = {}
