@@ -1268,64 +1268,18 @@ do
       eval_upval_indexes(stat, func)
     end,
     funcstat = function(stat,func)
-      local original_top = get_top(func)
-      local target_reg
-      local left
-
-      -- TODO: this is copy paste from assignment
-      if stat.name.node_type == "local_ref" then
-        target_reg = find_local(stat.name)
-        left = {
-          type = "local",
-          reg = target_reg,
-        }
-      elseif stat.name.node_type == "upval_ref" then
-        target_reg = create_temp_reg(func)
-        left = {
-          type = "upval",
-          upval_idx = find_upval(stat.name),
-        }
-        use_reg(target_reg, func)
-      elseif stat.name.node_type == "index" then
-        target_reg = create_temp_reg(func)
-        -- if index and parent not local/upval, fetch parent to temporary
-        left = {
-          type = "index",
-        }
-        left.ex, left.ex_is_upval = upval_or_local_or_fetch(stat.name.ex,func)
-        left.suffix = const_or_local_or_fetch(stat.name.suffix,func)
-        use_reg(target_reg, func)
-      else
-        error("Attempted to assign to " .. left.node_type)
-      end
-
-      local func_token = stat.func_def.function_token
-      -- CLOSURE into that register
-      func.instructions[#func.instructions+1] = {
-        op = opcodes.closure, a = target_reg, bx = stat.func_def.index,
-        line = func_token and func_token.line, column = func_token and func_token.column,
-      }
-      eval_upval_indexes(stat, func)
-
-      -- TODO: this is copy paste from assignment
-      if left.type == "index" then
-        local position = get_position_for_index(stat.name)
-        func.instructions[#func.instructions+1] = {
-          op = left.ex_is_upval and opcodes.settabup or opcodes.settable,
-          a = left.ex, b = left.suffix, c = target_reg,
-          line = position and position.line, column = position and position.column,
-        }
-      elseif left.type == "local" then
-        -- do nothing because the closure is directly put into the local
-      elseif left.type == "upval" then
-        func.instructions[#func.instructions+1] = {
-          op = opcodes.setupval, a = target_reg, b = left.upval_idx, -- up(b) := r(a)
-          line = stat.name.line, column = stat.name.column,
-        }
-      else
-        assert(false, "Impossible left type "..left.type)
-      end
-      release_down_to(original_top, func)
+      -- maybe these nodes should be removed from the ast at some point prior
+      -- but for now this works very well
+      generate_statement({
+        node_type = "assignment",
+        lhs = {stat.name},
+        rhs = {
+          {
+            node_type = "func_proto",
+            func_def = stat.func_def,
+          },
+        },
+      }, func)
     end,
     dostat = generate_scope,
     ifstat = function(stat,func)
