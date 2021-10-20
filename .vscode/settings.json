@@ -61,6 +61,7 @@
     "loadnil",
     "localfunc",
     "localstat",
+    "loopstat",
     "lshift",
     "lua's",
     "maxlength",

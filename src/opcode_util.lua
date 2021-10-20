@@ -28,9 +28,18 @@ local opcodes = {}
 local opcodes_by_id = {}
 local function op(name, params, special)
   local reduce_if_not_zero = {}
+  local conditional = {}
+  local next_op = special and special.next
+  if special then
+    special.next = nil
+  end
   for k, v in pairs(special or {}) do
-    if type(v) == "table" and v.reduce_if_not_zero then
-      reduce_if_not_zero[k] = v.reduce_if_not_zero
+    if type(v) == "table" then
+      if v.reduce_if_not_zero then
+        reduce_if_not_zero[k] = v.reduce_if_not_zero
+      elseif v.condition then
+        conditional[k] = v.condition
+      end
     end
   end
 
@@ -39,7 +48,8 @@ local function op(name, params, special)
     name = name,
     params = params,
     reduce_if_not_zero = reduce_if_not_zero,
-    next_op = special and special.next,
+    conditional = conditional,
+    next_op = next_op,
   }
 
   opcodes[name] = opcode
@@ -58,7 +68,7 @@ op("getupval", {a = register, b = upval})
 op("gettabup", {a = register, b = upval, c = register_or_constant})
 op("gettable", {a = register, b = register, c = register_or_constant})
 op("settabup", {a = upval, b = register_or_constant, c = register_or_constant})
-op("setupval", {a = upval, b = register})
+op("setupval", {a = register, b = upval})
 op("settable", {a = register, b = register_or_constant, c = register_or_constant})
 
 op("newtable", {a = register, b = floating_byte, c = floating_byte})
@@ -86,7 +96,9 @@ op("testset", {a = register, b = register, c = bool})
 
 op("call", {a = register, b = other, c = other}, {b = if_not_zero_reduce_by(1), c = if_not_zero_reduce_by(1)})
 op("tailcall", {a = register, b = other}, {b = if_not_zero_reduce_by(1)})
-op("return", {a = register, b = other}, {b = if_not_zero_reduce_by(1)})
+op("return", {a = register, b = other},
+  {a = {condition = function(opcode) return opcode.b > 0 end}, b = if_not_zero_reduce_by(1)}
+)
 
 op("forloop", {a = register, sbx = jump_pc_offset})
 op("forprep", {a = register, sbx = jump_pc_offset})

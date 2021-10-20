@@ -44,6 +44,7 @@
 ---| '"constructor"'
 ---optimizer statements:
 ---| '"inline_iife_retstat"' @ inline immediately invoked function expression return statement
+---| '"loopstat"'
 ---optimizer expressions:
 ---| '"inline_iife"' @ inline immediately invoked function expression
 
@@ -266,6 +267,11 @@
 ---@field semi_colon_token AstTokenNode|nil @ trailing `;`. `nil` = no semi colon
 ---@field linked_inline_iife AstInlineIIFE
 ---@field leave_block_goto AstGotoStat
+
+---@class AstLoopstat : AstStatement, AstBody, AstScope, AstLoop
+---@field node_type '"loopstat"'
+---@field open_token AstTokenNode
+---@field close_token AstTokenNode @ position for the loop `jmp` instruction
 
 
 

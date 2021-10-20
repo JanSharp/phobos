@@ -5,7 +5,7 @@ local function get_position(node)
   return (node.line and node.column and (" at "..node.line..":"..node.column))
 end
 
-local loop_node_types = invert{"whilestat", "fornum", "forlist", "repeatstat"}
+local loop_node_types = invert{"whilestat", "fornum", "forlist", "repeatstat", "loopstat"}
 
 ---@param func AstFunctionDef
 local function link(func)

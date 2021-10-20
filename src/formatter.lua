@@ -383,6 +383,10 @@ local function format(main)
     inline_iife_retstat = function(node)
       error("Cannot format 'inline_iife_retstat' nodes.")
     end,
+    ---@param node AstWhileStat
+    loopstat = function(node)
+      error("Cannot format 'loopstat' nodes.")
+    end,
   }
 
   ---@param node AstStatement

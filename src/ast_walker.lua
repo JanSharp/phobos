@@ -246,6 +246,10 @@ local function walk(main, on_open, on_close)
         walk_exp_list(node.exp_list)
       end
     end,
+    ---@param node AstDoStat
+    loopstat = function(node)
+      walk_body(node)
+    end,
   }
 
   ---@param node AstStatement

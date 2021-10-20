@@ -24,9 +24,9 @@ do
 
   local function get_register_label(key, idx)
     idx = idx or current[key]
-    for _, reg_name in ipairs(func.debug_registers) do
-      if reg_name.reg == idx and reg_name.start_at <= pc and reg_name.stop_at >= pc then
-        return "R("..(display_keys and (key..": ") or "")..idx.."|"..reg_name.name..")"
+    for _, reg in ipairs(func.debug_registers) do
+      if reg.index == idx and reg.start_at <= pc and reg.stop_at >= pc then
+        return "R("..(display_keys and (key..": ") or "")..idx..(reg.name and ("|"..reg.name) or "")..")"
       end
     end
     return "R("..(display_keys and (key..": ") or "")..idx..")"
@@ -508,7 +508,7 @@ local function disassemble(bytecode)
       for _, reg_name in ipairs(func.debug_registers) do
         if reg_name.start_at == j then
           top = top + 1
-          reg_name.reg = top
+          reg_name.index = top
         end
         if reg_name.stop_at == j then
           stopped = stopped + 1
