@@ -871,10 +871,15 @@ do
 
   generate_expr_code = {
     local_ref = function(expr,num_results,func,regs)
-      func.instructions[#func.instructions+1] = {
-        op = opcodes.move, a = use_reg(regs[num_results], func), b = find_local(expr),
-        line = expr.line, column = expr.column,
-      }
+      local local_reg = find_local(expr)
+      -- TODO: this index comparison will have to change once stack merging is implemented
+      -- NOTE: this is an optimization, meaning it might be moved out of here
+      if use_reg(regs[num_results], func).index ~= local_reg.index then
+        func.instructions[#func.instructions+1] = {
+          op = opcodes.move, a = regs[num_results], b = find_local(expr),
+          line = expr.line, column = expr.column,
+        }
+      end
     end,
     upval_ref = function(expr,num_results,func,regs)
       func.instructions[#func.instructions+1] = {
@@ -1578,6 +1583,7 @@ do
 
       if stat.exp_list and stat.exp_list[1] then
         num_results = #stat.exp_list
+        -- NOTE: this is an optimization, meaning it might be moved out of here
         local are_sequential_locals = true
         local first_local_reg
         for i, expr in ipairs(stat.exp_list) do
