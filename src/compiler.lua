@@ -1760,11 +1760,13 @@ do
     loopstat = function(stat,func)
       local start_pc = #func.instructions
       generate_scope(stat, func)
-      func.instructions[#func.instructions+1] = {
-        op = opcodes.jmp, a = 0, sbx = start_pc - (#func.instructions + 1),
-        line = stat.close_token and stat.close_token.line,
-        column = stat.close_token and stat.close_token.column,
-      }
+      if stat.do_jump_back then
+        func.instructions[#func.instructions+1] = {
+          op = opcodes.jmp, a = 0, sbx = start_pc - (#func.instructions + 1),
+          line = stat.close_token and stat.close_token.line,
+          column = stat.close_token and stat.close_token.column,
+        }
+      end
       patch_breaks_to_jump_here(stat, func)
     end
   }

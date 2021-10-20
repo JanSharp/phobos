@@ -270,6 +270,7 @@
 
 ---@class AstLoopstat : AstStatement, AstBody, AstScope, AstLoop
 ---@field node_type '"loopstat"'
+---@field do_jump_back boolean|nil @ when false behaves like a dostat, except breakstat can link to this
 ---@field open_token AstTokenNode
 ---@field close_token AstTokenNode @ position for the loop `jmp` instruction
 
