@@ -125,6 +125,8 @@ local function read_string(str,index,quote,state)
     return i+1,token
   end
 
+  local original_line = state.line
+  local original_line_offset = state.line_offset
   local parts = {}
 
   ::matching::
@@ -142,7 +144,7 @@ local function read_string(str,index,quote,state)
 
   if next_char == quote then
     -- finished string
-    local token = new_token("string",index,state.line,index - state.line_offset)
+    local token = new_token("string",index,original_line,index - original_line_offset)
     token.src_value = str:sub(index+1,i-1)
     token.value = table.concat(parts)
 
