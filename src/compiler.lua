@@ -928,6 +928,8 @@ do
       end
     end,
     concat = function(expr,num_results,func,regs)
+      -- OP_CONCAT does run `checkGC`, but in a way that allows directly assigning to a not at top register
+      -- it's logic is `checkGC(L, (ra >= rb ? ra + 1 : rb));`
       local num_exp = #expr.exp_list
       local temp_regs = {}
       for i = 1, num_exp do
@@ -968,7 +970,8 @@ do
       end
     end,
     constructor = function(expr,num_results,func,regs)
-      local tab_reg = use_reg(regs[num_results], func)
+      -- OP_NEWTABLE runs `checkGC(L, ra + 1);` so we have to generate new tables at the top of the stack
+      local tab_reg = use_reg(create_temp_reg(func), func)
       local new_tab = {
         op = opcodes.newtable, a = tab_reg, b = nil, c = nil, -- set later
         line = expr.open_token and expr.open_token.line,
@@ -1038,15 +1041,21 @@ do
       end
       new_tab.b = util.number_to_floating_byte(total_list_field_count)
       new_tab.c = util.number_to_floating_byte(total_rec_field_count or (fields_count - total_list_field_count))
+      generate_move(use_reg(regs[num_results], func), tab_reg, expr.open_token, func)
+      release_temp_reg(tab_reg, func)
     end,
     func_proto = function(expr,num_results,func,regs)
+      -- OP_CLOSURE runs `checkGC(L, ra + 1);` so we have to generate closures at the top of the stack
+      local temp_reg = use_reg(create_temp_reg(func), func)
       local func_token = expr.func_def.function_token
       func.instructions[#func.instructions+1] = {
-        op = opcodes.closure, a = use_reg(regs[num_results], func), bx = expr.func_def.index,
+        op = opcodes.closure, a = temp_reg, bx = expr.func_def.index,
         line = func_token and func_token.line,
         column = func_token and func_token.column,
       }
       eval_upval_indexes(expr, func)
+      generate_move(use_reg(regs[num_results], func), temp_reg, func_token, func)
+      release_temp_reg(temp_reg, func)
     end,
     vararg = function(expr,num_results,func,regs)
       if not func.is_vararg then
