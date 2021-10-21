@@ -377,12 +377,6 @@ do
     end
   end
 
-  --[[
-  local function is_falsy(node)
-    return node.node_type == "nil" or (node.node_type == "boolean" and node.value == false)
-  end
-  ]]
-
   local const_node_types = invert{"boolean","nil","string","number"}
   local function const_or_local_or_fetch(expr,func,reg)
     if const_node_types[expr.node_type] then
