@@ -295,6 +295,7 @@ end
 local parser = require("parser")
 local jump_linker = require("jump_linker")
 local fold_const = require("optimize.fold_const")
+local fold_control_statements = require("optimize.fold_control_statements")
 local compiler = require("compiler")
 local dump = require("dump")
 
@@ -340,6 +341,7 @@ for _, source_file in ipairs(source_files) do
   end
   jump_linker(ast)
   fold_const(ast)
+  fold_control_statements(ast)
   local compiled = compiler(ast)
   local bytecode = dump(compiled)
   local output
