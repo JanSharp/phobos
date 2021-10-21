@@ -19,7 +19,7 @@ local function check_delete_func_base_node(node, scope)
     assert(false, "Unable to find node.func_def in func_protos of parent func_def")
     ::removed::
     -- just to save the ast walker some unnecessary work
-    node.node_type = "empty"
+    node.func_def.body = {}
   end
 end
 
