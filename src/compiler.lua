@@ -441,6 +441,17 @@ do
     end
   end
 
+  local function generate_move(target_reg, source_reg, position, func)
+    -- TODO: this index comparison will have to change once stack merging is implemented
+    if target_reg.index ~= source_reg.index then
+      func.instructions[#func.instructions+1] = {
+        op = opcodes.move, a = target_reg, b = source_reg,
+        line = position and position.line,
+        column = position and position.column,
+      }
+    end
+  end
+
   local test_expr_with_result
   local test_expr_and_jump
   do
@@ -855,11 +866,7 @@ do
     release_temp_reg(func_reg, func)
     if need_temps then
       for i = num_results, 1, -1 do
-        func.instructions[#func.instructions+1] = {
-          op = opcodes.move, a = use_reg(regs[i], func), b = temp_regs[i],
-          line = position and position.line,
-          column = position and position.column,
-        }
+        generate_move(use_reg(regs[i], func), temp_regs[i], position, func)
       end
       release_temp_regs(temp_regs, func)
     end
@@ -880,15 +887,7 @@ do
 
   generate_expr_code = {
     local_ref = function(expr,num_results,func,regs)
-      local local_reg = find_local(expr)
-      -- TODO: this index comparison will have to change once stack merging is implemented
-      -- NOTE: this is an optimization, meaning it might be moved out of here
-      if use_reg(regs[num_results], func).index ~= local_reg.index then
-        func.instructions[#func.instructions+1] = {
-          op = opcodes.move, a = regs[num_results], b = find_local(expr),
-          line = expr.line, column = expr.column,
-        }
-      end
+      generate_move(use_reg(regs[num_results], func), find_local(expr), expr, func)
     end,
     upval_ref = function(expr,num_results,func,regs)
       func.instructions[#func.instructions+1] = {
@@ -1242,10 +1241,7 @@ do
             generate_settabup_or_settable(left, stat.lhs[i], right_reg)
           elseif left.type == "local" then
             if move_last_local or i ~= num_lhs then
-              func.instructions[#func.instructions+1] = {
-                op = opcodes.move, a = left.reg, b = right_reg,
-                line = stat.lhs[i].line, column = stat.lhs[i].column,
-              }
+              generate_move(left.reg, right_reg, stat.lhs[i], func)
             end
           elseif left.type == "upval" then
             generate_setupval(left, stat.lhs[i], right_reg)
