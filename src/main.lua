@@ -308,59 +308,85 @@ end
 local total_memory_allocated = 0
 local compiled_file_count = 0
 
-for _, source_file in ipairs(source_files) do
-  if args.monitor_memory_allocation then
-    compiled_file_count = compiled_file_count + 1
-    if (compiled_file_count % 8) == 0 then
-      local c = collectgarbage("count")
-      if c > 4 * 1000 * 1000 then
-        collectgarbage("collect")
-        total_memory_allocated = total_memory_allocated + (c - collectgarbage("count"))
+local current_source_file_index
+
+local success, err = xpcall(function()
+  for i, source_file in ipairs(source_files) do
+    current_source_file_index = i
+    if args.monitor_memory_allocation then
+      compiled_file_count = compiled_file_count + 1
+      if (compiled_file_count % 8) == 0 then
+        local c = collectgarbage("count")
+        if c > 4 * 1000 * 1000 then
+          collectgarbage("collect")
+          total_memory_allocated = total_memory_allocated + (c - collectgarbage("count"))
+        end
       end
     end
-  end
 
-  local file = assert(io.open(source_file:str(), "r"))
-  local text = file:read("*a")
-  file:close()
+    local file = assert(io.open(source_file:str(), "r"))
+    local text = file:read("*a")
+    file:close()
 
-  local source_name = args.source_name:gsub("%?", source_file:sub(#source_dir + 1):str())
-  local ast
-  if args.ignore_syntax_errors then
-    local success
-    success, ast = pcall(parser, text, source_name)
-    if not success then
-      err_count = err_count + 1
-      if not args.no_syntax_error_messages then
-        print(ast:gsub("^[^:]+:%d+: ", "").." in "..source_name)
+    local source_name = args.source_name:gsub("%?", source_file:sub(#source_dir + 1):str())
+    local ast
+    if args.ignore_syntax_errors then
+      local success
+      success, ast = pcall(parser, text, source_name)
+      if not success then
+        err_count = err_count + 1
+        if not args.no_syntax_error_messages then
+          print(ast:gsub("^[^:]+:%d+: ", "").." in "..source_name)
+        end
+        goto continue
       end
-      goto continue
+    else
+      ast = parser(text, source_name)
     end
-  else
-    ast = parser(text, source_name)
-  end
-  jump_linker(ast)
-  fold_const(ast)
-  fold_control_statements(ast)
-  local compiled = compiler(ast)
-  local bytecode = dump(compiled)
-  local output
-  if args.use_load then
-    output = string.format("local main_chunk=assert(load(%q,nil,'b'))\nreturn main_chunk(...)", bytecode)
-  else
-    output = bytecode
-  end
+    jump_linker(ast)
+    fold_const(ast)
+    fold_control_statements(ast)
+    local compiled = compiler(ast)
+    local bytecode = dump(compiled)
+    local output
+    if args.use_load then
+      output = string.format("local main_chunk=assert(load(%q,nil,'b'))\nreturn main_chunk(...)", bytecode)
+    else
+      output = bytecode
+    end
 
-  local output_file_dir = output_dir / source_file:sub(#source_dir + 1, -2)
-  if not output_file_dir:exists() then
-    io_util.mkdir_recursive(output_file_dir)
-  end
-  local output_file = output_file_dir / (source_file:filename()..args.lua_extension)
+    local output_file_dir = output_dir / source_file:sub(#source_dir + 1, -2)
+    if not output_file_dir:exists() then
+      io_util.mkdir_recursive(output_file_dir)
+    end
+    local output_file = output_file_dir / (source_file:filename()..args.lua_extension)
 
-  file = assert(io.open(output_file:str(), args.use_load and "w" or "wb"))
-  file:write(output)
-  file:close()
-  ::continue::
+    file = assert(io.open(output_file:str(), args.use_load and "w" or "wb"))
+    file:write(output)
+    file:close()
+    ::continue::
+  end
+end, function(msg)
+  return "phobos runtime error"
+    ..(
+      current_source_file_index
+        and (" when compiling file '"..source_files[current_source_file_index]:str().."'")
+        or ""
+    )
+    ..":\n\n"
+    ..debug.traceback(msg, 2)
+end)
+
+if not success then
+  print()
+  print("aborting"
+    ..(
+      current_source_file_index
+        and (" at "..current_source_file_index.."/"..(#source_files))
+        or ""
+    )
+    .."..."
+  )
 end
 
 if args.verbose and args.ignore_syntax_errors then
@@ -378,3 +404,8 @@ if args.verbose then
   print("compilation took ~ "..(end_time - start_time).."s")
 end
 print("total time elapsed ~ "..(end_time - very_start_time).."s")
+
+if not success then
+  print()
+  error(err)
+end
