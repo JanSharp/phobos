@@ -568,8 +568,9 @@ do
         and test.jump_target.is_main
         and (not test.force_bool_result)
         -- TODO: this index comparison will have to change once stack merging is implemented
-        and (use_reg(reg, func).index ~= expr_reg.index)
+        and (reg.index ~= expr_reg.index)
       then
+        -- NOTE: `reg` is not yet used (has not started yet), but this instruction references it anyway
         func.instructions[#func.instructions+1] = {
           op = opcodes.testset, a = reg, b = expr_reg, c = test.jump_if_true and 1 or 0,
           line = line, column = column,
@@ -756,6 +757,11 @@ do
 
       if store_result then
         finish_test_expr_storing_result(chain, jumps, reg, func)
+        assert(reg.start_at, "There is somehow a path where a test expr with result \z
+          didn't end up using the result register. The only instructions that reference \z
+          the register but don't actually use it are testset, but there should always be \z
+          either a last expression or a loadbool at the end, right?"
+        )
       else
         local result = {}
         for _, jump in ipairs(jumps) do
