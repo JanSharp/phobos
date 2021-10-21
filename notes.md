@@ -15,4 +15,8 @@ this below were some ideas but there is a lot more to be done and this idea is i
 
 -- TODO: capitalize all instances of `phobos`. I've decided the real name for the project will start with a capital letter
 
--- TODO: change all requires in the factorio mod to include the `__Phobos__.` prefix
+-- TODO: make thumbnail and icons. Or rather, ask for help
+
+-- TODO: change all requires in the factorio mod to include the `__Phobos__.` prefix and make sure every file is required with the same string. This requires some kind of injection system during compilation
+
+-- TODO: improve/fix position of several instructions
