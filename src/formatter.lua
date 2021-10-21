@@ -183,12 +183,13 @@ local function format(main)
     ---@param node AstConstructor
     constructor = function(node)
       add_token(node.open_token)
+      ---@type AstListField|AstRecordField
       for i, field in ipairs(node.fields) do
         if field.type == "list" then
-          ---@narrow field AstListField
+          -- ---@narrow field AstListField
           add_exp(field.value)
         else
-          ---@narrow field AstRecordField
+          -- ---@narrow field AstRecordField
           ---@diagnostic disable-next-line: undefined-field
           if field.key.node_type == "string" and field.key.src_is_ident then
             add_exp(field.key)

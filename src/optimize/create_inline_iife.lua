@@ -109,9 +109,10 @@ local on_open = {
       node.body[#node.body+1] = node.leave_block_label
 
       -- TODO: keep a list of child scopes
+      ---@type AstStatement|AstIfStat
       for _, inst in ipairs(node.body) do
         if inst.node_type == "ifstat" then
-          ---@narrow inst AstIfStat
+          -- ---@narrow inst AstIfStat
           for _, ifstat in ipairs(inst.ifs) do
             ifstat.parent_scope = node
           end

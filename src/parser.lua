@@ -16,7 +16,7 @@ local statement, expr
 
 ---TODO: make the right object in the error message the focus, the thing that is actually wrong.
 ---for example when an assertion of some token failed, it's most likely not that token that
----is missing (like a closing }), but rather the actual token that was encoutered that was unexpected
+---is missing (like a closing }), but rather the actual token that was encountered that was unexpected
 ---Throw a Syntax Error at the current location
 ---@param msg string Error message
 local function syntax_error(msg)
@@ -368,17 +368,17 @@ end
 
 --- Function Definition
 ---@param function_token AstTokenNode
----@param scope AstScope
+---@param scope AstScope|AstFunctionDef
 ---@param is_method boolean Insert the extra first parameter `self`
 ---@return AstFuncProto
 local function body(function_token, scope, is_method)
   -- body -> `(` param_list `)`  block END
   local parent_scope = scope
-  ---@narrow scope AstScope|AstFunctionDef
+  -- ---@narrow scope AstScope|AstFunctionDef
   while not scope.func_protos do
     scope = scope.parent_scope
   end
-  ---@narrow scope AstFunctionDef
+  -- ---@narrow scope AstFunctionDef
   local func_def_node = new_node("functiondef")
   func_def_node.source = scope.source
   func_def_node.is_method = is_method
@@ -662,16 +662,17 @@ local function sub_expr(limit,scope)
   while prio and prio.left > limit do
     local op_token = new_token_node()
     next_token() -- consume `binop`
+    ---@type AstExpression|AstConcat
     local right_node, next_op = sub_expr(prio.right,scope)
     if binop == ".." then
       if right_node.node_type == "concat" then
         -- TODO: add start and end locations within the exp_list for src_paren_wrappers
-        ---@narrow right_node AstConcat
+        -- ---@narrow right_node AstConcat
         table.insert(right_node.exp_list, 1, node)
         node = right_node
         table.insert(node.op_tokens, 1, op_token)
       elseif node.node_type == "concat" then
-        ---@narrow node AstConcat
+        -- ---@narrow node AstConcat
         node.exp_list[#node.exp_list+1] = right_node
         node.op_tokens[#node.op_tokens+1] = op_token
       else
@@ -926,8 +927,9 @@ end
 local function local_stat(local_token, scope)
   -- stat -> LOCAL NAME {`,' NAME} [`=' exp_list]
   local lhs = {}
+  ---@type AstLocalStat
   local this_tok = new_node("localstat")
-  ---@narrow this_tok AstLocalStat
+  -- ---@narrow this_tok AstLocalStat
   this_tok.local_token = local_token
   this_tok.lhs = lhs
   local lhs_comma_tokens = {}

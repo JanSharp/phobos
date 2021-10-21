@@ -85,12 +85,13 @@ local function walk(main, on_open, on_close)
     end,
     ---@param node AstConstructor
     constructor = function(node)
+      ---@type AstListField|AstRecordField
       for _, field in ipairs(node.fields) do
         if field.type == "list" then
-          ---@narrow field AstListField
+          -- ---@narrow field AstListField
           walk_exp(field.value)
         else
-          ---@narrow field AstRecordField
+          -- ---@narrow field AstRecordField
           walk_exp(field.key)
           walk_exp(field.value)
         end
