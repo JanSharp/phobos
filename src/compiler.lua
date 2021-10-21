@@ -441,6 +441,17 @@ do
     end
   end
 
+  local function generate_move(target_reg, source_reg, position, func)
+    -- TODO: this index comparison will have to change once stack merging is implemented
+    if target_reg.index ~= source_reg.index then
+      func.instructions[#func.instructions+1] = {
+        op = opcodes.move, a = target_reg, b = source_reg,
+        line = position and position.line,
+        column = position and position.column,
+      }
+    end
+  end
+
   local test_expr_with_result
   local test_expr_and_jump
   do
@@ -855,11 +866,7 @@ do
     release_temp_reg(func_reg, func)
     if need_temps then
       for i = num_results, 1, -1 do
-        func.instructions[#func.instructions+1] = {
-          op = opcodes.move, a = use_reg(regs[i], func), b = temp_regs[i],
-          line = position and position.line,
-          column = position and position.column,
-        }
+        generate_move(use_reg(regs[i], func), temp_regs[i], position, func)
       end
       release_temp_regs(temp_regs, func)
     end
@@ -880,15 +887,7 @@ do
 
   generate_expr_code = {
     local_ref = function(expr,num_results,func,regs)
-      local local_reg = find_local(expr)
-      -- TODO: this index comparison will have to change once stack merging is implemented
-      -- NOTE: this is an optimization, meaning it might be moved out of here
-      if use_reg(regs[num_results], func).index ~= local_reg.index then
-        func.instructions[#func.instructions+1] = {
-          op = opcodes.move, a = regs[num_results], b = find_local(expr),
-          line = expr.line, column = expr.column,
-        }
-      end
+      generate_move(use_reg(regs[num_results], func), find_local(expr), expr, func)
     end,
     upval_ref = function(expr,num_results,func,regs)
       func.instructions[#func.instructions+1] = {
@@ -1242,10 +1241,7 @@ do
             generate_settabup_or_settable(left, stat.lhs[i], right_reg)
           elseif left.type == "local" then
             if move_last_local or i ~= num_lhs then
-              func.instructions[#func.instructions+1] = {
-                op = opcodes.move, a = left.reg, b = right_reg,
-                line = stat.lhs[i].line, column = stat.lhs[i].column,
-              }
+              generate_move(left.reg, right_reg, stat.lhs[i], func)
             end
           elseif left.type == "upval" then
             generate_setupval(left, stat.lhs[i], right_reg)
@@ -1362,33 +1358,9 @@ do
     ifstat = function(stat,func)
       local prev_failure_jumps
       local finish_jumps = {}
-      local condition_is_always_truthy = false
-      for i,if_block in ipairs(stat.ifs) do
-        -- local original_top = get_top(func)
-        local condition_node = if_block.condition
-        local condition_node_type = condition_node.node_type
-
-        -- TODO: move this optimization out [...]
-        -- because any func protos that have their
-        -- closure in the removed block have to be removed
-        -- otherwise they can't resolve their upval indexes
-        --[[
-        if is_falsy(condition_node) then
-          -- always false, skip this block
-          goto continue
-        elseif const_node_types[condition_node_type] then
-          -- always true, stop after this block
-          prev_failure_jumps = nil
-          condition_is_always_truthy = true
-
-          -- TODO: include table constructors and closures here
-          -- maybe function calls of known truthy return types too?
-          -- but those still need to eval it if captured to a block local
-        else
-        ]]
-          -- generate a value and `test` it...
-          prev_failure_jumps = test_expr_and_jump(condition_node, false, func)
-        -- end
+      for _,if_block in ipairs(stat.ifs) do
+        -- generate a value and `test` it...
+        prev_failure_jumps = test_expr_and_jump(if_block.condition, false, func)
 
         -- generate body
         generate_scope(if_block, func)
@@ -1405,17 +1377,8 @@ do
         if prev_failure_jumps then
           jump_here(prev_failure_jumps, func)
         end
-
-        if condition_is_always_truthy then
-          break
-        end
-
-        -- release_down_to(original_top, func)
-        -- jump from end of body to end of blocks (not yet determined, build patch list)
-        -- patch test failure to jump here for next test/else/next_block
-        -- ::continue::
       end
-      if (not condition_is_always_truthy) and stat.elseblock then
+      if stat.elseblock then
         generate_scope(stat.elseblock, func)
       else
         if finish_jumps[#finish_jumps] then
@@ -1538,18 +1501,8 @@ do
     whilestat = function(stat,func)
       local start_pc = #func.instructions
       local failure_jumps
-      -- TODO: move this optimization out
-      --[[
-      if is_falsy(stat.condition) then
-        -- always false, no need to generate anything
-        return
-      elseif const_node_types[stat.condition.node_type] then
-        -- always true, no need to check the condition
-      else
-        ]]
-        -- generate condition and test
-        failure_jumps = test_expr_and_jump(stat.condition, false, func)
-      -- end
+      -- generate condition and test
+      failure_jumps = test_expr_and_jump(stat.condition, false, func)
       -- generate body
       generate_scope(stat, func)
       -- jump back
@@ -1582,29 +1535,6 @@ do
         end
         patch_breaks_to_jump_here(stat, func)
       end)
-
-      -- note that the code below is just kept around to understand the TODO
-      -- -- TODO: move this optimization out
-      -- --[[
-      -- if is_falsy(stat.condition) then
-      --   -- always false, always jump
-      --   func.instructions[#func.instructions+1] = {
-      --     op = opcodes.jmp, a = 0, sbx = start_pc - (#func.instructions + 1),
-      --     line = stat.until_token and stat.until_token.line,
-      --     column = stat.until_token and stat.until_token.column,
-      --   }
-      -- elseif const_node_types[stat.condition.node_type] then
-      --   -- always true, always leave
-      -- else
-      -- ]]
-      --   -- generate condition and test
-      --   for _, jump in ipairs(test_expr_and_jump(stat.condition, false, func)) do
-      --     -- jump back if it failed
-      --     jump.sbx = start_pc - jump.pc
-      --     jump.pc = nil
-      --   end
-      -- -- end
-      -- patch_breaks_to_jump_here(stat, func)
     end,
 
     ---@param stat AstRetStat

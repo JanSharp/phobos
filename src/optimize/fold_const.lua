@@ -1,6 +1,6 @@
 
-local walker = require("ast_walker")
-local invert = require("invert")
+local ast_walker = require("ast_walker")
+local util = require("util")
 
 local clear_exp_field_lut = {
   ["selfcall"] = function(exp)
@@ -91,10 +91,9 @@ local function clear_exp_fields(exp)
   clear_exp_field_lut[exp.node_type](exp)
 end
 
-local is_const_node = invert{"string","number","boolean","nil"}
 ---only for constant `node_type`s
 local function fold_exp(parent_exp,node_type,position,value)
-  assert(is_const_node[node_type])
+  assert(util.is_const_node_type(node_type))
   clear_exp_fields(parent_exp)
   parent_exp.node_type = node_type
   parent_exp.value = value
@@ -112,10 +111,6 @@ local function fold_exp_merge(parent_exp, child_node)
   parent_exp.folded = true
 end
 
-local function is_falsy(node)
-  return node.node_type == "nil" or (node.node_type == "boolean" and node.value == false)
-end
-
 local fold_unop = {
   ["-"] = function(exp)
     -- number
@@ -125,8 +120,8 @@ local fold_unop = {
   end,
   ["not"] = function(exp)
     -- boolean
-    if is_const_node[exp.ex.node_type] then
-      fold_exp(exp, "boolean", exp.op_token, is_falsy(exp.ex))
+    if util.is_const_node(exp.ex) then
+      fold_exp(exp, "boolean", exp.op_token, util.is_falsy(exp.ex))
     end
   end,
   ["#"] = function(exp)
@@ -204,38 +199,38 @@ local fold_binop = {
   end,
   ["=="] = function(exp)
     -- any type
-    if exp.left.node_type == exp.right.node_type and is_const_node[exp.left.node_type] then
+    if exp.left.node_type == exp.right.node_type and util.is_const_node(exp.left) then
       local res = exp.left.value == exp.right.value
       fold_exp(exp, "boolean", exp.left, res)
-    elseif is_const_node[exp.left.node_type] and is_const_node[exp.right.node_type] then
+    elseif util.is_const_node(exp.left) and util.is_const_node(exp.right) then
       -- different types of constants
       fold_exp(exp, "boolean", exp.left, false)
     end
   end,
   ["~="] = function(exp)
     -- any type
-    if exp.left.node_type == exp.right.node_type and is_const_node[exp.left.node_type] then
+    if exp.left.node_type == exp.right.node_type and util.is_const_node(exp.left) then
       local res = exp.left.value ~= exp.right.value
       fold_exp(exp, "boolean", exp.left, res)
-    elseif is_const_node[exp.left.node_type] and is_const_node[exp.right.node_type] then
+    elseif util.is_const_node(exp.left) and util.is_const_node(exp.right) then
       -- different types of constants
       fold_exp(exp, "boolean", exp.left, true)
     end
   end,
   ["and"] = function(exp)
     -- any type
-    if is_falsy(exp.left) then
+    if util.is_falsy(exp.left) then
       fold_exp_merge(exp, exp.left)
-    elseif is_const_node[exp.left.node_type] then
+    elseif util.is_const_node(exp.left) then
       -- the constants that failed the first test are all truthy
       fold_exp_merge(exp, exp.right)
     end
   end,
   ["or"] = function(exp)
     -- any type
-    if is_falsy(exp.left) then
+    if util.is_falsy(exp.left) then
       fold_exp_merge(exp, exp.right)
-    elseif is_const_node[exp.left.node_type] then
+    elseif util.is_const_node(exp.left) then
       -- the constants that failed the first test are all truthy
       fold_exp_merge(exp, exp.left)
     end
@@ -314,7 +309,7 @@ local on_close = {
 }
 
 local function fold_const(main)
-  walker(main, nil, on_close)
+  ast_walker(main, nil, on_close)
 end
 
 return fold_const
