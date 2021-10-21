@@ -2,16 +2,6 @@
 local ast_walker = require("ast_walker")
 local util = require("util")
 
-local function clear_table(t)
-  local keys = {}
-  for k in pairs(t) do
-    keys[#keys+1] = k
-  end
-  for _, k in ipairs(keys) do
-    t[k] = nil
-  end
-end
-
 local function check_delete_func_base_node(node, scope)
   local func_def = scope
   local to_delete = func_def.to_delete

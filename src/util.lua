@@ -47,6 +47,17 @@ local function is_const_node_type(node_type)
   return const_node_type_lut[node_type]
 end
 
+---currently unused
+local function clear_table(t)
+  local keys = {}
+  for k in pairs(t) do
+    keys[#keys+1] = k
+  end
+  for _, k in ipairs(keys) do
+    t[k] = nil
+  end
+end
+
 return {
   number_to_floating_byte = number_to_floating_byte,
   floating_byte_to_number = floating_byte_to_number,
@@ -54,4 +65,5 @@ return {
   is_falsy = is_falsy,
   is_const_node = is_const_node,
   is_const_node_type = is_const_node_type,
+  clear_table = clear_table,
 }
