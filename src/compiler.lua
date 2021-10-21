@@ -1362,33 +1362,9 @@ do
     ifstat = function(stat,func)
       local prev_failure_jumps
       local finish_jumps = {}
-      local condition_is_always_truthy = false
-      for i,if_block in ipairs(stat.ifs) do
-        -- local original_top = get_top(func)
-        local condition_node = if_block.condition
-        local condition_node_type = condition_node.node_type
-
-        -- TODO: move this optimization out [...]
-        -- because any func protos that have their
-        -- closure in the removed block have to be removed
-        -- otherwise they can't resolve their upval indexes
-        --[[
-        if is_falsy(condition_node) then
-          -- always false, skip this block
-          goto continue
-        elseif const_node_types[condition_node_type] then
-          -- always true, stop after this block
-          prev_failure_jumps = nil
-          condition_is_always_truthy = true
-
-          -- TODO: include table constructors and closures here
-          -- maybe function calls of known truthy return types too?
-          -- but those still need to eval it if captured to a block local
-        else
-        ]]
-          -- generate a value and `test` it...
-          prev_failure_jumps = test_expr_and_jump(condition_node, false, func)
-        -- end
+      for _,if_block in ipairs(stat.ifs) do
+        -- generate a value and `test` it...
+        prev_failure_jumps = test_expr_and_jump(if_block.condition, false, func)
 
         -- generate body
         generate_scope(if_block, func)
@@ -1405,17 +1381,8 @@ do
         if prev_failure_jumps then
           jump_here(prev_failure_jumps, func)
         end
-
-        if condition_is_always_truthy then
-          break
-        end
-
-        -- release_down_to(original_top, func)
-        -- jump from end of body to end of blocks (not yet determined, build patch list)
-        -- patch test failure to jump here for next test/else/next_block
-        -- ::continue::
       end
-      if (not condition_is_always_truthy) and stat.elseblock then
+      if stat.elseblock then
         generate_scope(stat.elseblock, func)
       else
         if finish_jumps[#finish_jumps] then
@@ -1538,18 +1505,8 @@ do
     whilestat = function(stat,func)
       local start_pc = #func.instructions
       local failure_jumps
-      -- TODO: move this optimization out
-      --[[
-      if is_falsy(stat.condition) then
-        -- always false, no need to generate anything
-        return
-      elseif const_node_types[stat.condition.node_type] then
-        -- always true, no need to check the condition
-      else
-        ]]
-        -- generate condition and test
-        failure_jumps = test_expr_and_jump(stat.condition, false, func)
-      -- end
+      -- generate condition and test
+      failure_jumps = test_expr_and_jump(stat.condition, false, func)
       -- generate body
       generate_scope(stat, func)
       -- jump back
@@ -1582,29 +1539,6 @@ do
         end
         patch_breaks_to_jump_here(stat, func)
       end)
-
-      -- note that the code below is just kept around to understand the TODO
-      -- -- TODO: move this optimization out
-      -- --[[
-      -- if is_falsy(stat.condition) then
-      --   -- always false, always jump
-      --   func.instructions[#func.instructions+1] = {
-      --     op = opcodes.jmp, a = 0, sbx = start_pc - (#func.instructions + 1),
-      --     line = stat.until_token and stat.until_token.line,
-      --     column = stat.until_token and stat.until_token.column,
-      --   }
-      -- elseif const_node_types[stat.condition.node_type] then
-      --   -- always true, always leave
-      -- else
-      -- ]]
-      --   -- generate condition and test
-      --   for _, jump in ipairs(test_expr_and_jump(stat.condition, false, func)) do
-      --     -- jump back if it failed
-      --     jump.sbx = start_pc - jump.pc
-      --     jump.pc = nil
-      --   end
-      -- -- end
-      -- patch_breaks_to_jump_here(stat, func)
     end,
 
     ---@param stat AstRetStat

@@ -107,13 +107,25 @@ local function walk(main, on_open, on_close)
   }
 
   ---@param node AstExpression
-  function walk_exp(node, allow_deletion)
+  function walk_exp(node, allow_modifiers)
     dispatch(on_open, node, false)
     exprs[node.node_type](node)
     dispatch(on_close, node, false)
     ---@diagnostic disable-next-line: undefined-field
-    if node.to_delete and (not allow_deletion) then
+    if node.to_delete and (not allow_modifiers) then
       error("Attempt to delete node '"..node.node_type.."' when it wasn't in an expression list.")
+    end
+    ---@diagnostic disable-next-line: undefined-field
+    if node.replace_with and (not allow_modifiers) then
+      error("Attempt to replace node '"..node.node_type.."' when it wasn't in an expression list.")
+    end
+    ---@diagnostic disable-next-line: undefined-field
+    if node.insert_before and (not allow_modifiers) then
+      error("Attempt to insert before node '"..node.node_type.."' when it wasn't in an expression list.")
+    end
+    ---@diagnostic disable-next-line: undefined-field
+    if node.insert_after and (not allow_modifiers) then
+      error("Attempt to insert after node '"..node.node_type.."' when it wasn't in an expression list.")
     end
   end
 
@@ -122,12 +134,30 @@ local function walk(main, on_open, on_close)
     local i = 1
     local c = #list
     while i <= c do
-      walk_exp(list[i], true)
-      ---@diagnostic disable-next-line: undefined-field
-      if list[i].to_delete then
+      local expr = list[i]
+      walk_exp(expr, true)
+      if expr.to_delete then ---@diagnostic disable-line: undefined-field
         table.remove(list, i)
         i = i - 1
         c = c - 1
+      elseif expr.replace_with then ---@diagnostic disable-line: undefined-field
+        list[i] = expr.replace_with ---@diagnostic disable-line: undefined-field
+      end
+      if expr.insert_before then ---@diagnostic disable-line: undefined-field
+        for _, new_expr in ipairs(expr.insert_before) do ---@diagnostic disable-line: undefined-field
+          table.insert(list, i, new_expr)
+          i = i + 1
+          c = c + 1
+        end
+        expr.insert_before = nil ---@diagnostic disable-line: undefined-field
+      end
+      if expr.insert_after then ---@diagnostic disable-line: undefined-field
+        for _, new_expr in ipairs(expr.insert_after) do ---@diagnostic disable-line: undefined-field
+          i = i + 1
+          c = c + 1
+          table.insert(list, i, new_expr)
+        end
+        expr.insert_after = nil ---@diagnostic disable-line: undefined-field
       end
       i = i + 1
     end
@@ -143,20 +173,46 @@ local function walk(main, on_open, on_close)
       local i = 1
       local c = #node.ifs
       while i <= c do
-        walk_stat(node.ifs[i])
-        ---@diagnostic disable-next-line: undefined-field
-        if node.ifs[i].to_delete then
+        local ifstat = node.ifs[i]
+        walk_stat(ifstat)
+        if ifstat.to_delete then ---@diagnostic disable-line: undefined-field
           table.remove(node.ifs, i)
           i = i - 1
           c = c - 1
+        elseif ifstat.replace_with then ---@diagnostic disable-line: undefined-field
+          node.ifs[i] = ifstat.replace_with ---@diagnostic disable-line: undefined-field
+        end
+        if ifstat.insert_before then ---@diagnostic disable-line: undefined-field
+          for _, new_ifstat in ipairs(ifstat.insert_before) do ---@diagnostic disable-line: undefined-field
+            table.insert(node.ifs, i, new_ifstat)
+            i = i + 1
+            c = c + 1
+          end
+          ifstat.insert_before = nil ---@diagnostic disable-line: undefined-field
+        end
+        if ifstat.insert_after then ---@diagnostic disable-line: undefined-field
+          for _, new_ifstat in ipairs(ifstat.insert_after) do ---@diagnostic disable-line: undefined-field
+            i = i + 1
+            c = c + 1
+            table.insert(node.ifs, i, new_ifstat)
+          end
+          ifstat.insert_after = nil ---@diagnostic disable-line: undefined-field
         end
         i = i + 1
       end
       if node.elseblock then
         walk_stat(node.elseblock)
+        if node.elseblock.insert_before then ---@diagnostic disable-line: undefined-field
+          error("Attempt to insert before node '"..node.node_type.."' when it is an elseblock.")
+        end
+        if node.elseblock.insert_after then ---@diagnostic disable-line: undefined-field
+          error("Attempt to insert after node '"..node.node_type.."' when it is an elseblock.")
+        end
         ---@diagnostic disable-next-line: undefined-field
         if node.elseblock.to_delete then
           node.elseblock = nil
+        elseif node.elseblock.replace_with then ---@diagnostic disable-line: undefined-field
+          node.elseblock = node.elseblock.replace_with ---@diagnostic disable-line: undefined-field
         end
       end
     end,
@@ -266,12 +322,30 @@ local function walk(main, on_open, on_close)
     local i = 1
     local c = #node.body
     while i <= c do
-      walk_stat(node.body[i])
-      ---@diagnostic disable-next-line: undefined-field
-      if node.body[i].to_delete then
+      local stat = node.body[i]
+      walk_stat(stat)
+      if stat.to_delete then ---@diagnostic disable-line: undefined-field
         table.remove(node.body, i)
         i = i - 1
         c = c - 1
+      elseif stat.replace_with then ---@diagnostic disable-line: undefined-field
+        node.body[i] = stat.replace_with
+      end
+      if stat.insert_before then ---@diagnostic disable-line: undefined-field
+        for _, new_stat in ipairs(stat.insert_before) do ---@diagnostic disable-line: undefined-field
+          table.insert(node.body, i, new_stat)
+          i = i + 1
+          c = c + 1
+        end
+        stat.insert_before = nil ---@diagnostic disable-line: undefined-field
+      end
+      if stat.insert_after then ---@diagnostic disable-line: undefined-field
+        for _, new_stat in ipairs(stat.insert_after) do ---@diagnostic disable-line: undefined-field
+          i = i + 1
+          c = c + 1
+          table.insert(node.body, i, new_stat)
+        end
+        stat.insert_after = nil ---@diagnostic disable-line: undefined-field
       end
       i = i + 1
     end

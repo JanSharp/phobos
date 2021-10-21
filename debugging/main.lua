@@ -10,13 +10,14 @@ local unsafe = true
 local print_progress = true
 local use_regular_lua_compiler = true
 local use_phobos_compiler = true
+local do_create_inline_iife = false
 local do_fold_const = true
-local do_create_inline_iife = true
+local do_fold_control_statements = true
 local eval_instruction_count = true
 local eval_byte_count = true
 local create_disassembly = true
 local show_keys_in_disassembly = false
-local load_and_run_compiled_funcs = true
+local load_and_run_compiled_funcs = false
 local run_count = 1
 
 local total_lua_inst_count = 0
@@ -156,6 +157,11 @@ local function compile(filename)
 
     if do_fold_const then
       success, err = pcall(require("optimize.fold_const"), main)
+      if not success then print(err) goto finish end
+    end
+
+    if do_fold_control_statements then
+      success, err = pcall(require("optimize.fold_control_statements"), main)
       if not success then print(err) goto finish end
     end
 

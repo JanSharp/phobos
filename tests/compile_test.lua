@@ -95,6 +95,7 @@ end
 local parser
 local jump_linker
 local fold_const
+local fold_control_statements
 local compiler
 local dump
 local disassembler
@@ -109,6 +110,7 @@ local function init()
   parser = req("parser")
   jump_linker = req("jump_linker")
   fold_const = req("optimize.fold_const")
+  fold_control_statements = req("optimize.fold_control_statements")
   compiler = req("compiler")
   dump = req("dump")
   disassembler = req("disassembler")
@@ -141,6 +143,7 @@ local function compile(filename)
 
   jump_linker(ast)
   fold_const(ast)
+  fold_control_statements(ast)
   local prev_ast_str
   if args.ensure_clean_data then
     prev_ast_str = serpent.block(ast)
