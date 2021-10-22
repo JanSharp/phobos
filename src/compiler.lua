@@ -20,18 +20,6 @@ do
       or nil
   end
 
-  local function get_position_for_index(index_node)
-    if index_node.suffix.node_type == "string" and index_node.suffix.src_is_ident then
-      if index_node.src_ex_did_not_exist then
-        return index_node.suffix
-      else
-        return index_node.dot_token
-      end
-    else
-      return index_node.suffix_open_token
-    end
-  end
-
   local function get_level(scope, func)
     return func.scope_levels[scope]
       or assert(false, "Trying to get the level for a scope that has not been reached yet")
@@ -289,6 +277,7 @@ do
         func.instructions[#func.instructions+1] = {
           -- the +1 for `a` is handled after generating all code for this function
           op = opcodes.jmp, a = lowest_captured_reg, sbx = 0,
+          -- TODO: better selection than hard coded `end_token`, see repeatstat for example
           line = scope.end_token and scope.end_token.line or get_last_used_line(func),
           column = scope.end_token and scope.end_token.column or get_last_used_column(func),
         }
@@ -554,14 +543,14 @@ do
         chain[#chain+1] = create_expr(expr, node.inverted, node.force_bool_result)
         chain[#chain].jump_target = jump_target
       else
-        chain[#chain+1] = create_test(node, {}, jump_if_true, jump_target)
+        chain[#chain+1] = create_test(node, util.get_main_position(node.expr), jump_if_true, jump_target)
       end
     end
 
     local function generate_test_test(test, reg, store_result, func)
       local expr = test.expr
-      local line = test.line or get_last_used_line(func)
-      local column = test.column or get_last_used_column(func)
+      local line = test.line
+      local column = test.column
 
       local expr_reg = local_or_fetch(expr, func)
       if store_result
@@ -594,14 +583,14 @@ do
     end
 
     local function generate_logical_test(test, func)
-      local node = test.expr
-      local line = node.op_token and node.op_token.line
-      local column = node.op_token and node.op_token.column
+      local expr = test.expr
+      local line = test.line
+      local column = test.column
 
-      local left_reg, left_is_const = const_or_local_or_fetch(node.left,func)
-      local right_reg, right_is_const = const_or_local_or_fetch(node.right,func)
+      local left_reg, left_is_const = const_or_local_or_fetch(expr.left,func)
+      local right_reg, right_is_const = const_or_local_or_fetch(expr.right,func)
       func.instructions[#func.instructions+1] = {
-        op = logical_binop_lut[node.op], a = (logical_invert_lut[node.op] ~= test.jump_if_true) and 1 or 0,
+        op = logical_binop_lut[expr.op], a = (logical_invert_lut[expr.op] ~= test.jump_if_true) and 1 or 0,
         b = left_reg, c = right_reg,
         line = line, column = column,
       }
@@ -640,8 +629,8 @@ do
       if (load_true or load_false) and chain[#chain].type == "expr" then
         local jump = {
           op = opcodes.jmp, a = 0, sbx = nil,
-          line = get_last_used_line(func),
-          column = get_last_used_column(func),
+          line = chain[#chain].line,
+          column = chain[#chain].column,
           force_bool_result = false,
           jump_to_success = true,
         }
@@ -656,8 +645,8 @@ do
       local function generate_loadbool(value, skip_next)
         func.instructions[#func.instructions+1] = {
           op = opcodes.loadbool, a = use_reg(reg, func), b = value and 1 or 0, c = skip_next and 1 or 0,
-          line = get_last_used_line(func),
-          column = get_last_used_column(func),
+          line = chain[#chain].line,
+          column = chain[#chain].column,
         }
       end
       local function generate_false(skip_next)
@@ -726,10 +715,7 @@ do
             generate_expr({
               node_type = "unop",
               op = "not",
-              op_token = {
-                line = get_last_used_line(func),
-                column = get_last_used_column(func),
-              },
+              op_token = util.get_main_position(test.expr),
               ex = test.expr,
             }, 1, func, {reg})
           else
@@ -1106,7 +1092,7 @@ do
     index = function(expr,num_results,func,regs)
       local ex_reg, is_upval = upval_or_local_or_fetch(expr.ex,func)
       local suffix_reg, suffix_is_const = const_or_local_or_fetch(expr.suffix,func)
-      local position = get_position_for_index(expr)
+      local position = util.get_main_position(expr)
       func.instructions[#func.instructions+1] = {
         op = is_upval and opcodes.gettabup or opcodes.gettable,
         a = use_reg(regs[num_results], func), b = ex_reg, c = suffix_reg,
@@ -1227,7 +1213,7 @@ do
       end
 
       local function generate_settabup_or_settable(left, lhs_expr, right_reg)
-        local position = get_position_for_index(lhs_expr)
+        local position = util.get_main_position(lhs_expr)
         func.instructions[#func.instructions+1] = {
           op = left.ex_is_upval and opcodes.settabup or opcodes.settable,
           a = left.ex_reg, b = left.suffix_reg, c = right_reg,
@@ -1778,14 +1764,26 @@ do
     end)
 
     -- TODO: temp until it can be determined if the end of the function is reachable
-    generate_statement({
-      node_type = "retstat",
-      return_token = functiondef.end_token or {
-        node_type = "token",
-        line = get_last_used_line(func),
-        column = get_last_used_column(func),
-      },
-    }, func)
+    do
+      local position = functiondef.body[#functiondef.body]
+        and util.get_main_position(functiondef.body[#functiondef.body])
+      local line = get_last_used_line(func)
+      if line and position and position.line > line then
+        line = position.line
+      end
+      local column = get_last_used_column(func)
+      if column and position and position.column > column then
+        column = position.column
+      end
+      generate_statement({
+        node_type = "retstat",
+        return_token = functiondef.end_token or {
+          node_type = "token",
+          line = line,
+          column = column,
+        },
+      }, func)
+    end
 
     -- normalize register indexes
     for _, inst in ipairs(func.instructions) do

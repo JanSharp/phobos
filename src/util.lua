@@ -58,6 +58,142 @@ local function clear_table(t)
   end
 end
 
+local get_main_position
+do
+  local getter_lut = {
+    ["env"] = function(node)
+      assert(false, "node_type 'env' is purely fake and therefore has no main position")
+      return nil
+    end,
+    ["functiondef"] = function(node)
+      return node.function_token
+    end,
+    ["token"] = function(node)
+      return node
+    end,
+    ["empty"] = function(node)
+      return node.semi_colon_token
+    end,
+    ["ifstat"] = function(node)
+      return get_main_position(node.ifs[1])
+    end,
+    ["testblock"] = function(node)
+      return node.if_token
+    end,
+    ["elseblock"] = function(node)
+      return node.else_token
+    end,
+    ["whilestat"] = function(node)
+      return node.while_token
+    end,
+    ["dostat"] = function(node)
+      return node.do_token
+    end,
+    ["fornum"] = function(node)
+      return node.for_token
+    end,
+    ["forlist"] = function(node)
+      return node.for_token
+    end,
+    ["repeatstat"] = function(node)
+      return node.repeat_token
+    end,
+    ["funcstat"] = function(node)
+      return get_main_position(node.func_def)
+    end,
+    ["localstat"] = function(node)
+      return node.local_token
+    end,
+    ["localfunc"] = function(node)
+      return node.local_token
+    end,
+    ["label"] = function(node)
+      return node.open_token
+    end,
+    ["retstat"] = function(node)
+      return node.return_token
+    end,
+    ["breakstat"] = function(node)
+      return node.break_token
+    end,
+    ["gotostat"] = function(node)
+      return node.goto_token
+    end,
+    ["selfcall"] = function(node)
+      return node.colon_token
+    end,
+    ["call"] = function(node)
+      return node.open_paren_token
+    end,
+    ["assignment"] = function(node)
+      return node.eq_token
+    end,
+    ["local_ref"] = function(node)
+      return node
+    end,
+    ["upval_ref"] = function(node)
+      return node
+    end,
+    ["index"] = function(node)
+      if node.suffix.node_type == "string" and node.suffix.src_is_ident then
+        if node.src_ex_did_not_exist then
+          return node.suffix
+        else
+          return node.dot_token
+        end
+      else
+        return node.suffix_open_token
+      end
+    end,
+    ["ident"] = function(node)
+      return node
+    end,
+    ["unop"] = function(node)
+      return node.op_token
+    end,
+    ["binop"] = function(node)
+      return node.op_token
+    end,
+    ["concat"] = function(node)
+      return node.op_tokens and node.op_tokens[1]
+    end,
+    ["number"] = function(node)
+      return node
+    end,
+    ["string"] = function(node)
+      return node
+    end,
+    ["nil"] = function(node)
+      return node
+    end,
+    ["boolean"] = function(node)
+      return node
+    end,
+    ["vararg"] = function(node)
+      return node
+    end,
+    ["func_proto"] = function(node)
+      return get_main_position(node.func_def)
+    end,
+    ["constructor"] = function(node)
+      return node.open_token
+    end,
+    ["inline_iife_retstat"] = function(node)
+      return node.return_token
+    end,
+    ["loopstat"] = function(node)
+      return node.open_token
+    end,
+    ["inline_iife"] = function(node)
+      -- TODO: when refactoring inline_iife add some main position
+      return node.body[1] and get_main_position(node.body[1])
+    end,
+  }
+  function get_main_position(node)
+    return getter_lut[node.node_type](node)
+  end
+end
+
 return {
   number_to_floating_byte = number_to_floating_byte,
   floating_byte_to_number = floating_byte_to_number,
@@ -66,4 +202,5 @@ return {
   is_const_node = is_const_node,
   is_const_node_type = is_const_node_type,
   clear_table = clear_table,
+  get_main_position = get_main_position,
 }
