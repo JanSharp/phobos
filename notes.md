@@ -9,8 +9,6 @@ this below were some ideas but there is a lot more to be done and this idea is i
 
 -- TODO: osx is actually macOS nowadays. Incorporate that into the readme somehow
 
--- TODO: ask Therenas what name to put into the license file. Legal stuff is hard
-
 -- TODO: add library package to github releases
 
 -- TODO: capitalize all instances of `phobos`. I've decided the real name for the project will start with a capital letter
