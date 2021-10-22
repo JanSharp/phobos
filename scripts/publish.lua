@@ -229,14 +229,16 @@ if not args.skip_package then
     "LICENSE_THIRD_PARTY.txt",
   }
 
-  local function create_zip(platform)
+  local function create_zip(platform, no_lua_binaries)
     local zip_path = Path.combine("temp/publish", "phobos_"..platform.."_"..version_str..".zip")
     print("Packaging "..zip_path:str())
 
     chdir((root_path / "out/src/release"):str())
     seven_zip("a", "-tzip", "-mx9", "-r", ("../../.." / zip_path):str(), "*.lua")
-    chdir((root_path / "bin" / platform):str())
-    seven_zip("a", "-tzip", "-mx9", "-r", ("../.." / zip_path):str(), "*")
+    if not no_lua_binaries then
+      chdir((root_path / "bin" / platform):str())
+      seven_zip("a", "-tzip", "-mx9", "-r", ("../.." / zip_path):str(), "*")
+    end
     chdir(root_path:str())
 
     -- not adding src files by default because the chances of someone needing them in
@@ -252,6 +254,7 @@ if not args.skip_package then
   create_zip("linux")
   create_zip("osx")
   create_zip("windows")
+  create_zip("raw", true)
 
   -- create factorio mod zip
   do
@@ -336,7 +339,19 @@ if not args.skip_github_release then
     out[#out+1] = str
   end
 
-  add("# Changelog")
+  add("\z
+    # Release Types\n\z
+    - `Phobos for <platform>` contains all files required to run Phobos as a command line tool.\n  \z
+      This includes built binaries for Lua and LuaFileSystem which are required to run Phobos.\n\z
+    - `Phobos Raw` contains the same as above, except built Lua and LuaFileSystem binaries.\n  \z
+      This is useful when you wish to use your own build of Lua and LuaFileSystem,\n  \z
+      or when you wish to use Phobos as a library for your project.\n  \z
+      (Note: Library package _might_ be its own package in the future.)\n\z
+    - `Phobos Factorio Mod` is the same package which is uploaded to the Factorio Mod Portal.\n  \z
+      In short, it is the library equivalent of Phobos within Factorio, but see the README for more info.\n\z
+    \n\z
+    # Changelog\z
+  ")
   add("\n")
 
   for _, category in ipairs(current_version_block.categories) do
@@ -368,6 +383,7 @@ if not args.skip_github_release then
     escape_arg("temp/publish/phobos_windows_"..version_str..".zip#Phobos for windows"),
     escape_arg("temp/publish/phobos_linux_"..version_str..".zip#Phobos for linux"),
     escape_arg("temp/publish/phobos_osx_"..version_str..".zip#Phobos for osx"),
+    escape_arg("temp/publish/phobos_raw_"..version_str..".zip#Phobos Raw (cmd tools and library)"),
     escape_arg("temp/publish/phobos_"..version_str..".zip#Phobos Factorio Mod"),
     "--repo", "JanSharp/phobos",
     "--notes-file", github_release_notes_filename,

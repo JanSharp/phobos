@@ -9,8 +9,6 @@ this below were some ideas but there is a lot more to be done and this idea is i
 
 -- TODO: osx is actually macOS nowadays. Incorporate that into the readme somehow
 
--- TODO: add library package to github releases
-
 -- TODO: make thumbnail and icons. Or rather, ask for help
 
 -- TODO: change all requires in the factorio mod to include the `__phobos__.` prefix and make sure every file is required with the same string. This requires some kind of injection system during compilation
