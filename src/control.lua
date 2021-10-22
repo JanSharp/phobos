@@ -19,7 +19,7 @@ local util = require("__core__.lualib.util")
 -- they were using regular commands. (so it's "fine" as long as nobody joined the game
 -- since the globals were created. maybe.)
 -- it remains a "just don't do that"
--- and i'm creating a copy to make it harder for someone to accidentally break phobos
+-- and i'm creating a copy to make it harder for someone to accidentally break Phobos
 -- by making modifications to globals. it's still relatively easy to escape that sandbox
 -- if someone is actively trying to do it
 -- technically this is more work than even regular commands do (you literally get
@@ -54,7 +54,7 @@ local function phobos_command(args, silent, measured)
 
   if not silent then
     print_msg((player and (player.name.." ") or "")
-      .."(phobos command): "..args.parameter,
+      .."(Phobos command): "..args.parameter,
       true
     )
   end
@@ -86,7 +86,7 @@ local function phobos_command(args, silent, measured)
   local bytecode = dump(compiled)
   local command, err = load(bytecode, nil, "b", command_env)
   if not command then
-    error(err) -- phobos generated broken bytecode
+    error(err) -- Phobos generated broken bytecode
   end
   if measured then
     profiler.stop()
@@ -127,12 +127,12 @@ local function measured_phobos_command(args)
   phobos_command(args, false, true)
 end
 
-local phobos_help = "<phobos command> - Executes a Phobos command (if allowed). \z
+local phobos_help = "<Phobos command> - Executes a Phobos command (if allowed). \z
   (Compiled without most optimizations)"
-local silent_phobos_help = "<phobos command> - Executes a Phobos command (if allowed) \z
+local silent_phobos_help = "<Phobos command> - Executes a Phobos command (if allowed) \z
   without printing it to the console. \z
   (Compiled without most optimizations)"
-local measured_phobos_help = "<phobos command> - Executes a Phobos command (if allowed) \z
+local measured_phobos_help = "<Phobos command> - Executes a Phobos command (if allowed) \z
   and measures time it took to compile and execute. \z
   (Compiled without most optimizations)"
 

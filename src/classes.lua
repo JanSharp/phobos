@@ -509,8 +509,8 @@
 ---@field bx integer
 ---@field sbx integer
 ---@field line integer|nil
----@field column integer|nil @ stored in phobos debug symbols
----@field source string|nil @ stored in phobos debug symbols
+---@field column integer|nil @ stored in Phobos debug symbols
+---@field source string|nil @ stored in Phobos debug symbols
 
 ---@alias CompiledConstant AstString|AstNumber|AstBoolean|AstNil
 
@@ -536,9 +536,9 @@
 
 ---@class CompiledFunc
 ---@field line_defined integer|nil
----@field column_defined integer|nil @ stored in phobos debug symbols
+---@field column_defined integer|nil @ stored in Phobos debug symbols
 ---@field last_line_defined integer|nil
----@field last_column_defined integer|nil @ stored in phobos debug symbols
+---@field last_column_defined integer|nil @ stored in Phobos debug symbols
 ---@field num_params integer
 ---@field is_vararg boolean
 ---@field max_stack_size integer @ min 2, reg0/1 always valid

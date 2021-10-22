@@ -216,7 +216,7 @@ local function main()
   end
 end
 
-print("compiling using phobos compiled by regular lua:")
+print("compiling using Phobos compiled by regular lua:")
 local start_time = os.clock()
 
 compiled = {}
@@ -229,7 +229,7 @@ local lua_raw_result = raw_compiled
 
 print("compilation time ~ "..(os.clock() - start_time).."s")
 print("--------")
-print("compiling using phobos compiled by phobos:")
+print("compiling using Phobos compiled by Phobos:")
 start_time = os.clock()
 
 compiled_modules = lua_result

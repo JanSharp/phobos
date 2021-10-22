@@ -295,14 +295,14 @@ local function DumpFunction(func)
 
   -- [Constants]
   -- int num_consts
-  dump[#dump+1] = DumpInt(#func.constants + 1) -- + 1 for phobos debug symbols
+  dump[#dump+1] = DumpInt(#func.constants + 1) -- + 1 for Phobos debug symbols
   -- TValue[] consts
   for _,constant in ipairs(func.constants) do
     dump[#dump+1] = DumpConstant(constant)
   end
 
   -- when adding an option to disable these ensure to add an extra unused `nil` constant
-  -- instead if the last constant happens to look just like phobos debug symbols
+  -- instead if the last constant happens to look just like Phobos debug symbols
   DumpPhobosDebugSymbols(dump, func)
 
   -- [func_protos]
@@ -328,7 +328,7 @@ local function DumpFunction(func)
 
   -- [Debug]
   -- string source
-  dump[#dump+1] = DumpString(func.source --[[or "(unknown phobos source)"]]) -- TODO: how does nil behave
+  dump[#dump+1] = DumpString(func.source --[[or "(unknown Phobos source)"]]) -- TODO: how does nil behave
 
   -- int num_lines (always same as num_instructions)
   -- int[] lines (line number per instruction)
@@ -369,7 +369,7 @@ local function DumpFunction(func)
   end
 
   -- lua will stop reading here
-  -- extra phobos debug sections:
+  -- extra Phobos debug sections:
   -- Phobos signature: "\x1bPhobos"
   -- byte version = "\x01"
   -- [branch annotations]

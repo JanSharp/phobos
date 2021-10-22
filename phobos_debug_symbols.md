@@ -19,7 +19,7 @@ The version number is a single byte counting from 0-254. At 255 it will start us
 
 ## Collisions
 
-If the source of the bytecode you are consuming is unknown, meaning it could be coming from regular Lua or Phobos, it may be wise to check if the string constant is _larger_ than the signature alone. This doesn't make collisions impossible, but it's incredibly unlikely that one would have that kind of string as a string constant in source code. Even phobos itself doesn't.
+If the source of the bytecode you are consuming is unknown, meaning it could be coming from regular Lua or Phobos, it may be wise to check if the string constant is _larger_ than the signature alone. This doesn't make collisions impossible, but it's incredibly unlikely that one would have that kind of string as a string constant in source code. Even Phobos itself doesn't.
 
 Phobos itself will always output collision free bytecode by adding an unused nil constant when necessary.
 

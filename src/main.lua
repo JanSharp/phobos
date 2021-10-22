@@ -69,7 +69,7 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
     {
       field = "pho_extension",
       long = "pho-extension",
-      description = "The file extension of phobos files.",
+      description = "The file extension of Phobos files.",
       single_param = true,
       type = "string",
       default_value = ".pho",
@@ -163,7 +163,7 @@ end
 -- (maybe add a flag to disable this but that should be hardly needed)
 if not args.output_path and args.pho_extension == args.lua_extension then
   error("When generating output next to source files the \z
-    lua and phobos file extensions cannot be the same."
+    lua and Phobos file extensions cannot be the same."
   )
 end
 
@@ -367,7 +367,7 @@ local success, err = xpcall(function()
     ::continue::
   end
 end, function(msg)
-  return "phobos runtime error"
+  return "Phobos runtime error"
     ..(
       current_source_file_index
         and (" when compiling file '"..source_files[current_source_file_index]:str().."'")

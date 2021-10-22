@@ -396,7 +396,7 @@ local function disassemble(bytecode)
         func.constants[j] = const_lut[read_uint8()]()
       end
 
-      -- check if the last constant is phobos debug symbols
+      -- check if the last constant is Phobos debug symbols
       local last_type = read_uint8()
       local original_i = i
       local are_phobos_debug_symbols = false
@@ -421,7 +421,7 @@ local function disassemble(bytecode)
 
       if are_phobos_debug_symbols then
         if phobos_debug_symbol_version ~= phobos_consts.phobos_debug_symbol_version then
-          -- TODO: somehow warn that reading phobos debug symbols was skipped [...]
+          -- TODO: somehow warn that reading Phobos debug symbols was skipped [...]
           -- because of a version mismatch
           i = phobos_debug_symbols_must_end_at
         else
@@ -464,11 +464,11 @@ local function disassemble(bytecode)
 
           read_uint8() -- trailing \0
           if i ~= phobos_debug_symbols_must_end_at then
-            error("Invalid phobos debug symbol size.")
+            error("Invalid Phobos debug symbol size.")
           end
         end
       else
-        -- wasn't phobos debug symbols
+        -- wasn't Phobos debug symbols
         i = original_i
         func.constants[constant_count] = const_lut[last_type]()
       end

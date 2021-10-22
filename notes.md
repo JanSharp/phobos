@@ -1,5 +1,5 @@
 
-for the phobos factorio mod add commands for running phobos.\
+for the Phobos factorio mod add commands for running Phobos.\
 `/pho`, `/s-pho`, `/phobos`, `/silent-phobos`, `/measured-phobos` or so
 
 with types there can be several optimizations related to comparisons
@@ -11,10 +11,8 @@ this below were some ideas but there is a lot more to be done and this idea is i
 
 -- TODO: add library package to github releases
 
--- TODO: capitalize all instances of `phobos`. I've decided the real name for the project will start with a capital letter
-
 -- TODO: make thumbnail and icons. Or rather, ask for help
 
--- TODO: change all requires in the factorio mod to include the `__Phobos__.` prefix and make sure every file is required with the same string. This requires some kind of injection system during compilation
+-- TODO: change all requires in the factorio mod to include the `__phobos__.` prefix and make sure every file is required with the same string. This requires some kind of injection system during compilation
 
 -- TODO: improve/fix position of several instructions

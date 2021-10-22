@@ -4,7 +4,7 @@ return {
   ---the start index gets shifted by c * fields_per_flush it makes sense to stick to this limit
   fields_per_flush = 50,
 
-  ---phobos debug symbol signature
+  ---Phobos debug symbol signature
   phobos_signature = "\x1bPho\x10\x42\xff",
   phobos_debug_symbol_version = 0,
 

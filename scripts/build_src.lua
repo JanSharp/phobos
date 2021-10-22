@@ -41,7 +41,7 @@ loadfile(assert(__source_dir).."/main.lua")(table.unpack{
   "--temp", "temp/src/"..script_util.get_dir_name(args.profile),
   -- for now source files are still `.lua` files because they
   -- do compile with regular lua compilers and i do not trust
-  -- phobos enough yet
+  -- Phobos enough yet
   -- this will probably change soon though
   "--pho-extension", ".lua",
   "--source-name", "@"..(args.include_src and "src/" or "").."?",
