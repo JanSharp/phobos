@@ -1,0 +1,209 @@
+
+local walker = require("ast_walker")
+
+local on_open = {
+  call = function(node, scope)
+    -- add `__phobos__.` to every `require`, which are identified by
+    -- a call where its expression is an index into _ENV the key "require"
+    -- and the call takes at least 1 argument which is a literal string that doesn't start with "__"
+    local ex = node.ex
+    local arg = node.args[1]
+    if arg and arg.node_type == "string" and (not arg.value:find("^__")) and ex.node_type == "index" then
+      local index_suffix = ex.suffix
+      if index_suffix.node_type == "string" and index_suffix.value == "require" then
+        local index_ex = ex.ex
+        if index_ex.node_type == "upval_ref" then
+          local def = index_ex.reference_def
+          repeat
+            def = def.parent_def
+          until def.def_type == "local"
+          if def.scope.node_type == "env" then
+            arg.value = "__phobos__."..arg.value
+          end
+        end
+      end
+    end
+  end,
+}
+
+-- NOTE: copy paste from parser.lua [...]
+-- except the start of try_get_def, because we don't want some
+-- random `_ENV` local defined later down the road
+-- so it's only looking for local defs in the "env" scope (fake parent scope of main)
+
+---@param node_type AstNodeType
+---@param use_prev? boolean @ indicates if this node was created for the current or previous token (unused)
+local function new_node(node_type, use_prev)
+  return {node_type = node_type}
+end
+
+---@param copy_src_data boolean @ should it copy line, column and leading?
+local function copy_node(node, new_node_type, copy_src_data)
+  return {
+    node_type = new_node_type,
+    line = copy_src_data and node.line or nil,
+    column = copy_src_data and node.column or nil,
+    leading = copy_src_data and node.leading or nil,
+  }
+end
+
+local get_ref
+do
+  ---@diagnostic disable: undefined-field
+  -- because AstScope doesn't have upvals, but some deriving classes do
+  -- to be exact, only functions do
+
+  ---@param scope AstScope
+  ---@param name string
+  ---@return AstLocalDef|AstUpvalDef|nil
+  local function try_get_def(scope, name)
+    -- search top down to find most recently defined one
+    -- in case of redefined locals in the same scope
+    if scope.node_type == "env" then
+      for i = #scope.locals, 1, -1 do
+        if scope.locals[i].name == name then
+          return scope.locals[i]
+        end
+      end
+    end
+
+    if scope.upvals then
+      for _, upval in ipairs(scope.upvals) do
+        if upval.name == name then
+          return upval
+        end
+      end
+    end
+
+    if scope.parent_scope then
+      local def = try_get_def(scope.parent_scope, name)
+      if def then
+        if scope.upvals then
+          local new_def = {
+            def_type = "upval",
+            name = name,
+            scope = scope,
+            parent_def = def,
+            child_defs = {},
+            refs = {},
+          }
+          def.child_defs[#def.child_defs+1] = new_def
+          if name == "_ENV" then
+            -- always put _ENV first so that `load`'s mangling will be correct
+            table.insert(scope.upvals, 1, new_def)
+          else
+            scope.upvals[#scope.upvals+1] = new_def
+          end
+          return new_def
+        else
+          return def
+        end
+      end
+    end
+  end
+  ---@diagnostic enable: undefined-field
+
+  ---@param scope AstScope
+  ---@param ident_node AstIdent
+  ---@return AstUpvalReference|AstLocalReference
+  function get_ref(scope, ident_node)
+    local def = try_get_def(scope, ident_node.value)
+    if def then
+      -- `local_ref` or `upval_ref`
+      local ref = copy_node(ident_node, def.def_type.."_ref", true)
+      ref.reference_def = def
+      ref.name = ident_node.value
+      def.refs[#def.refs+1] = ref
+      return ref
+    end
+
+    local env_ident = copy_node(ident_node, "ident", true)
+    env_ident.leading = {} -- i'd like to have that data "duplicated"
+    env_ident.value = "_ENV"
+
+    local suffix = copy_node(ident_node, "string", true)
+    suffix.value = ident_node.value
+    suffix.src_is_ident = true
+
+    local node = new_node("index")
+    node.ex = get_ref(scope, env_ident)
+    node.suffix = suffix
+    node.src_ex_did_not_exist = true
+
+    return node
+  end
+end
+
+-- end copy paste
+
+return function(main)
+  walker(main, on_open)
+
+  -- do return end
+
+  -- insert
+  -- `if ... ~= "__phobos__.foo" then return require("__phobos__.foo") end`
+  -- at the beginning of the main body
+  -- except for `control`, because not only makes that no sense,
+  -- but it also breaks indexing global ? a nil value. Idk why
+
+  local correct_require_name = main.source
+    :gsub("^@", "")
+    :gsub("__phobos__/src", "__phobos__")
+    :gsub("%.lua$", "")
+    :gsub("%.pho$", "")
+    :gsub("/", ".")
+
+  if correct_require_name == "__phobos__.control" then
+    return
+  end
+
+  -- this is basically 100% temp
+  -- definition of AST like this is going to change with some library functions at some point
+  local ifstat = {
+    node_type = "ifstat",
+    ifs = {
+      {
+        node_type = "testblock",
+        parent_scope = main,
+        locals = {},
+        labels = {},
+        condition = {
+          node_type = "binop",
+          left = {node_type = "vararg"},
+          op = "~=",
+          right = {
+            node_type = "string",
+            value = correct_require_name,
+          },
+        },
+        body = {
+          {
+            node_type = "retstat",
+            exp_list = {
+              {
+                node_type = "call",
+                ex = {
+                  node_type = "index",
+                  ex = nil, -- set later
+                  suffix = {
+                    node_type = "string",
+                    value = "require",
+                  },
+                },
+                args = {
+                  {
+                    node_type = "string",
+                    value = correct_require_name,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  }
+  ifstat.ifs[1].body[1].exp_list[1].ex.ex = get_ref(ifstat.ifs[1], "_ENV")
+  table.insert(main.body, 1, ifstat)
+end

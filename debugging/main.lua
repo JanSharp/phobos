@@ -155,6 +155,8 @@ local function compile(filename)
     success, err = pcall(require("jump_linker"), main)
     if not success then print(err) goto finish end
 
+    require("scripts.build_factorio_mod_ast_inject")(main)
+
     if do_fold_const then
       success, err = pcall(require("optimize.fold_const"), main)
       if not success then print(err) goto finish end

@@ -14,5 +14,3 @@ this below were some ideas but there is a lot more to be done and this idea is i
 -- TODO: write initial changelog
 
 -- TODO: proof read readme and maybe add library note
-
--- TODO: change all requires in the factorio mod to include the `__phobos__.` prefix and make sure every file is required with the same string. This requires some kind of injection system during compilation

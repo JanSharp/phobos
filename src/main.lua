@@ -8,6 +8,7 @@ Path.use_forward_slash_as_main_separator_on_windows()
 local arg_parser = require("lib.LuaArgParser.arg_parser")
 arg_parser.register_type(Path.arg_parser_path_type_def)
 local io_util = require("io_util")
+local constants = require("constants")
 
 local args = arg_parser.parse_and_print_on_error_or_help({...}, {
   options = {
@@ -55,6 +56,28 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
       short = "i",
       description = "Paths to ignore (files and or directories).\n\z
                      Relative to '--source'.",
+      min_params = 0,
+      type = "path",
+      optional = true,
+    },
+    {
+      field = "inject_paths",
+      long = "inject",
+      short = "j",
+      description = "Filenames of files to run which modify the AST of\n\z
+                     every compiled file. The extension of these files\n\z
+                     is ignored; They will load as bytecode if they are\n\z
+                     bytecode files, otherwise Phobos will compile them\n\z
+                     just in time.\n\z
+                     These files must return a function taking a single\n\z
+                     argument, which will be the AST of whichever file\n\z
+                     is currently being compiled.\n\z
+                     If multiple are provided they will be run in the\n\z
+                     order they are defined in.\n\z
+                     These files will be run before any optimizations.\n\z
+                     These files may require any Phobos file, such as\n\z
+                     the 'ast_walker' for example.\n\z
+                     (NOTE: This feature is far from complete.)",
       min_params = 0,
       type = "path",
       optional = true,
@@ -146,6 +169,10 @@ local output_dir = args.output_path
   and args.output_path:to_fully_qualified(working_dir):normalize()
   or source_dir
 local temp_dir = args.temp_path:to_fully_qualified(working_dir):normalize()
+local injection_files = {}
+for i, inject_path in ipairs(args.inject_paths) do
+  injection_files[i] = inject_path:to_fully_qualified(working_dir):normalize()
+end
 
 if source_dir:attr("mode") ~= "directory" then
   error("`--source` path does not exist or is not a directory ("..source_dir:str()..")")
@@ -162,8 +189,8 @@ end
 -- lua_extension files it did not just generate at the end of compilation
 -- (maybe add a flag to disable this but that should be hardly needed)
 if source_dir == output_dir and args.pho_extension == args.lua_extension then
-  error("When generating output next to source files the \z
-    Lua and Phobos file extensions cannot be the same."
+  error("when generating output next to source files the \z
+    lua and Phobos file extensions cannot be the same."
   )
 end
 
@@ -299,83 +326,146 @@ local fold_control_statements = require("optimize.fold_control_statements")
 local compiler = require("compiler")
 local dump = require("dump")
 
+local function compile(filename, source_name, ignore_syntax_errors, accept_bytecode, inject_scripts)
+  local file
+  if accept_bytecode then
+    file = assert(io.open(filename:str(), "rb"))
+    if file:read(4):find("^"..constants.lua_signature_str.."$") then
+      assert(file:seek("set"))
+      local contents = file:read("*a")
+      assert(file:close())
+      return contents
+    else
+      assert(lfs.setmode(file, "text"))
+      assert(file:seek("set"))
+    end
+  else
+    file = assert(io.open(filename:str(), "r"))
+  end
+  local contents = file:read("*a")
+  assert(file:close())
+  local ast
+  if ignore_syntax_errors then
+    local success
+    success, ast = pcall(parser, contents, source_name)
+    if not success then
+      err_count = err_count + 1
+      if not args.no_syntax_error_messages then
+        print(ast:gsub("^[^:]+:%d+: ", "").." in "..source_name)
+      end
+      return nil
+    end
+  else
+    ast = parser(contents, source_name)
+  end
+  jump_linker(ast)
+  if inject_scripts then
+    for _, inject_script in ipairs(inject_scripts) do
+      inject_script(ast)
+    end
+  end
+  fold_const(ast)
+  fold_control_statements(ast)
+  local compiled = compiler(ast)
+  local bytecode = dump(compiled)
+  return bytecode
+end
+
+-- load or compile ast injection files
+
+local inject_scripts
+local success, err = true, nil
+if injection_files[1] then
+  if args.verbose then
+    print("started compilation or loading of "..(#injection_files)
+      .." AST injection script files at ~ "..(os.clock() - very_start_time).."s"
+    )
+  end
+
+  inject_scripts = {}
+  local current_filename
+  success, err = xpcall(function()
+    for i, filename in ipairs(injection_files) do
+      current_filename = filename
+      local bytecode = compile(filename, "@"..filename:str(), false, true, nil)
+      local inject_script_main_chunk = assert(load(bytecode, nil, "b")) -- not sandboxed
+      local injection_func = inject_script_main_chunk()
+      if type(injection_func) ~= "function" then
+        error("expected 'function' return value from AST inject script file '"..filename:str().."'")
+      end
+      inject_scripts[i] = injection_func
+    end
+  end, function(msg)
+    return "Error when loading or compiling AST inject script file"
+      ..(current_filename and (" '"..current_filename:str().."'") or "")
+      ..":\n\n"
+      ..debug.traceback(msg, 2)
+  end)
+end
+
+-- compile source files
+
 local err_count = 0
 local start_time = os.clock()
-if args.verbose then
-  print("started compilation of "..(#source_files).." files at ~ "..(start_time - very_start_time).."s")
-end
 
 local total_memory_allocated = 0
 local compiled_file_count = 0
 
 local current_source_file_index
 
-local success, err = xpcall(function()
-  for i, source_file in ipairs(source_files) do
-    current_source_file_index = i
-    if args.monitor_memory_allocation then
-      compiled_file_count = compiled_file_count + 1
-      if (compiled_file_count % 8) == 0 then
-        local c = collectgarbage("count")
-        if c > 4 * 1000 * 1000 then
-          collectgarbage("collect")
-          total_memory_allocated = total_memory_allocated + (c - collectgarbage("count"))
+if success then
+  if args.verbose then
+    print("started compilation of "..(#source_files).." files at ~ "..(start_time - very_start_time).."s")
+  end
+
+  success, err = xpcall(function()
+    for i, source_file in ipairs(source_files) do
+      current_source_file_index = i
+      if args.monitor_memory_allocation then
+        compiled_file_count = compiled_file_count + 1
+        if (compiled_file_count % 8) == 0 then
+          local c = collectgarbage("count")
+          if c > 4 * 1000 * 1000 then
+            collectgarbage("collect")
+            total_memory_allocated = total_memory_allocated + (c - collectgarbage("count"))
+          end
         end
       end
-    end
 
-    local file = assert(io.open(source_file:str(), "r"))
-    local text = file:read("*a")
-    file:close()
-
-    local source_name = args.source_name:gsub("%?", source_file:sub(#source_dir + 1):str())
-    local ast
-    if args.ignore_syntax_errors then
-      local success
-      success, ast = pcall(parser, text, source_name)
-      if not success then
-        err_count = err_count + 1
-        if not args.no_syntax_error_messages then
-          print(ast:gsub("^[^:]+:%d+: ", "").." in "..source_name)
-        end
+      local source_name = args.source_name:gsub("%?", source_file:sub(#source_dir + 1):str())
+      local bytecode = compile(source_file, source_name, args.ignore_syntax_errors, false, inject_scripts)
+      if not bytecode then
         goto continue
       end
-    else
-      ast = parser(text, source_name)
-    end
-    jump_linker(ast)
-    fold_const(ast)
-    fold_control_statements(ast)
-    local compiled = compiler(ast)
-    local bytecode = dump(compiled)
-    local output
-    if args.use_load then
-      output = string.format("local main_chunk=assert(load(%q,nil,'b'))\nreturn main_chunk(...)", bytecode)
-    else
-      output = bytecode
-    end
+      local output
+      if args.use_load then
+        output = string.format("local main_chunk=assert(load(%q,nil,'b'))\nreturn main_chunk(...)", bytecode)
+      else
+        output = bytecode
+      end
 
-    local output_file_dir = output_dir / source_file:sub(#source_dir + 1, -2)
-    if not output_file_dir:exists() then
-      io_util.mkdir_recursive(output_file_dir)
-    end
-    local output_file = output_file_dir / (source_file:filename()..args.lua_extension)
+      local output_file_dir = output_dir / source_file:sub(#source_dir + 1, -2)
+      if not output_file_dir:exists() then
+        io_util.mkdir_recursive(output_file_dir)
+      end
+      local output_file = output_file_dir / (source_file:filename()..args.lua_extension)
 
-    file = assert(io.open(output_file:str(), args.use_load and "w" or "wb"))
-    file:write(output)
-    file:close()
-    ::continue::
-  end
-end, function(msg)
-  return "Phobos runtime error"
-    ..(
-      current_source_file_index
-        and (" when compiling file '"..source_files[current_source_file_index]:str().."'")
-        or ""
-    )
-    ..":\n\n"
-    ..debug.traceback(msg, 2)
-end)
+      file = assert(io.open(output_file:str(), args.use_load and "w" or "wb"))
+      file:write(output)
+      file:close()
+      ::continue::
+    end
+  end, function(msg)
+    return "Runtime error (Phobos itself or an AST inject script, see stack trace)"
+      ..(
+        current_source_file_index
+          and (" when compiling file '"..source_files[current_source_file_index]:str().."'")
+          or ""
+      )
+      ..":\n\n"
+      ..debug.traceback(msg, 2)
+  end)
+end
 
 if not success then
   print()
