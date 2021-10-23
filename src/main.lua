@@ -155,15 +155,15 @@ if not output_dir:exists() then
   io_util.mkdir_recursive(output_dir)
 end
 
--- if there is no target directory the output will be generated in place
--- in this case there is no auto cleanup of output files
+-- if the output will be generated in place there
+-- is no auto cleanup of output files
 --
 -- if there is a target directory it will automatically delete any
 -- lua_extension files it did not just generate at the end of compilation
 -- (maybe add a flag to disable this but that should be hardly needed)
-if not args.output_path and args.pho_extension == args.lua_extension then
+if source_dir == output_dir and args.pho_extension == args.lua_extension then
   error("When generating output next to source files the \z
-    lua and Phobos file extensions cannot be the same."
+    Lua and Phobos file extensions cannot be the same."
   )
 end
 
