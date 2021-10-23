@@ -185,7 +185,7 @@ local function warn_for_unhandled_entry(mode, entry_path)
     if mode then
       print("WARN: unhandled entry mode '"..mode.."' for '"..entry_path:str().."'")
     else
-      print("WARN: unsupported characters in filename '"..entry_path:str().."'")
+      print("WARN: skipping entry with unsupported characters '"..entry_path:str().."'")
     end
   end
 end
