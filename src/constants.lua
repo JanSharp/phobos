@@ -16,6 +16,8 @@ return {
     0x19, 0x93, 0x0d, 0x0a, 0x1a, 0x0a, -- magic
   },
 
+  lua_signature_str = "\x1bLua",
+
   -- Lua Signature: "\x1bLua"
   -- byte version = "\x52"
   -- byte format = 0 (official)

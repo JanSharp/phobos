@@ -83,6 +83,7 @@
     "retstat",
     "retstats",
     "rshift",
+    "sandboxed",
     "selfcall",
     "setlist",
     "setmode",
