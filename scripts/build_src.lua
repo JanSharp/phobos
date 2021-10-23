@@ -35,7 +35,7 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
 })
 if not args then return end
 
-loadfile(assert(__source_dir).."/main.lua")(table.unpack{
+loadfile(assert(package.searchpath("main", package.path)))(table.unpack{
   "--source", "src",
   "--output", "out/src/"..script_util.get_dir_name(args.profile),
   "--temp", "temp/src/"..script_util.get_dir_name(args.profile),

@@ -37,7 +37,7 @@ if not args then return end
 
 local output_dir = Path.combine("factorio", script_util.get_dir_name(args.profile), "phobos")
 
-loadfile(assert(__source_dir).."/main.lua")(table.unpack{
+loadfile(assert(package.searchpath("main", package.path)))(table.unpack{
   "--source", "src",
   "--output", ("out" / output_dir):str(),
   "--temp", ("temp" / output_dir):str(),
