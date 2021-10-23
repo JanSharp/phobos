@@ -14,3 +14,7 @@ this below were some ideas but there is a lot more to be done and this idea is i
 -- TODO: write initial changelog
 
 -- TODO: proof read readme and maybe add library note
+
+-- TODO: tail calls
+
+-- TODO: security warning readme note about running foreign binaries on your system
