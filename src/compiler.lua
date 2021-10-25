@@ -806,13 +806,16 @@ do
     return position
   end
 
-  local function generate_call(expr,num_results,func,regs,get_func_reg)
+  local function generate_call(expr,num_results,func,regs,is_tail_call,get_func_reg)
     -- out of order regs can be a problem
     -- if they would require moves both up and down the stack
     -- because values would most likely get overwritten with the current algorithm.
     -- there is no check for this right now because nothing is creating
     -- such `regs` tables, but it may be required to handle it somehow in the future
     local need_temps = not regs_are_at_top_in_order(regs, num_results, func)
+    if is_tail_call then
+      assert(not need_temps, "When generating a tailcall the given regs must be at top in order")
+    end
     local func_reg, first_arg_reg = get_func_reg()
     local args_regs = {}
     local num_args = #expr.args
@@ -827,7 +830,8 @@ do
     end
     local position = get_position_for_call_instruction(expr)
     func.instructions[#func.instructions+1] = {
-      op = opcodes.call, a = func_reg, b = num_args + 1, c = num_results + 1,
+      op = is_tail_call and opcodes.tailcall or opcodes.call,
+      a = func_reg, b = num_args + 1, c = not is_tail_call and num_results + 1 or nil,
       line = position and position.line,
       column = position and position.column,
     }
@@ -869,6 +873,34 @@ do
     --
     -- update: this is now handled by completed_registers. release_reg only adds
     -- valid registers to said array
+  end
+
+  local function generate_call_node(node,num_results,func,regs,is_tail_call)
+    if node.node_type == "call" then
+      generate_call(node, num_results, func, regs, is_tail_call, function()
+        local func_reg = create_temp_reg(func)
+        generate_expr(node.ex,1,func,{func_reg})
+        return func_reg
+      end)
+    elseif node.node_type == "selfcall" then
+      generate_call(node, num_results, func, regs, is_tail_call, function()
+        local func_reg = create_temp_reg(func)
+        local first_arg_reg = create_temp_reg(func, get_top(func) + 2)
+        local ex_reg = local_or_fetch(node.ex, func)
+        local suffix_reg, suffix_is_const = const_or_local_or_fetch(node.suffix, func)
+        -- maybe these 2 should be used after the instruction
+        use_reg(func_reg, func)
+        use_reg(first_arg_reg, func)
+        func.instructions[#func.instructions+1] = {
+          op = opcodes.self, a = func_reg, b = ex_reg, c = suffix_reg,
+          line = node.colon_token and node.colon_token.line,
+          column = node.colon_token and node.colon_token.column,
+        }
+        if not suffix_is_const then release_temp_reg(suffix_reg) end
+        release_temp_reg(ex_reg)
+        return func_reg, first_arg_reg
+      end)
+    end
   end
 
   generate_expr_code = {
@@ -1063,32 +1095,8 @@ do
         line = expr.line, column = expr.column,
       }
     end,
-    call = function(expr,num_results,func,regs)
-      generate_call(expr, num_results, func, regs, function()
-        local func_reg = create_temp_reg(func)
-        generate_expr(expr.ex,1,func,{func_reg})
-        return func_reg
-      end)
-    end,
-    selfcall = function(expr,num_results,func,regs)
-      generate_call(expr, num_results, func, regs, function()
-        local func_reg = create_temp_reg(func)
-        local first_arg_reg = create_temp_reg(func, get_top(func) + 2)
-        local ex_reg = local_or_fetch(expr.ex, func)
-        local suffix_reg, suffix_is_const = const_or_local_or_fetch(expr.suffix, func)
-        -- maybe these 2 should be used after the instruction
-        use_reg(func_reg, func)
-        use_reg(first_arg_reg, func)
-        func.instructions[#func.instructions+1] = {
-          op = opcodes.self, a = func_reg, b = ex_reg, c = suffix_reg,
-          line = expr.colon_token and expr.colon_token.line,
-          column = expr.colon_token and expr.colon_token.column,
-        }
-        if not suffix_is_const then release_temp_reg(suffix_reg) end
-        release_temp_reg(ex_reg)
-        return func_reg, first_arg_reg
-      end)
-    end,
+    call = generate_call_node,
+    selfcall = generate_call_node,
     index = function(expr,num_results,func,regs)
       local ex_reg, is_upval = upval_or_local_or_fetch(expr.ex,func)
       local suffix_reg, suffix_is_const = const_or_local_or_fetch(expr.suffix,func)
@@ -1537,38 +1545,54 @@ do
       local first_reg = 0
       local temp_regs = {}
       local num_results = 0
+      local is_tail_call = false
 
       if stat.exp_list and stat.exp_list[1] then
-        num_results = #stat.exp_list
-        -- NOTE: this is an optimization, meaning it might be moved out of here
-        local are_sequential_locals = true
-        local first_local_reg
-        for i, expr in ipairs(stat.exp_list) do
-          if expr.node_type == "local_ref" then
-            if i == 1 then
-              first_local_reg = find_local(expr)
-            elseif find_local(expr).index ~= first_local_reg.index + i - 1 then
+        -- TODO: check if tailcall is enabled
+        if not stat.exp_list[2]
+          and (
+            stat.exp_list[1].node_type == "call"
+            or stat.exp_list[1].node_type == "selfcall"
+          )
+        then
+          first_reg = create_temp_reg(func)
+          generate_call_node(stat.exp_list[1], -1, func, {[-1] = first_reg}, true)
+          num_results = -1
+          is_tail_call = true
+        else
+          -- not a tail call
+
+          num_results = #stat.exp_list
+          -- NOTE: this is an optimization, meaning it might be moved out of here
+          local are_sequential_locals = true
+          local first_local_reg
+          for i, expr in ipairs(stat.exp_list) do
+            if expr.node_type == "local_ref" then
+              if i == 1 then
+                first_local_reg = find_local(expr)
+              elseif find_local(expr).index ~= first_local_reg.index + i - 1 then
+                are_sequential_locals = false
+                break
+              end
+            else
               are_sequential_locals = false
               break
             end
-          else
-            are_sequential_locals = false
-            break
           end
-        end
 
-        if are_sequential_locals then
-          first_reg = first_local_reg
-        else
-          -- have to use temporaries and actually generate the expression list
-          for i = 1, num_results do
-            temp_regs[num_results - i + 1] = create_temp_reg(func, get_top(func) + i)
+          if are_sequential_locals then
+            first_reg = first_local_reg
+          else
+            -- have to use temporaries and actually generate the expression list
+            for i = 1, num_results do
+              temp_regs[num_results - i + 1] = create_temp_reg(func, get_top(func) + i)
+            end
+            first_reg = temp_regs[num_results]
+            if is_vararg(stat.exp_list[num_results]) then
+              num_results = -1
+            end
+            generate_exp_list(stat.exp_list, num_results, func, temp_regs)
           end
-          first_reg = temp_regs[num_results]
-          if is_vararg(stat.exp_list[num_results]) then
-            num_results = -1
-          end
-          generate_exp_list(stat.exp_list, num_results, func, temp_regs)
         end
       end
 
@@ -1578,6 +1602,9 @@ do
         column = stat.return_token and stat.return_token.column,
       }
       release_temp_regs(temp_regs, func)
+      if is_tail_call then
+        release_temp_reg(first_reg, func)
+      end
     end,
 
     label = function(stat,func)
