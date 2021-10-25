@@ -279,6 +279,7 @@ if not args.skip_package then
     end)())
 
     root_filenames[#root_filenames+1] = "info.json"
+    root_filenames[#root_filenames+1] = "thumbnail.png"
     seven_zip("a", "-tzip", "-mx9", zip_path:str(), table.unpack(root_filenames))
 
     -- move all files in the zip archive into a `phobos` sub dir
