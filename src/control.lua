@@ -8,6 +8,7 @@
 local parser = require("parser")
 local jump_linker = require("jump_linker")
 local fold_const = require("optimize.fold_const")
+local fold_control_statements = require("optimize.fold_control_statements")
 local compiler = require("compiler")
 local dump = require("dump")
 
@@ -81,8 +82,11 @@ local function phobos_command(args, silent, measured)
     return
   end
   jump_linker(ast)
-  fold_const(ast)
-  local compiled = compiler(ast)
+  if measured then
+    fold_const(ast)
+    fold_control_statements(ast)
+  end
+  local compiled = compiler(ast, measured)
   local bytecode = dump(compiled)
   local command, err = load(bytecode, nil, "b", command_env)
   if not command then
@@ -128,15 +132,15 @@ local function measured_phobos_command(args)
 end
 
 local phobos_help = "<Phobos command> - Executes a Phobos command (if allowed). \z
-  (Compiled without most optimizations)"
+  (Debug build; Compiled without optimizations and no tailcalls)"
 local silent_phobos_help = "<Phobos command> - Executes a Phobos command (if allowed) \z
   without printing it to the console. \z
-  (Compiled without most optimizations)"
+  (Debug build; Compiled without optimizations and no tailcalls)"
 local measured_phobos_help = "<Phobos command> - Executes a Phobos command (if allowed) \z
   and measures time it took to compile and execute. \z
-  (Compiled without most optimizations)"
+  (Release build; Compiled with all optimizations)"
 
-  ---cSpell:ignore spho
+---cSpell:ignore spho
 commands.add_command("pho", phobos_help, phobos_command)
 commands.add_command("phobos", phobos_help, phobos_command)
 commands.add_command("spho", silent_phobos_help, silent_phobos_command)

@@ -7,6 +7,8 @@ local Path = require("lib.LuaPath.path")
 Path.use_forward_slash_as_main_separator_on_windows()
 local arg_parser = require("lib.LuaArgParser.arg_parser")
 arg_parser.register_type(Path.arg_parser_path_type_def)
+local build_profile_arg_provider = require("build_profile_arg_provider")
+arg_parser.register_type(build_profile_arg_provider.arg_parser_build_profile_type_def)
 local io_util = require("io_util")
 local constants = require("constants")
 
@@ -81,6 +83,18 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
       min_params = 0,
       type = "path",
       optional = true,
+    },
+    {
+      field = "profile",
+      long = "profile",
+      short = "p",
+      description = "Which profile to use.\n\z
+                     'debug': No optimizations, no tailcalls.\n\z
+                     'release': All optimizations.\n\z
+                     (NOTE: Very WIP, most likely going to change)",
+      single_param = true,
+      default_value = "release",
+      type = build_profile_arg_provider.build_profile_type_id,
     },
     {
       field = "use_load",
@@ -327,6 +341,7 @@ local compiler = require("compiler")
 local dump = require("dump")
 
 local syntax_error_count = 0
+local do_optimize = args.profile == "release"
 local function compile(filename, source_name, ignore_syntax_errors, accept_bytecode, inject_scripts)
   local file
   if accept_bytecode then
@@ -365,9 +380,11 @@ local function compile(filename, source_name, ignore_syntax_errors, accept_bytec
       inject_script(ast)
     end
   end
-  fold_const(ast)
-  fold_control_statements(ast)
-  local compiled = compiler(ast)
+  if do_optimize then
+    fold_const(ast)
+    fold_control_statements(ast)
+  end
+  local compiled = compiler(ast, do_optimize)
   local bytecode = dump(compiled)
   return bytecode
 end

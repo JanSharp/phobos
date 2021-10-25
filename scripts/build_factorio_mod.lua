@@ -2,9 +2,9 @@
 local arg_parser = require("lib.LuaArgParser.arg_parser")
 local Path = require("lib.LuaPath.path")
 Path.use_forward_slash_as_main_separator_on_windows()
-local script_util = require("scripts.util")
+local build_profile_arg_provider = require("build_profile_arg_provider")
 arg_parser.register_type(Path.arg_parser_path_type_def)
-arg_parser.register_type(script_util.arg_parser_build_profile_type_def)
+arg_parser.register_type(build_profile_arg_provider.arg_parser_build_profile_type_def)
 
 local args = arg_parser.parse_and_print_on_error_or_help({...}, {
   options = {
@@ -13,7 +13,7 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
       long = "profile",
       short = "p",
       description = "The build profile to use.",
-      type = script_util.build_profile_type_id,
+      type = build_profile_arg_provider.build_profile_type_id,
       single_param = true,
     },
     {
@@ -35,13 +35,14 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
 })
 if not args then return end
 
-local output_dir = Path.combine("factorio", script_util.get_dir_name(args.profile), "phobos")
+local output_dir = Path.combine("factorio", args.profile, "phobos")
 
 loadfile(assert(package.searchpath("main", package.path)))(table.unpack{
   "--source", "src",
   "--output", ("out" / output_dir):str(),
   "--temp", ("temp" / output_dir):str(),
   "--inject", "scripts/build_factorio_mod_ast_inject.pho",
+  "--profile", args.profile,
   "--use-load",
   "--pho-extension", ".lua",
   "--source-name", "@__phobos__/"..(args.include_src and "src/" or "").."?",

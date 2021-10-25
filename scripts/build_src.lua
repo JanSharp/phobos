@@ -2,9 +2,9 @@
 local arg_parser = require("lib.LuaArgParser.arg_parser")
 local Path = require("lib.LuaPath.path")
 Path.use_forward_slash_as_main_separator_on_windows()
-local script_util = require("scripts.util")
+local build_profile_arg_provider = require("build_profile_arg_provider")
 arg_parser.register_type(Path.arg_parser_path_type_def)
-arg_parser.register_type(script_util.arg_parser_build_profile_type_def)
+arg_parser.register_type(build_profile_arg_provider.arg_parser_build_profile_type_def)
 
 local args = arg_parser.parse_and_print_on_error_or_help({...}, {
   options = {
@@ -13,7 +13,7 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
       long = "profile",
       short = "p",
       description = "The build profile to use.",
-      type = script_util.build_profile_type_id,
+      type = build_profile_arg_provider.build_profile_type_id,
       single_param = true,
     },
     {
@@ -37,8 +37,9 @@ if not args then return end
 
 loadfile(assert(package.searchpath("main", package.path)))(table.unpack{
   "--source", "src",
-  "--output", "out/src/"..script_util.get_dir_name(args.profile),
-  "--temp", "temp/src/"..script_util.get_dir_name(args.profile),
+  "--output", "out/src/"..args.profile,
+  "--temp", "temp/src/"..args.profile,
+  "--profile", args.profile,
   -- for now source files are still `.lua` files because they
   -- do compile with regular lua compilers and i do not trust
   -- Phobos enough yet

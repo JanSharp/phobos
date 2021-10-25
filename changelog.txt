@@ -16,6 +16,7 @@ Date: ????
     - Add cmd option to change the `source` name used for compiled bytecode functions for debugging
     - Add cmd option to monitor memory during compilation
     - Add cmd option to ignore and continue past files with syntax errors
+    - Add WIP cmd option for build profiles (debug or release)
   Optimizations:
     - Implement folding pure const expressions
     - Implement folding control statements with pure const conditions

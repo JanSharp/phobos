@@ -1,5 +1,6 @@
 
 local invert = require("invert")
+local serpent = require("lib.serpent")
 
 local profile_names = {
   "debug",
@@ -15,7 +16,6 @@ local arg_parser_build_profile_type_def = {
     if build_profiles[arg] then
       return arg
     else
-      local serpent = require("lib.serpent")
       return nil, "Expected one of "..serpent.line(profile_names)
         ..", got '"..arg.."' "..context.."."
     end
@@ -25,13 +25,8 @@ local arg_parser_build_profile_type_def = {
   end,
 }
 
-local function get_dir_name(profile)
-  return profile
-end
-
 return {
   profile_names = profile_names,
   build_profile_type_id = build_profile_type_id,
   arg_parser_build_profile_type_def = arg_parser_build_profile_type_def,
-  get_dir_name = get_dir_name,
 }
