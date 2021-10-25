@@ -89,7 +89,6 @@
         "src",
         "scripts/build_src.lua",
         "--profile", "debug",
-        "--include-src-in-source-name",
       ],
       // copy paste
       "type": "lua-local",
@@ -214,7 +213,6 @@
         "out/src/debug",
         "scripts/build_src.lua",
         "--profile", "debug",
-        "--include-src-in-source-name",
       ],
       // copy paste
       "preLaunchTask": "Build Debug",

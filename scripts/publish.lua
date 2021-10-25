@@ -136,7 +136,6 @@ if not args.skip_build then
   print("Building Factorio Mod")
   loadfile("scripts/build_factorio_mod.lua")(table.unpack{
     "--profile", "release",
-    "--include-src-in-source-name",
     args.verbose and "--verbose" or nil,
   })
 end

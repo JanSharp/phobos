@@ -17,15 +17,6 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
       single_param = true,
     },
     {
-      field = "include_src",
-      long = "include-src-in-source-name",
-      short = "s",
-      description = "include the `src` sub dir in source_name?\n\z
-        needed for the local lua debugger to resolve file paths.\n\z
-        enable when debugging locally, disable when building for publish.",
-      flag = true,
-    },
-    {
       field = "verbose",
       long = "verbose",
       short = "v",
@@ -45,7 +36,7 @@ loadfile(assert(package.searchpath("main", package.path)))(table.unpack{
   -- Phobos enough yet
   -- this will probably change soon though
   "--pho-extension", ".lua",
-  "--source-name", "@"..(args.include_src and "src/" or "").."?",
+  "--source-name", "@src/?",
   "--ignore",
   "control.lua",
   args.verbose and "--verbose" or nil,

@@ -21,7 +21,6 @@
         "--", "entry_point.lua",
         "src", "scripts/build_src.lua",
         "--profile", "debug",
-        "--include-src-in-source-name",
       ],
       "presentation": {
         "reveal": "silent",
@@ -46,7 +45,6 @@
         "--", "entry_point.lua",
         "src", "scripts/build_factorio_mod.lua",
         "--profile", "debug",
-        "--include-src-in-source-name",
       ],
       "presentation": {
         "reveal": "silent",
