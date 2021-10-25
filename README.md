@@ -9,7 +9,8 @@ Phobos currently only supports bytecode for Lua 5.2 with [this](src/constants.lu
 
 # Running Phobos
 
-Download the zip for your platform from the GitHub Releases, extract all files and run it using this command in your command line or terminal:
+Download the zip for your platform from the GitHub Releases, extract all files and run it using this command in your command line or terminal:\
+(If your OS blocks the executable for security reasons either allow them to run in properties (on windows) or preferences (on osx/macOS), or use your own Lua and LuaFileSystem binaries with the raw Phobos package)
 ```
 ./lua -- main.lua -h
 ```
@@ -28,7 +29,7 @@ Additionally the mod, and only the mod, contains a `control.lua` file to registe
 
 ## Compiling for Factorio
 
-When compiling (see below) for a Factorio mod you currently **must** use `--use-load` because Factorio currently does not load bytecode Lua files.
+When compiling (see next section) for a Factorio mod you currently **must** use `--use-load` because Factorio does not load bytecode Lua files.
 
 Additionally it is recommended to use `--source-name @__mod-name__/?` to match Factorio's source name pattern (`mod-name` being your internal mod name).
 
@@ -84,7 +85,7 @@ Phobos is type aware. The idea is that it can figure out the majority of types o
 ## Safe Chaining Operators (not implemented)
 
 The operators `?.`, `?:`, `?[]` and `?()` to replace the common Lua idiom
-`foo and foo.bar`. These allow more efficient re-use of intermediate results in deeply nested optional objects. `?.`, `?:` and `?[]` protect an indexing operation, while `?()` protects a function call, calling the function only if it exists.
+`foo and foo.bar`. These allow more efficient re-use of intermediate results in deeply nested optional objects. `?.`, `?:` and `?[]` protect an indexing operation, while `?()` protects a function call, calling the function only if it exists (is not `nil` or `false`).
 
 ## Block Initializer Clauses (not implemented)
 
@@ -145,7 +146,7 @@ Huge thanks to justarandomgeek for starting the project in the first place (writ
 
 Thanks to Therenas for providing built Lua and LuaFileSystem binaries for macOS and ensuring Phobos runs properly on macOS.
 
-Thanks to the factorio modding community for providing input, ideas and discussion about Phobos as a whole. Without several people wanting types and no longer wanting to micro optimize their code Phobos would never have  happened.
+Thanks to the factorio modding community for providing input, ideas and discussion about Phobos as a whole. Without several people wanting types and no longer wanting to micro optimize their code Phobos would never have happened.
 
 # Contributing
 
@@ -159,7 +160,9 @@ git submodule init
 git submodule update
 ```
 
-There are `scripts/build_src.lua` and `scripts/build_factorio_mod.lua`. I'd recommend looking at the `.vscode/tasks.json` file to know how to use them (or if you're using vscode already, just run those tasks from the command pallet.)
+There are `scripts/build_src.lua` and `scripts/build_factorio_mod.lua` which have to be run through `entry_point.lua` (see that file itself for details).
+
+If you're using vscode just run the build tasks from the command pallet.
 
 Then to actually run src or those built "binaries" check the `.vscode/launch.json` file.
 

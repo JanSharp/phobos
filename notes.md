@@ -7,14 +7,8 @@ this below were some ideas but there is a lot more to be done and this idea is i
 `foo == false` to `not foo` optimization if foo is known to never be `nil`
 `foo == true` to `foo` with "convert to bool flag" optimization
 
--- TODO: osx is actually macOS nowadays. Incorporate that into the readme somehow
-
 -- TODO: make thumbnail and icons. Or rather, ask for help
-
--- TODO: write initial changelog
 
 -- TODO: proof read readme and maybe add library note
 
 -- TODO: tail calls
-
--- TODO: security warning readme note about running foreign binaries on your system

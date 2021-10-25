@@ -1,7 +1,7 @@
 
 # General
 
-Endianness is the same as Lua's, so since it only supports little endian right now, everything is little endian in here as well.
+Endianness is the same as Lua's, so since Phobos only supports little endian right now, everything is little endian in here as well.
 
 Indexes are 0 based. For ranges they are `start`: _including_, `end`: _excluding_.
 
@@ -26,6 +26,7 @@ Phobos itself will always output collision free bytecode by adding an unused nil
 # Format
 
 ## Version 0
+**Introduced in v0.1.0**
 
 - `uint32` column_defined (0 for unknown or main chunk)
 - `uint32` end_column (0 for unknown or main chunk)
