@@ -326,6 +326,7 @@ local fold_control_statements = require("optimize.fold_control_statements")
 local compiler = require("compiler")
 local dump = require("dump")
 
+local syntax_error_count = 0
 local function compile(filename, source_name, ignore_syntax_errors, accept_bytecode, inject_scripts)
   local file
   if accept_bytecode then
@@ -349,7 +350,7 @@ local function compile(filename, source_name, ignore_syntax_errors, accept_bytec
     local success
     success, ast = pcall(parser, contents, source_name)
     if not success then
-      err_count = err_count + 1
+      syntax_error_count = syntax_error_count + 1
       if not args.no_syntax_error_messages then
         print(ast:gsub("^[^:]+:%d+: ", "").." in "..source_name)
       end
@@ -405,7 +406,6 @@ end
 
 -- compile source files
 
-local err_count = 0
 local start_time = os.clock()
 
 local total_memory_allocated = 0
@@ -480,7 +480,7 @@ if not success then
 end
 
 if args.verbose and args.ignore_syntax_errors then
-  print(err_count.." files with syntax errors")
+  print(syntax_error_count.." files with syntax errors")
 end
 
 if args.monitor_memory_allocation then
