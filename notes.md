@@ -7,8 +7,6 @@ this below were some ideas but there is a lot more to be done and this idea is i
 `foo == false` to `not foo` optimization if foo is known to never be `nil`
 `foo == true` to `foo` with "convert to bool flag" optimization
 
--- TODO: make thumbnail and icons. Or rather, ask for help
-
 -- TODO: proof read readme and maybe add library note
 
 -- TODO: tail calls

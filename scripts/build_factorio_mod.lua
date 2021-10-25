@@ -58,9 +58,10 @@ loadfile(assert(package.searchpath("main", package.path)))(table.unpack{
 })
 
 local io_util = require("io_util")
-local function copy_from_root_to_output(filename)
-  io_util.copy(filename, "out" / output_dir / filename)
+local function copy_from_root_to_output(filename, new_filename)
+  io_util.copy(filename, "out" / output_dir / (new_filename or filename))
 end
 
 copy_from_root_to_output("info.json")
 copy_from_root_to_output("changelog.txt")
+copy_from_root_to_output("thumbnail_144_144_padded.png", "thumbnail.png")

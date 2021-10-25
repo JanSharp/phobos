@@ -227,6 +227,7 @@ if not args.skip_package then
     "changelog.txt",
     "LICENSE.txt",
     "LICENSE_THIRD_PARTY.txt",
+    "thumbnail_1080_1080.png",
   }
 
   local function create_zip(platform, no_lua_binaries)

@@ -1,4 +1,8 @@
 
+<p align="center">
+  <img src="thumbnail_1080_1080.png" alt="Phobos Thumbnail" width="144"/>
+</p>
+
 # Phobos
 
 Phobos is an optimizing bytecode compiler for Lua with some language extensions and a type system.
