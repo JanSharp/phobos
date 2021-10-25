@@ -168,8 +168,8 @@ do
       return "TAILCALL", "return "..get_register_label("a").."("..(current.b ~= 0 and (current.b - 1) or "var").." args)"
     end,
     [opcodes["return"]] = function()
-      return "RETURN", "return "..(current.b ~= 0 and (current.b - 1) or "var").." results"
-        ..(current.b > 1 and (" starting at "..get_register_label("a")) or "")
+      return "RETURN", "return "..(current.b ~= 0 and (current.b - 1) or "var")
+        .." results starting at "..get_register_label("a")
     end,
 
     [opcodes.forloop] = function()
