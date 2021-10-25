@@ -266,6 +266,7 @@ if not args.skip_package then
     -- "-m0=PPMd" because for factorio mods lua files have to be text files (for now)
     -- so this is more size efficient
     seven_zip("a", "-tzip", "-mx9", "-r", --[["-m0=PPMd",]] ("../../../.." / zip_path):str(), "*.lua")
+    seven_zip("a", "-tzip", "-mx9", "-r", ("../../../.." / zip_path):str(), "thumbnail.png")
     chdir(root_path:str())
 
     seven_zip((function()
@@ -279,8 +280,8 @@ if not args.skip_package then
     end)())
 
     root_filenames[#root_filenames+1] = "info.json"
-    root_filenames[#root_filenames+1] = "thumbnail.png"
     seven_zip("a", "-tzip", "-mx9", zip_path:str(), table.unpack(root_filenames))
+    root_filenames[#root_filenames+1] = "thumbnail.png" -- added previously
 
     -- move all files in the zip archive into a `phobos` sub dir
 
