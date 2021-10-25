@@ -23,12 +23,17 @@ Download the zip for your platform from the GitHub Releases, extract all files a
 <!-- cSpell:ignore cpath -->
 You could also change the `LUA_PATH` and `LUA_CPATH` environment variables to include the Phobos directory but beware of name collisions. (See [package.path](https://www.lua.org/manual/5.2/manual.html#pdf-package.path) and [package.cpath](https://www.lua.org/manual/5.2/manual.html#pdf-package.cpath) and maybe [here](https://www.lua.org/manual/5.2/manual.html#7))
 
+# Library (not really supported)
+
+You can use Phobos as a library. The raw package from the github releases is meant for this, though it will most likely change in the future because actually using `.pho` source files from the library would be beneficial both to the programmer and the compiler.
+
 # Factorio
 
 ## Factorio Mod
 
 There is also a Factorio mod on the [Factorio Mod Portal](https://mods.factorio.com/mod/phobos) and in the GitHub Releases.\
-It contains all files required to use Phobos **at runtime**, no command line tools.\
+It contains all files required to use Phobos **at runtime** (like a library), no command line tools.\
+(Though as mentioned in the Library section, this is most likely going to undergo changes in the future)\
 Additionally the mod, and only the mod, contains a `control.lua` file to register commands to run Phobos in the in-game console similar to regular Lua commands. Use `/help` in-game.
 
 ## Compiling for Factorio
