@@ -975,7 +975,7 @@ do
       -- TODO: check if the "combine loadnil" optimization is enabled
       local prev = func.instructions[#func.instructions]
       if prev and prev.op == opcodes.loadnil and (prev.a.index + prev.b + 1) == regs[num_results].index then
-        -- only combine if prev was loadnil and stops loading nils just before regs[1].index
+        -- only combine if prev was loadnil and stops loading nils just before regs[num_results].index
         prev.b = prev.b + num_results
       else
         func.instructions[#func.instructions+1] = {

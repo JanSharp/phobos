@@ -49,7 +49,7 @@ local function phobos_command(args, silent, measured)
   end
 
   if player and not player.admin then
-    print_msg("-- TODO: error message for non admin running commands.", true)
+    print_msg("Non admins cannot run commands.", true)
     return
   end
 
@@ -61,18 +61,7 @@ local function phobos_command(args, silent, measured)
   end
 
   if not command_env then
-    command_env = {}
-    for k, v in pairs(_ENV) do
-      if type(v) == "table"
-        and type(rawget(v, "__self")) == "userdata"
-        and getmetatable(v) == "private"
-      then
-        command_env[k] = v
-      else
-        command_env[k] = util.copy(v)
-      end
-    end
-    command_env._G = command_env
+    command_env = util.copy(_ENV)
   end
 
   local profiler = measured and game.create_profiler() or nil
