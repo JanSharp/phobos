@@ -575,7 +575,7 @@ local function get_disassembly(func, func_description_callback, instruction_call
     local parts = {}
     for _, key in ipairs{"a", "b", "c", "ax", "bx", "sbx"} do
       if instructions[i].op.params[key] then
-        parts[#parts+1] = "["..key.." = "..instructions[i][key].."]"
+        parts[#parts+1] = "["..key.." "..instructions[i][key].."]"
       end
     end
     instruction_callback(
