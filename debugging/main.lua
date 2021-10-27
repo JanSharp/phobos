@@ -241,7 +241,7 @@ local function compile(filename)
       result[#result+1] = line.line
     end
 
-    file = assert(io.open("temp/phobos-disassembly.lua", "w"))
+    file = assert(io.open("temp/phobos_disassembly.lua", "w"))
     file:write(table.concat(result, "\n"))
     file:close()
   end
