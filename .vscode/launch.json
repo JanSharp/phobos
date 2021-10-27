@@ -17,6 +17,10 @@
         "phobos": true,
       },
       "disableExtraMods": true,
+      "factorioArgs": [
+        "--load-scenario", "base/freeplay",
+        "--window-size", "1280x720",
+      ],
     },
 
     // entry_point.lua args (copy paste from entry_point.lua itself)
