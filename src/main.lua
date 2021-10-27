@@ -346,7 +346,7 @@ local function compile(filename, source_name, ignore_syntax_errors, accept_bytec
   local file
   if accept_bytecode then
     file = assert(io.open(filename:str(), "rb"))
-    if file:read(4):find("^"..constants.lua_signature_str.."$") then
+    if file:read(4) == constants.lua_signature_str then
       assert(file:seek("set"))
       local contents = file:read("*a")
       assert(file:close())

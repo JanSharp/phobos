@@ -49,7 +49,7 @@ package.path = package.path
   ..arg[1]..path_sep..substitution..".lua"
 
 local file = assert(io.open(arg[2], "rb"))
-local is_binary = not not file:read(4):find("^\x1bLua$") -- check for lua bytecode signature
+local is_binary = file:read(4) == "\x1bLua" -- check for lua bytecode signature
 if not is_binary then
   assert(file:close())
   file = assert(io.open(arg[2], "r"))
