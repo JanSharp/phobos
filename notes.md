@@ -12,3 +12,7 @@ this below were some ideas but there is a lot more to be done and this idea is i
 -- TODO: better describe working dir weirdness/running Phobos
 
 -- TODO: add a short list of most useful things Phobos can be used for
+
+-- TODO: option to include single files in compilation
+
+-- TODO: option to copy files from source to output during compilation
