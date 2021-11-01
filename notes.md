@@ -13,6 +13,9 @@ this below were some ideas but there is a lot more to be done and this idea is i
 
 -- TODO: add a short list of most useful things Phobos can be used for
 
--- TODO: option to include single files in compilation
+maybe option to include single files in compilation
+an idea is to allow a list of sources which may either be files or directories
+and each entry in `--source` would require a matching one in `--output` which must match in entry type (file or directory)
 
--- TODO: option to copy files from source to output during compilation
+maybe option to copy files from source to output during compilation
+this is unlikely however because it is more part of a build script than a compiler
