@@ -47,6 +47,14 @@ local function is_const_node_type(node_type)
   return const_node_type_lut[node_type]
 end
 
+local vararg_node_type_lut = invert{"vararg","call","selfcall"}
+local function is_vararg_node(node)
+  return vararg_node_type_lut[node.node_type] and (not node.force_single_result)
+end
+local function is_vararg_node_type(node_type)
+  return vararg_node_type_lut[node_type]
+end
+
 ---currently unused
 local function clear_table(t)
   local keys = {}
@@ -201,6 +209,8 @@ return {
   is_falsy = is_falsy,
   is_const_node = is_const_node,
   is_const_node_type = is_const_node_type,
+  is_vararg_node = is_vararg_node,
+  is_vararg_node_type = is_vararg_node_type,
   clear_table = clear_table,
   get_main_position = get_main_position,
 }

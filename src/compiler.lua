@@ -160,11 +160,6 @@ do
     return assert(upval_ref.reference_def.index)
   end
 
-  local vararg_node_types = invert{"vararg","call","selfcall"}
-  local function is_vararg(node)
-    return vararg_node_types[node.node_type] and (not node.force_single_result)
-  end
-
   local generate_expr_code
   local function generate_expr(expr,num_results,func,regs)
     if num_results == -1 and not reg_is_top_or_above(regs[num_results], func) then
@@ -182,7 +177,7 @@ do
       release_temp_reg(regs[0], func)
     end
     if num_results > 1
-      and not is_vararg(expr)
+      and not util.is_vararg_node(expr)
       and expr.node_type ~= "nil"
     then
       generate_expr({
@@ -215,7 +210,7 @@ do
         if num_results ~= -1 then
           this_expr_regs = regs
           expr_num_results = (num_results - num_exp) + 1
-        elseif is_vararg(expr) then
+        elseif util.is_vararg_node(expr) then
           this_expr_regs = expr_regs
           expr_num_results = -1
           expr_regs[-1] = regs[1]
@@ -823,7 +818,7 @@ do
       args_regs[num_args - i + 1] = create_temp_reg(func, get_top(func) + i)
     end
     generate_exp_list(expr.args,-1,func,args_regs)
-    if num_args > 0 and is_vararg(expr.args[num_args]) then
+    if num_args > 0 and util.is_vararg_node(expr.args[num_args]) then
       num_args = -1
     else
       num_args = num_args + (first_arg_reg and 1 or 0)
@@ -1025,7 +1020,7 @@ do
           -- if list accumulate values
           local temp_regs = {}
           local count = 1
-          if i == fields_count and is_vararg(field.value) then
+          if i == fields_count and util.is_vararg_node(field.value) then
             count = -1
           end
           temp_regs[count] = create_temp_reg(func)
@@ -1588,7 +1583,7 @@ do
               temp_regs[num_results - i + 1] = create_temp_reg(func, get_top(func) + i)
             end
             first_reg = temp_regs[num_results]
-            if is_vararg(stat.exp_list[num_results]) then
+            if util.is_vararg_node(stat.exp_list[num_results]) then
               num_results = -1
             end
             generate_exp_list(stat.exp_list, num_results, func, temp_regs)
