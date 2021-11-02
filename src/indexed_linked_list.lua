@@ -1,9 +1,11 @@
 
----every `index_spacing`-th index will be used when appending or re-indexing\
----leaving a gap of `spacing - 1`\
+---every `index_spacing`-th index will be used when prepending, appending or re-indexing\
+---leaving a gap of `index_spacing - 1`\
 ---should always be a **power of 2** to create nicely split-able gaps\
----(to be exact, appended nodes just get the index of `self.last.index + index_spacing`)
-local index_spacing = 2 ^ 4 -- can split 4 times before having to move nodes or re-index
+---(to be exact, appended nodes just get the index of `self.last.index + index_spacing`;
+---mirrored for prepending or course)
+local index_spacing = 2 ^ 4
+-- can split 4 times before having to move nodes or re-index
 
 -- some example values:
 -- first row is the exponent used
