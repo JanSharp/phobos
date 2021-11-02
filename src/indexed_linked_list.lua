@@ -14,6 +14,7 @@ local index_spacing = 2 ^ 4
 -- are not the first or last node, as that would allow for infinite insertions without re-indexing
 -- 0 1 2 3  4  5  6  7  8
 -- 0 2 5 9 14 20 27 35 44
+-- note that this is one of the best case scenarios when inserting into the same area in the list
 
 local ill = {}
 
@@ -67,48 +68,47 @@ local function try_move_left_node(self, left, right, value, inserting_after)
   if not self.lookup[left.index - 1] then
     if left.prev then
       push_to_center(self, left.prev, left, right, true) -- closer to `left.prev`
-      insert_between(self, left, right, value, inserting_after)
+      return insert_between(self, left, right, value, inserting_after)
     else
       -- push `left` really far left to have max size gaps after the insert is done
       relocate_node(self, left, right.index - (index_spacing * 2))
-      insert_between(self, left, right, value, inserting_after)
+      return insert_between(self, left, right, value, inserting_after)
     end
-    return true
   end
-  return false
 end
 
 local function try_move_right_node(self, left, right, value, inserting_after)
   if not self.lookup[right.index + 1] then
     if right.next then
       push_to_center(self, left, right, right.next, false) -- closer to `right.next`
-      insert_between(self, left, right, value, inserting_after)
+      return insert_between(self, left, right, value, inserting_after)
     else
       -- push `right` really far right to have max size gaps after the insert is done
       relocate_node(self, right, left.index + (index_spacing * 2))
-      insert_between(self, left, right, value, inserting_after)
+      return insert_between(self, left, right, value, inserting_after)
     end
-    return true
   end
-  return false
 end
 
 function insert_between(self, left, right, value, inserting_after)
   local index_diff = right.index - left.index
   if index_diff == 1 then
+    local node
     if inserting_after then
-      if try_move_left_node(self, left, right, value, inserting_after) then return end
-      if try_move_right_node(self, left, right, value, inserting_after) then return end
+      node = try_move_left_node(self, left, right, value, inserting_after)
+        or try_move_right_node(self, left, right, value, inserting_after)
     else
-      if try_move_right_node(self, left, right, value, inserting_after) then return end
-      if try_move_left_node(self, left, right, value, inserting_after) then return end
+      node = try_move_right_node(self, left, right, value, inserting_after)
+        or try_move_left_node(self, left, right, value, inserting_after)
     end
-    -- couldn't move nodes, add node without an index and re-index
-    local node = new_node(value, nil, left, right)
-    left.next = node
-    right.prev = node
-    self.count = self.count + 1
-    re_index(self)
+    if not node then
+      -- couldn't move nodes, add node without an index and re-index
+      node = new_node(value, nil, left, right)
+      left.next = node
+      right.prev = node
+      self.count = self.count + 1
+      re_index(self)
+    end
     return node
   else -- there is a gap to place the node in
     -- move it more in the direction we are inserting in
