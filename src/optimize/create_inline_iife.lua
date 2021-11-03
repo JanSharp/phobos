@@ -1,5 +1,5 @@
 
-local walker = require("ast_walker")
+local ast_walker = require("ast_walker")
 
 local on_open = {
   ---@param node AstCall
@@ -172,7 +172,7 @@ local on_open = {
 }
 
 local function create_inline_iife(main)
-  walker(main, on_open, nil)
+  ast_walker.walk_scope(main, {on_open = on_open})
 end
 
 return create_inline_iife

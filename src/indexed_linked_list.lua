@@ -18,8 +18,9 @@ local index_spacing = 2 ^ 4
 
 local ill = {}
 
-local function new_node(value, index, prev, next)
+local function new_node(list, value, index, prev, next)
   return {
+    list = list,
     value = value,
     index = index,
     prev = prev,
@@ -103,7 +104,7 @@ function insert_between(self, left, right, value, inserting_after)
     end
     if not node then
       -- couldn't move nodes, add node without an index and re-index
-      node = new_node(value, nil, left, right)
+      node = new_node(self, value, nil, left, right)
       left.next = node
       right.prev = node
       self.count = self.count + 1
@@ -121,7 +122,7 @@ function insert_between(self, left, right, value, inserting_after)
       index_diff = index_diff - (index_diff % 2)
     end
     local index = left.index + (index_diff / 2)
-    local node = new_node(value, index, left, right)
+    local node = new_node(self, value, index, left, right)
     self.lookup[node.index] = node
     left.next = node
     right.prev = node
@@ -131,13 +132,26 @@ function insert_between(self, left, right, value, inserting_after)
 end
 
 local function add_first(self, value)
-  local node = new_node(value, 0, nil, nil)
+  local node = new_node(self, value, 0, nil, nil)
   self.lookup[node.index] = node
   self.first = node
   self.last = node
   self.count = 1
   return node
 end
+
+---@class ILLNode
+---@field list IndexedLinkedList @ back reference
+---@field value any
+---@field index integer @ non sequential but ordered index
+---@field prev ILLNode|nil @ `nil` if this is the first node
+---@field next ILLNode|nil @ `nil` if this is the last node
+
+---@class IndexedLinkedList
+---@field count integer @ if 0, `first` and `last` are `nil`
+---@field first ILLNode|nil
+---@field last ILLNode|nil
+---@field lookup table<integer, ILLNode> @ indexed by `ILLNode.index`
 
 function ill.new()
   return {
@@ -149,14 +163,14 @@ function ill.new()
 end
 
 function ill:prepend(value)
-  if not self.first then
+  if self.count == 0 then
     return add_first(self, value)
   else
     -- who says we can't use negative indexes? it's just a hash table
     -- well it can be problematic for external code, but
     -- for now it'll use negative numbers (until the next re-index)
     local prev_first = self.first
-    local node = new_node(value, prev_first.index - index_spacing, nil, prev_first)
+    local node = new_node(self, value, prev_first.index - index_spacing, nil, prev_first)
     self.lookup[node.index] = node
     self.first = node
     self.count = self.count + 1
@@ -166,11 +180,11 @@ function ill:prepend(value)
 end
 
 function ill:append(value)
-  if not self.last then
+  if self.count == 0 then
     return add_first(self, value)
   else
     local prev_last = self.last
-    local node = new_node(value, prev_last.index + index_spacing, prev_last, nil)
+    local node = new_node(self, value, prev_last.index + index_spacing, prev_last, nil)
     self.lookup[node.index] = node
     self.last = node
     self.count = self.count + 1
@@ -179,32 +193,36 @@ function ill:append(value)
   end
 end
 
-function ill:insert_before(node, value)
+function ill.insert_before(node, value)
   if node.prev then
-    return insert_between(self, node.prev, node, value, false)
+    return insert_between(node.list, node.prev, node, value, false)
   else
-    return ill.prepend(self, value)
+    return ill.prepend(node.list, value)
   end
 end
 
-function ill:insert_after(node, value)
+function ill.insert_after(node, value)
   if node.next then
-    return insert_between(self, node, node.next, value, true)
+    return insert_between(node.list, node, node.next, value, true)
   else
-    return ill.append(self, value)
+    return ill.append(node.list, value)
   end
 end
 
-function ill:remove(node)
-  self.lookup[node.index] = nil
+function ill.remove(node)
+  node.list.lookup[node.index] = nil
   if node.next then
     node.next.prev = node.prev
   end
   if node.prev then
     node.prev.next = node.next
   end
-  self.count = self.count - 1
+  node.list.count = node.list.count - 1
   return node
+end
+
+function ill.is_alive(node)
+  return node.list.lookup[node.index] == node
 end
 
 return ill

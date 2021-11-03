@@ -1,4 +1,5 @@
 local invert = require("invert")
+local ill = require("indexed_linked_list")
 
 ---leading `blank` and `comment` tokens for the current `token`
 local leading ---@type Token[]
@@ -235,17 +236,17 @@ end
 --- Read a list of Statements
 --- `stat_list -> { stat [';'] }`
 ---@param scope AstScope
----@return AstStatement[]
+---@return IndexedLinkedList<nil,AstStatement>
 local function stat_list(scope)
-  local sl = {}
+  local sl = ill.new()
   while not block_follow(true) do
     if token.token_type == "eof" then
       return sl
     elseif token.token_type == "return" then
-      sl[#sl+1] = statement(scope)
+      ill.append(sl, statement(scope))
       return sl
     end
-    sl[#sl+1] = statement(scope)
+    ill.append(sl, statement(scope))
   end
   return sl
 end
@@ -1100,7 +1101,7 @@ local function main_func(chunk_name)
     -- fake parent scope of main to provide _ENV upval
     parent_scope = {
       node_type = "env",
-      body = {},
+      body = ill.new(),
       locals = {
         -- Lua emits _ENV as if it's a local in the parent scope
         -- of the file. I'll probably change this one day to be

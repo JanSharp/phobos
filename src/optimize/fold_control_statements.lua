@@ -1,25 +1,33 @@
 
 local ast_walker = require("ast_walker")
+local ill = require("indexed_linked_list")
 local util = require("util")
 
-local function check_delete_func_base_node(node, scope)
-  local func_def = scope
-  local to_delete = func_def.to_delete
-  while func_def.node_type ~= "functiondef" do
-    func_def = func_def.parent_scope
-    to_delete = to_delete or func_def.to_delete
-  end
-  if to_delete then
+local remove_func_defs_in_scope
+do
+  local function delete_func_base_node(node, context)
+    -- save the ast walker some unnecessary work
+    node.func_def.body = ill.new()
+    local func_def = context.parent_func_def
     for i, func_proto in ipairs(func_def.func_protos) do
       if func_proto == node.func_def then
         table.remove(func_def.func_protos, i)
-        goto removed
+        return
       end
     end
-    assert(false, "Unable to find node.func_def in func_protos of parent func_def")
-    ::removed::
-    -- just to save the ast walker some unnecessary work
-    node.func_def.body = {}
+    error("Unable to find node.func_def in func_protos of parent func_def indicating malformed AST. \z
+      Every functiondef should be in the func_protos of the parent functiondef"
+    )
+  end
+
+  local on_open = {
+    funcstat = delete_func_base_node,
+    localfunc = delete_func_base_node,
+    func_proto = delete_func_base_node,
+  }
+
+  function remove_func_defs_in_scope(parent_func_def, scope)
+    ast_walker.walk_scope(scope, {on_open = on_open, parent_func_def = parent_func_def})
   end
 end
 
@@ -34,9 +42,14 @@ local function convert_repeatstat(node, do_jump_back)
 end
 
 local on_open = {
-  whilestat = function(node, scope)
+  whilestat = function(node, context, _, stat_elem)
     if util.is_falsy(node.condition) then -- falsy
-      node.to_delete = true
+      local func_def = context.scope
+      while func_def.node_type ~= "functiondef" do
+        func_def = func_def.parent_scope
+      end
+      remove_func_defs_in_scope(func_def, node)
+      ill.remove(stat_elem) -- remove is the last operation on the ill
     elseif util.is_const_node(node.condition) then -- truthy
       node.node_type = "loopstat"
       node.do_jump_back = true
@@ -49,7 +62,7 @@ local on_open = {
     end
   end,
 
-  repeatstat = function(node, scope)
+  repeatstat = function(node)
     if util.is_falsy(node.condition) then -- falsy
       convert_repeatstat(node, true)
     elseif util.is_const_node(node.condition) then -- truthy
@@ -57,22 +70,31 @@ local on_open = {
     end
   end,
 
-  ifstat = function(node, scope)
-    -- local func_def = scope
-    -- while func_def.node_type ~= "functiondef" do
-    --   func_def = func_def.parent_scope
-    -- end
-    for i, testblock in ipairs(node.ifs) do
+  ifstat = function(node, context, _, stat_elem)
+    local func_def = context.scope
+    while func_def.node_type ~= "functiondef" do
+      func_def = func_def.parent_scope
+    end
+    local i = 1
+    local c = #node.ifs
+    while i <= c do
+      local testblock = node.ifs[i]
       if util.is_falsy(testblock.condition) then -- falsy
-        testblock.to_delete = true
+        remove_func_defs_in_scope(func_def, testblock)
+        table.remove(node.ifs, i)
+        i = i - 1
+        c = c - 1
       elseif util.is_const_node(testblock.condition) then -- truthy
-        for j = i + 1, #node.ifs do
-          node.ifs[j].to_delete = true
+        for j = #node.ifs, i + 1, -1 do
+          remove_func_defs_in_scope(func_def, node.ifs[j])
+          node.ifs[j] = nil
         end
         if node.elseblock then
-          node.elseblock.to_delete = true
+          remove_func_defs_in_scope(func_def, node.elseblock)
+          node.elseblock = nil
         end
-        table.remove(node.ifs, i)
+        -- convert this testblock to a dostat just after this ifstat
+        node.ifs[i] = nil
         testblock.node_type = "dostat"
         testblock.condition = nil
         if testblock.if_token then
@@ -82,19 +104,12 @@ local on_open = {
         end
         testblock.then_token = nil
         testblock.end_token = node.end_token
-        node.insert_after = {testblock}
+        ill.insert_after(stat_elem, testblock)
         break
       end
+      i = i + 1
     end
-  end,
 
-  funcstat = check_delete_func_base_node,
-  localfunc = check_delete_func_base_node,
-  func_proto = check_delete_func_base_node,
-}
-
-local on_close = {
-  ifstat = function(node, scope)
     if not node.ifs[1] then
       if node.elseblock then
         local elseblock = node.elseblock
@@ -105,17 +120,16 @@ local on_close = {
           elseblock.else_token = nil
         end
         elseblock.end_token = node.end_token
-
-        node.replace_with = elseblock
+        stat_elem.value = elseblock -- replace
       else
-        node.replace_with = {node_type = "empty"}
+        ill.remove(stat_elem) -- remove is the last operation on the ill
       end
     end
   end,
 }
 
 local function fold(main)
-  ast_walker(main, on_open, on_close)
+  ast_walker.walk_scope(main, {on_open = on_open})
 end
 
 return fold

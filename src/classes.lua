@@ -73,18 +73,13 @@
 ---the first one in the list/first one you encounter when processing the data
 ---@field src_paren_wrappers AstParenWrapper[]|nil
 
--- since every scope inherits AstNode and AstBody, AstScope now does as well
-
----@class AstScope : AstNode, AstBody
+---@class AstScope : AstNode
 ---@field parent_scope AstScope|nil @ `nil` for the top level scope, the main function
-
-
----@class AstBody
----@field body AstStatement[]
+---@field body IndexedLinkedList<nil,AstStatement>
 ---@field locals AstLocalDef[]
 ---@field labels AstLabel[]
 
----@class AstFunctionDef : AstBody, AstScope, AstNode
+---@class AstFunctionDef : AstScope, AstNode
 ---@field node_type '"functiondef"'
 ---@field is_main 'nil' @ overridden by AstMain to be `true`
 ---@field source string
@@ -126,13 +121,13 @@
 ---@field elseblock AstElseBlock|nil
 ---@field end_token AstTokenNode
 
----@class AstTestBlock : AstStatement, AstBody, AstScope
+---@class AstTestBlock : AstStatement, AstScope
 ---@field node_type '"testblock"'
 ---@field condition AstExpression
 ---@field if_token AstTokenNode @ for the first test block this is an `if` node_type, otherwise `elseif`
 ---@field then_token AstTokenNode @ position for the failure `jup` instruction
 
----@class AstElseBlock : AstStatement, AstBody, AstScope
+---@class AstElseBlock : AstStatement, AstScope
 ---@field node_type '"elseblock"'
 ---@field else_token AstTokenNode
 
@@ -141,19 +136,19 @@
 ---**but only if there are any `break`s that linked to this loop**
 ---@field linked_breaks AstBreakStat[]|nil
 
----@class AstWhileStat : AstStatement, AstBody, AstScope, AstLoop
+---@class AstWhileStat : AstStatement, AstScope, AstLoop
 ---@field node_type '"whilestat"'
 ---@field condition AstExpression
 ---@field while_token AstTokenNode
 ---@field do_token AstTokenNode @ position for the failure `jmp` instruction
 ---@field end_token AstTokenNode @ position for the loop `jmp` instruction
 
----@class AstDoStat : AstStatement, AstBody, AstScope
+---@class AstDoStat : AstStatement, AstScope
 ---@field node_type '"dostat"'
 ---@field do_token AstTokenNode
 ---@field end_token AstTokenNode
 
----@class AstForNum : AstStatement, AstBody, AstScope, AstLoop
+---@class AstForNum : AstStatement, AstScope, AstLoop
 ---@field node_type '"fornum"'
 ---`var` is referring to a `whole_block = true` local
 ---@field var AstLocalReference
@@ -168,7 +163,7 @@
 ---@field do_token AstTokenNode @ position for the `forprep` instruction
 ---@field end_token AstTokenNode
 
----@class AstForList : AstStatement, AstBody, AstScope, AstLoop
+---@class AstForList : AstStatement, AstScope, AstLoop
 ---@field node_type '"forlist"'
 ---@field name_list AstLocalReference[]
 ---@field exp_list AstExpression[]
@@ -180,7 +175,7 @@
 ---@field do_token AstTokenNode @ position for the `jmp` to `tforcall` instruction
 ---@field end_token AstTokenNode
 
----@class AstRepeatStat : AstStatement, AstBody, AstScope, AstLoop
+---@class AstRepeatStat : AstStatement, AstScope, AstLoop
 ---@field node_type '"repeatstat"'
 ---@field condition AstExpression
 ---@field repeat_token AstTokenNode
@@ -268,7 +263,7 @@
 ---@field linked_inline_iife AstInlineIIFE
 ---@field leave_block_goto AstGotoStat
 
----@class AstLoopstat : AstStatement, AstBody, AstScope, AstLoop
+---@class AstLoopstat : AstStatement, AstScope, AstLoop
 ---@field node_type '"loopstat"'
 ---@field do_jump_back boolean|nil @ when false behaves like a dostat, except breakstat can link to this
 ---@field open_token AstTokenNode
@@ -400,7 +395,7 @@
 
 
 
----@class AstInlineIIFE : AstExpression, AstBody, AstScope
+---@class AstInlineIIFE : AstExpression, AstScope
 ---@field node_type '"inline_iife"'
 ---@field leave_block_label AstLabel
 ---@field linked_inline_iife_retstats AstInlineIIFERetstat[]
@@ -441,9 +436,9 @@
 ---@field num_params '0'
 ---@field eof_token AstTokenNode @ to store trailing blank and comment tokens
 
----@class AstENVScope : AstBody, AstScope
+---@class AstENVScope : AstScope
 ---@field node_type '"env"'
----@field body AstStatement[] @ always empty
+---@field body IndexedLinkedList<nil,AstStatement> @ always empty
 ---@field locals AstLocalDef[] @ always 1 `whole_block = true` local with the name `_ENV`
 ---@field labels AstLabel[] @ always empty
 
