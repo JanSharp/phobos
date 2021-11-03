@@ -309,7 +309,7 @@ local on_close = {
 }
 
 local function fold_const(main)
-  ast_walker(main, nil, on_close)
+  ast_walker.walk_scope(main, {on_close = on_close})
 end
 
 return fold_const

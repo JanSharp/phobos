@@ -4,7 +4,7 @@ local function format(main)
   local out = {}
 
   local add_stat
-  local add_body
+  local add_scope
 
   local add_exp
   local add_exp_list
@@ -96,10 +96,10 @@ local function format(main)
         add_token(node.func_def.vararg_token)
       end
       add_token(node.func_def.close_paren_token)
-      add_body(node.func_def)
+      add_scope(node.func_def)
       add_token(node.func_def.end_token)
     else
-      add_body(node.func_def)
+      add_scope(node.func_def)
     end
   end
 
@@ -262,25 +262,25 @@ local function format(main)
       add_token(node.if_token)
       add_exp(node.condition)
       add_token(node.then_token)
-      add_body(node)
+      add_scope(node)
     end,
     ---@param node AstElseBlock
     elseblock = function(node)
       add_token(node.else_token)
-      add_body(node)
+      add_scope(node)
     end,
     ---@param node AstWhileStat
     whilestat = function(node)
       add_token(node.while_token)
       add_exp(node.condition)
       add_token(node.do_token)
-      add_body(node)
+      add_scope(node)
       add_token(node.end_token)
     end,
     ---@param node AstDoStat
     dostat = function(node)
       add_token(node.do_token)
-      add_body(node)
+      add_scope(node)
       add_token(node.end_token)
     end,
     ---@param node AstForNum
@@ -296,7 +296,7 @@ local function format(main)
         add_exp(node.step)
       end
       add_token(node.do_token)
-      add_body(node)
+      add_scope(node)
       add_token(node.end_token)
     end,
     ---@param node AstForList
@@ -306,13 +306,13 @@ local function format(main)
       add_token(node.in_token)
       add_exp_list(node.exp_list, node.exp_list_comma_tokens)
       add_token(node.do_token)
-      add_body(node)
+      add_scope(node)
       add_token(node.end_token)
     end,
     ---@param node AstRepeatStat
     repeatstat = function(node)
       add_token(node.repeat_token)
-      add_body(node)
+      add_scope(node)
       add_token(node.until_token)
       add_exp(node.condition)
     end,
@@ -395,14 +395,16 @@ local function format(main)
     stats[node.node_type](node)
   end
 
-  ---@param node AstBody[]
-  function add_body(node)
-    for _, sub_node in ipairs(node.body) do
-      add_stat(sub_node)
+  ---@param node AstScope
+  function add_scope(node)
+    local elem = node.body.first
+    while elem do
+      add_stat(elem.value)
+      elem = elem.next
     end
   end
 
-  add_body(main)
+  add_scope(main)
   add_leading(main.eof_token)
   return table.concat(out)
 end

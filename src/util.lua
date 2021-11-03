@@ -186,7 +186,7 @@ do
     end,
     ["inline_iife"] = function(node)
       -- TODO: when refactoring inline_iife add some main position
-      return node.body[1] and get_main_position(node.body[1])
+      return node.body.first and get_main_position(node.body.first.value)
     end,
   }
   function get_main_position(node)

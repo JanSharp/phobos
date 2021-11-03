@@ -1,5 +1,6 @@
 
 local walker = require("ast_walker")
+local ill = require("indexed_linked_list")
 
 local on_open = {
   call = function(node, scope)
@@ -205,5 +206,5 @@ return function(main)
     },
   }
   ifstat.ifs[1].body[1].exp_list[1].ex.ex = get_ref(ifstat.ifs[1], "_ENV")
-  table.insert(main.body, 1, ifstat)
+  ill.prepend(main.body, ifstat)
 end
