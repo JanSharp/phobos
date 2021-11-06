@@ -61,8 +61,8 @@ end
 local get_main_position
 do
   local getter_lut = {
-    ["env"] = function(node)
-      assert(false, "node_type 'env' is purely fake and therefore has no main position")
+    ["env_scope"] = function(node)
+      error("node_type 'env_scope' is purely fake and therefore has no main position")
       return nil
     end,
     ["functiondef"] = function(node)

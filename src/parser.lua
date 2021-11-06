@@ -1022,7 +1022,7 @@ local function main_func(chunk_name)
     source = chunk_name,
     -- fake parent scope of main to provide _ENV upval
     parent_scope = {
-      node_type = "env",
+      node_type = "env_scope",
       body = ill.new(),
       locals = {
         -- Lua emits _ENV as if it's a local in the parent scope

@@ -83,7 +83,7 @@ do
       end
     end
 
-    if scope.node_type ~= "env" then
+    if scope.node_type ~= "env_scope" then
       assert(scope.parent_scope)
       local def = try_get_def(scope.parent_scope, name, ast.get_stat_elem(scope).index)
       if def then

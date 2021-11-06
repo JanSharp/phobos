@@ -4,7 +4,7 @@
 
 ---@alias AstNodeType
 ---special:
----| '"env"'
+---| '"env_scope"'
 ---| '"functiondef"'
 ---| '"token"'
 ---| '"ident"' @ not actually used in the AST, but used to create it
@@ -443,10 +443,10 @@
 ---@field eof_token AstTokenNode @ to store trailing blank and comment tokens
 
 ---@class AstENVScope : AstScope
----@field node_type '"env"'
+---@field node_type '"env_scope"'
 ---always contains exactly 1 ILLNode, the AstMain functiondef. A bit hacky, but AstMain needed a `stat_elem`
 ---@field body IndexedLinkedList<nil,AstStatement>
----@field locals AstLocalDef[] @ always 1 `whole_block = true` local with the name `_ENV`
+---@field locals AstLocalDef[] @ always exactly 1 `whole_block = true` local with the name `_ENV`
 ---@field labels AstLabel[] @ always empty
 
 --------------------------------------------------

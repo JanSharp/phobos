@@ -6,7 +6,7 @@ local ast = require("ast_util")
 local on_open = {
   call = function(node, scope)
     -- add `__phobos__.` to every `require`, which are identified by
-    -- a call where its expression is an index into _ENV the key "require"
+    -- a call where its expression is an index into _ENV with the key "require"
     -- and the call takes at least 1 argument which is a literal string that doesn't start with "__"
     local ex = node.ex
     local arg = node.args[1]
@@ -19,7 +19,7 @@ local on_open = {
           repeat
             def = def.parent_def
           until def.def_type == "local"
-          if def.scope.node_type == "env" then
+          if def.scope.node_type == "env_scope" then
             arg.value = "__phobos__."..arg.value
           end
         end
