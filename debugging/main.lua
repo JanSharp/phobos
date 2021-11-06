@@ -17,7 +17,7 @@ local eval_instruction_count = true
 local eval_byte_count = true
 local create_disassembly = true
 local show_keys_in_disassembly = false
-local load_and_run_compiled_funcs = true
+local load_and_run_compiled_funcs = false
 local run_count = 1
 
 local total_lua_inst_count = 0

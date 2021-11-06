@@ -7,6 +7,7 @@
 ---| '"env"'
 ---| '"functiondef"'
 ---| '"token"'
+---| '"ident"' @ not actually used in the AST, but used to create it
 ---statements:
 ---| '"empty"'
 ---| '"ifstat"'
@@ -31,7 +32,6 @@
 ---| '"local_ref"'
 ---| '"upval_ref"'
 ---| '"index"'
----| '"ident"'
 ---| '"unop"'
 ---| '"binop"'
 ---| '"concat"'
@@ -59,13 +59,22 @@
 ---@field column integer|nil
 ---@field leading Token[]|nil @ `"blank"` and `"comment"` tokens
 
+---uses line, column and leading
+---@class AstIdent : AstNode
+---@field node_type '"ident"'
+---@field value string
+
 ---@class AstStatement : AstNode
+---the element in the statement list of the scope this statement is in
+---@field stat_elem ILLNode<nil,AstStatement>
 
 ---@class AstParenWrapper
 ---@field open_paren_token AstTokenNode
 ---@field close_paren_token AstTokenNode
 
 ---@class AstExpression : AstNode
+---the element in the statement list of the scope of the statement this expression is apart of
+---@field stat_elem ILLNode<nil,AstStatement>
 ---should the expression be forced to evaluate to only one result
 ---caused by the expression being wrapped in `()`
 ---@field force_single_result boolean|nil
@@ -81,6 +90,8 @@
 
 ---@class AstFunctionDef : AstScope, AstNode
 ---@field node_type '"functiondef"'
+---the element in the statement list of the scope of the statement this functiondef is somehow apart of
+---@field stat_elem ILLNode<nil,AstStatement>
 ---@field is_main 'nil' @ overridden by AstMain to be `true`
 ---@field source string
 ---@field is_method boolean @ is it `function foo:bar() end`?
@@ -315,11 +326,6 @@
 ---@field src_has_leading_newline boolean|nil @ for block strings
 ---@field src_pad string|nil @ the `=` chain for block strings
 
----uses line, column and leading
----@class AstIdent : AstExpression
----@field node_type '"ident"'
----@field value string
-
 ---@class AstUnOp : AstExpression
 ---@field node_type '"unop"'
 ---@field op '"not"'|'"-"'|'"#"'
@@ -416,15 +422,15 @@
 ---i think this means it is defined at the start of
 ---the block and lasts for the entire block
 ---@field whole_block boolean|nil
----@field start_before AstStatement|nil
----@field start_after AstStatement|nil
+---@field start_at AstStatement|nil
+---@field start_offset '0'|'1'|nil @ `0` for "start before/at", `1` for "start after"
 ---@field child_defs AstUpvalDef[]
 ---@field refs AstLocalReference[] @ all local references referring to this local
 ---when true this did not exist in source, but
 ---was added because methods implicitly have the `self` parameter
 ---@field src_is_method_self boolean|nil
 
----@class AstMain : AstFunctionDef
+---@class AstMain : AstFunctionDef, AstStatement
 ---@field parent_scope AstENVScope
 ---@field is_main 'true'
 ---@field is_method 'false'
@@ -438,7 +444,8 @@
 
 ---@class AstENVScope : AstScope
 ---@field node_type '"env"'
----@field body IndexedLinkedList<nil,AstStatement> @ always empty
+---always contains exactly 1 ILLNode, the AstMain functiondef. A bit hacky, but AstMain needed a `stat_elem`
+---@field body IndexedLinkedList<nil,AstStatement>
 ---@field locals AstLocalDef[] @ always 1 `whole_block = true` local with the name `_ENV`
 ---@field labels AstLabel[] @ always empty
 

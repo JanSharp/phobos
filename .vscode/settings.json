@@ -29,6 +29,7 @@
     "bytecode",
     "chdir",
     "concat",
+    "concats",
     "consts",
     "currentdir",
     "dostat",
@@ -110,5 +111,8 @@
     "valtypeignore",
     "vararg",
     "whilestat"
+  ],
+  "cSpell.enableFiletypes": [
+    "factorio-changelog"
   ],
 }
