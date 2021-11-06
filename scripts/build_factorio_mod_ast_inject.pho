@@ -87,9 +87,7 @@ return function(main)
       call.ex = (function()
         local index = ast.new_node("index")
         index.stat_elem = retstat_elem
-        local ident_node = ast.new_node("ident")
-        ident_node.value = "_ENV"
-        index.ex = ast.get_ref(testblock, retstat_elem, ident_node, retstat)
+        index.ex = ast.get_ref(testblock, retstat_elem, "_ENV")
         index.suffix = (function()
           local str = ast.new_node("string")
           str.stat_elem = retstat_elem

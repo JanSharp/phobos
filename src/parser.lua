@@ -385,7 +385,8 @@ local function primary_exp(scope, stat_elem)
     }
     return ex
   elseif token.token_type == "ident" then
-    return ast.get_ref(scope, stat_elem, assert_name(), stat_elem)
+    local ident = assert_name()
+    return ast.get_ref(scope, stat_elem, ident.value, ident)
   else
     syntax_error("Unexpected symbol '" .. token.token_type .. "'")
   end
@@ -877,7 +878,8 @@ end
 local function func_name(scope, stat_elem)
   -- func_name -> NAME {‘.’ NAME} [`:' NAME]
 
-  local name = ast.get_ref(scope, stat_elem, assert_name(), stat_elem)
+  local ident = assert_name()
+  local name = ast.get_ref(scope, stat_elem, ident.value, ident)
 
   while token.token_type == "." do
     name = suffixed_lut["."](name)
