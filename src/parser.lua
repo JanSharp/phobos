@@ -49,15 +49,14 @@ local function new_full_node(node_type, use_prev)
 end
 
 --- Check that the current token is an "ident" token, and if so consume and return it.
----@return AstIdent name
-local function assert_name()
+---@return Token ident_token
+local function assert_ident()
   if token.token_type ~= "ident" then
     syntax_error("<name> expected")
   end
-  local name_node = new_full_node("ident")
-  name_node.value = token.value
+  local ident = token
   next_token()
-  return name_node
+  return ident
 end
 
 ---@param use_prev? boolean @ should this node be created using `prev_token` and `prev_leading`? Default: `false`
@@ -234,10 +233,8 @@ local function par_list(scope, stat_elem)
   end
   while true do
     if test_next("ident") then
-      local ident_node = new_full_node("ident", true)
-      ident_node.value = prev_token.value
       local param_def
-      param_def, params[#params+1] = ast.create_local(ident_node, stat_elem)
+      param_def, params[#params+1] = ast.create_local(prev_token, stat_elem)
       param_def.whole_block = true
       scope.locals[#scope.locals+1] = param_def
     elseif token.token_type == "..." then
@@ -385,7 +382,7 @@ local function primary_exp(scope, stat_elem)
     }
     return ex
   elseif token.token_type == "ident" then
-    local ident = assert_name()
+    local ident = assert_ident()
     return ast.get_ref(scope, stat_elem, ident.value, ident)
   else
     syntax_error("Unexpected symbol '" .. token.token_type .. "'")
@@ -398,8 +395,9 @@ local suffixed_lut = {
     node.ex = ex
     node.dot_token = new_token_node()
     next_token() -- skip '.'
-    node.suffix = assert_name()
-    node.suffix.node_type = "string"
+    local ident = assert_ident()
+    node.suffix = ast.copy_node(ident, "string")
+    node.suffix.value = ident.value
     node.suffix.stat_elem = stat_elem
     node.suffix.src_is_ident = true
     return node
@@ -415,8 +413,9 @@ local suffixed_lut = {
     node.ex = ex
     node.colon_token = new_token_node()
     next_token() -- skip ':'
-    node.suffix = assert_name()
-    node.suffix.node_type = "string"
+    local ident = assert_ident()
+    node.suffix = ast.copy_node(ident, "string")
+    node.suffix.value = ident.value
     node.suffix.src_is_ident = true
     node.args, node.args_comma_tokens = func_args(node, scope, stat_elem)
     return node
@@ -637,10 +636,10 @@ local function label_stat(scope, stat_elem)
   next_token() -- skip "::"
   local name_token = new_token_node()
   name_token.value = nil
-  local name = assert_name()
+  local ident = assert_ident()
   local label = new_node("label")
   label.stat_elem = stat_elem
-  label.name = name.value
+  label.name = ident.value
   label.open_token = open_token
   label.name_token = name_token
   label.close_token = new_token_node()
@@ -747,8 +746,7 @@ local function for_list(first_name, scope, stat_elem)
   this_tok.comma_tokens = {}
   while test_next(",") do
     this_tok.comma_tokens[#this_tok.comma_tokens+1] = new_token_node(true)
-    local name = assert_name()
-    this_tok.locals[#this_tok.locals+1], nl[#nl+1] = ast.create_local(name, stat_elem)
+    this_tok.locals[#this_tok.locals+1], nl[#nl+1] = ast.create_local(assert_ident(), stat_elem)
     this_tok.locals[#this_tok.locals].whole_block = true
   end
   this_tok.in_token = new_token_node()
@@ -767,13 +765,13 @@ end
 local function for_stat(scope, stat_elem)
   local for_token = new_token_node()
   next_token() -- skip FOR
-  local first_name = assert_name()
+  local first_ident = assert_ident()
   local t = token.token_type
   local for_node
   if t == "=" then
-    for_node = for_num(first_name, scope, stat_elem)
+    for_node = for_num(first_ident, scope, stat_elem)
   elseif t == "," or t == "in" then
-    for_node = for_list(first_name, scope, stat_elem)
+    for_node = for_list(first_ident, scope, stat_elem)
   else
     syntax_error("'=', ',' or 'in' expected")
   end
@@ -827,7 +825,7 @@ local function if_stat(scope, stat_elem)
 end
 
 local function local_func(local_token, function_token, scope, stat_elem)
-  local name_local, name_ref = ast.create_local(assert_name(), stat_elem)
+  local name_local, name_ref = ast.create_local(assert_ident(), stat_elem)
   scope.locals[#scope.locals+1] = name_local
   return body(function_token, scope, false, stat_elem, function(b)
     b.node_type = "localfunc"
@@ -858,7 +856,7 @@ local function local_stat(local_token, scope, stat_elem)
   end
   local local_defs = {}
   repeat
-    local_defs[#local_defs+1], lhs[#lhs+1] = ast.create_local(assert_name(), stat_elem)
+    local_defs[#local_defs+1], lhs[#lhs+1] = ast.create_local(assert_ident(), stat_elem)
     local_defs[#local_defs].start_at = this_tok
     local_defs[#local_defs].start_offset = 1
   until not test_comma()
@@ -878,7 +876,7 @@ end
 local function func_name(scope, stat_elem)
   -- func_name -> NAME {‘.’ NAME} [`:' NAME]
 
-  local ident = assert_name()
+  local ident = assert_ident()
   local name = ast.get_ref(scope, stat_elem, ident.value, ident)
 
   while token.token_type == "." do
@@ -1004,8 +1002,8 @@ local statement_lut = {
     this_tok.goto_token = new_token_node()
     next_token() -- skip GOTO
     local name_token = new_token_node()
-    local target_name = assert_name()
-    this_tok.target = target_name.value
+    local target_ident = assert_ident()
+    this_tok.target = target_ident.value
     this_tok.target_token = name_token
     return this_tok
   end,

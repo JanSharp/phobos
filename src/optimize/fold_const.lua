@@ -44,9 +44,6 @@ local clear_exp_field_lut = {
     exp.src_has_leading_newline = nil
     exp.src_pad = nil
   end,
-  ["ident"] = function(exp)
-    exp.value = nil
-  end,
   ["unop"] = function(exp)
     exp.op = nil
     exp.ex = nil

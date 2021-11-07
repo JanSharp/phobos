@@ -49,9 +49,6 @@ local exprs = {
   ---@param node AstString
   string = function(node, context)
   end,
-  ---@param node AstIdent
-  ident = function(node, context)
-  end,
   ---@param node AstUnOp
   unop = function(node, context)
     walk_exp(node.ex, context)

@@ -145,9 +145,6 @@ do
         return node.suffix_open_token
       end
     end,
-    ["ident"] = function(node)
-      return node
-    end,
     ["unop"] = function(node)
       return node.op_token
     end,

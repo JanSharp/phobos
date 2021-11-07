@@ -34,15 +34,15 @@ function ast.create_local_def(name)
   }
 end
 
----@param ident_node AstIdent
+---@param ident_token Token
 ---@return AstLocalDef def
 ---@return AstLocalReference ref
-function ast.create_local(ident_node, stat_elem)
-  local local_def = ast.create_local_def(ident_node.value)
+function ast.create_local(ident_token, stat_elem)
+  local local_def = ast.create_local_def(ident_token.value)
 
-  local ref = ast.copy_node(ident_node, "local_ref")
+  local ref = ast.copy_node(ident_token, "local_ref")
   ref.stat_elem = stat_elem
-  ref.name = ident_node.value
+  ref.name = ident_token.value
   ref.reference_def = local_def
   return local_def, ref
 end

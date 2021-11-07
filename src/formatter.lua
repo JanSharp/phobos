@@ -136,11 +136,6 @@ local function format(main)
       add_leading(node)
       add_string(node)
     end,
-    ---@param node AstIdent
-    ident = function(node)
-      add_leading(node)
-      add(node.value)
-    end,
     ---@param node AstUnOp
     unop = function(node)
       add_token(node.op_token)

@@ -7,7 +7,6 @@
 ---| '"env_scope"'
 ---| '"functiondef"'
 ---| '"token"'
----| '"ident"' @ not actually used in the AST, but used to create it
 ---statements:
 ---| '"empty"'
 ---| '"ifstat"'
@@ -58,11 +57,6 @@
 ---@field line integer|nil
 ---@field column integer|nil
 ---@field leading Token[]|nil @ `"blank"` and `"comment"` tokens
-
----uses line, column and leading
----@class AstIdent : AstNode
----@field node_type '"ident"'
----@field value string
 
 ---@class AstStatement : AstNode
 ---the element in the statement list of the scope this statement is in
