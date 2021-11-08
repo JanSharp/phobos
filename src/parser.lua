@@ -294,7 +294,6 @@ local function body(function_token, scope, is_method, stat_elem, on_func_proto_c
   this_node.func_def = func_def_node
   assert_next("(")
   func_def_node.params = par_list(func_def_node, stat_elem)
-  func_def_node.num_params = #func_def_node.params
   func_def_node.close_paren_token = new_token_node()
   assert_next(")")
   func_def_node.body = stat_list(func_def_node)
@@ -1038,11 +1037,9 @@ local function main_func(chunk_name)
     },
     func_protos = {},
     body = false, -- list body before locals
+    is_method = false,
     is_vararg = true, -- main is always vararg
     locals = {}, upvals = {}, labels = {},
-
-    is_method = false,
-    num_params = 0,
   }
   main.parent_scope.locals[1].scope = main.parent_scope
   main.stat_elem = ill.append(main.parent_scope.body, main)

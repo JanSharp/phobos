@@ -1732,7 +1732,7 @@ do
       column_defined = functiondef.function_token and functiondef.function_token.column,
       last_line_defined = functiondef.end_token and functiondef.end_token.line,
       last_column_defined = functiondef.end_token and functiondef.end_token.column,
-      num_params = functiondef.num_params + (functiondef.is_method and 1 or 0),
+      num_params = (#functiondef.params) + (functiondef.is_method and 1 or 0),
       is_vararg = functiondef.is_vararg,
       max_stack_size = nil,
       instructions = {},

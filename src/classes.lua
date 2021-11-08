@@ -93,10 +93,9 @@
 ---@field upvals AstUpvalDef[]
 ---@field is_vararg boolean
 ---@field vararg_token AstTokenNode|nil @ used when `is_vararg == true`
----@field num_params integer @ -- TODO: deprecated by params
 ---@field params AstLocalReference[]
 ---all parameters are `whole_block = true` locals, except vararg
----@field param_comma_tokens AstTokenNode[] @ max length is `num_params - 1`, min `0`
+---@field param_comma_tokens AstTokenNode[] @ max length is `#params - 1`, min `0`
 ---@field open_paren_token AstTokenNode
 ---@field close_paren_token AstTokenNode
 ---@field function_token AstTokenNode @ position for any `closure` instructions
@@ -433,7 +432,6 @@
 ---@field end_line '0'
 ---@field end_column '0'
 ---@field is_vararg 'true'
----@field num_params '0'
 ---@field eof_token AstTokenNode @ to store trailing blank and comment tokens
 
 ---@class AstENVScope : AstScope
