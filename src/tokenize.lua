@@ -79,6 +79,7 @@ local keywords = invert{
 ---@field src_value string @ for non block `string`, `comment` and `number` tokens
 ---@field src_has_leading_newline boolean @ for block `string` and `comment` tokens
 ---@field src_pad string @ the `=` chain for block `string` and `comment` tokens
+---@field leading Token[] @ `blank` and `comment` tokens before this token. Set and used by the parser
 
 ---@param token_type TokenType
 ---@param index number

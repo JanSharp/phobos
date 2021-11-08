@@ -3,11 +3,7 @@ local ast = require("ast_util")
 local invert = require("invert")
 local ill = require("indexed_linked_list")
 
----leading `blank` and `comment` tokens for the current `token`
-local leading ---@type Token[]
 local token ---@type Token
----set by test_next() and therefore also assert_next() and assert_match()
-local prev_leading ---@type Token[]
 ---set by test_next() and therefore also assert_next() and assert_match()
 local prev_token ---@type Token
 local next_token
@@ -37,14 +33,14 @@ local function new_node(node_type, use_prev)
   return ast.new_node(node_type)
 end
 
----create new AstNode using the current `token` and `leading`
+---create new AstNode using the current or previous `token`
 ---@param node_type AstNodeType
----@param use_prev? boolean @ should this node be created using `prev_token` and `prev_leading`?
+---@param use_prev? boolean @ should this node be created using `prev_token`?
 local function new_full_node(node_type, use_prev)
   local node = new_node(node_type, use_prev)
   node.line = (use_prev and prev_token or token).line
   node.column = (use_prev and prev_token or token).column
-  node.leading = (use_prev and prev_leading or leading)
+  node.leading = (use_prev and prev_token or token).leading
   return node
 end
 
@@ -59,7 +55,7 @@ local function assert_ident()
   return ident
 end
 
----@param use_prev? boolean @ should this node be created using `prev_token` and `prev_leading`? Default: `false`
+---@param use_prev? boolean @ should this node be created using `prev_token`?
 ---@param value? string @ Default: `(use_prev and prev_token.token_type or token.token_type)`
 ---@return AstTokenNode
 local function new_token_node(use_prev, value)
@@ -73,7 +69,6 @@ end
 ---@return boolean
 local function test_next(tok)
   if token.token_type == tok then
-    prev_leading = leading
     prev_token = token
     next_token()
     return true
@@ -1039,6 +1034,7 @@ local function main_func(chunk_name)
     body = false, -- list body before locals
     is_method = false,
     is_vararg = true, -- main is always vararg
+    params = {},
     locals = {}, upvals = {}, labels = {},
   }
   main.parent_scope.locals[1].scope = main.parent_scope
@@ -1055,11 +1051,11 @@ local function parse(text,source_name)
 
 
   function next_token()
-    leading = {}
+    local leading = {}
     while true do
       index,token = token_iter(str,index)
       if not token then
-        token = {token_type="eof"}
+        token = {token_type="eof", leading = leading}
         break
       end
       if token.token_type == "comment" then
@@ -1076,6 +1072,7 @@ local function parse(text,source_name)
       elseif token.token_type == "blank" then
         leading[#leading+1] = token
       else
+        token.leading = leading
         break
       end
     end
