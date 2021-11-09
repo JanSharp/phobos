@@ -256,8 +256,10 @@ do
     if pre_block then
       pre_block()
     end
-    for _,stat in ipairs(scope.body) do
-      generate_statement(stat,func)
+    local elem = scope.body.first
+    while elem do
+      generate_statement(elem.value,func)
+      elem = elem.next
     end
     if post_block then
       post_block()
@@ -1725,7 +1727,7 @@ do
       column_defined = functiondef.function_token and functiondef.function_token.column,
       last_line_defined = functiondef.end_token and functiondef.end_token.line,
       last_column_defined = functiondef.end_token and functiondef.end_token.column,
-      num_params = functiondef.num_params + (functiondef.is_method and 1 or 0),
+      num_params = (#functiondef.params) + (functiondef.is_method and 1 or 0),
       is_vararg = functiondef.is_vararg,
       max_stack_size = nil,
       instructions = {},
@@ -1788,8 +1790,8 @@ do
 
     -- TODO: temp until it can be determined if the end of the function is reachable
     do
-      local position = functiondef.body[#functiondef.body]
-        and util.get_main_position(functiondef.body[#functiondef.body])
+      local position = functiondef.body.last
+        and util.get_main_position(functiondef.body.last.value)
       local line = get_last_used_line(func)
       if line and position and position.line > line then
         line = position.line

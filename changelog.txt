@@ -1,5 +1,9 @@
 ---------------------------------------------------------------------------------------------------
 Version: 0.1.2
+  Bugfixes:
+    - Fix error when requiring files using non normalized module names in Factorio
+  Changes:
+    - Set linux lua executable flag [PR#1](https://github.com/JanSharp/phobos/pull/1)
 ---------------------------------------------------------------------------------------------------
 Version: 0.1.1
 Date: 2021-10-25
@@ -14,7 +18,7 @@ Date: 2021-10-25
     - Implement formatting AST to Lua 5.2 source code without making any format changes
       (except concats with parenthesis in the middle of them)
     - Implement compiling AST to Lua 5.2 bytecode
-    - Implement disassembing Lua 5.2 bytecode to AST
+    - Implement disassembling Lua 5.2 bytecode to AST
   Minor Features:
     - Add Phobos Debug Symbols v0 for use by third party tools (not Lua itself)
   Features:

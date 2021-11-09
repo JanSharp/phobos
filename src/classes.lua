@@ -4,7 +4,7 @@
 
 ---@alias AstNodeType
 ---special:
----| '"env"'
+---| '"env_scope"'
 ---| '"functiondef"'
 ---| '"token"'
 ---statements:
@@ -31,7 +31,6 @@
 ---| '"local_ref"'
 ---| '"upval_ref"'
 ---| '"index"'
----| '"ident"'
 ---| '"unop"'
 ---| '"binop"'
 ---| '"concat"'
@@ -59,13 +58,27 @@
 ---@field column integer|nil
 ---@field leading Token[]|nil @ `"blank"` and `"comment"` tokens
 
+---uses line, column and leading\
+---purely describing the syntax
+---@class AstTokenNode : AstNode
+---@field node_type '"token"'
+---some token nodes are purely used for their line, column and leading data\
+---specifically those with dynamic values where their value is already stored
+---on the parent/main node\
+---each of these have a comment noting that their `value` is `nil`
+---@field value string|nil
+
 ---@class AstStatement : AstNode
+---the element in the statement list of the scope this statement is in
+---@field stat_elem ILLNode<nil,AstStatement>
 
 ---@class AstParenWrapper
 ---@field open_paren_token AstTokenNode
 ---@field close_paren_token AstTokenNode
 
 ---@class AstExpression : AstNode
+---the element in the statement list of the scope of the statement this expression is apart of
+---@field stat_elem ILLNode<nil,AstStatement>
 ---should the expression be forced to evaluate to only one result
 ---caused by the expression being wrapped in `()`
 ---@field force_single_result boolean|nil
@@ -73,19 +86,16 @@
 ---the first one in the list/first one you encounter when processing the data
 ---@field src_paren_wrappers AstParenWrapper[]|nil
 
--- since every scope inherits AstNode and AstBody, AstScope now does as well
-
----@class AstScope : AstNode, AstBody
+---@class AstScope : AstNode
 ---@field parent_scope AstScope|nil @ `nil` for the top level scope, the main function
-
-
----@class AstBody
----@field body AstStatement[]
+---@field body IndexedLinkedList<nil,AstStatement>
 ---@field locals AstLocalDef[]
 ---@field labels AstLabel[]
 
----@class AstFunctionDef : AstBody, AstScope, AstNode
+---@class AstFunctionDef : AstScope, AstNode
 ---@field node_type '"functiondef"'
+---the element in the statement list of the scope of the statement this functiondef is somehow apart of
+---@field stat_elem ILLNode<nil,AstStatement>
 ---@field is_main 'nil' @ overridden by AstMain to be `true`
 ---@field source string
 ---@field is_method boolean @ is it `function foo:bar() end`?
@@ -93,10 +103,9 @@
 ---@field upvals AstUpvalDef[]
 ---@field is_vararg boolean
 ---@field vararg_token AstTokenNode|nil @ used when `is_vararg == true`
----@field num_params integer @ -- TODO: deprecated by params
 ---@field params AstLocalReference[]
 ---all parameters are `whole_block = true` locals, except vararg
----@field param_comma_tokens AstTokenNode[] @ max length is `num_params - 1`, min `0`
+---@field param_comma_tokens AstTokenNode[] @ max length is `#params - 1`, min `0`
 ---@field open_paren_token AstTokenNode
 ---@field close_paren_token AstTokenNode
 ---@field function_token AstTokenNode @ position for any `closure` instructions
@@ -111,28 +120,19 @@
 ---@field node_type '"empty"'
 ---@field semi_colon_token AstTokenNode
 
----Like an empty node, no-op, purely describing the syntax
----@class AstTokenNode : AstNode
----@field node_type '"token"'
----some token nodes are purely used for their line, column and leading data\
----specifically those with dynamic values where their value is already stored
----on the parent/main node\
----each of these have a comment noting that their `value` is `nil`
----@field value string|nil
-
 ---@class AstIfStat : AstStatement
 ---@field node_type '"ifstat"'
 ---@field ifs AstTestBlock[]
 ---@field elseblock AstElseBlock|nil
 ---@field end_token AstTokenNode
 
----@class AstTestBlock : AstStatement, AstBody, AstScope
+---@class AstTestBlock : AstStatement, AstScope
 ---@field node_type '"testblock"'
 ---@field condition AstExpression
 ---@field if_token AstTokenNode @ for the first test block this is an `if` node_type, otherwise `elseif`
 ---@field then_token AstTokenNode @ position for the failure `jup` instruction
 
----@class AstElseBlock : AstStatement, AstBody, AstScope
+---@class AstElseBlock : AstStatement, AstScope
 ---@field node_type '"elseblock"'
 ---@field else_token AstTokenNode
 
@@ -141,19 +141,19 @@
 ---**but only if there are any `break`s that linked to this loop**
 ---@field linked_breaks AstBreakStat[]|nil
 
----@class AstWhileStat : AstStatement, AstBody, AstScope, AstLoop
+---@class AstWhileStat : AstStatement, AstScope, AstLoop
 ---@field node_type '"whilestat"'
 ---@field condition AstExpression
 ---@field while_token AstTokenNode
 ---@field do_token AstTokenNode @ position for the failure `jmp` instruction
 ---@field end_token AstTokenNode @ position for the loop `jmp` instruction
 
----@class AstDoStat : AstStatement, AstBody, AstScope
+---@class AstDoStat : AstStatement, AstScope
 ---@field node_type '"dostat"'
 ---@field do_token AstTokenNode
 ---@field end_token AstTokenNode
 
----@class AstForNum : AstStatement, AstBody, AstScope, AstLoop
+---@class AstForNum : AstStatement, AstScope, AstLoop
 ---@field node_type '"fornum"'
 ---`var` is referring to a `whole_block = true` local
 ---@field var AstLocalReference
@@ -168,7 +168,7 @@
 ---@field do_token AstTokenNode @ position for the `forprep` instruction
 ---@field end_token AstTokenNode
 
----@class AstForList : AstStatement, AstBody, AstScope, AstLoop
+---@class AstForList : AstStatement, AstScope, AstLoop
 ---@field node_type '"forlist"'
 ---@field name_list AstLocalReference[]
 ---@field exp_list AstExpression[]
@@ -180,7 +180,7 @@
 ---@field do_token AstTokenNode @ position for the `jmp` to `tforcall` instruction
 ---@field end_token AstTokenNode
 
----@class AstRepeatStat : AstStatement, AstBody, AstScope, AstLoop
+---@class AstRepeatStat : AstStatement, AstScope, AstLoop
 ---@field node_type '"repeatstat"'
 ---@field condition AstExpression
 ---@field repeat_token AstTokenNode
@@ -207,15 +207,15 @@
 ---@class AstLabel : AstStatement
 ---@field node_type '"label"'
 ---@field name string
----@field name_token AstTokenNode @ it's value is `nil`
+---@field name_token AstTokenNode @ its value is `nil`
 ---@field open_token AstTokenNode @ opening `::`
 ---@field close_token AstTokenNode @ closing `::`
 ---@field linked_gotos AstGotoStat[]|nil @ evaluated by the jump linker. not `nil` after successful linking
 
 ---@class AstRetStat : AstStatement
 ---@field node_type '"retstat"'
----@field return_token AstTokenNode @ position for the `return` instruction
 ---@field exp_list AstExpression[]|nil @ `nil` = no return values
+---@field return_token AstTokenNode @ position for the `return` instruction
 ---@field exp_list_comma_tokens AstTokenNode[]
 ---@field semi_colon_token AstTokenNode|nil @ trailing `;`. `nil` = no semi colon
 
@@ -226,8 +226,8 @@
 
 ---@class AstGotoStat : AstStatement
 ---@field node_type '"gotostat"'
----@field target string @ name of the label to jump to
----@field target_token AstTokenNode @ it's value is `nil`
+---@field target_name string @ name of the label to jump to
+---@field target_token AstTokenNode @ its value is `nil`
 ---@field goto_token AstTokenNode @ position for the goto `jmp` instruction
 ---@field linked_label AstLabel|nil @ evaluated by the jump linker. not `nil` after successful linking
 
@@ -252,9 +252,9 @@
 ---@class AstAssignment : AstStatement
 ---@field node_type '"assignment"'
 ---@field lhs AstExpression[]
+---@field rhs AstExpression[]
 ---@field lhs_comma_tokens AstTokenNode[]
 ---@field eq_token AstTokenNode
----@field rhs AstExpression[]
 ---@field rhs_comma_tokens AstTokenNode[]
 
 
@@ -268,7 +268,7 @@
 ---@field linked_inline_iife AstInlineIIFE
 ---@field leave_block_goto AstGotoStat
 
----@class AstLoopstat : AstStatement, AstBody, AstScope, AstLoop
+---@class AstLoopstat : AstStatement, AstScope, AstLoop
 ---@field node_type '"loopstat"'
 ---@field do_jump_back boolean|nil @ when false behaves like a dostat, except breakstat can link to this
 ---@field open_token AstTokenNode
@@ -319,11 +319,6 @@
 ---@field src_value string|nil @ for non block strings
 ---@field src_has_leading_newline boolean|nil @ for block strings
 ---@field src_pad string|nil @ the `=` chain for block strings
-
----uses line, column and leading
----@class AstIdent : AstExpression
----@field node_type '"ident"'
----@field value string
 
 ---@class AstUnOp : AstExpression
 ---@field node_type '"unop"'
@@ -400,7 +395,7 @@
 
 
 
----@class AstInlineIIFE : AstExpression, AstBody, AstScope
+---@class AstInlineIIFE : AstExpression, AstScope
 ---@field node_type '"inline_iife"'
 ---@field leave_block_label AstLabel
 ---@field linked_inline_iife_retstats AstInlineIIFERetstat[]
@@ -421,15 +416,15 @@
 ---i think this means it is defined at the start of
 ---the block and lasts for the entire block
 ---@field whole_block boolean|nil
----@field start_before AstStatement|nil
----@field start_after AstStatement|nil
+---@field start_at AstStatement|nil
+---@field start_offset '0'|'1'|nil @ `0` for "start before/at", `1` for "start after"
 ---@field child_defs AstUpvalDef[]
 ---@field refs AstLocalReference[] @ all local references referring to this local
 ---when true this did not exist in source, but
 ---was added because methods implicitly have the `self` parameter
 ---@field src_is_method_self boolean|nil
 
----@class AstMain : AstFunctionDef
+---@class AstMain : AstFunctionDef, AstStatement
 ---@field parent_scope AstENVScope
 ---@field is_main 'true'
 ---@field is_method 'false'
@@ -438,13 +433,13 @@
 ---@field end_line '0'
 ---@field end_column '0'
 ---@field is_vararg 'true'
----@field num_params '0'
 ---@field eof_token AstTokenNode @ to store trailing blank and comment tokens
 
----@class AstENVScope : AstBody, AstScope
----@field node_type '"env"'
----@field body AstStatement[] @ always empty
----@field locals AstLocalDef[] @ always 1 `whole_block = true` local with the name `_ENV`
+---@class AstENVScope : AstScope
+---@field node_type '"env_scope"'
+---always contains exactly 1 ILLNode, the AstMain functiondef. A bit hacky, but AstMain needed a `stat_elem`
+---@field body IndexedLinkedList<nil,AstStatement>
+---@field locals AstLocalDef[] @ always exactly 1 `whole_block = true` local with the name `_ENV`
 ---@field labels AstLabel[] @ always empty
 
 --------------------------------------------------

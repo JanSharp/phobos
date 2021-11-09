@@ -1,5 +1,5 @@
 
-local walker = require("ast_walker")
+local ast_walker = require("ast_walker")
 
 local on_open = {
   ---@param node AstCall
@@ -55,10 +55,10 @@ local on_open = {
         end
       end
 
-      if inner_func.num_params > 0 then
+      if #inner_func.params > 0 then
         local param_local_defs = {}
         local param_local_refs = {}
-        for i = 1, inner_func.num_params do
+        for i = 1, #inner_func.params do
           local local_def = inner_func.locals[i]
           local_def.whole_block = nil
           param_local_defs[i] = local_def
@@ -156,7 +156,7 @@ local on_open = {
     node.leave_block_goto = {
       node_type = "gotostat",
       goto_token = node.return_token, -- how to deal with token values in this kind of a scenario?
-      target = "(leave inline iife block)",
+      target_name = "(leave inline iife block)",
       linked_label = scope.leave_block_label,
     }
     scope.leave_block_label.linked_gotos[#scope.leave_block_label.linked_gotos+1] = node.leave_block_goto
@@ -172,7 +172,7 @@ local on_open = {
 }
 
 local function create_inline_iife(main)
-  walker(main, on_open, nil)
+  ast_walker.walk_scope(main, {on_open = on_open})
 end
 
 return create_inline_iife
