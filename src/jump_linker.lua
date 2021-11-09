@@ -38,7 +38,7 @@ local function link(func)
       -- solve backwards references
       for j = 1, visible_label_count do
         local label = label_stack[j]
-        if label.name == goto_stat.target then
+        if label.name == goto_stat.target_name then
           goto_stat.linked_label = label
           label.linked_gotos[#label.linked_gotos+1] = goto_stat
           break
@@ -72,7 +72,10 @@ local function link(func)
 
       -- solve forward references
       for _, go in ipairs(gotos) do
-        if (not go.stat.linked_label) and go.lowest_level == level and go.stat.target == label_stat.name then
+        if (not go.stat.linked_label)
+          and go.lowest_level == level
+          and go.stat.target_name == label_stat.name
+        then
           if not latest_new_local_stat_elem
             or go.lowest_level_stat_elem.index > latest_new_local_stat_elem.index
             or is_end_of_body()
@@ -84,7 +87,7 @@ local function link(func)
             local local_ref = local_stat.node_type == "localfunc" and local_stat.name
               or local_stat.node_type == "localstat" and local_stat.lhs[#local_stat.lhs]
               or error("Impossible `local_stat.node_type` '"..local_stat.node_type.."'.")
-            error("Unable to jump from the 'goto' `"..go.stat.target.."`"..get_position(go.stat)
+            error("Unable to jump from the 'goto' `"..go.stat.target_name.."`"..get_position(go.stat)
               .." to the label"..get_position(label_stat)
               .." because it is in the scope of the local `"
               ..local_ref.name.."`"..get_position(local_ref).."."
@@ -158,7 +161,7 @@ local function link(func)
   -- all gotos without a label at the end of the function are unlinked and an error
   for _, go in ipairs(gotos) do
     if not go.stat.linked_label then
-      error("No visible label `"..go.stat.target.."` for 'goto'"..get_position(go.stat)..".")
+      error("No visible label `"..go.stat.target_name.."` for 'goto'"..get_position(go.stat)..".")
     end
   end
 end

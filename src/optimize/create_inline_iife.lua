@@ -156,7 +156,7 @@ local on_open = {
     node.leave_block_goto = {
       node_type = "gotostat",
       goto_token = node.return_token, -- how to deal with token values in this kind of a scenario?
-      target = "(leave inline iife block)",
+      target_name = "(leave inline iife block)",
       linked_label = scope.leave_block_label,
     }
     scope.leave_block_label.linked_gotos[#scope.leave_block_label.linked_gotos+1] = node.leave_block_goto

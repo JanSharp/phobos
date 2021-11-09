@@ -363,7 +363,7 @@ local function format(main)
     gotostat = function(node)
       add_token(node.goto_token)
       add_leading(node.target_token) -- value is nil
-      add(node.target)
+      add(node.target_name)
     end,
     ---@param node AstAssignment
     assignment = function(node)

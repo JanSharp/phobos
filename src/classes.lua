@@ -58,6 +58,16 @@
 ---@field column integer|nil
 ---@field leading Token[]|nil @ `"blank"` and `"comment"` tokens
 
+---uses line, column and leading\
+---purely describing the syntax
+---@class AstTokenNode : AstNode
+---@field node_type '"token"'
+---some token nodes are purely used for their line, column and leading data\
+---specifically those with dynamic values where their value is already stored
+---on the parent/main node\
+---each of these have a comment noting that their `value` is `nil`
+---@field value string|nil
+
 ---@class AstStatement : AstNode
 ---the element in the statement list of the scope this statement is in
 ---@field stat_elem ILLNode<nil,AstStatement>
@@ -109,15 +119,6 @@
 ---@class AstEmpty : AstStatement
 ---@field node_type '"empty"'
 ---@field semi_colon_token AstTokenNode
-
----Like an empty node, no-op, purely describing the syntax
----@class AstTokenNode : AstNode
----@field node_type '"token"'
----some token nodes are purely used for their line, column and leading data\
----specifically those with dynamic values where their value is already stored
----on the parent/main node\
----each of these have a comment noting that their `value` is `nil`
----@field value string|nil
 
 ---@class AstIfStat : AstStatement
 ---@field node_type '"ifstat"'
@@ -206,15 +207,15 @@
 ---@class AstLabel : AstStatement
 ---@field node_type '"label"'
 ---@field name string
----@field name_token AstTokenNode @ it's value is `nil`
+---@field name_token AstTokenNode @ its value is `nil`
 ---@field open_token AstTokenNode @ opening `::`
 ---@field close_token AstTokenNode @ closing `::`
 ---@field linked_gotos AstGotoStat[]|nil @ evaluated by the jump linker. not `nil` after successful linking
 
 ---@class AstRetStat : AstStatement
 ---@field node_type '"retstat"'
----@field return_token AstTokenNode @ position for the `return` instruction
 ---@field exp_list AstExpression[]|nil @ `nil` = no return values
+---@field return_token AstTokenNode @ position for the `return` instruction
 ---@field exp_list_comma_tokens AstTokenNode[]
 ---@field semi_colon_token AstTokenNode|nil @ trailing `;`. `nil` = no semi colon
 
@@ -225,8 +226,8 @@
 
 ---@class AstGotoStat : AstStatement
 ---@field node_type '"gotostat"'
----@field target string @ name of the label to jump to
----@field target_token AstTokenNode @ it's value is `nil`
+---@field target_name string @ name of the label to jump to
+---@field target_token AstTokenNode @ its value is `nil`
 ---@field goto_token AstTokenNode @ position for the goto `jmp` instruction
 ---@field linked_label AstLabel|nil @ evaluated by the jump linker. not `nil` after successful linking
 
@@ -251,9 +252,9 @@
 ---@class AstAssignment : AstStatement
 ---@field node_type '"assignment"'
 ---@field lhs AstExpression[]
+---@field rhs AstExpression[]
 ---@field lhs_comma_tokens AstTokenNode[]
 ---@field eq_token AstTokenNode
----@field rhs AstExpression[]
 ---@field rhs_comma_tokens AstTokenNode[]
 
 

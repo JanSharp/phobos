@@ -996,8 +996,9 @@ local statement_lut = {
     this_tok.goto_token = new_token_node()
     next_token() -- skip GOTO
     local name_token = new_token_node()
+    name_token.value = nil
     local target_ident = assert_ident()
-    this_tok.target = target_ident.value
+    this_tok.target_name = target_ident.value
     this_tok.target_token = name_token
     return this_tok
   end,
