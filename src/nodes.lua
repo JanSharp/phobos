@@ -678,4 +678,12 @@ function nodes.new_inline_iife()
   error("-- TODO: refactor inline iife")
 end
 
+-- util
+
+function nodes.set_position(node, token)
+  node.line = token.line
+  node.column = token.column
+  node.leading = token.leading
+end
+
 return nodes

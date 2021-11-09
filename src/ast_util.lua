@@ -1,4 +1,6 @@
 
+local nodes = require("nodes")
+
 local ast = {}
 
 ---@param node_type AstNodeType
@@ -123,24 +125,24 @@ do
     local def = try_get_def(scope, name, stat_elem.index)
     if def then
       -- `local_ref` or `upval_ref`
-      local ref = ast.copy_node(node_for_position, def.def_type.."_ref")
-      ref.stat_elem = stat_elem
-      ref.reference_def = def
-      ref.name = name
+      local ref = (def.def_type == "local" and nodes.new_local_ref and nodes.new_upval_ref)(
+        stat_elem,
+        name,
+        def
+      )
       def.refs[#def.refs+1] = ref
       return ref
     end
 
-    local suffix = ast.copy_node(node_for_position, "string")
-    suffix.stat_elem = stat_elem
-    suffix.value = name
-    suffix.src_is_ident = true
+    local suffix = nodes.new_string(stat_elem, name, true)
+    nodes.set_position(suffix, node_for_position)
 
-    local node = ast.new_node("index")
-    node.stat_elem = stat_elem
-    node.ex = ast.get_ref(scope, stat_elem, "_ENV", node_for_position)
-    node.suffix = suffix
-    node.src_ex_did_not_exist = true
+    local node = nodes.new_index(
+      stat_elem,
+      ast.get_ref(scope, stat_elem, "_ENV", node_for_position),
+      suffix,
+      true
+    )
 
     return node
   end
