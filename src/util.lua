@@ -61,8 +61,8 @@ end
 local get_main_position
 do
   local getter_lut = {
-    ["env"] = function(node)
-      assert(false, "node_type 'env' is purely fake and therefore has no main position")
+    ["env_scope"] = function(node)
+      error("node_type 'env_scope' is purely fake and therefore has no main position")
       return nil
     end,
     ["functiondef"] = function(node)
@@ -145,9 +145,6 @@ do
         return node.suffix_open_token
       end
     end,
-    ["ident"] = function(node)
-      return node
-    end,
     ["unop"] = function(node)
       return node.op_token
     end,
@@ -186,7 +183,7 @@ do
     end,
     ["inline_iife"] = function(node)
       -- TODO: when refactoring inline_iife add some main position
-      return node.body[1] and get_main_position(node.body[1])
+      return node.body.first and get_main_position(node.body.first.value)
     end,
   }
   function get_main_position(node)

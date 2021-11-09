@@ -25,6 +25,44 @@ local total_pho_inst_count = 0
 local total_lua_byte_count = 0
 local total_pho_byte_count = 0
 
+-- local ill = require("indexed_linked_list")
+
+-- local list = ill.new()
+
+-- ill.append(list, "one")
+-- ill.append(list, "two")
+-- ill.append(list, "three")
+-- ill.append(list, "four")
+
+-- local function pretty_print()
+--   local out = {}
+--   for i = list.first.index, list.last.index do
+--     if list.lookup[i] then
+--       out[#out+1] = list.lookup[i].value
+--     else
+--       out[#out+1] = "."
+--     end
+--     out[#out+1] = " "
+--   end
+--   print(table.concat(out))
+-- end
+
+-- local last_index = list.last.index
+-- local i = 0
+-- local target = list.first.next
+-- repeat
+--   pretty_print()
+--   i = i + 1
+--   -- ill.insert_before(list, list.last.prev, i)
+--   -- ill.insert_after(list, list.first.next, i)
+--   target = ill.insert_after(list, target, i)
+-- until list.last.index ~= last_index
+
+-- print()
+-- pretty_print()
+
+-- do return end
+
 if not Path.new("temp"):exists() then
   lfs.mkdir("temp")
 end
