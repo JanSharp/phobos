@@ -873,13 +873,13 @@ do
   end
 
   local function generate_call_node(node,num_results,func,regs,is_tail_call)
-    if node.node_type == "call" then
+    if not node.is_selfcall then
       generate_call(node, num_results, func, regs, is_tail_call, function()
         local func_reg = create_temp_reg(func)
         generate_expr(node.ex,1,func,{func_reg})
         return func_reg
       end)
-    elseif node.node_type == "selfcall" then
+    else
       generate_call(node, num_results, func, regs, is_tail_call, function()
         local func_reg = create_temp_reg(func)
         local first_arg_reg = create_temp_reg(func, get_top(func) + 2)
@@ -1093,7 +1093,6 @@ do
       }
     end,
     call = generate_call_node,
-    selfcall = generate_call_node,
     index = function(expr,num_results,func,regs)
       local ex_reg, is_upval = upval_or_local_or_fetch(expr.ex,func)
       local suffix_reg, suffix_is_const = const_or_local_or_fetch(expr.suffix,func)
@@ -1400,10 +1399,6 @@ do
       -- evaluate as a call expression for zero results
       generate_expr(stat,0,func)
     end,
-    selfcall = function(stat,func)
-      -- evaluate as a selfcall expression for zero results
-      generate_expr(stat,0,func)
-    end,
     forlist = function(stat,func)
       local regs = {}
       local jump, jump_pc
@@ -1547,10 +1542,7 @@ do
       if stat.exp_list and stat.exp_list[1] then
         if func.use_tail_calls
           and (not stat.exp_list[2])
-          and (
-            stat.exp_list[1].node_type == "call"
-            or stat.exp_list[1].node_type == "selfcall"
-          )
+          and (stat.exp_list[1].node_type == "call")
         then
           first_reg = create_temp_reg(func)
           generate_call_node(stat.exp_list[1], -1, func, {[-1] = first_reg}, true)

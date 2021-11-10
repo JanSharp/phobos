@@ -47,7 +47,7 @@ local function is_const_node_type(node_type)
   return const_node_type_lut[node_type]
 end
 
-local vararg_node_type_lut = invert{"vararg","call","selfcall"}
+local vararg_node_type_lut = invert{"vararg", "call"}
 local function is_vararg_node(node)
   return vararg_node_type_lut[node.node_type] and (not node.force_single_result)
 end
@@ -127,11 +127,12 @@ do
     ["gotostat"] = function(node)
       return node.goto_token
     end,
-    ["selfcall"] = function(node)
-      return node.colon_token
-    end,
     ["call"] = function(node)
-      return node.open_paren_token
+      if node.is_selfcall then
+        return node.colon_token
+      else
+        return node.open_paren_token
+      end
     end,
     ["assignment"] = function(node)
       return node.eq_token

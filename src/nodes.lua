@@ -416,31 +416,6 @@ function nodes.new_gotostat(
 end
 
 ---expression or statement
-function nodes.new_selfcall(
-  stat_elem,
-  ex,
-  suffix,
-  args,
-  args_comma_tokens,
-  colon_token,
-  open_paren_token,
-  close_paren_token,
-  force_single_result,
-  src_paren_wrappers
-)
-  local node = stat_base(new_node("selfcall"), stat_elem)
-  expr_base(node, stat_elem, force_single_result, src_paren_wrappers)
-  node.ex = assert(ex)
-  node.suffix = assert(suffix)
-  node.args = args or {}
-  node.args_comma_tokens = args_comma_tokens
-  node.colon_token = colon_token
-  node.open_paren_token = open_paren_token
-  node.close_paren_token = close_paren_token
-  return node
-end
-
----expression or statement
 function nodes.new_call(
   stat_elem,
   ex,

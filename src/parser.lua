@@ -314,7 +314,7 @@ local function exp_list(scope, stat_elem)
 end
 
 --- Function Arguments
----@param node AstCall|AstSelfCall
+---@param node AstCall
 ---@param scope AstScope
 ---@return Token[]
 local function func_args(node, scope, stat_elem)
@@ -404,7 +404,8 @@ local suffixed_lut = {
     return node
   end,
   [":"] = function(ex, scope, stat_elem)
-    local node = new_node("selfcall")
+    local node = new_node("call")
+    node.is_selfcall = true
     node.ex = ex
     node.colon_token = new_token_node()
     next_token() -- skip ':'
@@ -905,7 +906,7 @@ local function expr_stat(scope, stat_elem)
     return assignment({first_exp}, {}, scope, stat_elem)
   else
     -- stat -> func
-    if first_exp.node_type == "call" or first_exp.node_type == "selfcall" then
+    if first_exp.node_type == "call" then
       return first_exp
     else
       syntax_error("Unexpected <exp>")

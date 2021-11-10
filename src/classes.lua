@@ -24,7 +24,6 @@
 ---| '"retstat"'
 ---| '"breakstat"'
 ---| '"gotostat"'
----| '"selfcall"' @ expression or statement
 ---| '"call"' @ expression or statement
 ---| '"assignment"'
 ---expressions:
@@ -235,21 +234,16 @@
 ---@field goto_token AstTokenNode @ position for the goto `jmp` instruction
 ---@field linked_label AstLabel|nil @ evaluated by the jump linker. not `nil` after successful linking
 
----@class AstSelfCall : AstStatement, AstExpression
----@field node_type '"selfcall"'
+---@class AstCall : AstStatement, AstExpression
+---@field node_type '"call"'
+---@field is_selfcall boolean
 ---@field ex AstExpression
----@field suffix AstString @ function name. `src_is_ident` is always `true`
+---only used if `is_selfcall == true`\
+---function name. `src_is_ident` is always `true`
+---@field suffix AstString
 ---@field args AstExpression[]
 ---@field args_comma_tokens AstTokenNode[]
 ---@field colon_token AstTokenNode @ position for the `self` instruction
----@field open_paren_token AstTokenNode|nil @ position for the `call` instruction
----@field close_paren_token AstTokenNode|nil @ position for `move` instructions moving out of temp regs
-
----@class AstCall : AstStatement, AstExpression
----@field node_type '"call"'
----@field ex AstExpression
----@field args AstExpression[]
----@field args_comma_tokens AstTokenNode[]
 ---@field open_paren_token AstTokenNode|nil @ position for the `call` instruction
 ---@field close_paren_token AstTokenNode|nil @ position for `move` instructions moving out of temp regs
 
@@ -315,7 +309,7 @@
 ---if it was just an identifier in source.\
 ---Used in record field keys for table constructors\
 ---And when indexing with literal identifiers\
----Always `true` for AstSelfCall `suffix`
+---Always `true` for AstCall `suffix` (where `is_selfcall == true`)
 ---@field src_is_ident boolean|nil
 ---used when `src_is_ident` is falsy
 ---@field src_is_block_str boolean|nil
