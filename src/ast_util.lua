@@ -125,11 +125,12 @@ do
     local def = try_get_def(scope, name, stat_elem.index)
     if def then
       -- `local_ref` or `upval_ref`
-      local ref = (def.def_type == "local" and nodes.new_local_ref and nodes.new_upval_ref)(
+      local ref = (def.def_type == "local" and nodes.new_local_ref or nodes.new_upval_ref)(
         stat_elem,
         name,
         def
       )
+      nodes.set_position(ref, node_for_position)
       def.refs[#def.refs+1] = ref
       return ref
     end
