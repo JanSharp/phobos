@@ -114,9 +114,10 @@ end
 --- Read a list of Statements
 --- `stat_list -> { stat [';'] }`
 ---@param scope AstScope
----@return IndexedLinkedList<nil,AstStatement>
+---@return AstStatementList
 local function stat_list(scope)
   local sl = ill.new()
+  sl.scope = scope
   local stop
   while not block_follow(true) do
     if token.token_type == "eof" then
@@ -259,7 +260,7 @@ local function body(function_token, scope, is_method, stat_elem, on_func_proto_c
   -- body -> `(` param_list `)`  block END
   local parent_scope = scope
   -- ---@narrow scope AstScope|AstFunctionDef
-  while not scope.func_protos do
+  while scope.node_type ~= "functiondef" do
     scope = scope.parent_scope
   end
   -- ---@narrow scope AstFunctionDef
@@ -1017,6 +1018,7 @@ local function main_func(chunk_name)
     parent_scope = {
       node_type = "env_scope",
       body = ill.new(),
+      child_scopes = {},
       locals = {
         -- Lua emits _ENV as if it's a local in the parent scope
         -- of the file. I'll probably change this one day to be
@@ -1031,6 +1033,7 @@ local function main_func(chunk_name)
       },
       labels = {},
     },
+    child_scopes = {},
     func_protos = {},
     body = false, -- list body before locals
     is_method = false,
@@ -1040,6 +1043,7 @@ local function main_func(chunk_name)
   }
   main.parent_scope.locals[1].scope = main.parent_scope
   main.stat_elem = ill.append(main.parent_scope.body, main)
+  main.parent_scope.body.scope = main.parent_scope
 
   main.body = stat_list(main)
   main.eof_token = new_token_node()

@@ -41,11 +41,19 @@ end
 local function scope_base(
   node,
   body,
+  parent_scope,
+  child_scopes,
   locals,
   labels
 )
   assert(node)
-  node.body = body or ill.new()
+  node.body = body or (function()
+    local list = ill.new()
+    list.scope = parent_scope
+    return list
+  end)()
+  node.parent_scope = parent_scope
+  node.child_scopes = child_scopes or {}
   node.locals = locals or {}
   node.labels = labels or {}
   return node
@@ -73,11 +81,13 @@ end
 
 function nodes.new_env_scope(
   body,
+  parent_scope,
+  child_scopes,
   locals,
   labels
 )
   local node = new_node("env_scope")
-  scope_base(node, body, locals, labels)
+  scope_base(node, body, parent_scope, child_scopes, locals, labels)
   return node
 end
 
@@ -85,6 +95,8 @@ function nodes.new_functiondef(
   stat_elem,
   source,
   body,
+  parent_scope,
+  child_scopes,
   locals,
   labels,
   is_method,
@@ -101,7 +113,7 @@ function nodes.new_functiondef(
   end_token
 )
   local node = new_node("functiondef")
-  scope_base(node, body, locals, labels)
+  scope_base(node, body, parent_scope, child_scopes, locals, labels)
   node.stat_elem = assert(stat_elem)
   node.source = assert(source)
   node.is_method = is_method or false
@@ -153,13 +165,15 @@ function nodes.new_testblock(
   stat_elem,
   condition,
   body,
+  parent_scope,
+  child_scopes,
   locals,
   labels,
   if_token,
   then_token
 )
   local node = stat_base(new_node("testblock"), stat_elem)
-  scope_base(node, body, locals, labels)
+  scope_base(node, body, parent_scope, child_scopes, locals, labels)
   node.condition = assert(condition)
   node.if_token = if_token
   node.then_token = then_token
@@ -169,12 +183,14 @@ end
 function nodes.new_elseblock(
   stat_elem,
   body,
+  parent_scope,
+  child_scopes,
   locals,
   labels,
   else_token
 )
   local node = stat_base(new_node("elseblock"), stat_elem)
-  scope_base(node, body, locals, labels)
+  scope_base(node, body, parent_scope, child_scopes, locals, labels)
   node.else_token = else_token
   return node
 end
@@ -183,6 +199,8 @@ function nodes.new_whilestat(
   stat_elem,
   condition,
   body,
+  parent_scope,
+  child_scopes,
   locals,
   labels,
   linked_breaks,
@@ -191,7 +209,7 @@ function nodes.new_whilestat(
   end_token
 )
   local node = stat_base(new_node("whilestat"), stat_elem)
-  scope_base(node, body, locals, labels)
+  scope_base(node, body, parent_scope, child_scopes, locals, labels)
   loop_base(node, linked_breaks)
   node.condition = assert(condition)
   node.while_token = while_token
@@ -203,13 +221,15 @@ end
 function nodes.new_dostat(
   stat_elem,
   body,
+  parent_scope,
+  child_scopes,
   locals,
   labels,
   do_token,
   end_token
 )
   local node = stat_base(new_node("dostat"), stat_elem)
-  scope_base(node, body, locals, labels)
+  scope_base(node, body, parent_scope, child_scopes, locals, labels)
     node.do_token = do_token
   node.end_token = end_token
   return node
@@ -222,6 +242,8 @@ function nodes.new_fornum(
   stop,
   step,
   body,
+  parent_scope,
+  child_scopes,
   locals,
   labels,
   for_token,
@@ -232,7 +254,7 @@ function nodes.new_fornum(
   end_token
 )
   local node = stat_base(new_node("fornum"), stat_elem)
-  scope_base(node, body, locals, labels)
+  scope_base(node, body, parent_scope, child_scopes, locals, labels)
   node.var = assert(var)
   node.start = assert(start)
   node.stop = assert(stop)
@@ -251,6 +273,8 @@ function nodes.new_forlist(
   name_list,
   exp_list,
   body,
+  parent_scope,
+  child_scopes,
   locals,
   labels,
   exp_list_comma_tokens,
@@ -261,7 +285,7 @@ function nodes.new_forlist(
   end_token
 )
   local node = stat_base(new_node("forlist"), stat_elem)
-  scope_base(node, body, locals, labels)
+  scope_base(node, body, parent_scope, child_scopes, locals, labels)
   node.name_list = name_list or {}
   node.exp_list = exp_list or {}
   node.exp_list_comma_tokens = exp_list_comma_tokens
@@ -277,13 +301,15 @@ function nodes.new_repeatstat(
   stat_elem,
   condition,
   body,
+  parent_scope,
+  child_scopes,
   locals,
   labels,
   repeat_token,
   until_token
 )
   local node = stat_base(new_node("repeatstat"), stat_elem)
-  scope_base(node, body, locals, labels)
+  scope_base(node, body, parent_scope, child_scopes, locals, labels)
   node.condition = assert(condition)
   node.repeat_token = repeat_token
   node.until_token = until_token
@@ -462,6 +488,8 @@ function nodes.new_loopstat(
   stat_elem,
   do_jump_back,
   body,
+  parent_scope,
+  child_scopes,
   locals,
   labels,
   linked_breaks,
@@ -469,7 +497,7 @@ function nodes.new_loopstat(
   close_token
 )
   local node = stat_base(new_node("loopstat"), stat_elem)
-  scope_base(node, body, locals, labels)
+  scope_base(node, body, parent_scope, child_scopes, locals, labels)
   loop_base(node, linked_breaks)
   node.do_jump_back = do_jump_back
   node.open_token = open_token

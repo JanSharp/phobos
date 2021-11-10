@@ -86,9 +86,13 @@
 ---the first one in the list/first one you encounter when processing the data
 ---@field src_paren_wrappers AstParenWrapper[]|nil
 
+---@class AstStatementList : IndexedLinkedList
+---@field scope AstScope
+
 ---@class AstScope : AstNode
 ---@field parent_scope AstScope|nil @ `nil` for the top level scope, the main function
----@field body IndexedLinkedList<nil,AstStatement>
+---@field child_scopes AstScope[]
+---@field body AstStatementList
 ---@field locals AstLocalDef[]
 ---@field labels AstLabel[]
 
@@ -438,7 +442,7 @@
 ---@class AstENVScope : AstScope
 ---@field node_type '"env_scope"'
 ---always contains exactly 1 ILLNode, the AstMain functiondef. A bit hacky, but AstMain needed a `stat_elem`
----@field body IndexedLinkedList<nil,AstStatement>
+---@field body AstStatementList
 ---@field locals AstLocalDef[] @ always exactly 1 `whole_block = true` local with the name `_ENV`
 ---@field labels AstLabel[] @ always empty
 
