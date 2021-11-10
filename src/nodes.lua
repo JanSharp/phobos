@@ -4,452 +4,446 @@ local invert = require("invert")
 
 local nodes = {}
 
+-- The idea behind all of these `new_*` functions is:
+-- Allow for easy changes to some node type by modifying its constructor and/or finding all references
+-- Improve/keep code readability because all constructors are using a `params` table,
+--   which means you can see what values are being assigned to what field just by reading the code
+-- Make it easier to create new nodes thanks to intellisense for all fields a node can have
+
 ---@param node_type AstNodeType
-local function new_node(node_type, line, column, leading)
+local function new_node(node_type, position_token)
   return {
     node_type = node_type,
-    line = line,
-    column = column,
-    leading = leading,
+    line = position_token and position_token.line,
+    column = position_token and position_token.column,
+    leading = position_token and position_token.leading,
   }
 end
 
 -- base nodes
 
-local function stat_base(
-  node,
-  stat_elem
-)
+---@class AstStatementBaseParams
+---@field stat_elem ILLNode<nil,AstStatement>
+
+---@param params AstStatementBaseParams
+local function stat_base(node, params)
   assert(node)
-  node.stat_elem = assert(stat_elem)
+  node.stat_elem = assert(params.stat_elem)
   return node
 end
 
-local function expr_base(
-  node,
-  stat_elem,
-  force_single_result,
-  src_paren_wrappers
-)
+---@class AstExpressionBaseParams
+---@field stat_elem ILLNode<nil,AstStatement>
+---@field force_single_result boolean|nil
+---@field src_paren_wrappers AstParenWrapper[]|nil
+
+---@param params AstExpressionBaseParams
+local function expr_base(node, params)
   assert(node)
-  node.stat_elem = assert(stat_elem)
-  node.force_single_result = force_single_result or false
-  node.src_paren_wrappers = src_paren_wrappers
+  node.stat_elem = assert(params.stat_elem)
+  node.force_single_result = params.force_single_result or false
+  node.src_paren_wrappers = params.src_paren_wrappers
   return node
 end
 
-local function scope_base(
-  node,
-  body,
-  parent_scope,
-  child_scopes,
-  locals,
-  labels
-)
+---@class AstScopeBaseParams
+---@field body AstStatementList|nil
+---@field parent_scope AstScope|nil
+---@field child_scopes AstScope[]|nil
+---@field locals AstLocalDef[]|nil
+---@field labels AstLabel[]|nil
+
+---@param params AstScopeBaseParams
+local function scope_base(node, params)
   assert(node)
-  node.body = body or (function()
+  node.body = params.body or (function()
     local list = ill.new()
-    list.scope = parent_scope
+    list.scope = params.parent_scope
     return list
   end)()
-  node.parent_scope = parent_scope
-  node.child_scopes = child_scopes or {}
-  node.locals = locals or {}
-  node.labels = labels or {}
+  node.parent_scope = params.parent_scope
+  node.child_scopes = params.child_scopes or {}
+  node.locals = params.locals or {}
+  node.labels = params.labels or {}
   return node
 end
 
-local function loop_base(
-  node,
-  linked_breaks
-)
+---@class AstLoopBaseParams
+---@field linked_breaks AstBreakStat[]|nil
+
+---@param params AstLoopBaseParams
+local function loop_base(node, params)
   assert(node)
-  node.linked_breaks = linked_breaks or {}
+  node.linked_breaks = params.linked_breaks or {}
   return node
 end
 
-local function func_base_base(
-  node,
-  func_def
-)
+---@class AstFuncBaseBaseParams
+---@field func_def AstFunctionDef
+
+---@param params AstFuncBaseBaseParams
+local function func_base_base(node, params)
   assert(node)
-  node.func_def = assert(func_def)
+  node.func_def = assert(params.func_def)
   return node
 end
 
 -- special
 
-function nodes.new_env_scope(
-  body,
-  parent_scope,
-  child_scopes,
-  locals,
-  labels
-)
+---@class AstEnvScopeParams : AstScopeBaseParams
+
+---@param params AstEnvScopeParams
+function nodes.new_env_scope(params)
   local node = new_node("env_scope")
-  scope_base(node, body, parent_scope, child_scopes, locals, labels)
+  scope_base(node, params)
   return node
 end
 
-function nodes.new_functiondef(
-  stat_elem,
-  source,
-  body,
-  parent_scope,
-  child_scopes,
-  locals,
-  labels,
-  is_method,
-  func_protos,
-  upvals,
-  is_vararg,
-  params,
-  is_main,
-  vararg_token,
-  param_comma_tokens,
-  open_paren_token,
-  close_paren_token,
-  function_token,
-  end_token
-)
+---@class AstFunctionDefParams : AstScopeBaseParams
+---@field stat_elem ILLNode<nil,AstStatement>
+---@field source string
+---@field is_method boolean|nil
+---@field func_protos AstFunctionDef[]|nil
+---@field upvals AstUpvalDef[]|nil
+---@field is_vararg boolean|nil
+---@field params AstLocalReference[]|nil
+---@field is_main boolean|nil
+---@field vararg_token AstTokenNode|nil
+---@field param_comma_tokens AstTokenNode|nil
+---@field open_paren_token AstTokenNode|nil
+---@field close_paren_token AstTokenNode|nil
+---@field function_token AstTokenNode|nil
+---@field end_token AstTokenNode|nil
+
+---@param params AstFunctionDefParams
+function nodes.new_functiondef(params)
   local node = new_node("functiondef")
-  scope_base(node, body, parent_scope, child_scopes, locals, labels)
-  node.stat_elem = assert(stat_elem)
-  node.source = assert(source)
-  node.is_method = is_method or false
-  node.func_protos = func_protos or {}
-  node.upvals = upvals or {}
-  node.is_vararg = is_vararg or false
-  node.params = params or {}
-  node.is_main = is_main or false
-  node.param_comma_tokens = param_comma_tokens
-  node.vararg_token = vararg_token
-  node.open_paren_token = open_paren_token
-  node.close_paren_token = close_paren_token
-  node.function_token = function_token
-  node.end_token = end_token
+  scope_base(node, params)
+  node.stat_elem = assert(params.stat_elem)
+  node.source = assert(params.source)
+  node.is_method = params.is_method or false
+  node.func_protos = params.func_protos or {}
+  node.upvals = params.upvals or {}
+  node.is_vararg = params.is_vararg or false
+  node.params = params.params or {}
+  node.is_main = params.is_main or false
+  node.param_comma_tokens = params.param_comma_tokens
+  node.vararg_token = params.vararg_token
+  node.open_paren_token = params.open_paren_token
+  node.close_paren_token = params.close_paren_token
+  node.function_token = params.function_token
+  node.end_token = params.end_token
   return node
 end
 
-function nodes.new_token(
-  token
-)
-  local node = new_node("token", token.line, token.column, token.leading)
-  node.value = token.value
+---@param token Token
+---@param value string|nil @ default: `token.value`
+function nodes.new_token(token, value)
+  local node = new_node("token", token)
+  node.value = value or token.value
   return node
 end
 
 -- statements
 
-function nodes.new_empty(
-  stat_elem,
-  semi_colon_token
-)
-  local node = stat_base(new_node("empty"), stat_elem)
-  node.semi_colon_token = semi_colon_token
+---@class AstEmptyParams : AstStatementBaseParams
+---@field semi_colon_token AstTokenNode|nil
+
+---@param params AstEmptyParams
+function nodes.new_empty(params)
+  local node = stat_base(new_node("empty"), params)
+  node.semi_colon_token = params.semi_colon_token
   return node
 end
 
-function nodes.new_ifstat(
-  stat_elem,
-  ifs,
-  elseblock
-)
-  local node = stat_base(new_node("ifstat"), stat_elem)
-  node.ifs = ifs or {}
-  node.elseblock = elseblock
+---@class AstIfStatParams : AstStatementBaseParams
+---@field ifs AstTestBlock[]|nil
+---@field elseblock AstElseBlock|nil
+
+---@param params AstIfStatParams
+function nodes.new_ifstat(params)
+  local node = stat_base(new_node("ifstat"), params)
+  node.ifs = params.ifs or {}
+  node.elseblock = params.elseblock
   return node
 end
 
-function nodes.new_testblock(
-  stat_elem,
-  condition,
-  body,
-  parent_scope,
-  child_scopes,
-  locals,
-  labels,
-  if_token,
-  then_token
-)
-  local node = stat_base(new_node("testblock"), stat_elem)
-  scope_base(node, body, parent_scope, child_scopes, locals, labels)
-  node.condition = assert(condition)
-  node.if_token = if_token
-  node.then_token = then_token
+---@class AstTestBlockParams : AstStatementBaseParams, AstScopeBaseParams
+---@field condition AstExpression
+---@field if_token AstTokenNode|nil
+---@field then_token AstTokenNode|nil
+
+---@param params AstTestBlockParams
+function nodes.new_testblock(params)
+  local node = stat_base(new_node("testblock"), params)
+  scope_base(node, params)
+  node.condition = assert(params.condition)
+  node.if_token = params.if_token
+  node.then_token = params.then_token
   return node
 end
 
-function nodes.new_elseblock(
-  stat_elem,
-  body,
-  parent_scope,
-  child_scopes,
-  locals,
-  labels,
-  else_token
-)
-  local node = stat_base(new_node("elseblock"), stat_elem)
-  scope_base(node, body, parent_scope, child_scopes, locals, labels)
-  node.else_token = else_token
+---@class AstElseBlockParams : AstStatementBaseParams, AstScopeBaseParams
+---@field else_token AstTokenNode|nil
+
+---@param params AstElseBlockParams
+function nodes.new_elseblock(params)
+  local node = stat_base(new_node("elseblock"), params)
+  scope_base(node, params)
+  node.else_token = params.else_token
   return node
 end
 
-function nodes.new_whilestat(
-  stat_elem,
-  condition,
-  body,
-  parent_scope,
-  child_scopes,
-  locals,
-  labels,
-  linked_breaks,
-  while_token,
-  do_token,
-  end_token
-)
-  local node = stat_base(new_node("whilestat"), stat_elem)
-  scope_base(node, body, parent_scope, child_scopes, locals, labels)
-  loop_base(node, linked_breaks)
-  node.condition = assert(condition)
-  node.while_token = while_token
-  node.do_token = do_token
-  node.end_token = end_token
+---@class AstWhileStatParams : AstStatementBaseParams, AstScopeBaseParams, AstLoopBaseParams
+---@field condition AstExpression
+---@field while_token AstTokenNode|nil
+---@field do_token AstTokenNode|nil
+---@field end_token AstTokenNode|nil
+
+---@param params AstWhileStatParams
+function nodes.new_whilestat(params)
+  local node = stat_base(new_node("whilestat"), params)
+  scope_base(node, params)
+  loop_base(node, params)
+  node.condition = assert(params.condition)
+  node.while_token = params.while_token
+  node.do_token = params.do_token
+  node.end_token = params.end_token
   return node
 end
 
-function nodes.new_dostat(
-  stat_elem,
-  body,
-  parent_scope,
-  child_scopes,
-  locals,
-  labels,
-  do_token,
-  end_token
-)
-  local node = stat_base(new_node("dostat"), stat_elem)
-  scope_base(node, body, parent_scope, child_scopes, locals, labels)
-    node.do_token = do_token
-  node.end_token = end_token
+---@class AstDoStatParams : AstStatementBaseParams, AstScopeBaseParams
+---@field do_token AstTokenNode|nil
+---@field end_token AstTokenNode|nil
+
+---@param params AstDoStatParams
+function nodes.new_dostat(params)
+  local node = stat_base(new_node("dostat"), params)
+  scope_base(node, params)
+  node.do_token = params.do_token
+  node.end_token = params.end_token
   return node
 end
 
-function nodes.new_fornum(
-  stat_elem,
-  var,
-  start,
-  stop,
-  step,
-  body,
-  parent_scope,
-  child_scopes,
-  locals,
-  labels,
-  for_token,
-  eq_token,
-  first_comma_token,
-  second_comma_token,
-  do_token,
-  end_token
-)
-  local node = stat_base(new_node("fornum"), stat_elem)
-  scope_base(node, body, parent_scope, child_scopes, locals, labels)
-  node.var = assert(var)
-  node.start = assert(start)
-  node.stop = assert(stop)
-  node.step = step
-  node.for_token = for_token
-  node.eq_token = eq_token
-  node.first_comma_token = first_comma_token
-  node.second_comma_token = second_comma_token
-  node.do_token = do_token
-  node.end_token = end_token
+---@class AstForNumParams : AstStatementBaseParams, AstScopeBaseParams, AstLoopBaseParams
+---@field var AstExpression
+---@field start AstExpression
+---@field stop AstExpression
+---@field step AstExpression|nil
+---@field for_token AstTokenNode|nil
+---@field eq_token AstTokenNode|nil
+---@field first_comma_token AstTokenNode|nil
+---@field second_comma_token AstTokenNode|nil
+---@field do_token AstTokenNode|nil
+---@field end_token AstTokenNode|nil
+
+---@param params AstForNumParams
+function nodes.new_fornum(params)
+  local node = stat_base(new_node("fornum"), params)
+  scope_base(node, params)
+  loop_base(node, params)
+  node.var = assert(params.var)
+  node.start = assert(params.start)
+  node.stop = assert(params.stop)
+  node.step = params.step
+  node.for_token = params.for_token
+  node.eq_token = params.eq_token
+  node.first_comma_token = params.first_comma_token
+  node.second_comma_token = params.second_comma_token
+  node.do_token = params.do_token
+  node.end_token = params.end_token
   return node
 end
 
-function nodes.new_forlist(
-  stat_elem,
-  name_list,
-  exp_list,
-  body,
-  parent_scope,
-  child_scopes,
-  locals,
-  labels,
-  exp_list_comma_tokens,
-  for_token,
-  comma_tokens,
-  in_token,
-  do_token,
-  end_token
-)
-  local node = stat_base(new_node("forlist"), stat_elem)
-  scope_base(node, body, parent_scope, child_scopes, locals, labels)
-  node.name_list = name_list or {}
-  node.exp_list = exp_list or {}
-  node.exp_list_comma_tokens = exp_list_comma_tokens
-  node.for_token = for_token
-  node.comma_tokens = comma_tokens
-  node.in_token = in_token
-  node.do_token = do_token
-  node.end_token = end_token
+---@class AstForListParams : AstStatementBaseParams, AstScopeBaseParams, AstLoopBaseParams
+---@field name_list AstExpression[]|nil
+---@field exp_list AstExpression[]|nil
+---@field exp_list_comma_tokens AstTokenNode[]|nil
+---@field for_token AstTokenNode|nil
+---@field comma_tokens AstTokenNode[]|nil
+---@field in_token AstTokenNode|nil
+---@field do_token AstTokenNode|nil
+---@field end_token AstTokenNode|nil
+
+---@param params AstForListParams
+function nodes.new_forlist(params)
+  local node = stat_base(new_node("forlist"), params)
+  scope_base(node, params)
+  loop_base(node, params)
+  node.name_list = params.name_list or {}
+  assert(params.exp_list and params.exp_list[1], "'forlist' nodes without any expressions are invalid")
+  node.exp_list = params.exp_list or {}
+  node.exp_list_comma_tokens = params.exp_list_comma_tokens
+  node.for_token = params.for_token
+  node.comma_tokens = params.comma_tokens
+  node.in_token = params.in_token
+  node.do_token = params.do_token
+  node.end_token = params.end_token
   return node
 end
 
-function nodes.new_repeatstat(
-  stat_elem,
-  condition,
-  body,
-  parent_scope,
-  child_scopes,
-  locals,
-  labels,
-  repeat_token,
-  until_token
-)
-  local node = stat_base(new_node("repeatstat"), stat_elem)
-  scope_base(node, body, parent_scope, child_scopes, locals, labels)
-  node.condition = assert(condition)
-  node.repeat_token = repeat_token
-  node.until_token = until_token
+---@class AstRepeatStatParams : AstStatementBaseParams, AstScopeBaseParams, AstLoopBaseParams
+---@field condition AstExpression
+---@field repeat_token AstTokenNode|nil
+---@field until_token AstTokenNode|nil
+
+---@param params AstRepeatStatParams
+function nodes.new_repeatstat(params)
+  local node = stat_base(new_node("repeatstat"), params)
+  scope_base(node, params)
+  loop_base(node, params)
+  node.condition = assert(params.condition)
+  node.repeat_token = params.repeat_token
+  node.until_token = params.until_token
   return node
 end
 
-function nodes.new_funcstat(
-  stat_elem,
-  func_def
-)
-  local node = stat_base(new_node("funcstat"), stat_elem)
-  func_base_base(node, func_def)
+---@class AstFuncStatParams : AstStatementBaseParams, AstFuncBaseBaseParams
+
+---@param params AstFuncStatParams
+function nodes.new_funcstat(params)
+  local node = stat_base(new_node("funcstat"), params)
+  func_base_base(node, params)
   return node
 end
 
-function nodes.new_localstat(
-  stat_elem,
-  lhs,
-  rhs,
-  local_token,
-  lhs_comma_tokens,
-  rhs_comma_tokens,
-  eq_token
-)
-  local node = stat_base(new_node("localstat"), stat_elem)
-  node.lhs = lhs or {}
-  node.rhs = rhs
-  node.local_token = local_token
-  node.lhs_comma_tokens = lhs_comma_tokens
-  node.rhs_comma_tokens = rhs_comma_tokens
-  node.eq_token = eq_token
+---@class AstLocalStatParams : AstStatementBaseParams
+---@field lhs AstLocalReference[]|nil
+---@field rhs AstExpression[]|nil
+---@field local_token AstTokenNode|nil
+---@field lhs_comma_tokens AstTokenNode[]|nil
+---@field rhs_comma_tokens AstTokenNode[]|nil
+---@field eq_token AstTokenNode|nil
+
+---@param params AstLocalStatParams
+function nodes.new_localstat(params)
+  local node = stat_base(new_node("localstat"), params)
+  node.lhs = params.lhs or {}
+  node.rhs = params.rhs
+  node.local_token = params.local_token
+  node.lhs_comma_tokens = params.lhs_comma_tokens
+  node.rhs_comma_tokens = params.rhs_comma_tokens
+  node.eq_token = params.eq_token
   return node
 end
 
-function nodes.new_localfunc(
-  stat_elem,
-  name,
-  func_def,
-  local_token
-)
-  local node = stat_base(new_node("localfunc"), stat_elem)
-  func_base_base(node, func_def)
-  node.name = assert(name)
-  node.local_token = local_token
+---@class AstLocalFuncParams : AstStatementBaseParams, AstFuncBaseBaseParams
+---@field name AstLocalReference
+---@field local_token AstTokenNode|nil
+
+---@param params AstLocalFuncParams
+function nodes.new_localfunc(params)
+  local node = stat_base(new_node("localfunc"), params)
+  func_base_base(node, params)
+  node.name = assert(params.name)
+  node.local_token = params.local_token
   return node
 end
 
-function nodes.new_label(
-  stat_elem,
-  name,
-  linked_gotos,
-  name_token,
-  open_token,
-  close_token
-)
-  local node = stat_base(new_node("label"), stat_elem)
-  node.name = assert(name)
-  node.linked_gotos = linked_gotos or {}
-  node.name_token = name_token
-  node.open_token = open_token
-  node.close_token = close_token
+---@class AstLabelParams : AstStatementBaseParams
+---@field name string
+---@field linked_gotos AstGotoStat[]|nil
+---@field name_token AstTokenNode|nil
+---@field open_token AstTokenNode|nil
+---@field close_token AstTokenNode|nil
+
+---@param params AstLabelParams
+function nodes.new_label(params)
+  local node = stat_base(new_node("label"), params)
+  node.name = assert(params.name)
+  node.linked_gotos = params.linked_gotos or {}
+  node.name_token = params.name_token
+  node.open_token = params.open_token
+  node.close_token = params.close_token
   return node
 end
 
-function nodes.new_retstat(
-  stat_elem,
-  exp_list,
-  return_token,
-  exp_list_comma_tokens,
-  semi_colon_token
-)
-  local node = stat_base(new_node("retstat"), stat_elem)
-  node.exp_list = exp_list or {}
-  node.return_token = return_token
-  node.exp_list_comma_tokens = exp_list_comma_tokens
-  node.semi_colon_token = semi_colon_token
+---@class AstRetStatParams : AstStatementBaseParams
+---@field exp_list AstExpression[]|nil
+---@field return_token AstTokenNode|nil
+---@field exp_list_comma_tokens AstTokenNode[]|nil
+---@field semi_colon_token AstTokenNode|nil
+
+---@param params AstRetStatParams
+function nodes.new_retstat(params)
+  local node = stat_base(new_node("retstat"), params)
+  node.exp_list = params.exp_list or {}
+  node.return_token = params.return_token
+  node.exp_list_comma_tokens = params.exp_list_comma_tokens
+  node.semi_colon_token = params.semi_colon_token
   return node
 end
 
-function nodes.new_breakstat(
-  stat_elem,
-  linked_loop,
-  break_token
-)
-  local node = stat_base(new_node("breakstat"), stat_elem)
-  node.linked_loop = linked_loop
-  node.break_token = break_token
+---@class AstBreakStatParams : AstStatementBaseParams
+---@field linked_loop AstLoop
+---@field break_token AstTokenNode|nil
+
+---@param params AstBreakStatParams
+function nodes.new_breakstat(params)
+  local node = stat_base(new_node("breakstat"), params)
+  node.linked_loop = params.linked_loop
+  node.break_token = params.break_token
   return node
 end
 
-function nodes.new_gotostat(
-  stat_elem,
-  target_name,
-  linked_label,
-  target_token,
-  goto_token
-)
-  local node = stat_base(new_node("gotostat"), stat_elem)
-  node.target_name = target_name
-  node.linked_label = linked_label
-  node.target_token = target_token
-  node.goto_token = goto_token
+---@class AstGotoStatParams : AstStatementBaseParams
+---@field target_name string
+---@field linked_label AstLabel|nil
+---@field target_token AstTokenNode|nil
+---@field goto_token AstTokenNode|nil
+
+---@param params AstGotoStatParams
+function nodes.new_gotostat(params)
+  local node = stat_base(new_node("gotostat"), params)
+  node.target_name = assert(params.target_name)
+  node.linked_label = params.linked_label
+  node.target_token = params.target_token
+  node.goto_token = params.goto_token
   return node
 end
+
+---@class AstCallParams : AstStatementBaseParams, AstExpressionBaseParams
+---@field is_selfcall boolean|nil
+---@field ex AstExpression
+---@field suffix AstString|nil @ required if `is_selfcall == true`
+---@field args AstExpression[]|nil
+---@field args_comma_tokens AstTokenNode[]|nil
+---@field open_paren_token AstTokenNode|nil
+---@field close_paren_token AstTokenNode|nil
 
 ---expression or statement
-function nodes.new_call(
-  stat_elem,
-  ex,
-  args,
-  args_comma_tokens,
-  open_paren_token,
-  close_paren_token,
-  force_single_result,
-  src_paren_wrappers
-)
-  local node = stat_base(new_node("call"), stat_elem)
-  expr_base(node, stat_elem, force_single_result, src_paren_wrappers)
-  node.ex = assert(ex)
-  node.args = args or {}
-  node.args_comma_tokens = args_comma_tokens
-  node.open_paren_token = open_paren_token
-  node.close_paren_token = close_paren_token
+---@param params AstCallParams
+function nodes.new_call(params)
+  local node = stat_base(new_node("call"), params)
+  expr_base(node, params)
+  node.is_selfcall = params.is_selfcall or false
+  if params.is_selfcall then
+    assert(params.suffix, "if 'is_selfcall == true', 'suffix' must not be nil")
+  end
+  node.ex = assert(params.ex)
+  node.suffix = params.suffix
+  node.args = params.args or {}
+  node.args_comma_tokens = params.args_comma_tokens
+  node.open_paren_token = params.open_paren_token
+  node.close_paren_token = params.close_paren_token
   return node
 end
 
-function nodes.new_assignment(
-  stat_elem,
-  lhs,
-  rhs,
-  lhs_comma_tokens,
-  eq_token,
-  rhs_comma_tokens
-)
-  local node = stat_base(new_node("assignment"), stat_elem)
-  node.lhs = lhs or {}
-  node.rhs = rhs or {}
-  node.lhs_comma_tokens = lhs_comma_tokens
-  node.eq_token = eq_token
-  node.rhs_comma_tokens = rhs_comma_tokens
+---@class AstAssignmentParams : AstStatementBaseParams
+---@field lhs AstExpression[]|nil
+---@field rhs AstExpression[]|nil
+---@field lhs_comma_tokens AstTokenNode[]|nil
+---@field eq_token AstTokenNode|nil
+---@field rhs_comma_tokens AstTokenNode[]|nil
+
+---@param params AstAssignmentParams
+function nodes.new_assignment(params)
+  local node = stat_base(new_node("assignment"), params)
+  node.lhs = params.lhs or {}
+  node.rhs = params.rhs or {}
+  node.lhs_comma_tokens = params.lhs_comma_tokens
+  node.eq_token = params.eq_token
+  node.rhs_comma_tokens = params.rhs_comma_tokens
   return node
 end
 
@@ -459,219 +453,200 @@ function nodes.new_inline_iife_retstat()
   error("-- TODO: refactor inline iife")
 end
 
-function nodes.new_loopstat(
-  stat_elem,
-  do_jump_back,
-  body,
-  parent_scope,
-  child_scopes,
-  locals,
-  labels,
-  linked_breaks,
-  open_token,
-  close_token
-)
-  local node = stat_base(new_node("loopstat"), stat_elem)
-  scope_base(node, body, parent_scope, child_scopes, locals, labels)
-  loop_base(node, linked_breaks)
-  node.do_jump_back = do_jump_back
-  node.open_token = open_token
-  node.close_token = close_token
+---@class AstLoopStatParams : AstStatementBaseParams, AstScopeBaseParams, AstLoopBaseParams
+---@field do_jump_back boolean|nil
+---@field open_token AstTokenNode|nil
+---@field close_token AstTokenNode|nil
+
+---@param params AstLoopStatParams
+function nodes.new_loopstat(params)
+  local node = stat_base(new_node("loopstat"), params)
+  scope_base(node, params)
+  loop_base(node, params)
+  node.do_jump_back = params.do_jump_back or false
+  node.open_token = params.open_token
+  node.close_token = params.close_token
   return node
 end
 
 -- expressions
 
-function nodes.new_local_ref(
-  stat_elem,
-  name,
-  reference_def,
-  force_single_result,
-  src_paren_wrappers
-)
-  local node = expr_base(new_node("local_ref"), stat_elem, force_single_result, src_paren_wrappers)
-  node.name = assert(name)
-  assert(reference_def.def_type == "local")
-  node.reference_def = assert(reference_def)
+---@class AstLocalReferenceParams : AstExpressionBaseParams
+---@field name string
+---@field reference_def AstLocalDef
+
+---@param params AstLocalReferenceParams
+function nodes.new_local_ref(params)
+  local node = expr_base(new_node("local_ref"), params)
+  node.name = assert(params.name)
+  assert(params.reference_def.def_type == "local")
+  node.reference_def = assert(params.reference_def)
   return node
 end
 
-function nodes.new_upval_ref(
-  stat_elem,
-  name,
-  reference_def,
-  force_single_result,
-  src_paren_wrappers
-)
-  local node = expr_base(new_node("upval_ref"), stat_elem, force_single_result, src_paren_wrappers)
-  node.name = assert(name)
-  assert(reference_def.def_type == "upval")
-  node.reference_def = assert(reference_def)
+---@class AstUpvalReferenceParams : AstExpressionBaseParams
+---@field name string
+---@field reference_def AstUpvalDef
+
+---@param params AstUpvalReferenceParams
+function nodes.new_upval_ref(params)
+  local node = expr_base(new_node("upval_ref"), params)
+  node.name = assert(params.name)
+  assert(params.reference_def.def_type == "upval")
+  node.reference_def = assert(params.reference_def)
   return node
 end
 
-function nodes.new_index(
-  stat_elem,
-  ex,
-  suffix,
-  src_ex_did_not_exist,
-  dot_token,
-  suffix_open_token,
-  suffix_close_token,
-  force_single_result,
-  src_paren_wrappers
-)
-  local node = expr_base(new_node("index"), stat_elem, force_single_result, src_paren_wrappers)
-  node.ex = assert(ex)
-  node.suffix = assert(suffix)
-  node.src_ex_did_not_exist = src_ex_did_not_exist or false
-  node.dot_token = dot_token
-  node.suffix_open_token = suffix_open_token
-  node.suffix_close_token = suffix_close_token
+---@class AstIndexParams : AstExpressionBaseParams
+---@field ex AstExpression
+---@field suffix AstExpression
+---@field src_ex_did_not_exist boolean|nil
+---@field dot_token AstTokenNode|nil
+---@field suffix_open_token AstTokenNode|nil
+---@field suffix_close_token AstTokenNode|nil
+
+---@param params AstIndexParams
+function nodes.new_index(params)
+  local node = expr_base(new_node("index"), params)
+  node.ex = assert(params.ex)
+  node.suffix = assert(params.suffix)
+  node.src_ex_did_not_exist = params.src_ex_did_not_exist or false
+  node.dot_token = params.dot_token
+  node.suffix_open_token = params.suffix_open_token
+  node.suffix_close_token = params.suffix_close_token
   return node
 end
+
+---@class AstUnOpParams : AstExpressionBaseParams
+---@field op AstUnOpOp
+---@field ex AstExpression
+---@field op_token AstTokenNode|nil
 
 local unop_ops = invert{"not", "-", "#"}
-function nodes.new_unop(
-  stat_elem,
-  op,
-  ex,
-  op_token,
-  force_single_result,
-  src_paren_wrappers
-)
-  local node = expr_base(new_node("unop"), stat_elem, force_single_result, src_paren_wrappers)
-  assert(unop_ops[op], "invalid unop op '"..op.."'")
-  node.op = op
-  node.ex = assert(ex)
-  node.op_token = op_token
+---@param params AstUnOpParams
+function nodes.new_unop(params)
+  local node = expr_base(new_node("unop"), params)
+  assert(unop_ops[params.op], "invalid unop op '"..params.op.."'")
+  node.op = params.op
+  node.ex = assert(params.ex)
+  node.op_token = params.op_token
   return node
 end
+
+---@class AstBinOpParams : AstExpressionBaseParams
+---@field op AstBinOpOp
+---@field left AstExpression
+---@field right AstExpression
+---@field op_token AstTokenNode|nil
 
 local binop_ops = invert{"^", "*", "/", "%", "+", "-", "==", "<", "<=", "~=", ">", ">=", "and", "or"}
-function nodes.new_binop(
-  stat_elem,
-  op,
-  left,
-  right,
-  op_token,
-  force_single_result,
-  src_paren_wrappers
-)
-  local node = expr_base(new_node("binop"), stat_elem, force_single_result, src_paren_wrappers)
-  assert(binop_ops[op], "invalid binop op '"..op.."'")
-  node.op = op
-  node.left = assert(left)
-  node.right = assert(right)
-  node.op_token = op_token
+---@param params AstBinOpParams
+function nodes.new_binop(params)
+  local node = expr_base(new_node("binop"), params)
+  assert(binop_ops[params.op], "invalid binop op '"..params.op.."'")
+  node.op = params.op
+  node.left = assert(params.left)
+  node.right = assert(params.right)
+  node.op_token = params.op_token
   return node
 end
 
-function nodes.new_concat(
-  stat_elem,
-  exp_list,
-  op_tokens,
-  force_single_result,
-  src_paren_wrappers
-)
-  local node = expr_base(new_node("concat"), stat_elem, force_single_result, src_paren_wrappers)
-  assert(exp_list and exp_list[1], "'concat' nodes without any expressions are invalid")
-  node.exp_list = exp_list
-  node.op_tokens = op_tokens
+---@class AstConcatParams : AstExpressionBaseParams
+---@field exp_list AstExpression[]
+---@field op_tokens AstTokenNode|[]
+
+---@param params AstConcatParams
+function nodes.new_concat(params)
+  local node = expr_base(new_node("concat"), params)
+  assert(params.exp_list and params.exp_list[1], "'concat' nodes without any expressions are invalid")
+  node.exp_list = params.exp_list or {}
+  node.op_tokens = params.op_tokens
   return node
 end
 
-function nodes.new_number(
-  stat_elem,
-  value,
-  src_value,
-  force_single_result,
-  src_paren_wrappers
-)
-  local node = expr_base(new_node("number"), stat_elem, force_single_result, src_paren_wrappers)
-  node.value = assert(value)
-  node.src_value = src_value
+---@class AstNumberParams : AstExpressionBaseParams
+---@field value number
+---@field src_value string|nil
+
+---@param params AstNumberParams
+function nodes.new_number(params)
+  local node = expr_base(new_node("number"), params)
+  node.value = assert(params.value)
+  node.src_value = params.src_value
   return node
 end
 
-function nodes.new_string(
-  stat_elem,
-  value,
-  src_is_ident,
-  src_is_block_str,
-  src_quote,
-  src_value,
-  src_has_leading_newline,
-  src_pad,
-  force_single_result,
-  src_paren_wrappers
-)
-  local node = expr_base(new_node("string"), stat_elem, force_single_result, src_paren_wrappers)
-  node.value = assert(value, "null strings might be valid, but they truly are useless and annoying, so no")
-  node.src_is_ident = src_is_ident
-  node.src_is_block_str = src_is_block_str
-  node.src_quote = src_quote
-  node.src_value = src_value
-  node.src_has_leading_newline = src_has_leading_newline
-  node.src_pad = src_pad
+---@class AstStringParams : AstExpressionBaseParams
+---@field value string
+---@field src_is_ident boolean|nil
+---@field src_is_block_str boolean|nil
+---@field src_quote string|nil
+---@field src_value string|nil
+---@field src_has_leading_newline boolean|nil
+---@field src_pad string|nil
+
+---@param params AstStringParams
+function nodes.new_string(params)
+  local node = expr_base(new_node("string"), params)
+  node.value = assert(params.value, "null strings might be valid, but they truly are useless and annoying, so no")
+  node.src_is_ident = params.src_is_ident
+  node.src_is_block_str = params.src_is_block_str
+  node.src_quote = params.src_quote
+  node.src_value = params.src_value
+  node.src_has_leading_newline = params.src_has_leading_newline
+  node.src_pad = params.src_pad
   return node
 end
 
-function nodes.new_nil(
-  stat_elem,
-  force_single_result,
-  src_paren_wrappers
-)
-  local node = expr_base(new_node("nil"), stat_elem, force_single_result, src_paren_wrappers)
+---@class AstNilParams : AstExpressionBaseParams
+
+---@param params AstNilParams
+function nodes.new_nil(params)
+  local node = expr_base(new_node("nil"), params)
   return node
 end
 
-function nodes.new_boolean(
-  stat_elem,
-  value,
-  force_single_result,
-  src_paren_wrappers
-)
-  local node = expr_base(new_node("boolean"), stat_elem, force_single_result, src_paren_wrappers)
-  assert(value == true or value == false, "'boolean' nodes need a boolean value")
-  node.value = value
+---@class AstBooleanParams : AstExpressionBaseParams
+---@field value boolean
+
+---@param params AstBooleanParams
+function nodes.new_boolean(params)
+  local node = expr_base(new_node("boolean"), params)
+  assert(params.value == true or params.value == false, "'boolean' nodes need a boolean value")
+  node.value = params.value
   return node
 end
 
-function nodes.new_vararg(
-  stat_elem,
-  force_single_result,
-  src_paren_wrappers
-)
-  local node = expr_base(new_node("vararg"), stat_elem, force_single_result, src_paren_wrappers)
+---@class AstVarArgParams : AstExpressionBaseParams
+
+---@param params AstVarArgParams
+function nodes.new_vararg(params)
+  local node = expr_base(new_node("vararg"), params)
   return node
 end
 
-function nodes.new_func_proto(
-  stat_elem,
-  func_def,
-  force_single_result,
-  src_paren_wrappers
-)
-  local node = expr_base(new_node("func_proto"), stat_elem, force_single_result, src_paren_wrappers)
-  func_base_base(node, func_def)
+---@class AstFuncProtoParams : AstExpressionBaseParams, AstFuncBaseBaseParams
+
+---@param params AstFuncProtoParams
+function nodes.new_func_proto(params)
+  local node = expr_base(new_node("func_proto"), params)
+  func_base_base(node, params)
   return node
 end
 
-function nodes.new_constructor(
-  stat_elem,
-  fields,
-  open_token,
-  comma_tokens,
-  close_token,
-  force_single_result,
-  src_paren_wrappers
-)
-  local node = expr_base(new_node("constructor"), stat_elem, force_single_result, src_paren_wrappers)
-  node.fields = fields or {}
-  node.open_token = open_token
-  node.comma_tokens = comma_tokens
-  node.close_token = close_token
+---@class AstConstructorParams : AstExpressionBaseParams
+---@field fields AstField[]|nil
+---@field open_token AstTokenNode|nil
+---@field comma_tokens AstTokenNode[]|nil
+---@field close_token AstTokenNode|nil
+
+---@param params AstConstructorParams
+function nodes.new_constructor(params)
+  local node = expr_base(new_node("constructor"), params)
+  node.fields = params.fields or {}
+  node.open_token = params.open_token
+  node.comma_tokens = params.comma_tokens
+  node.close_token = params.close_token
   return node
 end
 

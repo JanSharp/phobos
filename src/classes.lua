@@ -225,7 +225,7 @@
 ---@class AstBreakStat : AstStatement
 ---@field node_type '"breakstat"'
 ---@field break_token AstTokenNode @ position for the break `jmp` instruction
----@field linked_loop AstStatement[]|nil @ evaluated by the jump linker. not `nil` after successful linking
+---@field linked_loop AstLoop[]|nil @ evaluated by the jump linker. not `nil` after successful linking
 
 ---@class AstGotoStat : AstStatement
 ---@field node_type '"gotostat"'
@@ -266,7 +266,7 @@
 ---@field linked_inline_iife AstInlineIIFE
 ---@field leave_block_goto AstGotoStat
 
----@class AstLoopstat : AstStatement, AstScope, AstLoop
+---@class AstLoopStat : AstStatement, AstScope, AstLoop
 ---@field node_type '"loopstat"'
 ---@field do_jump_back boolean|nil @ when false behaves like a dostat, except breakstat can link to this
 ---@field open_token AstTokenNode
@@ -318,15 +318,19 @@
 ---@field src_has_leading_newline boolean|nil @ for block strings
 ---@field src_pad string|nil @ the `=` chain for block strings
 
+---@alias AstUnOpOp '"not"'|'"-"'|'"#"'
+
 ---@class AstUnOp : AstExpression
 ---@field node_type '"unop"'
----@field op '"not"'|'"-"'|'"#"'
+---@field op AstUnOpOp
 ---@field ex AstExpression
 ---@field op_token AstTokenNode @ position for the various unop instructions
 
+---@alias AstBinOpOp '"^"'|'"*"'|'"/"'|'"%"'|'"+"'|'"-"'|'"=="'|'"<"'|'"<="'|'"~="'|'">"'|'">="'|'"and"'|'"or"'
+
 ---@class AstBinOp : AstExpression
 ---@field node_type '"binop"'
----@field op '"^"'|'"*"'|'"/"'|'"%"'|'"+"'|'"-"'|'"=="'|'"<"'|'"<="'|'"~="'|'">"'|'">="'|'"and"'|'"or"'
+---@field op AstBinOpOp
 ---@field left AstExpression
 ---@field right AstExpression
 ---@field op_token AstTokenNode @ position for the various binop instructions

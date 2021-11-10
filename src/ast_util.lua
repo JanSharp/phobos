@@ -125,25 +125,29 @@ do
     local def = try_get_def(scope, name, stat_elem.index)
     if def then
       -- `local_ref` or `upval_ref`
-      local ref = (def.def_type == "local" and nodes.new_local_ref or nodes.new_upval_ref)(
-        stat_elem,
-        name,
-        def
-      )
+      local ref = (def.def_type == "local" and nodes.new_local_ref or nodes.new_upval_ref){
+        stat_elem = stat_elem,
+        name = name,
+        reference_def = def,
+      }
       nodes.set_position(ref, node_for_position)
       def.refs[#def.refs+1] = ref
       return ref
     end
 
-    local suffix = nodes.new_string(stat_elem, name, true)
+    local suffix = nodes.new_string{
+      stat_elem = stat_elem,
+      value = name,
+      src_is_ident = true,
+    }
     nodes.set_position(suffix, node_for_position)
 
-    local node = nodes.new_index(
-      stat_elem,
-      ast.get_ref(scope, stat_elem, "_ENV", node_for_position),
-      suffix,
-      true
-    )
+    local node = nodes.new_index{
+      stat_elem = stat_elem,
+      ex = ast.get_ref(scope, stat_elem, "_ENV", node_for_position),
+      suffix = suffix,
+      src_ex_did_not_exist = true,
+    }
 
     return node
   end
