@@ -113,6 +113,7 @@
 ---@field close_paren_token AstTokenNode
 ---@field function_token AstTokenNode @ position for any `closure` instructions
 ---@field end_token AstTokenNode
+---@field eof_token 'nil' @ overridden by AstMain to be an AstTokenNode
 
 ---@class AstFuncBase : AstNode
 ---@field func_def AstFunctionDef

@@ -10,17 +10,29 @@ local nodes = {}
 --   which means you can see what values are being assigned to what field just by reading the code
 -- Make it easier to create new nodes thanks to intellisense for all fields a node can have
 
+local function assert_params_field(params, field_name)
+  return assert(params[field_name], "missing param '"..field_name.."'")
+end
+
+function nodes.set_position(node, token)
+  node.line = token.line
+  node.column = token.column
+  node.leading = token.leading
+end
+
 ---@param node_type AstNodeType
 local function new_node(node_type, position_token)
-  return {
-    node_type = node_type,
-    line = position_token and position_token.line,
-    column = position_token and position_token.column,
-    leading = position_token and position_token.leading,
-  }
+  local node = {node_type = node_type}
+  if position_token then
+    nodes.set_position(node, position_token)
+  end
+  return node
 end
 
 -- base nodes
+
+---@class AstPositionParams
+---@field position AstTokenNode|nil
 
 ---@class AstStatementBaseParams
 ---@field stat_elem ILLNode<nil,AstStatement>
@@ -28,7 +40,7 @@ end
 ---@param params AstStatementBaseParams
 local function stat_base(node, params)
   assert(node)
-  node.stat_elem = assert(params.stat_elem)
+  node.stat_elem = assert_params_field(params, "stat_elem")
   return node
 end
 
@@ -40,7 +52,7 @@ end
 ---@param params AstExpressionBaseParams
 local function expr_base(node, params)
   assert(node)
-  node.stat_elem = assert(params.stat_elem)
+  node.stat_elem = assert_params_field(params, "stat_elem")
   node.force_single_result = params.force_single_result or false
   node.src_paren_wrappers = params.src_paren_wrappers
   return node
@@ -84,7 +96,7 @@ end
 ---@param params AstFuncBaseBaseParams
 local function func_base_base(node, params)
   assert(node)
-  node.func_def = assert(params.func_def)
+  node.func_def = assert_params_field(params, "func_def")
   return node
 end
 
@@ -114,13 +126,14 @@ end
 ---@field close_paren_token AstTokenNode|nil
 ---@field function_token AstTokenNode|nil
 ---@field end_token AstTokenNode|nil
+---@field eof_token AstTokenNode|nil
 
 ---@param params AstFunctionDefParams
 function nodes.new_functiondef(params)
   local node = new_node("functiondef")
   scope_base(node, params)
-  node.stat_elem = assert(params.stat_elem)
-  node.source = assert(params.source)
+  node.stat_elem = assert_params_field(params, "stat_elem")
+  node.source = assert_params_field(params, "source")
   node.is_method = params.is_method or false
   node.func_protos = params.func_protos or {}
   node.upvals = params.upvals or {}
@@ -133,6 +146,7 @@ function nodes.new_functiondef(params)
   node.close_paren_token = params.close_paren_token
   node.function_token = params.function_token
   node.end_token = params.end_token
+  node.eof_token = params.eof_token
   return node
 end
 
@@ -159,12 +173,14 @@ end
 ---@class AstIfStatParams : AstStatementBaseParams
 ---@field ifs AstTestBlock[]|nil
 ---@field elseblock AstElseBlock|nil
+---@field end_token AstTokenNode
 
 ---@param params AstIfStatParams
 function nodes.new_ifstat(params)
   local node = stat_base(new_node("ifstat"), params)
   node.ifs = params.ifs or {}
   node.elseblock = params.elseblock
+  node.end_token = params.end_token
   return node
 end
 
@@ -177,7 +193,7 @@ end
 function nodes.new_testblock(params)
   local node = stat_base(new_node("testblock"), params)
   scope_base(node, params)
-  node.condition = assert(params.condition)
+  node.condition = assert_params_field(params, "condition")
   node.if_token = params.if_token
   node.then_token = params.then_token
   return node
@@ -205,7 +221,7 @@ function nodes.new_whilestat(params)
   local node = stat_base(new_node("whilestat"), params)
   scope_base(node, params)
   loop_base(node, params)
-  node.condition = assert(params.condition)
+  node.condition = assert_params_field(params, "condition")
   node.while_token = params.while_token
   node.do_token = params.do_token
   node.end_token = params.end_token
@@ -242,9 +258,9 @@ function nodes.new_fornum(params)
   local node = stat_base(new_node("fornum"), params)
   scope_base(node, params)
   loop_base(node, params)
-  node.var = assert(params.var)
-  node.start = assert(params.start)
-  node.stop = assert(params.stop)
+  node.var = assert_params_field(params, "var")
+  node.start = assert_params_field(params, "start")
+  node.stop = assert_params_field(params, "stop")
   node.step = params.step
   node.for_token = params.for_token
   node.eq_token = params.eq_token
@@ -292,18 +308,20 @@ function nodes.new_repeatstat(params)
   local node = stat_base(new_node("repeatstat"), params)
   scope_base(node, params)
   loop_base(node, params)
-  node.condition = assert(params.condition)
+  node.condition = assert_params_field(params, "condition")
   node.repeat_token = params.repeat_token
   node.until_token = params.until_token
   return node
 end
 
 ---@class AstFuncStatParams : AstStatementBaseParams, AstFuncBaseBaseParams
+---@field name AstExpression
 
 ---@param params AstFuncStatParams
 function nodes.new_funcstat(params)
   local node = stat_base(new_node("funcstat"), params)
   func_base_base(node, params)
+  node.name = assert_params_field(params, "name")
   return node
 end
 
@@ -335,7 +353,7 @@ end
 function nodes.new_localfunc(params)
   local node = stat_base(new_node("localfunc"), params)
   func_base_base(node, params)
-  node.name = assert(params.name)
+  node.name = assert_params_field(params, "name")
   node.local_token = params.local_token
   return node
 end
@@ -350,7 +368,7 @@ end
 ---@param params AstLabelParams
 function nodes.new_label(params)
   local node = stat_base(new_node("label"), params)
-  node.name = assert(params.name)
+  node.name = assert_params_field(params, "name")
   node.linked_gotos = params.linked_gotos or {}
   node.name_token = params.name_token
   node.open_token = params.open_token
@@ -395,7 +413,7 @@ end
 ---@param params AstGotoStatParams
 function nodes.new_gotostat(params)
   local node = stat_base(new_node("gotostat"), params)
-  node.target_name = assert(params.target_name)
+  node.target_name = assert_params_field(params, "target_name")
   node.linked_label = params.linked_label
   node.target_token = params.target_token
   node.goto_token = params.goto_token
@@ -408,6 +426,7 @@ end
 ---@field suffix AstString|nil @ required if `is_selfcall == true`
 ---@field args AstExpression[]|nil
 ---@field args_comma_tokens AstTokenNode[]|nil
+---@field colon_token AstTokenNode|nil
 ---@field open_paren_token AstTokenNode|nil
 ---@field close_paren_token AstTokenNode|nil
 
@@ -416,14 +435,15 @@ end
 function nodes.new_call(params)
   local node = stat_base(new_node("call"), params)
   expr_base(node, params)
-  node.is_selfcall = params.is_selfcall or false
   if params.is_selfcall then
     assert(params.suffix, "if 'is_selfcall == true', 'suffix' must not be nil")
   end
-  node.ex = assert(params.ex)
+  node.is_selfcall = params.is_selfcall or false
+  node.ex = assert_params_field(params, "ex")
   node.suffix = params.suffix
   node.args = params.args or {}
   node.args_comma_tokens = params.args_comma_tokens
+  node.colon_token = params.colon_token
   node.open_paren_token = params.open_paren_token
   node.close_paren_token = params.close_paren_token
   return node
@@ -471,29 +491,29 @@ end
 
 -- expressions
 
----@class AstLocalReferenceParams : AstExpressionBaseParams
+---@class AstLocalReferenceParams : AstExpressionBaseParams, AstPositionParams
 ---@field name string
 ---@field reference_def AstLocalDef
 
 ---@param params AstLocalReferenceParams
 function nodes.new_local_ref(params)
-  local node = expr_base(new_node("local_ref"), params)
-  node.name = assert(params.name)
+  local node = expr_base(new_node("local_ref", params.position), params)
+  node.name = assert_params_field(params, "name")
   assert(params.reference_def.def_type == "local")
-  node.reference_def = assert(params.reference_def)
+  node.reference_def = assert_params_field(params, "reference_def")
   return node
 end
 
----@class AstUpvalReferenceParams : AstExpressionBaseParams
+---@class AstUpvalReferenceParams : AstExpressionBaseParams, AstPositionParams
 ---@field name string
 ---@field reference_def AstUpvalDef
 
 ---@param params AstUpvalReferenceParams
 function nodes.new_upval_ref(params)
-  local node = expr_base(new_node("upval_ref"), params)
-  node.name = assert(params.name)
+  local node = expr_base(new_node("upval_ref", params.position), params)
+  node.name = assert_params_field(params, "name")
   assert(params.reference_def.def_type == "upval")
-  node.reference_def = assert(params.reference_def)
+  node.reference_def = assert_params_field(params, "reference_def")
   return node
 end
 
@@ -508,8 +528,8 @@ end
 ---@param params AstIndexParams
 function nodes.new_index(params)
   local node = expr_base(new_node("index"), params)
-  node.ex = assert(params.ex)
-  node.suffix = assert(params.suffix)
+  node.ex = assert_params_field(params, "ex")
+  node.suffix = assert_params_field(params, "suffix")
   node.src_ex_did_not_exist = params.src_ex_did_not_exist or false
   node.dot_token = params.dot_token
   node.suffix_open_token = params.suffix_open_token
@@ -528,7 +548,7 @@ function nodes.new_unop(params)
   local node = expr_base(new_node("unop"), params)
   assert(unop_ops[params.op], "invalid unop op '"..params.op.."'")
   node.op = params.op
-  node.ex = assert(params.ex)
+  node.ex = assert_params_field(params, "ex")
   node.op_token = params.op_token
   return node
 end
@@ -545,8 +565,8 @@ function nodes.new_binop(params)
   local node = expr_base(new_node("binop"), params)
   assert(binop_ops[params.op], "invalid binop op '"..params.op.."'")
   node.op = params.op
-  node.left = assert(params.left)
-  node.right = assert(params.right)
+  node.left = assert_params_field(params, "left")
+  node.right = assert_params_field(params, "right")
   node.op_token = params.op_token
   return node
 end
@@ -564,19 +584,19 @@ function nodes.new_concat(params)
   return node
 end
 
----@class AstNumberParams : AstExpressionBaseParams
+---@class AstNumberParams : AstExpressionBaseParams, AstPositionParams
 ---@field value number
 ---@field src_value string|nil
 
 ---@param params AstNumberParams
 function nodes.new_number(params)
-  local node = expr_base(new_node("number"), params)
-  node.value = assert(params.value)
+  local node = expr_base(new_node("number", params.position), params)
+  node.value = assert_params_field(params, "value")
   node.src_value = params.src_value
   return node
 end
 
----@class AstStringParams : AstExpressionBaseParams
+---@class AstStringParams : AstExpressionBaseParams, AstPositionParams
 ---@field value string
 ---@field src_is_ident boolean|nil
 ---@field src_is_block_str boolean|nil
@@ -587,7 +607,7 @@ end
 
 ---@param params AstStringParams
 function nodes.new_string(params)
-  local node = expr_base(new_node("string"), params)
+  local node = expr_base(new_node("string", params.position), params)
   node.value = assert(params.value, "null strings might be valid, but they truly are useless and annoying, so no")
   node.src_is_ident = params.src_is_ident
   node.src_is_block_str = params.src_is_block_str
@@ -598,30 +618,30 @@ function nodes.new_string(params)
   return node
 end
 
----@class AstNilParams : AstExpressionBaseParams
+---@class AstNilParams : AstExpressionBaseParams, AstPositionParams
 
 ---@param params AstNilParams
 function nodes.new_nil(params)
-  local node = expr_base(new_node("nil"), params)
+  local node = expr_base(new_node("nil", params.position), params)
   return node
 end
 
----@class AstBooleanParams : AstExpressionBaseParams
+---@class AstBooleanParams : AstExpressionBaseParams, AstPositionParams
 ---@field value boolean
 
 ---@param params AstBooleanParams
 function nodes.new_boolean(params)
-  local node = expr_base(new_node("boolean"), params)
+  local node = expr_base(new_node("boolean", params.position), params)
   assert(params.value == true or params.value == false, "'boolean' nodes need a boolean value")
   node.value = params.value
   return node
 end
 
----@class AstVarArgParams : AstExpressionBaseParams
+---@class AstVarArgParams : AstExpressionBaseParams, AstPositionParams
 
 ---@param params AstVarArgParams
 function nodes.new_vararg(params)
-  local node = expr_base(new_node("vararg"), params)
+  local node = expr_base(new_node("vararg", params.position), params)
   return node
 end
 
@@ -654,14 +674,6 @@ end
 
 function nodes.new_inline_iife()
   error("-- TODO: refactor inline iife")
-end
-
--- util
-
-function nodes.set_position(node, token)
-  node.line = token.line
-  node.column = token.column
-  node.leading = token.leading
 end
 
 return nodes
