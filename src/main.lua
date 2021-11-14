@@ -467,7 +467,7 @@ if success then
       end
       local output_file = output_file_dir / (source_file:filename()..args.lua_extension)
 
-      file = assert(io.open(output_file:str(), args.use_load and "w" or "wb"))
+      local file = assert(io.open(output_file:str(), args.use_load and "w" or "wb"))
       file:write(output)
       file:close()
       ::continue::
