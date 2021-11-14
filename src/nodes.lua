@@ -150,11 +150,24 @@ function nodes.new_functiondef(params)
   return node
 end
 
+local cannot_infer_value_for_token_type_lut = invert{
+  "blank",
+  "comment",
+  "string",
+  "number",
+  "ident",
+}
+
 ---@param token Token
 ---@param value string|nil @ default: `token.value`
 function nodes.new_token(token, value)
   local node = new_node("token", token)
-  node.value = value or token.value
+  if value then
+    node.value = value
+  elseif not cannot_infer_value_for_token_type_lut[token.token_type] then
+    node.value = token.token_type
+  end
+  -- else `node.value = nil`
   return node
 end
 
