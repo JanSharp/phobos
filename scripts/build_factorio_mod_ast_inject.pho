@@ -34,8 +34,6 @@ return function(main)
   -- insert
   -- `if ... ~= "__phobos__.foo" then return require("__phobos__.foo") end`
   -- at the beginning of the main body
-  -- except for `control`, because not only makes that no sense,
-  -- but it also breaks by indexing global ? a nil value. Idk why
 
   local correct_require_name = main.source
     :gsub("^@", "")
@@ -43,10 +41,6 @@ return function(main)
     :gsub("%.lua$", "")
     :gsub("%.pho$", "")
     :gsub("/", ".")
-
-  if correct_require_name == "__phobos__.control" then
-    return
-  end
 
   -- hmmm, so this is no longer temp, but I still don't love it
   -- requiring a callback for every statement is... eh? I'm mostly annoyed by `stat_elem`
