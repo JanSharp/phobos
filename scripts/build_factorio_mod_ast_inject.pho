@@ -1,6 +1,5 @@
 
 local walker = require("ast_walker")
-local ill = require("indexed_linked_list")
 local ast = require("ast_util")
 local nodes = require("nodes")
 
