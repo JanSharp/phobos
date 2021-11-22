@@ -78,6 +78,7 @@
     "prio",
     "proto",
     "protos",
+    "ptrs",
     "rawget",
     "rawset",
     "regs",
