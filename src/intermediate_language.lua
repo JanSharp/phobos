@@ -12,6 +12,9 @@
 ---@class ILRegister : ILPointer
 ---@field ptr_type '"reg"'
 
+---@class ILVarargRegister : ILRegister
+---@field ptr_type '"vararg"'
+
 ---@class ILNumber : ILPointer
 ---@field ptr_type '"number"'
 ---@field value number
@@ -133,6 +136,7 @@ end
 ---@class ILSetTableParams : ILInstParamsBase
 ---@field table_reg ILRegister
 ---@field key_ptr ILPointer
+---Can be a `ILVarargRegister` at which point `key_ptr` has to be an integer constant >= 1
 ---@field right_ptr ILPointer
 
 ---@param params ILGetUpvalParams
@@ -222,10 +226,8 @@ end
 
 ---@class ILCallParams : ILInstParamsBase
 ---@field func_reg ILRegister
----@field args ILPointer[]|nil
----@field result_regs ILRegister[]|nil
----@field consume_vararg boolean|nil
----@field vararg_result boolean|nil
+---@field args ILPointer[]|nil @ The last one can be an `ILVarargRegister`
+---@field result_regs ILRegister[]|nil @ The last one can be an `ILVarargRegister`
 
 ---@param params ILCallParams
 local function new_call(params)
@@ -233,21 +235,17 @@ local function new_call(params)
   inst.func_reg = assert_reg(params, "func_reg")
   inst.args = params.args or {}
   inst.result_regs = params.result_regs or {}
-  inst.consume_vararg = params.consume_vararg or false
-  inst.vararg_result = params.vararg_result or false
   return inst
 end
 
 ---@class ILRetParams : ILInstParamsBase
----@field ptrs ILPointer[]|nil
----@field consume_vararg boolean|nil
+---@field ptrs ILPointer[]|nil @ The last one can be an `ILVarargRegister`
 
 ---@param params ILRetParams
 local function new_ret(params)
   local inst = new_inst(params, "ret")
   inst.func_reg = assert_reg(params, "func_reg")
   inst.ptrs = params.ptrs or {}
-  inst.consume_vararg = params.consume_vararg or false
   return inst
 end
 
@@ -264,14 +262,12 @@ local function new_closure(params)
 end
 
 ---@class ILVarargParams : ILInstParamsBase
----@field result_regs ILRegister[]|nil
----@field vararg_result boolean|nil
+---@field result_regs ILRegister[]|nil @ The last one can be an `ILVarargRegister`
 
 ---@param params ILVarargParams
 local function new_vararg(params)
   local inst = new_inst(params, "vararg")
   inst.result_regs = params.result_regs or {}
-  inst.vararg_result = params.vararg_result or false
   return inst
 end
 
