@@ -55,6 +55,13 @@ local function is_vararg_node_type(node_type)
   return vararg_node_type_lut[node_type]
 end
 
+local function is_single_result_node_type(node_type)
+  return not is_vararg_node_type(node_type) and node_type ~= "nil"
+end
+local function is_single_result_node(node)
+  return is_single_result_node_type(node.node_type)
+end
+
 ---currently unused
 local function clear_table(t)
   local keys = {}
@@ -209,6 +216,8 @@ return {
   is_const_node_type = is_const_node_type,
   is_vararg_node = is_vararg_node,
   is_vararg_node_type = is_vararg_node_type,
+  is_single_result_node = is_single_result_node,
+  is_single_result_node_type = is_single_result_node_type,
   clear_table = clear_table,
   get_main_position = get_main_position,
 }

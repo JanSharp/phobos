@@ -176,10 +176,7 @@ do
     if manage_temp then
       release_temp_reg(regs[0], func)
     end
-    if num_results > 1
-      and not util.is_vararg_node(expr)
-      and expr.node_type ~= "nil"
-    then
+    if num_results > 1 and util.is_single_result_node(expr) then
       generate_expr({
         node_type = "nil",
         line = get_last_used_line(func),
