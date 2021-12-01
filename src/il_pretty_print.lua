@@ -39,15 +39,13 @@ local function get_ptr(ptr, context)
 end
 
 local function get_upval(upval, context)
-  -- TODO: what type does upval have? (is going to have?)
-  local upval_def = upval.reference_def
-  if context.upval_label_lut[upval_def] then
-    return context.upval_label_lut[upval_def]
+  if context.upval_label_lut[upval] then
+    return context.upval_label_lut[upval]
   end
   local id = context.next_upval_id
   context.next_upval_id = id + 1
-  local label = "UP("..id..(upval_def.name and ("|"..upval_def.name) or "")..")"
-  context.upval_label_lut[upval_def] = label
+  local label = "UP("..id..(upval.name and ("|"..upval.name) or "")..")"
+  context.upval_label_lut[upval] = label
   return label
 end
 
@@ -102,7 +100,7 @@ local instruction_label_getter_lut = {
     return "JUMP", "-> "..get_label_label(inst.label, context)
   end,
   ["test"] = function(inst, context)
-    return "TEST", "if "..(inst.inverted and "not " or "")..get_ptr(inst.condition_ptr, context).." then -> "..get_label_label(inst.label, context)
+    return "TEST", "if "..(inst.jump_if_true and "" or "not ")..get_ptr(inst.condition_ptr, context).." then -> "..get_label_label(inst.label, context)
   end,
   ["call"] = function(inst, context)
     return "CALL", (inst.result_regs[1] and (get_list(get_reg, inst.result_regs, context).." := ") or "")..get_reg(inst.func_reg, context).."("..get_list(get_ptr, inst.arg_ptrs, context)..")"
@@ -111,10 +109,13 @@ local instruction_label_getter_lut = {
     return "RETURN", "return"..(inst.ptrs[1] and (" "..get_list(get_ptr, inst.ptrs, context)) or "")
   end,
   ["closure"] = function(inst, context)
-    return "CLOSURE", get_reg(inst.result_reg, context).." := <some function>" -- TODO: what is the type of a function
+    return "CLOSURE", get_reg(inst.result_reg, context).." := <some function>" -- TODO: what is there to say about a function?
   end,
   ["vararg"] = function(inst, context)
     return "VARARG", get_list(get_reg, inst.result_regs, context).." := vararg"
+  end,
+  ["scoping"] = function(inst, context)
+    return "SCOPING", get_list(get_reg, inst.result_regs, context).." := vararg"
   end,
 }
 

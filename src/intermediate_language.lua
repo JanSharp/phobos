@@ -2,41 +2,8 @@
 local util = require("util")
 local nodes = require("nodes")
 
---- same as in parser
+---same as in parser
 local prevent_assert = {prevent_assert = true}
-
----@alias ILPointerType
----| '"reg"'
----| '"vararg"'
----| '"number"'
----| '"string"'
----| '"boolean"'
----| '"nil"'
-
----@class ILPointer
----@field ptr_type ILPointerType
-
----@class ILRegister : ILPointer
----@field ptr_type '"reg"'
----@field name string|nil
-
----@class ILVarargRegister : ILRegister
----@field ptr_type '"vararg"'
-
----@class ILNumber : ILPointer
----@field ptr_type '"number"'
----@field value number
-
----@class ILString : ILPointer
----@field ptr_type '"string"'
----@field value string
-
----@class ILBoolean : ILPointer
----@field ptr_type '"boolean"'
----@field value boolean
-
----@class ILNil : ILPointer
----@field ptr_type '"nil"'
 
 local function is_reg(ptr)
   return ptr.ptr_type == "reg" or ptr.ptr_type == "vararg"
@@ -62,30 +29,8 @@ local function assert_ptr(params, field_name)
   return field
 end
 
----@class ILPosition
----@field leading Token[]
----@field line number
----@field column number
-
 ---@class ILInstParamsBase
 ---@field position ILPosition
-
----@alias ILInstructionType
----| '"move"'
----| '"get_upval"'
----| '"set_upval"'
----| '"get_table"'
----| '"set_table"'
----| '"new_table"'
----| '"binop"'
----| '"unop"'
----| '"label"'
----| '"jump"'
----| '"test"'
----| '"call"'
----| '"ret"'
----| '"closure"'
----| '"vararg"'
 
 local function new_inst(params, inst_type)
   return {inst_type = inst_type, position = params.position}
@@ -105,7 +50,7 @@ end
 
 ---@class ILGetUpvalParams : ILInstParamsBase
 ---@field result_reg ILRegister
----@field upval any @ -- TODO: type
+---@field upval ILUpval
 
 ---@param params ILGetUpvalParams
 local function new_get_upval(params)
@@ -116,7 +61,7 @@ local function new_get_upval(params)
 end
 
 ---@class ILSetUpvalParams : ILInstParamsBase
----@field upval any @ -- TODO: type
+---@field upval ILUpval
 ---@field right_ptr ILPointer
 
 ---@param params ILSetUpvalParams
@@ -211,7 +156,7 @@ local function new_label(params)
 end
 
 ---@class ILJumpParams : ILInstParamsBase
----@field label any @ -- TODO: type
+---@field label ILLabel
 
 ---@param params ILJumpParams
 local function new_jump(params)
@@ -221,7 +166,7 @@ local function new_jump(params)
 end
 
 ---@class ILTestParams : ILInstParamsBase
----@field label any @ -- TODO: type
+---@field label ILLabel
 ---@field condition_ptr ILPointer
 ---@field jump_if_true boolean|nil
 
@@ -260,7 +205,7 @@ end
 
 ---@class ILClosureParams : ILInstParamsBase
 ---@field result_reg ILRegister
----@field func any @ -- TODO: ILFunc
+---@field func ILFunction
 
 ---@param params ILClosureParams
 local function new_closure(params)
@@ -277,6 +222,18 @@ end
 local function new_vararg(params)
   local inst = new_inst(params, "vararg")
   inst.result_regs = params.result_regs or {}
+  return inst
+end
+
+---@class ILScopingParams : ILInstParamsBase
+---@field set_regs ILRegister[]|nil
+---@field get_regs ILRegister[]|nil
+
+---@param params ILScopingParams
+local function new_scoping(params)
+  local inst = new_inst(params, "scoping")
+  inst.set_regs = params.set_regs or {}
+  inst.get_regs = params.get_regs or {}
   return inst
 end
 
@@ -320,6 +277,7 @@ end
 
 local generate_expr
 local generate_stat
+local generate_functiondef
 
 local function get_last_used_position(func)
   return func.instructions[#func.instructions] and func.instructions[#func.instructions].position
@@ -327,6 +285,10 @@ end
 
 local function find_local(expr, func)
   return assert(func.temp.local_reg_lut[expr.reference_def])
+end
+
+local function find_upval(expr, func)
+  return assert(func.temp.upval_def_lut[expr.reference_def])
 end
 
 local function set_local_reg(local_ref, reg, func)
@@ -453,7 +415,7 @@ do
       add_inst(func, new_get_upval{
         position = expr,
         result_reg = reg,
-        upval = expr, -- TODO: change when I know the type
+        upval = find_upval(expr, func),
       })
       return reg
     end,
@@ -478,6 +440,7 @@ do
       return reg
     end,
     ["binop"] = function(expr, func)
+      -- TODO: `and` and `or` binops should be jumps
       local reg = new_reg()
       add_inst(func, new_binop{
         position = expr.op_token,
@@ -533,7 +496,7 @@ do
       add_inst(func, new_closure{
         position = expr.func_def.function_token,
         result_reg = reg,
-        func = func.temp.il_func_lut[expr.func_def],
+        func = generate_functiondef(expr.func_def, func),
       })
       return reg
     end,
@@ -929,7 +892,7 @@ do
       add_inst(func, new_closure{
         position = stat.func_def.function_token,
         result_reg = reg,
-        func = func.temp.il_func_lut[stat.func_def],
+        func = generate_functiondef(stat.func_def, func),
       })
     end,
     ["label"] = function(stat, func)
@@ -985,7 +948,6 @@ do
         elseif left.node_type == "upval_ref" then
           lefts[i] = {
             type = "upval",
-            -- temp_reg = new_reg(),
           }
         elseif left.node_type == "index" then
           lefts[i] = {
@@ -1010,7 +972,7 @@ do
       local function generate_setupval(left, lhs_expr, right_ptr)
         add_inst(func, new_set_upval{
           position = lhs_expr,
-          upval = lhs_expr, -- TODO: change this once I know the type
+          upval = find_upval(lhs_expr, func),
           right_ptr = right_ptr,
         })
       end
@@ -1115,39 +1077,63 @@ do
   end
 end
 
-local function generate_functiondef(ast_func, parent_il_func)
+function generate_functiondef(functiondef, func)
+  if not functiondef.is_main then
+    assert(func, "`func` can only be omitted if the given functiondef is a main chunk")
+  end
+
   local il_func = {
-    ast = ast_func, -- but why?
-    parent_il_func = parent_il_func,
-    instructions = {},
+    parent_func = func,
     inner_functions = {},
+    instructions = {},
     temp = {
       local_reg_lut = {},
+      upval_def_lut = {},
       break_jump_lut = {},
       label_inst_lut = {},
       goto_inst_lut = {},
-      il_func_lut = {},
     },
+    upvals = {},
     param_regs = {},
+    is_vararg = functiondef.is_vararg,
   }
 
-  if parent_il_func then
-    parent_il_func.inner_functions[#parent_il_func.inner_functions+1] = il_func
-  end
-  -- inner functions first so closure instructions can reference them
-  for _, inner_ast_func in ipairs(ast_func.func_protos) do
-    il_func.temp.il_func_lut[inner_ast_func] = generate_functiondef(inner_ast_func, il_func)
+  if func then
+    func.inner_functions[#func.inner_functions+1] = il_func
   end
 
-  for i, param in ipairs(ast_func.params) do
+  for i, upval in ipairs(functiondef.upvals) do
+    local il_upval = {
+      name = upval.name,
+      parent_type = nil, -- set below
+      child_upvals = {},
+    }
+    il_func.upvals[i] = il_upval
+    il_func.temp.upval_def_lut[upval] = il_upval
+    if upval.parent_def.def_type == "upval" then
+      il_upval.parent_type = "upval"
+      local parent_upval = func.temp.upval_def_lut[upval.parent_def]
+      il_func.upvals[i].parent_upval = parent_upval
+      parent_upval.child_upvals[#parent_upval.child_upvals+1] = il_func.upvals[i]
+    elseif upval.parent_def.scope.node_type == "env_scope" then
+      -- this will actually only ever happen for the main chunk, but I like this test better
+      -- I think it is more explicit and descriptive
+      il_upval.parent_type = "env"
+    else
+      il_upval.parent_type = "local"
+      il_func.upvals[i].reg_in_parent_func = func.temp.local_reg_lut[upval.parent_def]
+    end
+  end
+
+  for i, param in ipairs(functiondef.params) do
     il_func.param_regs[i] = new_reg(param.name)
     set_local_reg(param, il_func.param_regs[i], il_func)
   end
 
-  generate_scope(ast_func, il_func)
+  generate_scope(functiondef, il_func)
 
   -- as per usual, an extra return for good measure
-  add_inst(il_func, new_ret{position = ast_func.end_token or get_last_used_position(il_func)})
+  add_inst(il_func, new_ret{position = functiondef.end_token or get_last_used_position(il_func)})
 
   il_func.temp = nil
   return il_func

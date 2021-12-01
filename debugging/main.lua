@@ -8,7 +8,7 @@ Path.use_forward_slash_as_main_separator_on_windows()
 
 local unsafe = true
 local print_progress = true
-local use_regular_lua_compiler = true
+local use_regular_lua_compiler = false
 local use_phobos_compiler = true
 local do_create_inline_iife = false
 local do_fold_const = true
