@@ -14,10 +14,11 @@ end
 
 ---@param name string
 ---@return AstLocalDef
-function ast.create_local_def(name)
+function ast.create_local_def(name, scope)
   return {
     def_type = "local",
     name = name,
+    scope = scope,
     child_defs = {},
     refs = {},
   }
@@ -26,8 +27,8 @@ end
 ---@param ident_token Token
 ---@return AstLocalDef def
 ---@return AstLocalReference ref
-function ast.create_local(ident_token, stat_elem)
-  local local_def = ast.create_local_def(ident_token.value)
+function ast.create_local(ident_token, scope, stat_elem)
+  local local_def = ast.create_local_def(ident_token.value, scope)
 
   local ref = nodes.new_local_ref{
     stat_elem = stat_elem,

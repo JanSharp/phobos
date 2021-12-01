@@ -215,7 +215,7 @@ local function par_list(scope, stat_elem)
   while true do
     if test_next("ident") then
       local param_def
-      param_def, params[#params+1] = ast.create_local(prev_token, stat_elem)
+      param_def, params[#params+1] = ast.create_local(prev_token, scope, stat_elem)
       param_def.whole_block = true
       scope.locals[#scope.locals+1] = param_def
     elseif token.token_type == "..." then
@@ -256,7 +256,7 @@ local function functiondef(function_token, scope, is_method, stat_elem)
     param_comma_tokens = {},
   }
   if is_method then
-    local self_local = ast.create_local_def("self")
+    local self_local = ast.create_local_def("self", node)
     self_local.whole_block = true
     self_local.src_is_method_self = true
     node.locals[1] = self_local
@@ -705,7 +705,7 @@ end
 ---@param scope AstScope
 ---@return Token
 local function for_num(first_name, scope, stat_elem)
-  local var_local, var_ref = ast.create_local(first_name, stat_elem)
+  local var_local, var_ref = ast.create_local(first_name, scope, stat_elem)
   var_local.whole_block = true
   local node = nodes.new_fornum{
     stat_elem = stat_elem,
@@ -738,7 +738,7 @@ end
 ---@param scope AstScope
 ---@return Token
 local function for_list(first_name, scope, stat_elem)
-  local name_local, name_ref = ast.create_local(first_name, stat_elem)
+  local name_local, name_ref = ast.create_local(first_name, scope, stat_elem)
   name_local.whole_block = true
   local name_list = {name_ref}
   local node = nodes.new_forlist{
@@ -751,7 +751,7 @@ local function for_list(first_name, scope, stat_elem)
   }
   while test_next(",") do
     node.comma_tokens[#node.comma_tokens+1] = new_token_node(true)
-    node.locals[#node.locals+1], name_list[#name_list+1] = ast.create_local(assert_ident(), stat_elem)
+    node.locals[#node.locals+1], name_list[#name_list+1] = ast.create_local(assert_ident(), scope, stat_elem)
     node.locals[#node.locals].whole_block = true
   end
   node.in_token = new_token_node()
@@ -832,7 +832,7 @@ local function if_stat(scope, stat_elem)
 end
 
 local function local_func(local_token, function_token, scope, stat_elem)
-  local name_local, name_ref = ast.create_local(assert_ident(), stat_elem)
+  local name_local, name_ref = ast.create_local(assert_ident(), scope, stat_elem)
   scope.locals[#scope.locals+1] = name_local
   local node = nodes.new_localfunc{
     stat_elem = stat_elem,
@@ -862,7 +862,7 @@ local function local_stat(local_token, scope, stat_elem)
   end
   local local_defs = {}
   repeat
-    local_defs[#local_defs+1], node.lhs[#node.lhs+1] = ast.create_local(assert_ident(), stat_elem)
+    local_defs[#local_defs+1], node.lhs[#node.lhs+1] = ast.create_local(assert_ident(), scope, stat_elem)
     local_defs[#local_defs].start_at = node
     local_defs[#local_defs].start_offset = 1
   until not test_comma()
@@ -1031,9 +1031,8 @@ local function main_func(chunk_name)
   -- of the file. I'll probably change this one day to be
   -- the first upval of the parent scope, since load()
   -- clobbers the first upval anyway to be the new _ENV value
-  local def = ast.create_local_def("_ENV")
+  local def = ast.create_local_def("_ENV", env_scope)
   def.whole_block = true
-  def.scope = env_scope
   env_scope.locals[1] = def
 
   local main = ast.append_stat(env_scope, function(stat_elem)

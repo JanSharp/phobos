@@ -416,6 +416,7 @@
 ---@class AstLocalDef
 ---@field def_type '"local"'
 ---@field name string
+---@field scope AstScope
 ---i think this means it is defined at the start of
 ---the block and lasts for the entire block
 ---@field whole_block boolean|nil
