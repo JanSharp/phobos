@@ -327,7 +327,8 @@
 ---@field ex AstExpression
 ---@field op_token AstTokenNode @ position for the various unop instructions
 
----@alias AstBinOpOp '"^"'|'"*"'|'"/"'|'"%"'|'"+"'|'"-"'|'"=="'|'"<"'|'"<="'|'"~="'|'">"'|'">="'|'"and"'|'"or"'
+---@alias ILBinOpOpBase '"^"'|'"*"'|'"/"'|'"%"'|'"+"'|'"-"'|'"=="'|'"<"'|'"<="'|'"~="'|'">"'|'">="'
+---@alias AstBinOpOp ILBinOpOpBase|'"and"'|'"or"'
 
 ---@class AstBinOp : AstExpression
 ---@field node_type '"binop"'
@@ -552,7 +553,7 @@
 ---@class ILBinop
 ---@field inst_type '"binop"'
 ---@field result_reg ILRegister
----@field op AstBinOpOp|'".."' @ -- TODO: no `and` and `or`
+---@field op ILBinOpOpBase|'".."' @ note the absence of "and" and "or", but presence of ".."
 ---@field left_ptr ILPointer
 ---@field right_ptr ILPointer
 

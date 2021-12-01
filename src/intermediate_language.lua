@@ -126,6 +126,9 @@ local function new_binop(params)
   local inst = new_inst(params, "binop")
   inst.result_reg = assert_reg(params, "result_reg")
   inst.op = assert_field(params, "op")
+  assert(params.op ~= "and" and params.op ~= "or",
+    "Use jumps for '"..params.op.."' ('and' and 'or') binops in IL"
+  )
   inst.left_ptr = assert_ptr(params, "left_ptr")
   inst.right_ptr = assert_ptr(params, "right_ptr")
   return inst
@@ -359,6 +362,31 @@ local function generate_expr_list(expr_list, func, num_results, regs, allow_ptrs
   end
 end
 
+local function jump_here(jumps, func, label_position)
+  if not jumps[1] then
+    return
+  end
+  local label
+  if func.instructions[#func.instructions].inst_type == "label" then
+    label = func.instructions[#func.instructions]
+    if not (label.position == label_position
+        or (label.position and label_position
+          and label.position.line == label_position.line
+          and label.position.column == label_position.column
+        )
+      )
+    then
+      label = nil
+    end
+  end
+  if not label then
+    label = add_inst(func, new_label{position = label_position})
+  end
+  for _, jump in ipairs(jumps) do
+    jump.label = label
+  end
+end
+
 do
   local function make_generate_const_expr(right_ptr_constructor)
     return function(expr, func)
@@ -440,16 +468,33 @@ do
       return reg
     end,
     ["binop"] = function(expr, func)
-      -- TODO: `and` and `or` binops should be jumps
-      local reg = new_reg()
-      add_inst(func, new_binop{
-        position = expr.op_token,
-        result_reg = reg,
-        left_ptr = const_or_local_or_fetch(expr.left, func),
-        op = expr.op,
-        right_ptr = const_or_local_or_fetch(expr.right, func),
-      })
-      return reg
+      if expr.op == "and" or expr.op == "or" then
+        local reg = generate_expr(expr.left, func)
+        local jump = add_inst(func, new_test{
+          condition_ptr = reg,
+          position = expr.op_token,
+          jump_if_true = expr.op == "or",
+          label = prevent_assert,
+        })
+        -- should directly assign to `reg`, but the IL generator currently does not have this capability
+        add_inst(func, new_move{
+          position = expr.op_token,
+          result_reg = reg,
+          right_ptr = const_or_local_or_fetch(expr.right, func),
+        })
+        jump_here({jump}, func, expr.op_token)
+        return reg
+      else
+        local reg = new_reg()
+        add_inst(func, new_binop{
+          position = expr.op_token,
+          result_reg = reg,
+          left_ptr = const_or_local_or_fetch(expr.left, func),
+          op = expr.op,
+          right_ptr = const_or_local_or_fetch(expr.right, func),
+        })
+        return reg
+      end
     end,
     ["concat"] = function(expr, func)
       local left_ptr = const_or_local_or_fetch(expr.exp_list[1], func)
@@ -629,31 +674,6 @@ do
       label = prevent_assert,
     })
     return test
-  end
-
-  local function jump_here(jumps, func, label_position)
-    if not jumps[1] then
-      return
-    end
-    local label
-    if func.instructions[#func.instructions].inst_type == "label" then
-      label = func.instructions[#func.instructions]
-      if not (label.position == label_position
-          or (label.position and label_position
-            and label.position.line == label_position.line
-            and label.position.column == label_position.column
-          )
-        )
-      then
-        label = nil
-      end
-    end
-    if not label then
-      label = add_inst(func, new_label{position = label_position})
-    end
-    for _, jump in ipairs(jumps) do
-      jump.label = label
-    end
   end
 
   local function breaks_jump_here(loop, func, label_position)
