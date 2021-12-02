@@ -3,15 +3,6 @@ local ast_walker = require("ast_walker")
 local util = require("util")
 
 local clear_exp_field_lut = {
-  ["selfcall"] = function(exp)
-    exp.ex = nil
-    exp.suffix = nil
-    exp.args = nil
-    exp.args_comma_tokens = nil
-    exp.colon_token = nil
-    exp.open_paren_token = nil
-    exp.close_paren_token = nil
-  end,
   ["call"] = function(exp)
     exp.ex = nil
     exp.args = nil

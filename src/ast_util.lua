@@ -1,21 +1,8 @@
 
 local nodes = require("nodes")
+local ill = require("indexed_linked_list")
 
 local ast = {}
-
----@param node_type AstNodeType
-function ast.new_node(node_type)
-  return {node_type = node_type}
-end
-
-function ast.copy_node(node, new_node_type)
-  return {
-    node_type = new_node_type,
-    line = node.line,
-    column = node.column,
-    leading = node.leading,
-  }
-end
 
 function ast.get_start_index(local_def)
   return local_def.start_at.stat_elem.index + local_def.start_offset
@@ -27,10 +14,11 @@ end
 
 ---@param name string
 ---@return AstLocalDef
-function ast.create_local_def(name)
+function ast.create_local_def(name, scope)
   return {
     def_type = "local",
     name = name,
+    scope = scope,
     child_defs = {},
     refs = {},
   }
@@ -39,13 +27,15 @@ end
 ---@param ident_token Token
 ---@return AstLocalDef def
 ---@return AstLocalReference ref
-function ast.create_local(ident_token, stat_elem)
-  local local_def = ast.create_local_def(ident_token.value)
+function ast.create_local(ident_token, scope, stat_elem)
+  local local_def = ast.create_local_def(ident_token.value, scope)
 
-  local ref = ast.copy_node(ident_token, "local_ref")
-  ref.stat_elem = stat_elem
-  ref.name = ident_token.value
-  ref.reference_def = local_def
+  local ref = nodes.new_local_ref{
+    stat_elem = stat_elem,
+    position = ident_token,
+    name = ident_token.value,
+    reference_def = local_def,
+  }
   return local_def, ref
 end
 
@@ -125,26 +115,54 @@ do
     local def = try_get_def(scope, name, stat_elem.index)
     if def then
       -- `local_ref` or `upval_ref`
-      local ref = (def.def_type == "local" and nodes.new_local_ref and nodes.new_upval_ref)(
-        stat_elem,
-        name,
-        def
-      )
+      local ref = (def.def_type == "local" and nodes.new_local_ref or nodes.new_upval_ref){
+        stat_elem = stat_elem,
+        name = name,
+        reference_def = def,
+      }
+      nodes.set_position(ref, node_for_position)
       def.refs[#def.refs+1] = ref
       return ref
     end
 
-    local suffix = nodes.new_string(stat_elem, name, true)
+    local suffix = nodes.new_string{
+      stat_elem = stat_elem,
+      value = name,
+      src_is_ident = true,
+    }
     nodes.set_position(suffix, node_for_position)
 
-    local node = nodes.new_index(
-      stat_elem,
-      ast.get_ref(scope, stat_elem, "_ENV", node_for_position),
-      suffix,
-      true
-    )
+    local node = nodes.new_index{
+      stat_elem = stat_elem,
+      ex = ast.get_ref(scope, stat_elem, "_ENV", node_for_position),
+      suffix = suffix,
+      src_ex_did_not_exist = true,
+    }
 
     return node
+  end
+end
+
+do
+  local function call_callback(stat_elem, callback)
+    stat_elem.value = assert(callback(stat_elem), "The callback must return the created statement")
+    return stat_elem.value
+  end
+
+  function ast.prepend_stat(scope, callback)
+    return call_callback(ill.prepend(scope.body), callback)
+  end
+
+  function ast.append_stat(scope, callback)
+    return call_callback(ill.append(scope.body), callback)
+  end
+
+  function ast.insert_after_stat(stat, callback)
+    return call_callback(ill.insert_after(stat.stat_elem), callback)
+  end
+
+  function ast.insert_before_stat(stat, callback)
+    return call_callback(ill.insert_before(stat.stat_elem), callback)
   end
 end
 

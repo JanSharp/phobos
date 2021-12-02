@@ -13,12 +13,6 @@ local walk_scope
 local walk_exp
 local walk_exp_list
 
----@param node AstSelfCall
-local function selfcall(node, context)
-  walk_exp(node.ex, context)
-  walk_exp_list(node.args, context)
-end
-
 ---@param node AstCall
 local function call(node, context)
   walk_exp(node.ex, context)
@@ -93,7 +87,6 @@ local exprs = {
     end
   end,
 
-  selfcall = selfcall,
   call = call,
 
   ---@param node AstInlineIIFE
@@ -208,7 +201,6 @@ local stats = {
     walk_exp_list(node.rhs, context)
   end,
 
-  selfcall = selfcall,
   call = call,
 
   ---@param node AstInlineIIFERetstat

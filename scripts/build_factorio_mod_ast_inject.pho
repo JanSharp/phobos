@@ -1,7 +1,7 @@
 
 local walker = require("ast_walker")
-local ill = require("indexed_linked_list")
 local ast = require("ast_util")
+local nodes = require("nodes")
 
 local on_open = {
   call = function(node, scope)
@@ -34,8 +34,6 @@ return function(main)
   -- insert
   -- `if ... ~= "__phobos__.foo" then return require("__phobos__.foo") end`
   -- at the beginning of the main body
-  -- except for `control`, because not only makes that no sense,
-  -- but it also breaks by indexing global ? a nil value. Idk why
 
   local correct_require_name = main.source
     :gsub("^@", "")
@@ -44,69 +42,51 @@ return function(main)
     :gsub("%.pho$", "")
     :gsub("/", ".")
 
-  if correct_require_name == "__phobos__.control" then
-    return
-  end
+  -- hmmm, so this is no longer temp, but I still don't love it
+  -- requiring a callback for every statement is... eh? I'm mostly annoyed by `stat_elem`
+  -- requiring an iife for every scope is also annoying but there is not much to be done about that
+  -- I really wish `stat_elem` just wasn't a thing
+  ast.prepend_stat(main, function(ifstat_elem)
+    return nodes.new_ifstat{
+      stat_elem = ifstat_elem,
+      ifs = {(function()
+        local testblock = nodes.new_testblock{ -- `if`
+          stat_elem = ifstat_elem,
+          parent_scope = main,
+          condition = nodes.new_binop{ -- `... ~= <correct_require_name>`
+            stat_elem = ifstat_elem,
+            left = nodes.new_vararg{stat_elem = ifstat_elem},
+            op = "~=",
+            right = nodes.new_string{
+              stat_elem = ifstat_elem,
+              value = correct_require_name,
+            },
+          },
+        } -- `then`
 
-  -- this is basically 100% temp
-  -- definition of AST like this is going to change with some library functions at some point
-  local ifstat_elem = ill.prepend(main.body)
-  local ifstat = ast.new_node("ifstat")
-  ifstat.elem_stat = ifstat_elem
-  ifstat.ifs = {(function()
-    local testblock = ast.new_node("testblock")
-    testblock.stat_elem = ifstat_elem
-    testblock.parent_scope = main
-    testblock.locals = {}
-    testblock.labels = {}
-    testblock.condition = (function()
-      local binop = ast.new_node("binop")
-      binop.stat_elem = ifstat_elem
-      binop.left = (function()
-        local vararg = ast.new_node("vararg")
-        vararg.stat_elem = ifstat_elem
-        return vararg
-      end)()
-      binop.op = "~="
-      binop.right = (function()
-        local str = ast.new_node("string")
-        str.elem_stat = ifstat_elem
-        str.value = correct_require_name
-        return str
-      end)()
-      return binop
-    end)()
-    testblock.body = ill.new()
+        ast.append_stat(testblock, function(retstat_elem)
+          return nodes.new_retstat{ -- `return`
+            stat_elem = retstat_elem,
+            exp_list = {nodes.new_call{
+              stat_elem = retstat_elem,
+              ex = nodes.new_index{ -- `_ENV.require`
+                stat_elem = retstat_elem,
+                ex = ast.get_ref(testblock, retstat_elem, "_ENV"),
+                suffix = nodes.new_string{
+                  stat_elem = retstat_elem,
+                  value = "require",
+                },
+              },
+              args = {nodes.new_string{ -- `(<correct_require_name>)`
+                stat_elem = retstat_elem,
+                value = correct_require_name,
+              }},
+            }},
+          }
+        end)
 
-    local retstat_elem = ill.append(testblock.body)
-    local retstat = ast.new_node("retstat")
-    retstat.stat_elem = retstat_elem
-    retstat.exp_list = {(function()
-      local call = ast.new_node("call")
-      call.stat_elem = retstat_elem
-      call.ex = (function()
-        local index = ast.new_node("index")
-        index.stat_elem = retstat_elem
-        index.ex = ast.get_ref(testblock, retstat_elem, "_ENV")
-        index.suffix = (function()
-          local str = ast.new_node("string")
-          str.stat_elem = retstat_elem
-          str.value = "require"
-          return str
-        end)()
-        return index
-      end)()
-      call.args = {(function()
-        local str = ast.new_node("string")
-        str.stat_elem = retstat_elem
-        str.value = correct_require_name
-        return str
-      end)()}
-      return call
-    end)()}
-    retstat_elem.value = retstat
-
-    return testblock
-  end)()}
-  ifstat_elem.value = ifstat
+        return testblock -- `end`
+      end)()},
+    }
+  end)
 end

@@ -57,23 +57,13 @@ local function format(main)
     add(token_node.value)
   end
 
-  ---@param node AstSelfCall
-  local function selfcall(node)
-    add_exp(node.ex)
-    add_token(node.colon_token)
-    add_exp(node.suffix)
-    if node.open_paren_token then
-      add_token(node.open_paren_token)
-    end
-    add_exp_list(node.args, node.args_comma_tokens)
-    if node.close_paren_token then
-      add_token(node.close_paren_token)
-    end
-  end
-
   ---@param node AstCall
   local function call(node)
     add_exp(node.ex)
+    if node.is_selfcall then
+      add_token(node.colon_token)
+      add_exp(node.suffix)
+    end
     if node.open_paren_token then
       add_token(node.open_paren_token)
     end
@@ -203,7 +193,6 @@ local function format(main)
       add_token(node.close_token)
     end,
 
-    selfcall = selfcall,
     call = call,
 
     ---@param node AstInlineIIFE
@@ -372,7 +361,6 @@ local function format(main)
       add_exp_list(node.rhs, node.rhs_comma_tokens)
     end,
 
-    selfcall = selfcall,
     call = call,
 
     ---@param node AstInlineIIFERetstat

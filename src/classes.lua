@@ -24,7 +24,6 @@
 ---| '"retstat"'
 ---| '"breakstat"'
 ---| '"gotostat"'
----| '"selfcall"' @ expression or statement
 ---| '"call"' @ expression or statement
 ---| '"assignment"'
 ---expressions:
@@ -86,9 +85,13 @@
 ---the first one in the list/first one you encounter when processing the data
 ---@field src_paren_wrappers AstParenWrapper[]|nil
 
+---@class AstStatementList : IndexedLinkedList
+---@field scope AstScope
+
 ---@class AstScope : AstNode
 ---@field parent_scope AstScope|nil @ `nil` for the top level scope, the main function
----@field body IndexedLinkedList<nil,AstStatement>
+---@field child_scopes AstScope[]
+---@field body AstStatementList
 ---@field locals AstLocalDef[]
 ---@field labels AstLabel[]
 
@@ -110,6 +113,7 @@
 ---@field close_paren_token AstTokenNode
 ---@field function_token AstTokenNode @ position for any `closure` instructions
 ---@field end_token AstTokenNode
+---@field eof_token 'nil' @ overridden by AstMain to be an AstTokenNode
 
 ---@class AstFuncBase : AstNode
 ---@field func_def AstFunctionDef
@@ -222,7 +226,7 @@
 ---@class AstBreakStat : AstStatement
 ---@field node_type '"breakstat"'
 ---@field break_token AstTokenNode @ position for the break `jmp` instruction
----@field linked_loop AstStatement[]|nil @ evaluated by the jump linker. not `nil` after successful linking
+---@field linked_loop AstLoop[]|nil @ evaluated by the jump linker. not `nil` after successful linking
 
 ---@class AstGotoStat : AstStatement
 ---@field node_type '"gotostat"'
@@ -231,21 +235,16 @@
 ---@field goto_token AstTokenNode @ position for the goto `jmp` instruction
 ---@field linked_label AstLabel|nil @ evaluated by the jump linker. not `nil` after successful linking
 
----@class AstSelfCall : AstStatement, AstExpression
----@field node_type '"selfcall"'
+---@class AstCall : AstStatement, AstExpression
+---@field node_type '"call"'
+---@field is_selfcall boolean
 ---@field ex AstExpression
----@field suffix AstString @ function name. `src_is_ident` is always `true`
+---only used if `is_selfcall == true`\
+---function name. `src_is_ident` is always `true`
+---@field suffix AstString
 ---@field args AstExpression[]
 ---@field args_comma_tokens AstTokenNode[]
 ---@field colon_token AstTokenNode @ position for the `self` instruction
----@field open_paren_token AstTokenNode|nil @ position for the `call` instruction
----@field close_paren_token AstTokenNode|nil @ position for `move` instructions moving out of temp regs
-
----@class AstCall : AstStatement, AstExpression
----@field node_type '"call"'
----@field ex AstExpression
----@field args AstExpression[]
----@field args_comma_tokens AstTokenNode[]
 ---@field open_paren_token AstTokenNode|nil @ position for the `call` instruction
 ---@field close_paren_token AstTokenNode|nil @ position for `move` instructions moving out of temp regs
 
@@ -268,7 +267,7 @@
 ---@field linked_inline_iife AstInlineIIFE
 ---@field leave_block_goto AstGotoStat
 
----@class AstLoopstat : AstStatement, AstScope, AstLoop
+---@class AstLoopStat : AstStatement, AstScope, AstLoop
 ---@field node_type '"loopstat"'
 ---@field do_jump_back boolean|nil @ when false behaves like a dostat, except breakstat can link to this
 ---@field open_token AstTokenNode
@@ -311,7 +310,7 @@
 ---if it was just an identifier in source.\
 ---Used in record field keys for table constructors\
 ---And when indexing with literal identifiers\
----Always `true` for AstSelfCall `suffix`
+---Always `true` for AstCall `suffix` (where `is_selfcall == true`)
 ---@field src_is_ident boolean|nil
 ---used when `src_is_ident` is falsy
 ---@field src_is_block_str boolean|nil
@@ -320,15 +319,20 @@
 ---@field src_has_leading_newline boolean|nil @ for block strings
 ---@field src_pad string|nil @ the `=` chain for block strings
 
+---@alias AstUnOpOp '"not"'|'"-"'|'"#"'
+
 ---@class AstUnOp : AstExpression
 ---@field node_type '"unop"'
----@field op '"not"'|'"-"'|'"#"'
+---@field op AstUnOpOp
 ---@field ex AstExpression
 ---@field op_token AstTokenNode @ position for the various unop instructions
 
+---@alias ILBinOpOpBase '"^"'|'"*"'|'"/"'|'"%"'|'"+"'|'"-"'|'"=="'|'"<"'|'"<="'|'"~="'|'">"'|'">="'
+---@alias AstBinOpOp ILBinOpOpBase|'"and"'|'"or"'
+
 ---@class AstBinOp : AstExpression
 ---@field node_type '"binop"'
----@field op '"^"'|'"*"'|'"/"'|'"%"'|'"+"'|'"-"'|'"=="'|'"<"'|'"<="'|'"~="'|'">"'|'">="'|'"and"'|'"or"'
+---@field op AstBinOpOp
 ---@field left AstExpression
 ---@field right AstExpression
 ---@field op_token AstTokenNode @ position for the various binop instructions
@@ -413,6 +417,7 @@
 ---@class AstLocalDef
 ---@field def_type '"local"'
 ---@field name string
+---@field scope AstScope
 ---i think this means it is defined at the start of
 ---the block and lasts for the entire block
 ---@field whole_block boolean|nil
@@ -438,9 +443,171 @@
 ---@class AstENVScope : AstScope
 ---@field node_type '"env_scope"'
 ---always contains exactly 1 ILLNode, the AstMain functiondef. A bit hacky, but AstMain needed a `stat_elem`
----@field body IndexedLinkedList<nil,AstStatement>
+---@field body AstStatementList
 ---@field locals AstLocalDef[] @ always exactly 1 `whole_block = true` local with the name `_ENV`
 ---@field labels AstLabel[] @ always empty
+
+--------------------------------------------------
+-- intermediate language:
+
+---@alias ILPointerType
+---| '"reg"'
+---| '"vararg"'
+---| '"number"'
+---| '"string"'
+---| '"boolean"'
+---| '"nil"'
+
+---@class ILPointer
+---@field ptr_type ILPointerType
+
+---@class ILRegister : ILPointer
+---@field ptr_type '"reg"'
+---@field name string|nil
+
+---@class ILVarargRegister : ILRegister
+---@field ptr_type '"vararg"'
+
+---@class ILNumber : ILPointer
+---@field ptr_type '"number"'
+---@field value number
+
+---@class ILString : ILPointer
+---@field ptr_type '"string"'
+---@field value string
+
+---@class ILBoolean : ILPointer
+---@field ptr_type '"boolean"'
+---@field value boolean
+
+---@class ILNil : ILPointer
+---@field ptr_type '"nil"'
+
+---@class ILUpval
+---@field name string|nil
+---@field parent_type '"upval"'|'"local"'|'"env"'
+---@field parent_upval ILUpval|nil @ used if `parent_type == "upval"`
+---@field reg_in_parent_func ILRegister|nil @ used if `parent_type == "local"`
+---@field child_upvals ILUpval[]
+
+---@class ILPosition
+---@field leading Token[]
+---@field line number
+---@field column number
+
+---@alias ILInstructionType
+---| '"move"'
+---| '"get_upval"'
+---| '"set_upval"'
+---| '"get_table"'
+---| '"set_table"'
+---| '"new_table"'
+---| '"binop"'
+---| '"unop"'
+---| '"label"'
+---| '"jump"'
+---| '"test"'
+---| '"call"'
+---| '"ret"'
+---| '"closure"'
+---| '"vararg"'
+---| '"scoping"'
+
+---@class ILInstruction
+---@field inst_type ILInstructionType
+
+---@class ILMove
+---@field inst_type '"move"'
+---@field result_reg ILRegister
+---@field right_ptr ILPointer
+
+---@class ILGetUpval
+---@field inst_type '"get_upval"'
+---@field result_reg ILRegister
+---@field upval ILUpval
+
+---@class ILSetUpval
+---@field inst_type '"set_upval"'
+---@field upval ILUpval
+---@field right_ptr ILPointer
+
+---@class ILGetTable
+---@field inst_type '"get_table"'
+---@field result_reg ILRegister
+---@field table_reg ILRegister
+---@field key_ptr ILPointer
+
+---@class ILSetTable
+---@field inst_type '"set_table"'
+---@field table_reg ILRegister
+---@field key_ptr ILPointer
+---Can be a `ILVarargRegister` at which point `key_ptr` has to be an integer constant >= 1
+---@field right_ptr ILPointer
+
+---@class ILNewTable
+---@field inst_type '"new_table"'
+---@field result_reg ILRegister
+---@field array_size integer
+---@field hash_size integer
+
+---@class ILBinop
+---@field inst_type '"binop"'
+---@field result_reg ILRegister
+---@field op ILBinOpOpBase|'".."' @ note the absence of "and" and "or", but presence of ".."
+---@field left_ptr ILPointer
+---@field right_ptr ILPointer
+
+---@class ILUnop
+---@field inst_type '"unop"'
+---@field result_reg ILRegister
+---@field op AstUnOpOp
+---@field right_ptr ILPointer
+
+---@class ILLabel
+---@field inst_type '"label"'
+---@field name string|nil
+
+---@class ILJump
+---@field inst_type '"jump"'
+---@field label ILLabel
+
+---@class ILTest
+---@field inst_type '"test"'
+---@field label ILLabel
+---@field condition_ptr ILPointer
+---@field jump_if_true boolean
+
+---@class ILCall
+---@field inst_type '"call"'
+---@field func_reg ILRegister
+---@field arg_ptrs ILPointer[] @ The last one can be an `ILVarargRegister`
+---@field result_regs ILRegister[] @ The last one can be an `ILVarargRegister`
+
+---@class ILRet
+---@field inst_type '"ret"'
+---@field ptrs ILPointer[] @ The last one can be an `ILVarargRegister`
+
+---@class ILClosure
+---@field inst_type '"closure"'
+---@field result_reg ILRegister
+---@field func ILFunction
+
+---@class ILVararg
+---@field inst_type '"vararg"'
+---@field result_regs ILRegister[] @ The last one can be an `ILVarargRegister`
+
+---@class ILScoping
+---@field inst_type '"scoping"'
+---@field set_regs ILRegister[]|nil
+---@field get_regs ILRegister[]|nil
+
+---@class ILFunction
+---@field parent_func ILFunction|nil @ `nil` if main chunk
+---@field inner_functions ILFunction[]
+---@field instructions ILInstruction[]
+---@field upvals ILUpval[]
+---@field param_regs ILRegister[]
+---@field is_vararg boolean
 
 --------------------------------------------------
 -- generated/bytecode stuff:
