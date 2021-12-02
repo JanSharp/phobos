@@ -389,6 +389,29 @@ local function format(main)
 
   add_scope(main)
   add_leading(main.eof_token)
+
+  -- dirty way of ensuring formatted code doesn't combine identifiers (or keywords or numbers)
+  -- one line comments without a blank token afterwards with a newline in its value can still
+  -- "break" formatted code in the sense that it changes the general AST structure, or most likely
+  -- causes a syntax error when parsed again
+  do
+    local prev = out[1]
+    local i = 2
+    local c = #out
+    while i <= c do
+      local cur = out[i]
+      if cur ~= "" then
+        if prev:find("[a-z_A-Z0-9]$") and cur:find("^[a-z_A-Z0-9]") then
+          table.insert(out, i, " ")
+          i = i + 1
+          c = c + 1
+        end
+        prev = cur
+      end
+      i = i + 1
+    end
+  end
+
   return table.concat(out)
 end
 
