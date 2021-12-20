@@ -32,7 +32,7 @@ end
 -- base nodes
 
 ---@class AstPositionParams
----@field position AstTokenNode|nil
+---@field position Token|AstTokenNode|nil
 
 ---@class AstStatementBaseParams
 ---@field stat_elem ILLNode<nil,AstStatement>
@@ -168,6 +168,19 @@ function nodes.new_token(token, value)
     node.value = token.token_type
   end
   -- else `node.value = nil`
+  return node
+end
+
+---@class AstInvalidParams : AstPositionParams
+---@field error_message string
+---@field tokens AstTokenNode[]|nil
+
+---@param params AstInvalidParams
+function nodes.new_invalid(params)
+  local node = new_node("invalid", params.position)
+  node.leading = nil -- doesn't use leading, period
+  node.error_message = assert_params_field(params, "error_message")
+  node.tokens = params.tokens or {}
   return node
 end
 

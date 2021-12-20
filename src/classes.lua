@@ -7,6 +7,7 @@
 ---| '"env_scope"'
 ---| '"functiondef"'
 ---| '"token"'
+---| '"invalid"'
 ---statements:
 ---| '"empty"'
 ---| '"ifstat"'
@@ -66,6 +67,14 @@
 ---on the parent/main node\
 ---each of these have a comment noting that their `value` is `nil`
 ---@field value string|nil
+
+---uses line and column (but not leading) (indicating the location of the error)\
+---indicates syntax errors
+---TODO: maybe add an error id and respective enum
+---@class AstInvalidNode : AstNode
+---@field node_type '"invalid"'
+---@field error_message string
+---@field tokens AstTokenNode[]|nil @ tokens that ended up being unused due to this syntax error
 
 ---@class AstStatement : AstNode
 ---the element in the statement list of the scope this statement is in
