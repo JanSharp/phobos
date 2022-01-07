@@ -1,6 +1,8 @@
 
 local arg_parser = require("lib.LuaArgParser.arg_parser")
 local Path = require("lib.LuaPath.path")
+---@type LFS
+local lfs = require("lfs")
 Path.use_forward_slash_as_main_separator_on_windows()
 local build_profile_arg_provider = require("build_profile_arg_provider")
 arg_parser.register_type(Path.arg_parser_path_type_def)
@@ -57,3 +59,17 @@ end
 copy_from_root_to_output("info.json")
 copy_from_root_to_output("changelog.txt")
 copy_from_root_to_output("thumbnail_144_144_padded.png", "thumbnail.png")
+
+-- create symlink for minimal-no-base-mod
+local output_root_path = Path.combine("out/factorio", args.profile)
+local function create_symlink(mod_name)
+  if not (output_root_path / mod_name):exists() or true then
+    lfs.link(
+      Path.combine("debugging", mod_name):to_fully_qualified():str(),
+      (output_root_path / mod_name):str(),
+      true
+    )
+  end
+end
+create_symlink("minimal-no-base-mod")
+create_symlink("JanSharpDevEnv")

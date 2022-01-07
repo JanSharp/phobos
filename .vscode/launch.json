@@ -7,7 +7,7 @@
     {
       "type": "factoriomod",
       "request": "launch",
-      "name": "Factorio Mod",
+      "name": "Factorio Mod (base)",
       "factorioPath": "${env:PHOBOS_FACTORIO_PATH}",
       "modsPath": "${workspaceFolder}/out/factorio/debug",
       "preLaunchTask": "Build Factorio Mod Debug",
@@ -19,6 +19,25 @@
       "disableExtraMods": true,
       "factorioArgs": [
         "--load-scenario", "base/freeplay",
+        "--window-size", "1280x720",
+      ],
+    },
+    {
+      "type": "factoriomod",
+      "request": "launch",
+      "name": "Factorio Mod (minimal no base)",
+      "factorioPath": "${env:PHOBOS_FACTORIO_PATH}",
+      "modsPath": "${workspaceFolder}/out/factorio/debug",
+      "preLaunchTask": "Build Factorio Mod Debug",
+      "allowDisableBaseMod": true,
+      "adjustMods": {
+        "minimal-no-base-mod": true,
+        "JanSharpDevEnv": true,
+        "phobos": true,
+      },
+      "disableExtraMods": true,
+      "factorioArgs": [
+        "--load-scenario", "JanSharpDevEnv/NoBase",
         "--window-size", "1280x720",
       ],
     },

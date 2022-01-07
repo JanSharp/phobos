@@ -6,6 +6,11 @@
     "script",
     "game",
   ],
+  "Lua.workspace.ignoreDir": [
+    ".vscode",
+    "debugging/minimal-no-base-mod",
+    "debugging/JanSharpDevEnv",
+  ],
   "cSpell.flagWords": [
     "colum",
   ],
