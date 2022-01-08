@@ -20,6 +20,7 @@ local prevent_assert = nodes.new_invalid{
 -- without actually modifying the value at all
 
 local is_in_error_state = false
+local invalid_nodes
 
 local token_iter_state
 local token ---@type Token
@@ -34,17 +35,17 @@ local peek_token
 
 local statement, expr
 
-local function copy_iter_state()
-  return {
-    line = token_iter_state.line,
-    line_offset = token_iter_state.line_offset,
-  }
-end
+-- local function copy_iter_state()
+--   return {
+--     line = token_iter_state.line,
+--     line_offset = token_iter_state.line_offset,
+--   }
+-- end
 
-local function paste_iter_state(copy)
-  token_iter_state.line = copy.line
-  token_iter_state.line_offset = copy.line_offset
-end
+-- local function paste_iter_state(copy)
+--   token_iter_state.line = copy.line
+--   token_iter_state.line_offset = copy.line_offset
+-- end
 
 local function is_invalid(node)
   return node.node_type == "invalid"
@@ -65,7 +66,7 @@ end
 local function syntax_error(msg, use_prev)
   is_in_error_state = true
   local token_node = new_token_node(use_prev)
-  return nodes.new_invalid{
+  local invalid = nodes.new_invalid{
     error_message = msg.." near '"..token.token_type.."'"..(
       token.token_type ~= "eof"
         and (" at "..token.line..":"..token.column)
@@ -74,6 +75,8 @@ local function syntax_error(msg, use_prev)
     position = token_node,
     tokens = {token_node},
   }
+  invalid_nodes[#invalid_nodes+1] = invalid
+  return invalid
 end
 
 --- Check that the current token is an "ident" token, and if so consume and return it.
@@ -104,9 +107,8 @@ end
 ---@param tok string
 local function assert_next(tok)
   if not test_next(tok) then
-    return false, syntax_error("'" .. tok .. "' expected")
+    return syntax_error("'" .. tok .. "' expected")
   end
-  return true
 end
 
 --- Check for the matching `close` token to a given `open` token
@@ -114,11 +116,10 @@ end
 ---@param close string
 local function assert_match(open_token, close)
   if not test_next(close) then
-    return false, syntax_error("'"..close.."' expected (to close '"..open_token.value
+    return syntax_error("'"..close.."' expected (to close '"..open_token.value
       .."' at "..open_token.line..":"..open_token.column..")"
     )
   end
-  return true
 end
 
 local block_ends = invert{"else", "elseif", "end", "eof"}
@@ -166,7 +167,10 @@ local function index_expr(scope, stat_elem)
   next_token()
   local e = expr(scope, stat_elem)
   local close_token = new_token_node()
-  assert_match(open_token, "]")
+  local invalid = assert_match(open_token, "]")
+  if invalid then
+    close_token = invalid
+  end
   return e, open_token, close_token
 end
 
@@ -187,8 +191,13 @@ local function rec_field(scope, stat_elem)
     field.key, field.key_open_token, field.key_close_token = index_expr(scope, stat_elem)
   end
   field.eq_token = new_token_node()
-  assert_next("=")
-  field.value = expr(scope, stat_elem)
+  local invalid = assert_next("=")
+  if invalid then
+    field.eq_token = nil
+    field.value = invalid
+  else
+    field.value = expr(scope, stat_elem)
+  end
   return field
 end
 
@@ -228,7 +237,7 @@ local function constructor(scope, stat_elem)
     open_token = new_token_node(),
     comma_tokens = {},
   }
-  assert_next("{")
+  assert(assert_next("{") == nil, "Do not call 'constructor' if the current token is not '{'.")
   while token.token_type ~= "}" do
     node.fields[#node.fields+1] = field(scope, stat_elem)
     if test_next(",") or test_next(";") then
@@ -238,7 +247,10 @@ local function constructor(scope, stat_elem)
     end
   end
   node.close_token = new_token_node()
-  assert_match(node.open_token, "}")
+  local invalid = assert_match(node.open_token, "}")
+  if invalid then
+    node.close_token = invalid
+  end
   return node
 end
 
@@ -302,19 +314,16 @@ local function functiondef(function_token, scope, is_method, stat_elem)
     node.locals[1] = self_local
   end
   node.function_token = function_token
-  node.open_paren_token = new_token_node()
-  assert_next("(")
+  node.open_paren_token = assert_next("(") or new_token_node(true)
   node.params = par_list(node, stat_elem)
   -- if par list was invalid but the current token is `")"` then just continue
   -- because there is a good chance there merely was a trailing comma in the par list
   if node.params[1] and is_invalid(node.params[#node.params]) and token.token_type ~= ")" then
     return node
   end
-  node.close_paren_token = new_token_node()
-  assert_next(")")
+  node.close_paren_token = assert_next(")") or new_token_node(true)
   stat_list(node)
-  node.end_token = new_token_node()
-  assert_match(function_token, "end")
+  node.end_token = assert_match(function_token, "end") or new_token_node(true)
   parent_functiondef.func_protos[#parent_functiondef.func_protos+1] = node
   return node
 end
@@ -349,7 +358,11 @@ local function func_args(node, scope, stat_elem)
       end
       local el, comma_tokens = exp_list(scope, stat_elem)
       node.close_paren_token = new_token_node()
-      assert_match(node.open_paren_token, ")")
+      local invalid = assert_match(node.open_paren_token, ")")
+      if invalid then
+        node.close_paren_token = nil
+        el[#el+1] = invalid
+      end
       return el, comma_tokens
     end,
     ["string"] = function()
@@ -387,8 +400,7 @@ local function primary_exp(scope, stat_elem)
     --  followed by `)` `=>` is single arg, expect `expr_list`
     --  followed by `)` or anything else is expr of inner, current behavior
     local ex = expr(scope, stat_elem)
-    local close_paren_token = new_token_node()
-    assert_match(open_paren_token, ")")
+    local close_paren_token = assert_match(open_paren_token, ")") or new_token_node(true)
     ex.force_single_result = true
     ex.src_paren_wrappers = ex.src_paren_wrappers or {}
     ex.src_paren_wrappers[#ex.src_paren_wrappers+1] = {
@@ -673,14 +685,16 @@ local function assignment(lhs, lhs_comma_tokens, scope, stat_elem)
     lhs[#lhs+1] = suffixed_exp(scope, stat_elem)
     return assignment(lhs, lhs_comma_tokens, scope, stat_elem)
   else
-    assert_next("=")
+    local invalid = assert_next("=")
     local node = nodes.new_assignment{
       stat_elem = stat_elem,
-      eq_token = new_token_node(true),
+      eq_token = invalid or new_token_node(true),
       lhs = lhs,
       lhs_comma_tokens = lhs_comma_tokens,
     }
-    node.rhs, node.rhs_comma_tokens = exp_list(scope, stat_elem)
+    if not invalid then
+      node.rhs, node.rhs_comma_tokens = exp_list(scope, stat_elem)
+    end
     return node
   end
 end
@@ -703,9 +717,8 @@ local function label_stat(scope, stat_elem)
     name = ident.value,
     open_token = open_token,
     name_token = name_token,
-    close_token = new_token_node(),
+    close_token = assert_next("::") or new_token_node(true),
   }
-  assert_next("::")
   local prev_label = scope.labels[node.name]
   if prev_label then
     error("Duplicate label '" .. node.name .. "' at "
@@ -731,11 +744,13 @@ local function while_stat(scope, stat_elem)
   }
   next_token() -- skip WHILE
   node.condition = expr(node, stat_elem)
-  node.do_token = new_token_node()
-  assert_next("do")
+  local invalid = assert_next("do")
+  node.do_token = invalid or new_token_node(true)
+  if invalid then
+    return node
+  end
   stat_list(node)
-  node.end_token = new_token_node()
-  assert_match(node.while_token, "end")
+  node.end_token = assert_match(node.while_token, "end") or new_token_node(true)
   return node
 end
 
@@ -752,9 +767,11 @@ local function repeat_stat(scope, stat_elem)
   }
   next_token() -- skip REPEAT
   stat_list(node)
-  node.until_token = new_token_node()
-  assert_match(node.repeat_token, "until")
-  node.condition = expr(node, stat_elem)
+  local invalid = assert_match(node.repeat_token, "until")
+  node.until_token = invalid or new_token_node(true)
+  if not invalid then
+    node.condition = expr(node, stat_elem)
+  end
   return node
 end
 
@@ -766,28 +783,36 @@ end
 local function for_num(first_name, scope, stat_elem)
   local var_local, var_ref = ast.create_local(first_name, scope, stat_elem)
   var_local.whole_block = true
+  local invalid = assert_next("=")
   local node = nodes.new_fornum{
     stat_elem = stat_elem,
     parent_scope = scope,
     var = var_ref,
     locals = {var_local},
-    eq_token = new_token_node(),
+    eq_token = invalid or new_token_node(true),
     start = prevent_assert,
     stop = prevent_assert,
   }
-  assert_next("=")
+  if invalid then
+    return node
+  end
   node.start = expr(scope, stat_elem)
-  node.first_comma_token = new_token_node()
-  assert_next(",")
+  invalid = assert_next(",")
+  node.first_comma_token = invalid or new_token_node(true)
+  if invalid then
+    return node
+  end
   node.stop = expr(scope, stat_elem)
   node.step = nil
   if test_next(",") then
     node.second_comma_token = new_token_node(true)
     node.step = expr(scope, stat_elem)
   end
-  node.do_token = new_token_node()
-  assert_next("do")
-  stat_list(node)
+  invalid = assert_next("do")
+  node.do_token = invalid or new_token_node(true)
+  if not invalid then
+    stat_list(node)
+  end
   return node
 end
 
@@ -822,12 +847,17 @@ local function for_list(first_name, scope, stat_elem)
       node.locals[#node.locals].whole_block = true
     end
   end
-  node.in_token = new_token_node()
-  assert_next("in")
+  local invalid = assert_next("in")
+  node.in_token = invalid or new_token_node(true)
+  if invalid then
+    return node
+  end
   node.exp_list, node.exp_list_comma_tokens = exp_list(scope, stat_elem)
-  node.do_token = new_token_node()
-  assert_next("do")
-  stat_list(node)
+  invalid = assert_next("do")
+    node.do_token = invalid or new_token_node(true)
+  if not invalid then
+    stat_list(node)
+  end
   return node
 end
 
@@ -855,8 +885,7 @@ local function for_stat(scope, stat_elem)
     return invalid
   end
   node.for_token = for_token
-  node.end_token = new_token_node()
-  assert_match(for_token, "end")
+  node.end_token = assert_match(for_token, "end") or new_token_node(true)
   return node
 end
 
@@ -874,8 +903,11 @@ local function test_then_block(scope, stat_elem)
   }
   next_token() -- skip IF or ELSEIF
   node.condition = expr(node, stat_elem)
-  node.then_token = new_token_node()
-  assert_next("then")
+  local invalid = assert_next("then")
+  node.then_token = invalid or new_token_node(true)
+  if invalid then
+    return node, true
+  end
   stat_list(node)
   return node
 end
@@ -883,11 +915,12 @@ end
 local function if_stat(scope, stat_elem)
   -- ifstat -> IF condition THEN block {ELSEIF condition THEN block} [ELSE block] END
   local ifs = {}
+  local invalid = false
   repeat
-    ifs[#ifs+1] = test_then_block(scope, stat_elem)
-  until token.token_type ~= "elseif"
+    ifs[#ifs+1], invalid = test_then_block(scope, stat_elem)
+  until token.token_type ~= "elseif" or invalid
   local elseblock
-  if test_next("else") then
+  if not invalid and test_next("else") then
     elseblock = nodes.new_elseblock{
       stat_elem = stat_elem,
       parent_scope = scope,
@@ -899,9 +932,10 @@ local function if_stat(scope, stat_elem)
     stat_elem = stat_elem,
     ifs = ifs,
     elseblock = elseblock,
-    end_token = new_token_node(),
   }
-  assert_match(node.ifs[1].if_token, "end")
+  if not invalid then
+    node.end_token = assert_match(ifs[1].if_token, "end") or new_token_node(true)
+  end
   return node
 end
 
@@ -1059,8 +1093,7 @@ local statement_lut = {
     }
     next_token() -- skip "do"
     stat_list(node)
-    node.end_token = new_token_node()
-    assert_match(node.do_token, "end")
+    node.end_token = assert_match(node.do_token, "end") or new_token_node(true)
     return node
   end,
   ["for"] = function(scope, stat_elem) -- stat -> for_stat
@@ -1147,6 +1180,7 @@ end
 
 local tokenize = require("tokenize")
 local function parse(text,source_name)
+  invalid_nodes = {}
   local token_iter, index
   token_iter,token_iter_state,index = tokenize(text)
 
@@ -1192,7 +1226,7 @@ local function parse(text,source_name)
 
   next_token()
 
-  return main_func(source_name)
+  return main_func(source_name), invalid_nodes
 end
 
 return parse
