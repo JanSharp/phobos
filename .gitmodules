@@ -14,3 +14,9 @@
 	path = src/lib/LuaArgParser
 	url = https://github.com/JanSharp/LuaArgParser.git
 	branch = master
+[submodule "debugging/minimal-no-base-mod"]
+	path = debugging/minimal-no-base-mod
+	url = https://github.com/Bilka2/minimal-no-base-mod.git
+[submodule "debugging/JanSharpDevEnv"]
+	path = debugging/JanSharpDevEnv
+	url = https://github.com/JanSharp/JanSharpDevEnv.git

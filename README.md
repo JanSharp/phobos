@@ -5,7 +5,8 @@
 
 # Phobos
 
-Phobos is an optimizing bytecode compiler for Lua with some language extensions and a type system.
+Phobos is planned to be an optimizing bytecode compiler for Lua with some language extensions and a type system.\
+See below for which features are implemented and which are planned.
 
 # Lua Bytecode
 
@@ -15,7 +16,7 @@ Phobos currently only supports bytecode for Lua 5.2 with [this](src/constants.lu
 
 Download the zip for your platform from the GitHub Releases, extract all files and run it using this command in your command line or terminal:\
 (If your OS blocks the executable for security reasons either allow them to run in properties (on windows) or preferences (on osx/macOS), or use your own Lua and LuaFileSystem binaries with the raw Phobos package)
-```
+```bash
 ./lua -- main.lua -h
 ```
 **The working directory has to be the directory containing the main.lua file.** Use the `--working-dir` argument if you wish to use relative paths to said directory. Otherwise they are relative to the `main.lua` file, as that is the working directory.
@@ -67,15 +68,15 @@ There is no command line entry point for disassembling, but you can require the 
 
 # Disassembly Language (not implemented)
 
-Phobos can parse some form of disassembly language to then generate bytecode basically one to one.
+Phobos is planned to be able to parse some form of disassembly language to then generate bytecode basically one to one.
 
 # Formatting (not implemented)
 
-Phobos can format your code.
+Phobos is planned to be able to format your code.
 
 ## Refactoring (not implemented)
 
-Phobos can be used to run refactoring scripts based on AST to, well, refactor code.
+Phobos is planned to be able to run refactoring scripts based on AST to, well, refactor code.
 
 # Phobos Debug Symbols
 
@@ -89,16 +90,15 @@ Phobos syntax is based on Lua 5.2. By default Phobos will always be able to comp
 
 ## Type System (not implemented)
 
-Phobos is type aware. The idea is that it can figure out the majority of types on it's own, but there are ways for you to explicitly tell Phobos what type something should have.
+Phobos is planned to be type aware. The idea is that it can figure out the majority of types on it's own, but there will most likely be ways for you to explicitly tell Phobos what type something should have.
 
 ## Safe Chaining Operators (not implemented)
 
-The operators `?.`, `?:`, `?[]` and `?()` to replace the common Lua idiom
-`foo and foo.bar`. These allow more efficient re-use of intermediate results in deeply nested optional objects. `?.`, `?:` and `?[]` protect an indexing operation, while `?()` protects a function call, calling the function only if it exists (is not `nil` or `false`).
+The operators `?.`, `?:`, `?[]` and `?()` to replace the common Lua idiom `foo and foo.bar`. These allow more efficient re-use of intermediate results in deeply nested optional objects. `?.`, `?:` and `?[]` protect an indexing operation, while `?()` protects a function call, calling the function only if it exists (is not `nil` or `false`).
 
 ## Block Initializer Clauses (not implemented)
 
-Modified versions of several block constructs allow defining block locals in the opening condition of the block.
+Modified versions of several block constructs are planned to allow defining block locals in the opening condition of the block.
 
 ```lua
 if name_list = exp_list then ... end
