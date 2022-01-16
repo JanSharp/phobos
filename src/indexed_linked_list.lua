@@ -5,7 +5,6 @@
 ---(to be exact, appended nodes just get the index of `self.last.index + index_spacing`;
 ---mirrored for prepending or course)
 local index_spacing = 2 ^ 4
--- can split 4 times before having to move nodes or re-index
 
 -- some example values:
 -- first row is the exponent used
