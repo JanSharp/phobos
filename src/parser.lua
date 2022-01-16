@@ -67,10 +67,10 @@ local function syntax_error(msg, use_prev)
   is_in_error_state = true
   local token_node = new_token_node(use_prev)
   local invalid = nodes.new_invalid{
-    error_message = msg.." near '"..token.token_type.."'"..(
+    error_message = msg.." near '"..(token.token_type == "ident" and token.value or token.token_type).."'"..(
       token.token_type ~= "eof"
         and (" at "..token.line..":"..token.column)
-        or " at end of file"
+        or ""
       ),
     position = token_node,
     tokens = {token_node},
@@ -854,7 +854,7 @@ local function for_list(first_name, scope, stat_elem)
   end
   node.exp_list, node.exp_list_comma_tokens = exp_list(scope, stat_elem)
   invalid = assert_next("do")
-    node.do_token = invalid or new_token_node(true)
+  node.do_token = invalid or new_token_node(true)
   if not invalid then
     stat_list(node)
   end
@@ -1042,6 +1042,11 @@ local function expr_stat(scope, stat_elem)
   else
     -- stat -> func
     if first_exp.node_type == "call" then
+      return first_exp
+    elseif first_exp.node_type == "invalid" then
+      ---@diagnostic disable-next-line: undefined-field
+      first_exp.tokens[#first_exp.tokens+1] = new_token_node()
+      next_token() -- consume the invalid token, it would infinitely loop otherwise
       return first_exp
     else
       -- TODO: store data about the expression (`first_exp`) that caused this error
