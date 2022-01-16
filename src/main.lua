@@ -360,19 +360,23 @@ local function compile(filename, source_name, ignore_syntax_errors, accept_bytec
   end
   local contents = file:read("*a")
   assert(file:close())
-  local ast
-  if ignore_syntax_errors then
-    local success
-    success, ast = pcall(parser, contents, source_name)
-    if not success then
-      syntax_error_count = syntax_error_count + 1
-      if not args.no_syntax_error_messages then
-        print(ast:gsub("^[^:]+:%d+: ", "").." in "..source_name)
-      end
-      return nil
+  local ast, invalid_nodes = parser(contents, source_name)
+  if invalid_nodes[1] then
+    -- build error message
+    local msgs = {}
+    for i, invalid_node in ipairs(invalid_nodes) do
+      msgs[i] = invalid_node.error_message
     end
-  else
-    ast = parser(contents, source_name)
+    local error_count = #invalid_nodes
+    syntax_error_count = syntax_error_count + error_count
+    local msg = "up to "..error_count.." syntax errors in "
+      ..source_name..":\n"..table.concat(msgs, "\n")
+    if ignore_syntax_errors then
+      print(msg)
+      return nil
+    else
+      error(msg)
+    end
   end
   jump_linker(ast)
   if inject_scripts then
