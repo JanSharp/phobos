@@ -19,7 +19,6 @@ local prevent_assert = nodes.new_invalid{
 -- this saves a lot of passing around of values through returns, parameters and locals
 -- without actually modifying the value at all
 
-local is_in_error_state = false
 local invalid_nodes
 
 local token_iter_state
@@ -64,13 +63,18 @@ end
 ---Throw a Syntax Error at the current location
 ---@param msg string Error message
 local function syntax_error(msg, use_prev)
-  is_in_error_state = true
   local token_node = new_token_node(use_prev)
   local invalid = nodes.new_invalid{
-    error_message = msg.." near '"..(token.token_type == "ident" and token.value or token.token_type).."'"..(
-      token.token_type ~= "eof"
-        and (" at "..token.line..":"..token.column)
-        or ""
+    error_message = msg
+      ..(
+        token.token_type ~= "invalid"
+          and (" near '"..(token.token_type == "ident" and token.value or token.token_type).."'")
+          or ""
+      )
+      ..(
+        token.token_type ~= "eof"
+          and (" at "..token.line..":"..token.column)
+          or ""
       ),
     position = token_node,
     tokens = {token_node},
@@ -415,7 +419,11 @@ local function primary_exp(scope, stat_elem)
     end
     return ast.get_ref(scope, stat_elem, ident.value, ident)
   else
-    return syntax_error("Unexpected symbol '" .. token.token_type .. "'")
+    if token.token_type == "invalid" then
+      return invalid_nodes[#invalid_nodes]
+    else
+      return syntax_error("Unexpected symbol '" .. token.token_type .. "'")
+    end
   end
 end
 
@@ -1050,7 +1058,7 @@ local function expr_stat(scope, stat_elem)
       return first_exp
     else
       -- TODO: store data about the expression (`first_exp`) that caused this error
-      return syntax_error("Unexpected <exp>")
+      return syntax_error("Unexpected expression")
     end
   end
 end
@@ -1203,6 +1211,9 @@ local function parse(text,source_name)
 
 
   function next_token()
+    if token and token.token_type == "eof" then
+      return
+    end
     local leading = {}
     while true do
       index,token = token_iter(token_iter_state,index)
@@ -1225,6 +1236,11 @@ local function parse(text,source_name)
         leading[#leading+1] = token
       else
         token.leading = leading
+        if token.token_type == "invalid" then
+          for _, msg in ipairs(token.error_messages) do
+            syntax_error(msg)
+          end
+        end
         break
       end
     end
