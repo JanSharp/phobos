@@ -1177,6 +1177,18 @@ local function main_func(chunk_name)
       is_vararg = true,
     }
     stat_list(main)
+    -- this will only fail either if there previously were syntax errors or an early return
+    local invalid = assert_next("eof")
+    if invalid then
+      ast.append_stat(main, function() return invalid end)
+      -- continue parsing the rest of the file as if it's part of the main body
+      -- because the main body is the highest scope we got
+      while not test_next("eof") do
+        ast.append_stat(main, function(stat_elem_2)
+          return statement(main, stat_elem_2)
+        end)
+      end
+    end
     main.eof_token = new_token_node()
     return main
   end)
