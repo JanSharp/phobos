@@ -150,28 +150,32 @@ function nodes.new_functiondef(params)
   return node
 end
 
-local cannot_infer_value_for_token_type_lut = invert{
-  "blank",
-  "comment",
-  "string",
-  "number",
-  "ident",
-}
+do
+  local have_their_own_value = invert{
+    "blank",
+    "comment",
+    "string",
+    "number",
+    "ident",
+    "invalid",
+  }
 
----@param token Token
----@param value string|nil @ default: `token.value` -- TODO: this comment is wrong, or is the code wrong?
-function nodes.new_token(token, value)
-  local node = new_node("token", token)
-  if value then
-    node.value = value
-  elseif not cannot_infer_value_for_token_type_lut[token.token_type] then
-    node.value = token.token_type
+  ---@param token Token
+  ---@param value string|nil @ default: `token.value` for special token_type, `token.token_type` otherwise
+  function nodes.new_token(token, value)
+    local node = new_node("token", token)
+    if value then
+      node.value = value
+    elseif have_their_own_value[token.token_type] then
+      node.value = token.value
+    else
+      node.value = token.token_type
+    end
+    if token.token_type == "invalid" then
+      node.error_messages = token.error_messages
+    end
+    return node
   end
-  -- else `node.value = nil`
-  if token.token_type == "invalid" then
-    node.error_messages = token.error_messages
-  end
-  return node
 end
 
 ---@class AstInvalidParams : AstPositionParams
