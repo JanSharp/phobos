@@ -1258,8 +1258,19 @@ local function parse(text,source_name)
   end
 
   next_token()
+  local main = main_func(source_name)
 
-  return main_func(source_name), invalid_nodes
+  -- have to reset token, otherwise the next parse call will think its already reached the end
+  token = nil
+  -- clear these references to not hold on to memory
+  local current_invalid_nodes = invalid_nodes
+  invalid_nodes = nil
+  prev_token = nil
+  token_iter_state = nil
+  -- with token_iter_state cleared, next_token and peek_token
+  -- don't really have any other big upvals, so no need to clear them
+
+  return main, current_invalid_nodes
 end
 
 return parse
