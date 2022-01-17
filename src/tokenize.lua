@@ -13,6 +13,8 @@ local keywords = invert{
 ---| '"string"'
 ---| '"number"'
 ---| '"ident"' @ identifier
+---| '"eof"' @ not created in the tokenizer, but created and used by the parser
+---| '"invalid"'
 ---
 ---| '"+"'
 ---| '"*"'
@@ -70,7 +72,7 @@ local keywords = invert{
 ---@field index number
 ---@field line number
 ---@field column number
----for `blank`, `comment`, `string`, `number` and `ident` tokens\
+---for `blank`, `comment`, `string`, `number`, `ident` and `invalid` tokens\
 ---"blank" tokens shall never contain `\n` in the middle of their value\
 ---"comment" tokens with `not src_is_block_str` do not contain trailing `\n`
 ---@field value string|number
@@ -80,6 +82,8 @@ local keywords = invert{
 ---@field src_has_leading_newline boolean @ for block `string` and `comment` tokens
 ---@field src_pad string @ the `=` chain for block `string` and `comment` tokens
 ---@field leading Token[] @ `blank` and `comment` tokens before this token. Set and used by the parser
+---for `invalid` tokens
+---@field error_messages string[]
 
 ---@param token_type TokenType
 ---@param index number
@@ -115,19 +119,18 @@ local escape_sequence_lut = {
 }
 
 local function read_string(str,index,quote,state)
+  local token = new_token("string",index,state.line,index - state.line_offset)
+
   local i = index + 1
   local next_char = str:sub(i,i)
   if next_char == quote then
     -- empty string
-    local token = new_token("string",index,state.line,index - state.line_offset)
     token.value = ""
     token.src_quote = quote
     token.src_value = ""
     return i+1,token
   end
 
-  local original_line = state.line
-  local original_line_offset = state.line_offset
   local parts = {}
 
   ::matching::
@@ -145,18 +148,25 @@ local function read_string(str,index,quote,state)
 
   if next_char == quote then
     -- finished string
-    local token = new_token("string",index,original_line,index - original_line_offset)
-    token.src_value = str:sub(index+1,i-1)
-    token.value = table.concat(parts)
-
-    -- token.src_is_block_str = false -- why bother setting quite literally anything to false :P
-    token.src_quote = quote
-
+    if token.token_type == "invalid" then
+      token.value = str:sub(index,i)
+    else
+      token.src_value = str:sub(index+1,i-1)
+      token.value = table.concat(parts)
+      -- token.src_is_block_str = false -- why bother setting quite literally anything to false :P
+      token.src_quote = quote
+    end
     return i+1,token
   elseif next_char == "" then
-    error("Unterminated string at EOF")
+    token.token_type = "invalid"
+    token.value = str:sub(index,i-1)
+    token.error_messages = {"Unterminated string"}
+    return i,token
   elseif next_char == "\n" then
-    error("Unterminated string at end of line " .. state.line)
+    token.token_type = "invalid"
+    token.value = str:sub(index,i-1)
+    token.error_messages = {"Unterminated string (at end of line " .. state.line..")"}
+    return i,token
   elseif next_char == "\\" then
     -- advance past an escape sequence...
     i = i + 1
@@ -164,12 +174,15 @@ local function read_string(str,index,quote,state)
     if next_char == "x" then
       local digits = str:match("^%x%x", i + 1)
       if not digits then
-        error("Invalid escape sequence `\\x"..str:sub(i + 1, i + 2)
-          .."`, `\\x` must be followed by 2 hexadecimal digits."
-        )
+        token.token_type = "invalid"
+        token.error_messages = token.error_messages or {}
+        token.error_messages[#token.error_messages+1] = "Invalid escape sequence `\\x"
+          ..str:sub(i + 1, i + 2).."`, `\\x` must be followed by 2 hexadecimal digits."
+        i = i + 1 -- skip x
+      else
+        parts[#parts+1] = string.char(tonumber(digits, 16))
+        i = i + 3 -- skip x and two hex digits
       end
-      parts[#parts+1] = string.char(tonumber(digits, 16))
-      i = i + 3 -- skip x and two hex digits
       goto matching
     elseif next_char == "\n" then
       state.line = state.line + 1
@@ -204,18 +217,25 @@ local function read_string(str,index,quote,state)
         i = skip + 1
         goto matching
       else
-        error("Unrecognized escape '\\".. next_char .. "'")
+        token.token_type = "invalid"
+        token.error_messages = token.error_messages or {}
+        token.error_messages[#token.error_messages+1] = "Unrecognized escape '\\".. next_char .. "'"
+        -- nothing to skip
+      goto matching
       end
     end
   end
 end
 
-local block_string_open_bracket_patter = "^%[(=*)%["
+local block_string_open_bracket_pattern = "^%[(=*)%["
 
 local function read_block_string(str,index,state)
-  local _,open_end,pad = str:find(block_string_open_bracket_patter,index)
+  local _,open_end,pad = str:find(block_string_open_bracket_pattern,index)
   if not pad then
-    error("Invalid string open bracket")
+    local token = new_token("invalid",index,state.line,index - state.line_offset)
+    token.value = "["
+    token.error_messages = {"Invalid string open bracket"}
+    return index+1,token
   end
 
   local has_leading_newline = false
@@ -230,11 +250,14 @@ local function read_block_string(str,index,state)
   local token_col = (open_end+1) - state.line_offset
 
   local bracket,bracket_end = str:find("%]"..pad.."%]",index)
-  if not bracket then
-    error("Unterminated block string at EOF")
+  local invalid = not bracket
+  if invalid then
+    bracket = #str + 1
+    bracket_end = #str
   end
 
-  local token = new_token("string",index,token_line,token_col)
+  local token = new_token(invalid and "invalid" or "string",index,token_line,token_col)
+  token.error_messages = invalid and {"Unterminated block string"} or nil
   token.value = str:sub(open_end+1,bracket-1)
   local has_newline
   for _ in token.value:gmatch("\n") do
@@ -255,15 +278,20 @@ end
 
 -- TODO: remove code duplication and double check if this can really read all formats of numbers
 local function try_read_number(str, index, state)
-  -- hex numbers: "0x%x+" followed by "%.%x+" followed by "[pP][+-]?%x+"
-  local hex_start,hex_end,integer_part = str:find("^0[xX](%x*)",index) -- "integer part"
+  -- hex numbers: "0x%x*" followed by "%.%x+" followed by "[pP][+-]?%x+"
+  local hex_start,hex_end = str:find("^0[xX]%x*",index) -- "integer part"
   if hex_start then
-    local omitted_integer_part = integer_part == ""
+    -- this basically means %x* didn't match anything
+    local omitted_integer_part = hex_start + 1 == hex_end
     local _,fractional_end = str:find("^%.%x+",hex_end+1)
     if fractional_end then
       hex_end = fractional_end
     elseif omitted_integer_part then
-      error("Malformed number")
+      -- this actually only ever happens if the number is just 0x or 0X
+      local token = new_token("invalid",index,state.line,index - state.line_offset)
+      token.value = str:sub(hex_start,hex_end)
+      token.error_messages = {"Malformed number '"..token.value.."'"}
+      return hex_end+1,token
     else
       -- consume trailing dot
       _, fractional_end = str:find("^%.", hex_end + 1)
@@ -279,9 +307,10 @@ local function try_read_number(str, index, state)
     return hex_end+1,token
   end
 
-  -- decimal numbers: "%d+" followed by "%.%d+" followed by "[eE][+-]?%d+"
+  -- decimal numbers: "%d*" followed by "%.%d+" followed by "[eE][+-]?%d+"
   local num_start,num_end = str:find("^%d*",index) -- "integer part"
   if num_start then
+    -- this basically means %d* didn't match anything
     local omitted_integer_part = num_start > num_end
     local _,fractional_end = str:find("^%.%d+",num_end+1)
     if fractional_end then
@@ -302,6 +331,13 @@ local function try_read_number(str, index, state)
     token.value = tonumber(token.src_value)
     return num_end+1,token
   end
+end
+
+local function simple_invalid_token(invalid_char, index, state)
+  local token = new_token("invalid",index,state.line,index - state.line_offset)
+  token.value = invalid_char
+  token.error_messages = {"Invalid token '"..invalid_char.."'"}
+  return index+1,token
 end
 
 ---@param state TokenizeState
@@ -339,7 +375,7 @@ local function next_token(state,index)
     end
   elseif next_char == "-" then
     if str:sub(index+1,index+1) == "-" then
-      if str:find(block_string_open_bracket_patter, index + 2) then
+      if str:find(block_string_open_bracket_pattern, index + 2) then
         --[[
           read block string, build a token from that
         ]]
@@ -360,7 +396,7 @@ local function next_token(state,index)
     if str:sub(index+1,index+1) == "=" then
       return index+2,new_token("~=",index,state.line,index - state.line_offset)
     else
-      error("Invalid token '~' at " .. state.line .. ":" .. index - state.line_offset)
+      return simple_invalid_token(next_char,index,state)
     end
   elseif next_char == ":" then
     if str:sub(index+1,index+1) == ":" then
@@ -407,7 +443,7 @@ local function next_token(state,index)
       end
       return match_end+1,token
     else
-      error("Invalid token at " .. state.line .. ":" .. index - state.line_offset)
+      return simple_invalid_token(next_char,index,state)
     end
   end
 end

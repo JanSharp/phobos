@@ -65,9 +65,17 @@ local function phobos_command(args, silent, measured)
   end
 
   local profiler = measured and game.create_profiler() or nil
-  local success, ast = pcall(parser, args.parameter, args.parameter)
-  if not success then
-    print_msg("Cannot execute command. "..ast:gsub("^[^:]+:%d+: ", ""))
+  local ast, invalid_nodes = parser(args.parameter, args.parameter)
+  if invalid_nodes[1] then
+    local max_errors_shown = 8
+    local msgs = {}
+    for i = 1, math.min(#invalid_nodes, max_errors_shown) do
+      msgs[i] = invalid_nodes[i].error_message
+    end
+    print_msg("Cannot execute command. "..(#invalid_nodes).." syntax errors"
+      ..(#invalid_nodes > max_errors_shown and (", showing first "..max_errors_shown) or "")
+      ..":\n"..table.concat(msgs, "\n")
+    )
     return
   end
   jump_linker(ast)

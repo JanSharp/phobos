@@ -13,7 +13,16 @@ local function run(filename)
   --     :write(text))
   --     :close())
 
-  local ast = parse(text, "@"..filename)
+  local ast, invalid_nodes = parse(text, "@"..filename)
+  if invalid_nodes[1] then
+    local msgs = {}
+    for i, invalid_node in ipairs(invalid_nodes) do
+      msgs[i] = invalid_node.error_message
+    end
+    error((#invalid_nodes).." syntax errors in "
+      ..filename..":\n"..table.concat(msgs, "\n")
+    )
+  end
   text = format(ast)
 
   -- ast = parse(text, "@"..filename)
