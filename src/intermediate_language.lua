@@ -1097,13 +1097,13 @@ do
   end
 end
 
-function generate_functiondef(functiondef, func)
+function generate_functiondef(functiondef, parent_func)
   if not functiondef.is_main then
-    assert(func, "`func` can only be omitted if the given functiondef is a main chunk")
+    assert(parent_func, "`parent_func` can only be omitted if the given functiondef is a main chunk")
   end
 
-  local il_func = {
-    parent_func = func,
+  local func = {
+    parent_func = parent_func,
     inner_functions = {},
     instructions = {},
     temp = {
@@ -1118,8 +1118,8 @@ function generate_functiondef(functiondef, func)
     is_vararg = functiondef.is_vararg,
   }
 
-  if func then
-    func.inner_functions[#func.inner_functions+1] = il_func
+  if parent_func then
+    parent_func.inner_functions[#parent_func.inner_functions+1] = func
   end
 
   for i, upval in ipairs(functiondef.upvals) do
@@ -1128,35 +1128,40 @@ function generate_functiondef(functiondef, func)
       parent_type = nil, -- set below
       child_upvals = {},
     }
-    il_func.upvals[i] = il_upval
-    il_func.temp.upval_def_lut[upval] = il_upval
+    func.upvals[i] = il_upval
+    func.temp.upval_def_lut[upval] = il_upval
     if upval.parent_def.def_type == "upval" then
       il_upval.parent_type = "upval"
-      local parent_upval = func.temp.upval_def_lut[upval.parent_def]
-      il_func.upvals[i].parent_upval = parent_upval
-      parent_upval.child_upvals[#parent_upval.child_upvals+1] = il_func.upvals[i]
+      local parent_upval = parent_func.temp.upval_def_lut[upval.parent_def]
+      func.upvals[i].parent_upval = parent_upval
+      parent_upval.child_upvals[#parent_upval.child_upvals+1] = func.upvals[i]
     elseif upval.parent_def.scope.node_type == "env_scope" then
       -- this will actually only ever happen for the main chunk, but I like this test better
       -- I think it is more explicit and descriptive
       il_upval.parent_type = "env"
     else
       il_upval.parent_type = "local"
-      il_func.upvals[i].reg_in_parent_func = func.temp.local_reg_lut[upval.parent_def]
+      func.upvals[i].reg_in_parent_func = parent_func.temp.local_reg_lut[upval.parent_def]
     end
   end
 
+  if functiondef.is_method then
+    func.param_regs[1] = new_reg("self")
+    func.temp.local_reg_lut[functiondef.locals[1]] = func.param_regs[1]
+  end
+  local param_offset = functiondef.is_method and 1 or 0
   for i, param in ipairs(functiondef.params) do
-    il_func.param_regs[i] = new_reg(param.name)
-    set_local_reg(param, il_func.param_regs[i], il_func)
+    func.param_regs[i + param_offset] = new_reg(param.name)
+    set_local_reg(param, func.param_regs[i + param_offset], func)
   end
 
-  generate_scope(functiondef, il_func)
+  generate_scope(functiondef, func)
 
   -- as per usual, an extra return for good measure
-  add_inst(il_func, new_ret{position = functiondef.end_token or get_last_used_position(il_func)})
+  add_inst(func, new_ret{position = functiondef.end_token or get_last_used_position(func)})
 
-  il_func.temp = nil
-  return il_func
+  func.temp = nil
+  return func
 end
 
 return generate_functiondef
