@@ -195,7 +195,7 @@ local function compile(filename)
       for i, invalid_node in ipairs(invalid_nodes) do
         msgs[i] = invalid_node.error_message
       end
-      error("up to "..(#invalid_nodes).." syntax errors:\n"..table.concat(msgs, "\n"))
+      error((#invalid_nodes).." syntax errors:\n"..table.concat(msgs, "\n"))
     end
 
     success, err = pcall(require("jump_linker"), main)

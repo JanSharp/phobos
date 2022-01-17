@@ -72,7 +72,7 @@ local function phobos_command(args, silent, measured)
     for i = 1, math.min(#invalid_nodes, max_errors_shown) do
       msgs[i] = invalid_nodes[i].error_message
     end
-    print_msg("Cannot execute command. Up to "..(#invalid_nodes).." syntax errors"
+    print_msg("Cannot execute command. "..(#invalid_nodes).." syntax errors"
       ..(#invalid_nodes > max_errors_shown and (", showing first "..max_errors_shown) or "")
       ..":\n"..table.concat(msgs, "\n")
     )

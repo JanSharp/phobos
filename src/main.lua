@@ -369,7 +369,7 @@ local function compile(filename, source_name, ignore_syntax_errors, accept_bytec
     end
     local error_count = #invalid_nodes
     syntax_error_count = syntax_error_count + error_count
-    local msg = "up to "..error_count.." syntax errors in "
+    local msg = error_count.." syntax errors in "
       ..source_name..":\n"..table.concat(msgs, "\n")
     if ignore_syntax_errors then
       print(msg)

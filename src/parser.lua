@@ -57,25 +57,66 @@ local function new_token_node(use_prev, value)
   return nodes.new_token(use_prev and prev_token or token, value)
 end
 
----TODO: make the right object in the error message the focus, the thing that is actually wrong.
+---TODO: make the correct object in the error message the focus, the thing that is actually wrong.
 ---for example when an assertion of some token failed, it's most likely not that token that
 ---is missing (like a closing }), but rather the actual token that was encountered that was unexpected
 ---Throw a Syntax Error at the current location
 ---@param msg string Error message
-local function syntax_error(msg, use_prev)
+local function syntax_error(msg, use_prev, location_descriptor)
   local token_node = new_token_node(use_prev)
+  if location_descriptor then
+    location_descriptor = location_descriptor == "" and "" or " "..location_descriptor
+  else
+    location_descriptor = " near"
+  end
+  local location
+  if token.token_type == "blank" then
+    -- this should never happen, blank tokens are all in `leading`
+    location = location_descriptor.." <blank>"
+  elseif token.token_type == "comment" then
+    -- same here
+    location = location_descriptor.." <comment>"
+  elseif token.token_type == "string" then
+    local str
+    if token.src_is_block_str then
+      if token.src_has_leading_newline
+        or token.value:find("\n")
+      then
+        location = location_descriptor.." <string>"
+      else
+        str = "["..token.src_pad.."["..token.value.."]"..token.src_pad.."]"
+      end
+    else -- regular string
+      if token.src_value:find("\n") then
+        location = location_descriptor.." <string>"
+      else
+        str = token.src_quote..token.src_value..token.src_quote
+      end
+    end
+    if str then
+      if #str > 32 then
+        -- this message is pretty long and descriptive, but honestly it'll be shown so
+        -- rarely that i don't consider this to be problematic
+        location = location_descriptor.." "..str:sub(1, 16).."..."..str:sub(-16, -1)
+          .." (showing 32 of "..#str.." characters)"
+      else
+        location = location_descriptor.." "..str
+      end
+    end
+  elseif token.token_type == "number" then
+    location = location_descriptor.." '"..token.src_value.."'"
+  elseif token.token_type == "ident" then
+    location = location_descriptor.." "..token.value
+  elseif token.token_type == "invalid" then
+    location = ""
+  elseif token.token_type == "eof" then
+    location = location_descriptor.." <eof>"
+  else
+    location = location_descriptor.." '"..token.token_type.."'"
+  end
   local invalid = nodes.new_invalid{
-    error_message = msg
-      ..(
-        token.token_type ~= "invalid"
-          and (" near '"..(token.token_type == "ident" and token.value or token.token_type).."'")
-          or ""
-      )
-      ..(
-        token.token_type ~= "eof"
-          and (" at "..token.line..":"..token.column)
-          or ""
-      ),
+    error_message = msg..location
+      ..(token.token_type ~= "eof" and (" at "..token.line..":"..token.column) or ""),
     position = token_node,
     tokens = {token_node},
   }
@@ -387,7 +428,7 @@ local function func_args(node, scope, stat_elem)
       return {(constructor(scope, stat_elem))}, {}
     end,
   })[token.token_type] or function()
-    return {syntax_error("Expected function arguments")}
+    return {syntax_error("Function arguments expected")}
   end)()
 end
 
@@ -422,7 +463,7 @@ local function primary_exp(scope, stat_elem)
     if token.token_type == "invalid" then
       return invalid_nodes[#invalid_nodes]
     else
-      return syntax_error("Unexpected symbol '" .. token.token_type .. "'")
+      return syntax_error("Unexpected symbol", false, "")
     end
   end
 end
@@ -556,7 +597,7 @@ local simple_lut = {
       scope = scope.parent_scope
     end
     if not scope.is_vararg then
-      return syntax_error("Cannot use '...' outside a vararg function")
+      return syntax_error("Cannot use '...' outside a vararg function", false, "at")
     end
     return nodes.new_vararg{
       stat_elem = stat_elem,

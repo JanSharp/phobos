@@ -19,7 +19,7 @@ local function run(filename)
     for i, invalid_node in ipairs(invalid_nodes) do
       msgs[i] = invalid_node.error_message
     end
-    error("Up to "..(#invalid_nodes).." syntax errors in "
+    error((#invalid_nodes).." syntax errors in "
       ..filename..":\n"..table.concat(msgs, "\n")
     )
   end

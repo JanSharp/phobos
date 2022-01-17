@@ -13,6 +13,7 @@ local keywords = invert{
 ---| '"string"'
 ---| '"number"'
 ---| '"ident"' @ identifier
+---| '"eof"' @ not created in the tokenizer, but created and used by the parser
 ---| '"invalid"'
 ---
 ---| '"+"'
