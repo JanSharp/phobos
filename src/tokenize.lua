@@ -280,14 +280,16 @@ local function try_read_number(str, index, state)
   -- hex numbers: "0x%x*" followed by "%.%x+" followed by "[pP][+-]?%x+"
   local hex_start,hex_end = str:find("^0[xX]%x*",index) -- "integer part"
   if hex_start then
+    -- this basically means %x* didn't match anything
     local omitted_integer_part = hex_start + 1 == hex_end
     local _,fractional_end = str:find("^%.%x+",hex_end+1)
     if fractional_end then
       hex_end = fractional_end
     elseif omitted_integer_part then
+      -- this actually only ever happens if the number is just 0x or 0X
       local token = new_token("invalid",index,state.line,index - state.line_offset)
       token.value = str:sub(hex_start,hex_end)
-      token.error_messages = {"Malformed number"}
+      token.error_messages = {"Malformed number '"..token.value.."'"}
       return hex_end+1,token
     else
       -- consume trailing dot
@@ -307,6 +309,7 @@ local function try_read_number(str, index, state)
   -- decimal numbers: "%d*" followed by "%.%d+" followed by "[eE][+-]?%d+"
   local num_start,num_end = str:find("^%d*",index) -- "integer part"
   if num_start then
+    -- this basically means %d* didn't match anything
     local omitted_integer_part = num_start > num_end
     local _,fractional_end = str:find("^%.%d+",num_end+1)
     if fractional_end then
