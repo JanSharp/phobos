@@ -2,6 +2,7 @@
 Version: 0.1.2
   Bugfixes:
     - Fix error when requiring files using non normalized module names in Factorio
+    - Fix vararg expressions sometimes not assigning values properly (like `foo, bar = ...`)
   Changes:
     - Set linux lua executable flag [PR#1](https://github.com/JanSharp/phobos/pull/1)
 ---------------------------------------------------------------------------------------------------

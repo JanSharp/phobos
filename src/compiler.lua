@@ -1078,16 +1078,34 @@ do
       if num_results == 0 then
         return
       end
+      local need_temps = not regs_are_at_top_in_order(regs, num_results, func)
+      local temp_regs
+      if not need_temps then
+        temp_regs = regs
+      else
+        assert(num_results >= 1, "Impossible because generate_expr makes sure this isn't the case")
+        temp_regs = {}
+        local top = get_top(func)
+        for i = 1, num_results do
+          temp_regs[num_results - i + 1] = create_temp_reg(func, top + i)
+        end
+      end
       for i = num_results, 1, -1 do
-        use_reg(regs[i], func)
+        use_reg(temp_regs[i], func)
       end
       if num_results == -1 then
-        use_reg(regs[-1], func)
+        use_reg(temp_regs[-1], func)
       end
       func.instructions[#func.instructions+1] = {
-        op = opcodes.vararg, a = regs[num_results], b = num_results + 1,
+        op = opcodes.vararg, a = temp_regs[num_results], b = num_results + 1,
         line = expr.line, column = expr.column,
       }
+      if need_temps then
+        for i = num_results, 1, -1 do
+          generate_move(use_reg(regs[i], func), temp_regs[i], expr, func)
+        end
+        release_temp_regs(temp_regs, func)
+      end
     end,
     call = generate_call_node,
     index = function(expr,num_results,func,regs)
