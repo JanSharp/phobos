@@ -391,6 +391,7 @@ if not args.skip_github_release then
     "--notes-file", github_release_notes_filename,
     "--title", "v"..version_str
   )
+  git("pull", "--tags")
 end
 
 -- increment version in info.json
