@@ -80,7 +80,7 @@ local function seven_zip(...)
   return run("7z", ...)
 end
 
-local main_branch = "master"
+local main_branch = "main"
 
 -- ensure git, gh (github cli) and 7z (7-zip) are available
 if not args.skip_ensure_command_availability then
@@ -99,7 +99,7 @@ if not args.skip_ensure_command_availability then
   end
 end
 
--- ensure git is clean and on master
+-- ensure git is clean and on main
 print("Checking git status")
 local foo = git("status", "--porcelain", "-b")
 if not foo[1]:find("^## "..main_branch.."%.%.%.") then
