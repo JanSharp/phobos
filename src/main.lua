@@ -341,6 +341,7 @@ local compiler = require("compiler")
 local dump = require("dump")
 
 local syntax_error_count = 0
+local files_with_syntax_error_count = 0
 local do_optimize = args.profile == "release"
 local function compile(filename, source_name, ignore_syntax_errors, accept_bytecode, inject_scripts)
   local file
@@ -369,10 +370,13 @@ local function compile(filename, source_name, ignore_syntax_errors, accept_bytec
     end
     local error_count = #invalid_nodes
     syntax_error_count = syntax_error_count + error_count
+    files_with_syntax_error_count = files_with_syntax_error_count + 1
     local msg = error_count.." syntax errors in "
       ..source_name..":\n"..table.concat(msgs, "\n")
     if ignore_syntax_errors then
-      print(msg)
+      if not args.no_syntax_error_messages then
+        print(msg)
+      end
       return nil
     else
       error(msg)
@@ -500,8 +504,8 @@ if not success then
   )
 end
 
-if args.verbose and args.ignore_syntax_errors then
-  print(syntax_error_count.." files with syntax errors")
+if args.verbose and (args.ignore_syntax_errors or files_with_syntax_error_count ~= 0) then
+  print(files_with_syntax_error_count.." files with a total of "..syntax_error_count.." syntax errors")
 end
 
 if args.monitor_memory_allocation then
