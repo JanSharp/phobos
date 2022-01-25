@@ -16,6 +16,7 @@ local do_fold_const = true
 local do_fold_control_statements = true
 local eval_instruction_count = true
 local eval_byte_count = true
+local create_tokenizer_output = false
 local create_disassembly = true
 local show_keys_in_disassembly = false
 local load_and_run_compiled_funcs = false
@@ -185,6 +186,16 @@ local function compile(filename)
       pcall = function(f, ...)
         return true, f(...)
       end
+    end
+
+    if create_tokenizer_output then
+      local tokens = {}
+      for _, token in require("tokenize")(text) do
+        tokens[#tokens+1] = token
+      end
+      file = assert(io.open("temp/tokens.lua", "w"))
+      file:write(serpent.dump(tokens, {indent = "  ", sortkeys = true}))
+      file:close()
     end
 
     local success, main, invalid_nodes = pcall(require("parser"), text, "@"..filename)
