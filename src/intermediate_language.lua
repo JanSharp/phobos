@@ -528,6 +528,10 @@ do
     ["boolean"] = make_generate_const_expr(new_boolean),
     ["vararg"] = function(expr, func, num_results, regs)
       -- TODO: vararg really is just a weird kind of move... so what if it was just a move?
+      if expr.force_single_result then
+        num_results = 1
+        regs = {}
+      end
       if num_results == 0 then
         return
       end
@@ -535,6 +539,9 @@ do
         position = expr,
         result_regs = create_result_regs(num_results, regs),
       })
+      if expr.force_single_result then
+        return regs[1]
+      end
     end,
     ["func_proto"] = function(expr, func)
       local reg = new_reg()
@@ -595,6 +602,10 @@ do
       return table_reg
     end,
     ["call"] = function(expr, func, num_results, regs)
+      if expr.force_single_result then
+        num_results = 1
+        regs = {}
+      end
       local func_reg
       local arg_ptrs = {}
       if expr.is_selfcall then
@@ -619,6 +630,9 @@ do
         arg_ptrs = arg_ptrs,
         result_regs = create_result_regs(num_results, regs),
       })
+      if expr.force_single_result then
+        return regs[1]
+      end
     end,
   }
 
