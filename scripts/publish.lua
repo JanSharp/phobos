@@ -93,7 +93,9 @@ if not args.skip_ensure_command_availability then
   end
   ensure_command_is_available("git", "git", "status -s")
   ensure_command_is_available("gh", "github cli")
-  ensure_command_is_available("7z", "7-zip")
+  ensure_command_is_available("7z", "7 zip (look for p7zip in your \z
+    package manager on Linux or MacOS (ref: brew?), 7zip on windows)"
+  )
   if missing_commands[1] then
     error("Missing programs "..table.concat(missing_commands, ", "))
   end
