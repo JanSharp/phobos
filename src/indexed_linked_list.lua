@@ -212,9 +212,13 @@ function ill.remove(node)
   node.list.lookup[node.index] = nil
   if node.next then
     node.next.prev = node.prev
+  else
+    node.list.last = node.prev
   end
   if node.prev then
     node.prev.next = node.next
+  else
+    node.list.first = node.next
   end
   node.list.count = node.list.count - 1
   return node
