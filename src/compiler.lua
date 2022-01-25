@@ -172,11 +172,22 @@ do
     if manage_temp then
       regs = {[0] = create_temp_reg(func)}
     end
-    generate_expr_code[expr.node_type](expr,num_results,func,regs)
+    generate_expr_code[expr.node_type](
+      expr,
+      expr.force_single_result and 1 or num_results,
+      func,
+      expr.force_single_result and {regs[num_results]} or regs
+    )
     if manage_temp then
       release_temp_reg(regs[0], func)
     end
     if num_results > 1 and util.is_single_result_node(expr) then
+      -- in a case like `local foo, bar; foo, bar = (...)`
+      -- this will LOADNIL into `bar` before the assignment MOVEs the temporary
+      -- register into `foo`. Note that the index of the temp is higher than `bar`
+      -- TODO: so if there can be GC between LOADNIL and MOVE then that's a problem
+      -- and I can't think of a good or easy way to put this LOADNIL after that MOVE
+      -- (note that this might not be the only case where this applies)
       generate_expr({
         node_type = "nil",
         line = get_last_used_line(func),
@@ -1558,6 +1569,7 @@ do
         if func.use_tail_calls
           and (not stat.exp_list[2])
           and (stat.exp_list[1].node_type == "call")
+          and (not stat.exp_list[1].force_single_result)
         then
           first_reg = create_temp_reg(func)
           generate_call_node(stat.exp_list[1], -1, func, {[-1] = first_reg}, true)

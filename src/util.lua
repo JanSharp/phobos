@@ -59,7 +59,7 @@ local function is_single_result_node_type(node_type)
   return not is_vararg_node_type(node_type) and node_type ~= "nil"
 end
 local function is_single_result_node(node)
-  return is_single_result_node_type(node.node_type)
+  return node.force_single_result or is_single_result_node_type(node.node_type)
 end
 
 ---currently unused
