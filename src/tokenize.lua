@@ -112,6 +112,21 @@ local function peek_equals(str,index,next_char,line,column)
   end
 end
 
+local newline_chars = invert{"\n", "\r"}
+
+local function consume_newline(str, index, state, current_char)
+  current_char = current_char or str:sub(index, index)
+  assert(newline_chars[current_char], "Trying to consume a newline when there isn't a newline")
+  local next_char = str:sub(index + 1, index + 1)
+  state.line = state.line + 1
+  if newline_chars[next_char] and next_char ~= current_char then
+    state.line_offset = index + 1
+  else
+    state.line_offset = index
+  end
+    return state.line_offset + 1
+end
+
 local escape_sequence_lut = {
   a = "\a", b = "\b", f = "\f", n = "\n",
   r = "\r", t = "\t", v = "\v", ["\\"] = "\\",
@@ -184,11 +199,9 @@ local function read_string(str,index,quote,state)
         i = i + 3 -- skip x and two hex digits
       end
       goto matching
-    elseif next_char == "\n" then
-      state.line = state.line + 1
-      state.line_offset = i
+    elseif newline_chars[next_char] then
       parts[#parts+1] = "\n"
-      i = i + 1
+      i = consume_newline(str, i, state, next_char)
       goto matching
     elseif next_char == "z" then
       --skip z and whitespace
@@ -197,13 +210,11 @@ local function read_string(str,index,quote,state)
       i = skip + 1
       -- figure out the right line and line_offset
       while true do
-        local _, newline_index = str:find("^%s-\n", j)
+        local newline_index, newline_char = str:match("^[^%S\r\n]*()([\r\n])", j)
         if not newline_index then
           break
         end
-        j = newline_index + 1
-        state.line = state.line + 1
-        state.line_offset = newline_index
+        j = consume_newline(str, newline_index, state, newline_char)
       end
       goto matching
     elseif escape_sequence_lut[next_char] then
@@ -239,41 +250,45 @@ local function read_block_string(str,index,state)
   end
 
   local has_leading_newline = false
-  if str:sub(open_end+1,open_end+1) == "\n" then
-    has_leading_newline = true
-    state.line = state.line + 1
-    open_end = open_end + 1
-    state.line_offset = open_end
+  local next_index = open_end + 1
+  do
+    local first_char = str:sub(next_index,next_index)
+    if newline_chars[first_char] then
+      has_leading_newline = true
+      next_index = consume_newline(str, next_index, state, first_char)
+    end
   end
 
   local token_line = state.line
-  local token_col = (open_end+1) - state.line_offset
+  local token_col = next_index - state.line_offset
 
-  local bracket,bracket_end = str:find("%]"..pad.."%]",index)
-  local invalid = not bracket
-  if invalid then
-    bracket = #str + 1
-    bracket_end = #str
+  local parts = {}
+  local close_pattern = "^%]"..pad.."%]()"
+  while true do
+    local part, stopped_at, stop_char = str:match("^([^\r\n%]]*)()(.?)", next_index)
+    parts[#parts+1] = part
+    if stop_char == "]" then
+      local bracket_end = str:match(close_pattern, stopped_at)
+      if bracket_end then
+        local token = new_token("string", index, token_line, token_col)
+        token.value = table.concat(parts)
+        token.src_is_block_str = true
+        token.src_has_leading_newline = has_leading_newline
+        token.src_pad = pad
+        return bracket_end, token
+      else
+        next_index = stopped_at + 1
+      end
+    elseif stop_char == "" then
+      local token = new_token("invalid", index, token_line, token_col)
+      token.error_messages = {"Unterminated block string"}
+      token.value = table.concat(parts)
+      return stopped_at, token
+    else
+      parts[#parts+1] = "\n"
+      next_index = consume_newline(str, stopped_at, state, stop_char)
+    end
   end
-
-  local token = new_token(invalid and "invalid" or "string",index,token_line,token_col)
-  token.error_messages = invalid and {"Unterminated block string"} or nil
-  token.value = str:sub(open_end+1,bracket-1)
-  local has_newline
-  for _ in token.value:gmatch("\n") do
-    has_newline = true
-    state.line = state.line + 1
-  end
-  if has_newline then
-    local last_line_start, last_line_finish = token.value:find("\n[^\n]*$")
-    state.line_offset = bracket - (last_line_finish - last_line_start) - 1
-  end
-
-  token.src_is_block_str = true
-  token.src_has_leading_newline = has_leading_newline
-  token.src_pad = pad
-
-  return bracket_end+1,token
 end
 
 -- TODO: remove code duplication and double check if this can really read all formats of numbers
@@ -353,15 +368,13 @@ local function next_token(state,index)
   end
 
   if next_char:match("%s") then
-    local value, line_end, value_end = str:match("([^%S\n]*()\n?)()", index)
+    local value, line_end, value_end = str:match("([^%S\r\n]*()[\r\n]?)()", index)
     local token = new_token("blank", index, state.line, index - state.line_offset)
     token.value = value
-    index = value_end
     if line_end ~= value_end then -- ends with newline?
-      state.line = state.line + 1
-      state.line_offset = line_end
+      return consume_newline(str, line_end, state), token
     end
-    return index, token
+    return value_end, token
   elseif next_char:match("[+*/%%^#;,(){}%]]") then
     return index+1,new_token(next_char,index,state.line,index - state.line_offset)
   elseif next_char:match("[>=<]") then
@@ -384,7 +397,7 @@ local function next_token(state,index)
         token.index = index
         return next_index,token
       else
-        local token_start,token_end,text = str:find("^([^\n]*)",index+2)
+        local token_start,token_end,text = str:find("^([^\r\n]*)",index+2)
         local token = new_token("comment",token_start,state.line,index - state.line_offset)
         token.value = text
         return token_end+1,token
@@ -458,7 +471,7 @@ end
 ---@param str string
 ---@return fun(state: TokenizeState, index: integer|nil): integer|nil, Token next_token
 ---@return TokenizeState state
----@return nil index
+---@return number|nil index
 local function tokenize(str)
   local index
   local state = {

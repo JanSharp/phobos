@@ -6,6 +6,9 @@ Version: 0.1.2
       (for example `local foo, bar; foo, bar = ...`, while `local foo, bar = ...` worked)
     - Fix call or vararg expressions wrapped in `()` not forcing single results and potentially
       not even assigning to the right registers (for example `local foo, bar; foo, bar = (...)`)
+    - Fix '\r\n' (or '\n\r' which shouldn't - but can - exist) breaking escaped newlines in strings
+      In fact '\r' was mostly unhandled. Now all newlines get properly normalized to '\n' just like
+      they do in regular Lua
   Changes:
     - Set linux lua executable flag [PR#1](https://github.com/JanSharp/phobos/pull/1)
 ---------------------------------------------------------------------------------------------------
