@@ -210,7 +210,7 @@ local filenames = {}
 if args.use_filename_cache then
   filenames = assert(pcall_with_one_result(assert(loadfile("temp/compile_test_filename_cache.lua", "t", {}))))
 else
-  filenames = require("debugging.util").find_lua_source_files()
+  filenames = require("debugging.debugging_util").find_lua_source_files()
   if args.create_filename_cache then
     local cache_file = assert(io.open("temp/compile_test_filename_cache.lua", "w"))
     cache_file:write(serpent.dump(filenames))

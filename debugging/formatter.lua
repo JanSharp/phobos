@@ -40,7 +40,7 @@ local filenames
 if ... then
   filenames = {...}
 else
-  filenames = require("debugging.util").find_lua_source_files()
+  filenames = require("debugging.debugging_util").find_lua_source_files()
 end
 
 local start_time = os.clock()
