@@ -1,0 +1,19 @@
+
+local scripts_util = require("scripts.scripts_util")
+local walker = require("ast_walker")
+
+return function(main)
+  if main.source:find("[@/]main%.") then
+    local info_json = scripts_util.read_info_json()
+    local version_str = scripts_util.get_info_json_version_str(info_json)
+    walker.walk_scope(main, {
+      on_close = {
+        ["string"] = function(node, scope)
+          if node.value == "$$phobos_version$$" then
+            node.value = version_str
+          end
+        end,
+      },
+    })
+  end
+end

@@ -1,5 +1,7 @@
 ---------------------------------------------------------------------------------------------------
 Version: 0.1.2
+  Minor Features:
+    - Add `--version` argument
   Bugfixes:
     - Fix error when requiring files using non normalized module names in Factorio
     - Fix vararg expressions sometimes not assigning values properly

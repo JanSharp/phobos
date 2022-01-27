@@ -6,6 +6,7 @@ Path.use_forward_slash_as_main_separator_on_windows()
 local arg_parser = require("lib.LuaArgParser.arg_parser")
 local io_util = require("io_util")
 local changelog_util = require("scripts.changelog_util")
+local scripts_util = require("scripts.scripts_util")
 
 local skip_able = {
   "skip_ensure_command_availability",
@@ -144,17 +145,8 @@ end
 
 -- get version from info.json
 print("Reading info.json")
-local info_json
-do
-  local file = assert(io.open("info.json", "r"))
-  info_json = file:read("*a")
-  assert(file:close())
-end
-local info_json_version_pattern = "(\"version\"%s*:%s*\")(%d+%.%d+%.%d+)\""
-local version_str = select(2, info_json:match(info_json_version_pattern))
-if not version_str then
-  error("Unable to get version from info.json")
-end
+local info_json = scripts_util.read_info_json()
+local version_str = scripts_util.get_info_json_version_str(info_json)
 local version = changelog_util.parse_version(version_str)
 if version_str ~= changelog_util.print_version(version) then
   error("Version "..version_str.." has leading 0s. It should be "..changelog_util.print_version(version))
@@ -401,14 +393,8 @@ if not args.skip_increment_version then
   print("Incrementing version in info.json")
   version.patch = version.patch + 1
   version_str = changelog_util.print_version(version)
-  info_json = info_json:gsub(info_json_version_pattern, function(prefix)
-    return prefix..version_str..'"'
-  end)
-  do
-    local file = assert(io.open("info.json", "w"))
-    assert(file:write(info_json))
-    assert(file:close())
-  end
+  info_json = scripts_util.set_info_json_version_str(info_json, version_str)
+  scripts_util.write_info_json(info_json)
 
   -- add new version block in changelog.txt
   print("Adding new version block for "..version_str)

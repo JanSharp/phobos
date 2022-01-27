@@ -169,9 +169,25 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
                      a bit.)",
       flag = true,
     },
+    {
+      field = "version",
+      long = "version",
+      description = "Prints the current version of Phobos to std out.",
+      flag = true,
+    },
   },
 }, {label_length = 80 - 4 - 2 - 50})
 if not args then return end
+
+if args.version then
+  -- we don't have a preprocessor yet, maybe won't ever have one, so
+  -- I'm doing this the ugly way. Somehow loading it from a different file
+  -- is also an option however I've decided against it because that would
+  -- add several points of failure for something as simple as getting the version
+  -- the ugly way is through an ast inject script btw
+  print("$$phobos_version$$")
+  return
+end
 
 if args.monitor_memory_allocation then
   collectgarbage("stop")

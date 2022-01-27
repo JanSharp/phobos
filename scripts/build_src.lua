@@ -30,6 +30,7 @@ loadfile(assert(package.searchpath("main", package.path)))(table.unpack{
   "--source", "src",
   "--output", "out/src/"..args.profile,
   "--temp", "temp/src/"..args.profile,
+  "--inject", "scripts/build_src_ast_inject.pho",
   "--profile", args.profile,
   -- for now source files are still `.lua` files because they
   -- do compile with regular lua compilers and i do not trust
