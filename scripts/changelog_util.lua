@@ -96,10 +96,8 @@ local function decode(text)
         lines[#lines+1] = assert_match("([^\n ][^\n]*)")
       end
       add_line()
-      if test_next("\n"..string.rep(" ", 6)) then
+      while test_next("\n"..string.rep(" ", 6)) do
         line = line + 1
-        assert_next("[^ ]")
-        i = i - 1
         add_line()
       end
       return true
