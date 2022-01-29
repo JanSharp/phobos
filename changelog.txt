@@ -1,5 +1,7 @@
 ---------------------------------------------------------------------------------------------------
 Version: 0.1.2
+  Features:
+    - Add continuing parsing after encountering syntax errors
   Changes:
     - Set linux lua executable flag [PR#1](https://github.com/JanSharp/phobos/pull/1)
   Bugfixes:
