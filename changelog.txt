@@ -26,8 +26,6 @@ Date: 2021-10-25
       (except concats with parenthesis in the middle of them)
     - Implement compiling AST to Lua 5.2 bytecode
     - Implement disassembling Lua 5.2 bytecode to AST
-  Minor Features:
-    - Add Phobos Debug Symbols v0 for use by third party tools (not Lua itself)
   Features:
     - Add Factorio in game commands to execute phobos code similar to regular Lua commands
     - Add cmd option to compile to bytecode files or text files that `load` a bytecode string
@@ -35,6 +33,8 @@ Date: 2021-10-25
     - Add cmd option to monitor memory during compilation
     - Add cmd option to ignore and continue past files with syntax errors
     - Add WIP cmd option for build profiles (debug or release)
+  Minor Features:
+    - Add Phobos Debug Symbols v0 for use by third party tools (not Lua itself)
   Optimizations:
     - Implement folding pure const expressions
     - Implement folding control statements with pure const conditions
