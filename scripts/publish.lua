@@ -116,7 +116,7 @@ if not args.skip_tests then
   print("Running tests")
   local success, err = pcall(loadfile("tests/compile_test.lua"), table.unpack{
     "--test-disassembler",
-    "--ensure-clean",
+    -- "--ensure-clean", -- see compile_test.lua about performance problems
     "--test-formatter",
   })
   if not success then

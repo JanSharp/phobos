@@ -32,6 +32,9 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
       flag = true,
     },
     {
+      -- this is so incredibly slow at this point that it is unusable
+      -- I'm 99% sure it's serpent creating way too many increasingly big intermediate strings
+      -- however I haven't made sure that's really the case. Regardless, it's too slow
       field = "ensure_clean_data",
       long = "ensure-clean",
       short = "e",
