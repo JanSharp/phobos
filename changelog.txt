@@ -1,5 +1,7 @@
 ---------------------------------------------------------------------------------------------------
 Version: 0.1.2
+  Changes:
+    - Set linux lua executable flag [PR#1](https://github.com/JanSharp/phobos/pull/1)
   Bugfixes:
     - Fix error when requiring files using non normalized module names in Factorio
     - Fix vararg expressions sometimes not assigning values properly
@@ -9,13 +11,11 @@ Version: 0.1.2
     - Fix '\r\n' (or '\n\r' which shouldn't - but can - exist) breaking escaped newlines in strings
       In fact '\r' was mostly unhandled. Now all newlines get properly normalized to '\n' just like
       they do in regular Lua
-  Changes:
-    - Set linux lua executable flag [PR#1](https://github.com/JanSharp/phobos/pull/1)
 ---------------------------------------------------------------------------------------------------
 Version: 0.1.1
 Date: 2021-10-25
   Changes:
-    - Fix missing thumbnail on mod portal
+    - Add missing thumbnail on mod portal
 ---------------------------------------------------------------------------------------------------
 Version: 0.1.0
 Date: 2021-10-25
