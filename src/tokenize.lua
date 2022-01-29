@@ -368,13 +368,14 @@ local function next_token(state,index)
   end
 
   if next_char:match("%s") then
-    local value, line_end, value_end = str:match("([^%S\r\n]*()[\r\n]?)()", index)
+    local value, line_end, newline = str:match("([^%S\r\n]*)()([\r\n]?)", index)
     local token = new_token("blank", index, state.line, index - state.line_offset)
-    token.value = value
-    if line_end ~= value_end then -- ends with newline?
+    if newline ~= "" then -- ends with newline?
+      token.value = value.."\n"
       return consume_newline(str, line_end, state), token
     end
-    return value_end, token
+    token.value = value
+    return line_end, token
   elseif next_char:match("[+*/%%^#;,(){}%]]") then
     return index+1,new_token(next_char,index,state.line,index - state.line_offset)
   elseif next_char:match("[>=<]") then
