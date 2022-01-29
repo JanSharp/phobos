@@ -6,18 +6,19 @@ local lfs = require("lfs")
 local Path = require("lib.LuaPath.path")
 Path.use_forward_slash_as_main_separator_on_windows()
 
-local unsafe = true
+local unsafe = false
 local print_progress = true
 local use_regular_lua_compiler = false
 local use_phobos_compiler = true
+local use_il = false
 local do_create_inline_iife = false
 local do_fold_const = true
-local do_fold_control_statements = true
+local do_fold_control_statements = false
 local eval_instruction_count = true
 local eval_byte_count = true
 local create_disassembly = true
 local show_keys_in_disassembly = false
-local load_and_run_compiled_funcs = false
+local load_and_run_compiled_funcs = true
 local run_count = 1
 
 local total_lua_inst_count = 0
@@ -201,35 +202,37 @@ local function compile(filename)
     success, err = pcall(require("jump_linker"), main)
     if not success then print(err) goto finish end
 
-    local il
-    success, il = pcall(require("intermediate_language"), main)
-    if not success then print(il) goto finish end
+    if use_il then
+      local il
+      success, il = pcall(require("intermediate_language"), main)
+      if not success then print(il) goto finish end
 
-    success, err = pcall(function()
-      local il_func_id = 0
-      local pretty_print = require("il_pretty_print")
-      local function il_add_func_lines(func)
-        il_func_id = il_func_id + 1
-        -- "-- < line column compiler :  func_id  pc  opcode  description  params >\n"
-        pretty_print(func, function(pc, label, description, inst)
-          local line = get_line(inst.position and inst.position.line)
-          line[#line+1] = string.format(
-            "-- %s %3d IL1: %2df  %4d  %s  %s",
-            format_line_num(inst.position and inst.position.line or 0),
-            inst.position and inst.position.column or 0,
-            il_func_id,
-            pc,
-            label,
-            description
-          )
-        end)
-        for _, inner_func in ipairs(func.inner_functions) do
-          il_add_func_lines(inner_func)
+      success, err = pcall(function()
+        local il_func_id = 0
+        local pretty_print = require("il_pretty_print")
+        local function il_add_func_lines(func)
+          il_func_id = il_func_id + 1
+          -- "-- < line column compiler :  func_id  pc  opcode  description  params >\n"
+          pretty_print(func, function(pc, label, description, inst)
+            local line = get_line(inst.position and inst.position.line)
+            line[#line+1] = string.format(
+              "-- %s %3d IL1: %2df  %4d  %s  %s",
+              format_line_num(inst.position and inst.position.line or 0),
+              inst.position and inst.position.column or 0,
+              il_func_id,
+              pc,
+              label,
+              description
+            )
+          end)
+          for _, inner_func in ipairs(func.inner_functions) do
+            il_add_func_lines(inner_func)
+          end
         end
-      end
-      il_add_func_lines(il)
-    end)
-    if not success then print(err) goto finish end
+        il_add_func_lines(il)
+      end)
+      if not success then print(err) goto finish end
+    end
 
     if do_fold_const then
       success, err = pcall(require("optimize.fold_const"), main)

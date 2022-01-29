@@ -254,6 +254,12 @@
 ---function name. `src_is_ident` is always `true`
 ---@field suffix AstString
 ---@field args AstExpression[]
+---@field safe_chaining boolean
+---@field question_mark_token AstTokenNode|nil
+---only used if `is_selfcall == true`
+---@field ex_safe_chaining boolean
+---only used if `is_selfcall == true`
+---@field ex_question_mark_token AstTokenNode|nil
 ---@field args_comma_tokens AstTokenNode[]
 ---@field colon_token AstTokenNode @ position for the `self` instruction
 ---@field open_paren_token AstTokenNode|nil @ position for the `call` instruction
@@ -304,6 +310,8 @@
 ---if this is an AstString with `src_is_ident == true`
 ---then it is representing a literal identifier
 ---@field suffix AstExpression
+---@field safe_chaining boolean
+---@field question_mark_token AstTokenNode|nil
 ---Only used if it is a literal identifier\
 ---position for index related instructions
 ---@field dot_token AstTokenNode|nil

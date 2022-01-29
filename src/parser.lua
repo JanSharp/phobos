@@ -528,6 +528,8 @@ local suffixed_lut = {
         src_is_ident = true,
       }
     end
+    node.safe_chaining = test_next("?")
+    node.question_mark_token = node.safe_chaining and new_token_node(true)
     node.args, node.args_comma_tokens = func_args(node, scope, stat_elem)
     return node
   end,
@@ -541,15 +543,31 @@ local suffixed_lut = {
 ---@return AstExpression
 local function suffixed_exp(scope, stat_elem)
   -- suffixed_exp ->
-  --   primary_exp { '.' NAME | '[' exp ']' | ':' NAME func_args | func_args }
-  --TODO: safe chaining adds optional '?' in front of each suffix
+  --   primary_exp { [ '?' ] ( '.' NAME | '[' exp ']' | ':' NAME func_args | func_args ) }
+  --TODO: check if the usage of `()` in that syntax definition is correct
   local ex = primary_exp(scope, stat_elem)
   local should_break = false
   repeat
+    local safe_chaining = test_next("?")
+    local question_mark_token = safe_chaining and new_token_node(true)
     ex = ((suffixed_lut)[token.token_type] or function(ex)
       should_break = true
       return ex
     end)(ex, scope, stat_elem)
+    if safe_chaining then
+      if should_break then
+        -- TODO: somehow include `ex` into the invalid node data structure
+        return syntax_error("Expected an index or a call after '?'")
+      end
+      ---@diagnostic disable-next-line: undefined-field
+      if ex.node_type == "call" and ex.is_selfcall then
+        ex.ex_safe_chaining = true
+        ex.ex_question_mark_token = question_mark_token
+      else
+        ex.safe_chaining = true
+        ex.question_mark_token = question_mark_token
+      end
+    end
   until should_break
   return ex
 end

@@ -90,10 +90,8 @@ selfcall => ex suffix args
 index => ex suffix
 ```
 
-# To Add
-
+# Definitely Add
 - `continue` keyword
-- `!=` for `~=`
 - `+=` `-=` `*=` `/=` `%=` `^=` composite assignment ops
   no multiple-assignment with these?
   parse to tree equivalent of LHS = LHS op ( RHS )
@@ -102,38 +100,47 @@ index => ex suffix
 - `:[]()` operator for self-call by non-ident index
 - `expr?.ident` `expr?[expr]` `expr?()` for safe-chaining
   `expr?:ident?(exp_list)` for SELF
-- `^.` for `getmetatable()?.`
-- `@` `@[]` for rawget()/rawset()
-- `condition ?? exp_list :: exp_list` ternary op
-  single `?` causes parsing difficulty with safe chaining ops
-  single `:` causes parsing difficulty with self-call op
-  foo?(bar):baz():baz()
-- `local {foo, bar} = exp` table unpack as name in local statement
-  declare extra local (unpack) for the table after all names with scope only until it's been used
-  unpack the named fields into locals, discard intermediate table
-  `foo as foo_bar` to rename?
-- `(name_list)=>exp_list` for `function(name_list) return exp_list end`
-- `if name_list = exp_list then` use first var as condition
-    `if name_list = exp_list; condition then` explicit condition
-    `while name_list = exp_list; condition do` while too?
-switch/case?
+- switch/case?
     implement as `(({})[case] or default)()` ?
     allow `return switch`?
-- `const name_list ‘=’ exp_list`, compile-time constant folding? prevent re-assignment, allow reuse of common sub_expressions
-- `inline function` or `macro` at file or smaller scope
-  not assignable
-  no upvals?
-- `static foo` vars for upvals only in scope for closure
-  LOADNIL statics, then CLOSURE, then JMP to close them
+- `(name_list)=>exp_list` for `function(name_list) return exp_list end`
 - string interpolation?
   evaluate it all then do one big concat
   $"" or $[[]] like a function call of $
   turn into concat series, expressions in {} break out as code
   or `` and ${} like TS?
   tostring() sub expressions? or just let it error on non-string?
+- numbers with `_`
+- block expression `do stat_list transfer expr_list end`
+- `if condition then exp_list else exp_list end` "ternary" op. more like if expression
+  if we go with the usual `? :` we have to use `?? ::` instead because
+  single `?` causes parsing difficulty with safe chaining ops
+  single `:` causes parsing difficulty with self-call op
+  foo?(bar):baz():baz()
+- `const name_list ‘=’ exp_list`, compile-time constant folding? prevent re-assignment, allow reuse of common sub_expressions
+
+# Maybe Add
+
+- `!=` for `~=`
+- `^.` for `getmetatable()?.`
+- `@` `@[]` for rawget()/rawset()
+- `local {foo, bar} = exp` table unpack as name in local statement
+  declare extra local (unpack) for the table after all names with scope only until it's been used
+  unpack the named fields into locals, discard intermediate table
+  `foo as foo_bar` to rename?
+- `if name_list = exp_list then` use first var as condition
+    `if name_list = exp_list; condition then` explicit condition
+    `while name_list = exp_list; condition do` while too?
+- `inline function` or `macro` at file or smaller scope
+  not assignable
+  no upvals?
+- `static foo` vars for upvals only in scope for closure
+  LOADNIL statics, then CLOSURE, then JMP to close them
 - branch annotations for coverage testing?
 - compile time regex? builds to a function that uses patterns?
-- numbers with `_`
+`break :label:` and `continue :label:` where is somehow identifying a loop
+  potentially by a label being the first thing in a loop
+  or by there being a special way to "name" a block/loop
 
 type annotations, somehow? steal a bunch from TypeScript?
   compile time warning on assignment of incompatible types
@@ -145,9 +152,3 @@ type annotations, somehow? steal a bunch from TypeScript?
   `_ENV = <T>_ENV` with an interface?
   `T?`, `T|T`, `T&T`, `any`
   `interface T [extends U] { }`
-
-# Maybe Add
-
-`break :label:` and `continue :label:` where is somehow identifying a loop
-  potentially by a label being the first thing in a loop
-  or by there being a special way to "name" a block/loop

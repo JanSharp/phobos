@@ -458,6 +458,8 @@ end
 ---@field ex AstExpression
 ---@field suffix AstString|nil @ required if `is_selfcall == true`
 ---@field args AstExpression[]|nil
+---@field safe_chaining boolean|nil
+---@field question_mark_token AstTokenNode|nil
 ---@field args_comma_tokens AstTokenNode[]|nil
 ---@field colon_token AstTokenNode|nil
 ---@field open_paren_token AstTokenNode|nil
@@ -475,6 +477,8 @@ function nodes.new_call(params)
   node.ex = assert_params_field(params, "ex")
   node.suffix = params.suffix
   node.args = params.args or {}
+  node.safe_chaining = params.safe_chaining or false
+  node.question_mark_token = params.question_mark_token
   node.args_comma_tokens = params.args_comma_tokens
   node.colon_token = params.colon_token
   node.open_paren_token = params.open_paren_token
@@ -553,20 +557,24 @@ end
 ---@class AstIndexParams : AstExpressionBaseParams
 ---@field ex AstExpression
 ---@field suffix AstExpression
----@field src_ex_did_not_exist boolean|nil
+---@field safe_chaining boolean|nil
+---@field question_mark_token AstTokenNode|nil
 ---@field dot_token AstTokenNode|nil
 ---@field suffix_open_token AstTokenNode|nil
 ---@field suffix_close_token AstTokenNode|nil
+---@field src_ex_did_not_exist boolean|nil
 
 ---@param params AstIndexParams
 function nodes.new_index(params)
   local node = expr_base(new_node("index"), params)
   node.ex = assert_params_field(params, "ex")
   node.suffix = assert_params_field(params, "suffix")
-  node.src_ex_did_not_exist = params.src_ex_did_not_exist or false
+  node.safe_chaining = params.safe_chaining or false
+  node.question_mark_token = params.question_mark_token
   node.dot_token = params.dot_token
   node.suffix_open_token = params.suffix_open_token
   node.suffix_close_token = params.suffix_close_token
+  node.src_ex_did_not_exist = params.src_ex_did_not_exist or false
   return node
 end
 

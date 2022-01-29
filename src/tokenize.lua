@@ -43,6 +43,7 @@ local keywords = invert{
 ---| '"..."'
 ---| '".."'
 ---| '"."'
+---| '"?"'
 ---keywords:
 ---| '"and"'
 ---| '"break"'
@@ -362,7 +363,7 @@ local function next_token(state,index)
       state.line_offset = line_end
     end
     return index, token
-  elseif next_char:match("[+*/%%^#;,(){}%]]") then
+  elseif next_char:match("[+*/%%^#;,(){}%]?]") then
     return index+1,new_token(next_char,index,state.line,index - state.line_offset)
   elseif next_char:match("[>=<]") then
     return peek_equals(str,index,next_char,state.line,index - state.line_offset)

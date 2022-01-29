@@ -133,8 +133,12 @@ do
     end
   end
 
+  local function reg_is_used(reg)
+    return reg.start_at
+  end
+
   local function use_reg(reg, func, start_at)
-    if reg.start_at then
+    if reg_is_used(reg) then
       return reg
     end
     if func.stack.next_reg_index ~= reg.index then
@@ -161,7 +165,7 @@ do
   end
 
   local generate_expr_code
-  local function generate_expr(expr,num_results,func,regs)
+  local function generate_expr(expr,num_results,func,regs,safe_chaining_state)
     if num_results == -1 and not reg_is_top_or_above(regs[num_results], func) then
       assert(false, "Attempt to generate '"..expr.node_type
         .."' expression with var results into register "
@@ -172,7 +176,7 @@ do
     if manage_temp then
       regs = {[0] = create_temp_reg(func)}
     end
-    generate_expr_code[expr.node_type](expr,num_results,func,regs)
+    generate_expr_code[expr.node_type](expr,num_results,func,regs,safe_chaining_state)
     if manage_temp then
       release_temp_reg(regs[0], func)
     end
@@ -350,30 +354,30 @@ do
     ["not"] = opcodes["not"],
   }
 
-  local function local_or_fetch(expr,func,reg)
+  local function local_or_fetch(expr,func,reg,safe_chaining_state)
     if expr.node_type == "local_ref" then
       return find_local(expr)
     else
-      reg = create_temp_reg(func)
-      generate_expr(expr,1,func,{reg})
+      reg = reg or create_temp_reg(func)
+      generate_expr(expr,1,func,{reg},safe_chaining_state)
       return reg
     end
   end
 
   local const_node_types = invert{"boolean","nil","string","number"}
-  local function const_or_local_or_fetch(expr,func,reg)
+  local function const_or_local_or_fetch(expr,func)
     if const_node_types[expr.node_type] then
       return bit32.bor(add_constant(expr,func),0x100), true
     else
-      return local_or_fetch(expr,func,reg), false
+      return local_or_fetch(expr,func), false
     end
   end
 
-  local function upval_or_local_or_fetch(expr,func,reg)
+  local function upval_or_local_or_fetch(expr,func)
     if expr.node_type == "upval_ref" then
       return expr.reference_def.index, true
     else
-      return local_or_fetch(expr,func,reg), false
+      return local_or_fetch(expr,func), false
     end
   end
 
@@ -737,7 +741,7 @@ do
 
       if store_result then
         finish_test_expr_storing_result(chain, jumps, reg, func)
-        assert(reg.start_at, "There is somehow a path where a test expr with result \z
+        assert(reg_is_used(reg), "There is somehow a path where a test expr with result \z
           didn't end up using the result register. The only instructions that reference \z
           the register but don't actually use it are testset, but there should always be \z
           either a last expression or a loadbool at the end, right?"
@@ -800,7 +804,34 @@ do
     return position
   end
 
-  local function generate_call(expr,num_results,func,regs,is_tail_call,get_func_reg)
+  local function generate_safe_chaining_test(test_reg, question_mark_token, safe_chaining_state, func)
+    local test = {
+      op = nil, a = nil, b = nil, c = 0,
+      line = question_mark_token and question_mark_token.line,
+      column = question_mark_token and question_mark_token.column,
+    }
+    func.instructions[#func.instructions+1] = test
+    if reg_is_used(safe_chaining_state.result_reg)
+      and safe_chaining_state.result_reg.index == test_reg.index
+    then
+      test.op = opcodes.test
+      test.a = test_reg
+    else
+      test.op = opcodes.testset
+      test.a = use_reg(safe_chaining_state.result_reg, func)
+      test.b = test_reg
+    end
+    local jump = {
+      op = opcodes.jmp, a = 0,
+      line = question_mark_token and question_mark_token.line,
+      column = question_mark_token and question_mark_token.column,
+    }
+    func.instructions[#func.instructions+1] = jump
+    jump.pc = #func.instructions
+    safe_chaining_state.jumps[#safe_chaining_state.jumps+1] = jump
+  end
+
+  local function generate_call(expr,num_results,func,regs,is_tail_call,safe_chaining_state,get_func_reg)
     -- out of order regs can be a problem
     -- if they would require moves both up and down the stack
     -- because values would most likely get overwritten with the current algorithm.
@@ -810,7 +841,18 @@ do
     if is_tail_call then
       assert(not need_temps, "When generating a tailcall the given regs must be at top in order")
     end
-    local func_reg, first_arg_reg = get_func_reg()
+    local safe_chaining_state_param = safe_chaining_state
+    if expr.safe_chaining then
+      safe_chaining_state = safe_chaining_state or {
+        result_reg = create_temp_reg(func, regs[num_results].index),
+        jumps = {},
+      }
+    end
+    local func_reg, first_arg_reg = get_func_reg(safe_chaining_state)
+    if expr.safe_chaining then
+      -- test func_reg
+      generate_safe_chaining_test(func_reg, expr.question_mark_token, safe_chaining_state, func)
+    end
     local args_regs = {}
     local num_args = #expr.args
     for i = 1, num_args do
@@ -854,12 +896,34 @@ do
       end
       release_temp_regs(temp_regs, func)
     end
+    if expr.safe_chaining and not safe_chaining_state_param then
+      -- this function created the safe chaining state, it has to finish it
+      local finish_jump
+      if num_results > 1 then
+        finish_jump = {
+          op = opcodes.jmp, a = 0,
+          line = position and position.line,
+          column = position and position.column,
+        }
+        func.instructions[#func.instructions+1] = finish_jump
+        finish_jump.pc = #func.instructions
+      end
+      jump_here(safe_chaining_state.jumps, func)
+      if num_results > 1 then
+        generate_expr({
+          node_type = "nil",
+          line = position and position.line,
+          column = position and position.column,
+        }, num_results - 1, func, regs)
+        jump_here({finish_jump}, func)
+      end
+    end
     -- if this isn't using temps and the last node that gets generated in a scope is a call
     -- the registers passed into this function will start_at _past_ the call instruction
     -- but stop_at _at_ the call instruction.
     -- those are malformed registers, and requires some sort of handling
-    -- i'm not how though
-    -- in all other expressions and statements end up using the regs passed into them
+    -- i'm not sure how though
+    -- all other expressions and statements end up using the regs passed into them
     -- starting at some instruction they generate, which avoids this issue
     -- it might be required to behave the same in here as well, but evaluating the
     -- right register reference for the call itself is awkward if it should be avoided to
@@ -869,31 +933,79 @@ do
     -- valid registers to said array
   end
 
-  local function generate_call_node(node,num_results,func,regs,is_tail_call)
+  local function generate_call_node(node,num_results,func,regs,safe_chaining_state,is_tail_call)
     if not node.is_selfcall then
-      generate_call(node, num_results, func, regs, is_tail_call, function()
-        local func_reg = create_temp_reg(func)
-        generate_expr(node.ex,1,func,{func_reg})
-        return func_reg
-      end)
+      generate_call(
+        node,
+        num_results,
+        func,
+        regs,
+        is_tail_call,
+        safe_chaining_state,
+        function(safe_chaining_state)
+          local func_reg = create_temp_reg(func)
+          generate_expr(node.ex,1,func,{func_reg},safe_chaining_state)
+          return func_reg
+        end
+      )
     else
-      generate_call(node, num_results, func, regs, is_tail_call, function()
-        local func_reg = create_temp_reg(func)
-        local first_arg_reg = create_temp_reg(func, get_top(func) + 2)
-        local ex_reg = local_or_fetch(node.ex, func)
-        local suffix_reg, suffix_is_const = const_or_local_or_fetch(node.suffix, func)
-        -- maybe these 2 should be used after the instruction
-        use_reg(func_reg, func)
-        use_reg(first_arg_reg, func)
-        func.instructions[#func.instructions+1] = {
-          op = opcodes.self, a = func_reg, b = ex_reg, c = suffix_reg,
-          line = node.colon_token and node.colon_token.line,
-          column = node.colon_token and node.colon_token.column,
-        }
-        if not suffix_is_const then release_temp_reg(suffix_reg) end
-        release_temp_reg(ex_reg)
-        return func_reg, first_arg_reg
-      end)
+      generate_call(
+        node,
+        num_results,
+        func,
+        regs,
+        is_tail_call,
+        safe_chaining_state,
+        function(safe_chaining_state)
+          local func_reg = create_temp_reg(func)
+          local first_arg_reg = create_temp_reg(func, get_top(func) + 2)
+          local ex_safe_chaining_state
+          local ex_reg
+          local safe_chaining_state_param = safe_chaining_state
+          if node.ex_safe_chaining then
+            ex_reg = create_temp_reg(func)
+            ex_safe_chaining_state = safe_chaining_state or {
+              result_reg = ex_reg,
+              jumps = {},
+            }
+          end
+          ex_reg = local_or_fetch(node.ex, func, ex_reg, ex_safe_chaining_state)
+          if node.ex_safe_chaining then
+            -- test if ex reg is not nil
+            generate_safe_chaining_test(ex_reg, node.ex_question_mark_token, ex_safe_chaining_state, func)
+          end
+          local suffix_reg, suffix_is_const = const_or_local_or_fetch(node.suffix, func)
+          -- maybe these 2 should be used after the instruction
+          use_reg(func_reg, func)
+          use_reg(first_arg_reg, func)
+          func.instructions[#func.instructions+1] = {
+            op = opcodes.self, a = func_reg, b = ex_reg, c = suffix_reg,
+            line = node.colon_token and node.colon_token.line,
+            column = node.colon_token and node.colon_token.column,
+          }
+          if node.ex_safe_chaining and not safe_chaining_state_param then
+            -- this function created the safe chaining state, it has to finish it
+            local finish_jump
+            finish_jump = {
+              op = opcodes.jmp, a = 0,
+              line = node.colon_token and node.colon_token.line,
+              column = node.colon_token and node.colon_token.column,
+            }
+            func.instructions[#func.instructions+1] = finish_jump
+            finish_jump.pc = #func.instructions
+            jump_here(ex_safe_chaining_state.jumps, func)
+            generate_expr({
+              node_type = "nil",
+              line = node.colon_token and node.colon_token.line,
+              column = node.colon_token and node.colon_token.column,
+            }, 1, func, {first_arg_reg})
+            jump_here({finish_jump}, func)
+          end
+          if not suffix_is_const then release_temp_reg(suffix_reg) end
+          release_temp_reg(ex_reg)
+          return func_reg, first_arg_reg
+        end
+      )
     end
   end
 
@@ -1090,18 +1202,41 @@ do
       }
     end,
     call = generate_call_node,
-    index = function(expr,num_results,func,regs)
-      local ex_reg, is_upval = upval_or_local_or_fetch(expr.ex,func)
-      local suffix_reg, suffix_is_const = const_or_local_or_fetch(expr.suffix,func)
+    index = function(expr,num_results,func,regs,safe_chaining_state)
       local position = util.get_main_position(expr)
-      func.instructions[#func.instructions+1] = {
-        op = is_upval and opcodes.gettabup or opcodes.gettable,
-        a = use_reg(regs[num_results], func), b = ex_reg, c = suffix_reg,
-        line = position and position.line,
-        column = position and position.column,
-      }
-      if not suffix_is_const then release_temp_reg(suffix_reg, func) end
-      if not is_upval then release_temp_reg(ex_reg, func) end
+      if expr.safe_chaining then
+        local safe_chaining_state_param = safe_chaining_state
+        safe_chaining_state = safe_chaining_state or {
+          result_reg = create_temp_reg(func, regs[num_results].index),
+          jumps = {},
+        }
+        local ex_reg = local_or_fetch(expr.ex,func,nil,safe_chaining_state)
+        generate_safe_chaining_test(ex_reg, expr.question_mark_token, safe_chaining_state, func)
+        local suffix_reg, suffix_is_const = const_or_local_or_fetch(expr.suffix,func)
+        func.instructions[#func.instructions+1] = {
+          op = opcodes.gettable,
+          a = use_reg(regs[num_results], func), b = ex_reg, c = suffix_reg,
+          line = position and position.line,
+          column = position and position.column,
+        }
+        if not safe_chaining_state_param then
+          -- this index created the state, so it has to finish it
+          jump_here(safe_chaining_state.jumps, func)
+        end
+        if not suffix_is_const then release_temp_reg(suffix_reg, func) end
+        release_temp_reg(ex_reg, func)
+      else
+        local ex_reg, is_upval = upval_or_local_or_fetch(expr.ex,func)
+        local suffix_reg, suffix_is_const = const_or_local_or_fetch(expr.suffix,func)
+        func.instructions[#func.instructions+1] = {
+          op = is_upval and opcodes.gettabup or opcodes.gettable,
+          a = use_reg(regs[num_results], func), b = ex_reg, c = suffix_reg,
+          line = position and position.line,
+          column = position and position.column,
+        }
+        if not suffix_is_const then release_temp_reg(suffix_reg, func) end
+        if not is_upval then release_temp_reg(ex_reg, func) end
+      end
     end,
 
     inline_iife = function(expr,num_results,func,regs)
@@ -1387,10 +1522,7 @@ do
           end
         end
       end
-      for _, finish_jump in ipairs(finish_jumps) do
-        finish_jump.sbx = #func.instructions - finish_jump.pc
-        finish_jump.pc = nil
-      end
+      jump_here(finish_jumps, func)
     end,
     call = function(stat,func)
       -- evaluate as a call expression for zero results
@@ -1542,7 +1674,7 @@ do
           and (stat.exp_list[1].node_type == "call")
         then
           first_reg = create_temp_reg(func)
-          generate_call_node(stat.exp_list[1], -1, func, {[-1] = first_reg}, true)
+          generate_call_node(stat.exp_list[1], -1, func, {[-1] = first_reg}, nil, true)
           num_results = -1
           is_tail_call = true
         else
