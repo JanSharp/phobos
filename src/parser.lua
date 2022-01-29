@@ -554,14 +554,6 @@ local function suffixed_exp(scope, stat_elem)
   return ex
 end
 
-local function new_boolean_node(scope, stat_elem)
-  return nodes.new_boolean{
-    stat_elem = stat_elem,
-    position = token,
-    value = token.value,
-  }
-end
-
 ---value is set outside, for all of them
 local simple_lut = {
   ["number"] = function(scope, stat_elem)
@@ -590,8 +582,20 @@ local simple_lut = {
       position = token,
     }
   end,
-  ["true"] = new_boolean_node,
-  ["false"] = new_boolean_node,
+  ["true"] = function(scope, stat_elem)
+    return nodes.new_boolean{
+      stat_elem = stat_elem,
+      position = token,
+      value = true,
+    }
+  end,
+  ["false"] = function(scope, stat_elem)
+    return nodes.new_boolean{
+      stat_elem = stat_elem,
+      position = token,
+      value = false,
+    }
+  end,
   ["..."] = function(scope, stat_elem)
     while scope.node_type ~= "functiondef" do
       scope = scope.parent_scope

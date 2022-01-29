@@ -446,13 +446,10 @@ local function next_token(state,index)
     if match_start == index then
       token = new_token(
         keywords[ident] and ident or "ident",
-        index,state.line,index - state.line_offset)
+        index,state.line,index - state.line_offset
+      )
       if not keywords[ident] then
         token.value = ident
-      elseif ident == "true" then
-        token.value = true
-      elseif ident == "false" then
-        token.value = false
       end
       return match_end+1,token
     else
