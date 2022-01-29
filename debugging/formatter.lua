@@ -1,6 +1,7 @@
 
 local parse = require("parser")
 local format = require("formatter")
+local random_formatter = require("random_formatter")
 
 local function run(filename)
   print(filename)
@@ -23,6 +24,7 @@ local function run(filename)
       ..filename..":\n"..table.concat(msgs, "\n")
     )
   end
+  random_formatter(ast)
   text = format(ast)
 
   -- ast = parse(text, "@"..filename)
