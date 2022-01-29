@@ -165,6 +165,35 @@
         },
       },
     },
+    {
+      "name": "Lua tests/main",
+      "args": [
+        "src",
+        "tests/main.lua",
+      ],
+      // copy paste
+      "type": "lua-local",
+      "request": "launch",
+      "program": {"lua": "", "file": ""}, // uh, i guess?
+      "windows": {
+        "program": {
+          "lua": "bin/windows/lua",
+          "file": "entry_point.lua",
+        },
+      },
+      "linux": {
+        "program": {
+          "lua": "bin/linux/lua",
+          "file": "entry_point.lua",
+        },
+      },
+      "osx": {
+        "program": {
+          "lua": "bin/osx/lua",
+          "file": "entry_point.lua",
+        },
+      },
+    },
 
     // copy paste except it's using `out/src/debug` as the source dir
     // and it compiles src before as a prelaunch task
@@ -266,6 +295,36 @@
       "args": [
         "src",
         "tests/compile_test.lua",
+      ],
+      // copy paste
+      "preLaunchTask": "Build Debug",
+      "type": "lua-local",
+      "request": "launch",
+      "program": {"lua": "", "file": ""}, // uh, i guess?
+      "windows": {
+        "program": {
+          "lua": "bin/windows/lua",
+          "file": "entry_point.lua",
+        },
+      },
+      "linux": {
+        "program": {
+          "lua": "bin/linux/lua",
+          "file": "entry_point.lua",
+        },
+      },
+      "osx": {
+        "program": {
+          "lua": "bin/osx/lua",
+          "file": "entry_point.lua",
+        },
+      },
+    },
+    {
+      "name": "Pho tests/main",
+      "args": [
+        "src",
+        "tests/main.lua",
       ],
       // copy paste
       "preLaunchTask": "Build Debug",
