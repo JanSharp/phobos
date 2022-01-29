@@ -1,5 +1,6 @@
 ---------------------------------------------------------------------------------------------------
 Version: 0.1.2
+Date: 2022-01-29
   Features:
     - Add continuing parsing after encountering syntax errors
   Changes:
