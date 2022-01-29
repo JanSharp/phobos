@@ -483,6 +483,8 @@ local function tokenize(str)
     state.line_offset = 3
     index = 4
   end
+  ---cSpell:ignore skipcomment, lauxlib
+  -- TODO: what is this about skipcomment in lauxlib.c
   return next_token,state,index
 end
 
