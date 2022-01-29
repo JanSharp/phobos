@@ -151,7 +151,7 @@ local function read_string(str,index,quote,state)
   ::matching::
   local start_i = i
   -- read through normal text...
-  while str:match("^[^"..quote.."\\\n]",i) do
+  while str:match("^[^"..quote.."\\\r\n]",i) do
     i = i + 1
   end
 
@@ -177,7 +177,7 @@ local function read_string(str,index,quote,state)
     token.value = str:sub(index,i-1)
     token.error_messages = {"Unterminated string"}
     return i,token
-  elseif next_char == "\n" then
+  elseif newline_chars[next_char] then
     token.token_type = "invalid"
     token.value = str:sub(index,i-1)
     token.error_messages = {"Unterminated string (at end of line " .. state.line..")"}
@@ -398,8 +398,8 @@ local function next_token(state,index)
         token.index = index
         return next_index,token
       else
-        local token_start,token_end,text = str:find("^([^\r\n]*)",index+2)
-        local token = new_token("comment",token_start,state.line,index - state.line_offset)
+        local _,token_end,text = str:find("^([^\r\n]*)",index+2)
+        local token = new_token("comment",index,state.line,index - state.line_offset)
         token.value = text
         return token_end+1,token
       end
