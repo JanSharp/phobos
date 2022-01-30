@@ -176,12 +176,15 @@ local function read_string(str,index,quote,state)
   elseif next_char == "" then
     token.token_type = "invalid"
     token.value = str:sub(index,i-1)
-    token.error_messages = {"Unterminated string"}
+    token.error_messages = token.error_messages or {}
+    token.error_messages[#token.error_messages+1] = "Unterminated string"
     return i,token
   elseif newline_chars[next_char] then
     token.token_type = "invalid"
     token.value = str:sub(index,i-1)
-    token.error_messages = {"Unterminated string (at end of line " .. state.line..")"}
+    token.error_messages = token.error_messages or {}
+    token.error_messages[#token.error_messages+1] =
+      "Unterminated string (at end of line " .. state.line..")"
     return i,token
   elseif next_char == "\\" then
     -- advance past an escape sequence...
@@ -192,8 +195,8 @@ local function read_string(str,index,quote,state)
       if not digits then
         token.token_type = "invalid"
         token.error_messages = token.error_messages or {}
-        token.error_messages[#token.error_messages+1] = "Invalid escape sequence `\\x"
-          ..str:sub(i + 1, i + 2).."`, `\\x` must be followed by 2 hexadecimal digits."
+        token.error_messages[#token.error_messages+1] = "Invalid escape sequence '\\x"
+          ..str:sub(i + 1, i + 2).."', '\\x' must be followed by 2 hexadecimal digits."
         i = i + 1 -- skip x
       else
         parts[#parts+1] = string.char(tonumber(digits, 16))

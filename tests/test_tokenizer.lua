@@ -244,6 +244,29 @@ do
     add_escape_sequence_test([[\xCF]], "\xCF")
     add_escape_sequence_test([[\xdD]], "\xdD")
 
+    scope:register_test("containing invalid escape sequence \\x", function()
+      local token = new_token("invalid", 1, 1, 1)
+      token.src_is_block_str = nil
+      token.value = [["\x"]]
+      token.error_messages = {
+        "Invalid escape sequence '\\x\";', '\\x' must be followed by 2 hexadecimal digits."
+      }
+      test([["\x";]], {
+        token,
+        new_token(";", 5, 1, 5),
+      })
+    end)
+
+    scope:register_test("containing invalid \\x with string and file ending right after", function()
+      local token = new_token("invalid", 1, 1, 1)
+      token.src_is_block_str = nil
+      token.value = [["\x"]]
+      token.error_messages = {
+        "Invalid escape sequence '\\x\"', '\\x' must be followed by 2 hexadecimal digits."
+      }
+      test([["\x"]], {token})
+    end)
+
     for _, data in ipairs{
       {str = "\n", label = "\\n"},
       {str = "\r", label = "\\r"},
@@ -378,6 +401,42 @@ do
         )
       end
     end)
+
+    local function add_each_syntax_error_in_a_string(func)
+      func("invalid \\x", [[\xha]],
+        "Invalid escape sequence '\\xha', '\\x' must be followed by 2 hexadecimal digits."
+      )
+      func("invalid \\500", [[\500]],
+        "Too large value in decimal escape sequence '\\500'"
+      )
+      func("invalid escape", [[\_]],
+        "Unrecognized escape '\\_'"
+      )
+    end
+    local function initial_syntax_error(label1, str1, msg1)
+      local function consecutive_syntax_error(label2, str2, msg2)
+        local function ending_syntax_error_or_end_of_string(label3, str3, msg3, is_eol)
+          scope:register_test("syntax error chain: "..label1.." + "..label2.." + "..label3, function()
+            local token = new_token("invalid", 1, 1, 1)
+            local str = [["]]..str1..str2
+            token.value = str..(is_eol and "" or str3)
+            token.error_messages = {msg1, msg2, msg3}
+            str = str..str3
+            test(str, {
+              token,
+              is_eol and new_token("blank", #str, 1, #str, "\n") or nil
+            })
+          end)
+        end
+        ending_syntax_error_or_end_of_string("regular end of string", [["]], nil)
+        ending_syntax_error_or_end_of_string("unterminated at eof", "", "Unterminated string")
+        ending_syntax_error_or_end_of_string("unterminated at eol", "\n",
+          "Unterminated string (at end of line 1)", true
+        )
+      end
+      add_each_syntax_error_in_a_string(consecutive_syntax_error)
+    end
+    add_each_syntax_error_in_a_string(initial_syntax_error)
   end
 
   do
