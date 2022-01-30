@@ -4,6 +4,7 @@ Version: 0.1.3
     - Fix '\r' and '\r\n' resulting in '\r' instead of '\n' in blank tokens
     - Fix unescaped '\r' in strings not causing syntax errors and breaking line numbers
     - Fix too large decimal escape sequences crashing in the tokenizer. For example '\256'
+    - Fix block string token positions being "the start of the value" instead of the actual token
 ---------------------------------------------------------------------------------------------------
 Version: 0.1.2
 Date: 2022-01-29

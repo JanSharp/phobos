@@ -258,6 +258,9 @@ local function read_block_string(str,index,state)
     return index+1,token
   end
 
+  local token_line = state.line
+  local token_col = index - state.line_offset
+
   local has_leading_newline = false
   local next_index = open_end + 1
   do
@@ -267,9 +270,6 @@ local function read_block_string(str,index,state)
       next_index = consume_newline(str, next_index, state, first_char)
     end
   end
-
-  local token_line = state.line
-  local token_col = next_index - state.line_offset
 
   local parts = {}
   local close_pattern = "^%]"..pad.."%]()"
