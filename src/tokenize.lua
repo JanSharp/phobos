@@ -271,7 +271,7 @@ local function read_block_string(str,index,state)
     end
   end
 
-  local parts = {}
+  local parts = {""}
   local close_pattern = "^%]"..pad.."%]()"
   while true do
     local part, stopped_at, stop_char = str:match("^([^\r\n%]]*)()(.?)", next_index)
@@ -292,6 +292,7 @@ local function read_block_string(str,index,state)
     elseif stop_char == "" then
       local token = new_token("invalid", index, token_line, token_col)
       token.error_messages = {"Unterminated block string"}
+      parts[1] = "["..pad.."["
       token.value = table.concat(parts)
       return stopped_at, token
     else
