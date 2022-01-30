@@ -286,6 +286,7 @@ local function read_block_string(str,index,state)
         token.src_pad = pad
         return bracket_end, token
       else
+        parts[#parts+1] = "]"
         next_index = stopped_at + 1
       end
     elseif stop_char == "" then
