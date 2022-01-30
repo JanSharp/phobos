@@ -2,6 +2,7 @@
 local framework = require("test_framework")
 local assert = require("assert")
 
+local invert = require("invert")
 local tokenizer = require("tokenize")
 
 local basic_tokens = {
@@ -183,22 +184,28 @@ do
   do
     local scope = scope:new_scope("non block string")
 
-    scope:register_test([["foo"]], function()
-      local token = new_token("string", 1, 1, 1)
-      token.src_is_block_str = nil
-      token.value = "foo"
-      token.src_value = "foo"
-      token.src_quote = [["]]
-      test([["foo"]], {token})
-    end)
+    for _, data in ipairs{
+      {str = [["foo"]], quote = [["]], value = [[foo]], label = [[" quotes]]},
+      {str = [['foo']], quote = [[']], value = [[foo]], label = [[' quotes]]},
+      {str = [["foo'"]], quote = [["]], value = [[foo']], label = [[" quotes containing ']]},
+      {str = [['foo"']], quote = [[']], value = [[foo"]], label = [[' quotes containing "]]},
+    }
+    do
+      scope:register_test(data.label, function()
+        local token = new_token("string", 1, 1, 1)
+        token.src_is_block_str = nil
+        token.value = data.value
+        token.src_value = data.value
+        token.src_quote = data.quote
+        test(data.str, {token})
+      end)
+    end
 
-    scope:register_test([['foo']], function()
-      local token = new_token("string", 1, 1, 1)
-      token.src_is_block_str = nil
-      token.value = "foo"
-      token.src_value = "foo"
-      token.src_quote = [[']]
-      test([['foo']], {token})
+    scope:register_test("unterminated at eof", function()
+      local token = new_token("invalid", 1, 1, 1)
+      token.value = [["foo]]
+      token.error_messages = {"Unterminated string"}
+      test([["foo]], {token})
     end)
 
     for _, data in ipairs{
@@ -216,5 +223,160 @@ do
         })
       end)
     end
+
+    local function add_escape_sequence_test(str, value)
+      scope:register_test("containing escape sequence "..str, function()
+        local token = new_token("string", 1, 1, 1)
+        token.src_is_block_str = nil
+        token.value = "foo "..value.." bar"
+        token.src_value = "foo "..str.." bar"
+        token.src_quote = [["]]
+        local full_str = [["foo ]]..str..[[ bar";]]
+        test(full_str, {
+          token,
+          new_token(";", #full_str, 1, #full_str),
+        })
+      end)
+    end
+
+    add_escape_sequence_test([[\x03]], "\x03")
+    add_escape_sequence_test([[\xab]], "\xab")
+    add_escape_sequence_test([[\xCF]], "\xCF")
+    add_escape_sequence_test([[\xdD]], "\xdD")
+
+    for _, data in ipairs{
+      {str = "\n", label = "\\n"},
+      {str = "\r", label = "\\r"},
+      {str = "\n\r", label = "\\n\\r"},
+      {str = "\r\n", label = "\\r\\n"},
+    }
+    do
+      scope:register_test("containing escaped "..data.label, function()
+        local token = new_token("string", 1, 1, 1)
+        token.src_is_block_str = nil
+        token.value = "foo\nbar"
+        token.src_value = [[foo\]]..data.str..[[bar]]
+        token.src_quote = [["]]
+        local str = [["foo\]]..data.str..[[bar";]]
+        test(str, {
+          token,
+          new_token(";", #str, 2, 5),
+        })
+      end)
+    end
+
+    scope:register_test("containing escape sequence \\z with spaces", function()
+      local token = new_token("string", 1, 1, 1)
+      token.src_is_block_str = nil
+      token.value = "foo bar"
+      token.src_value = [[foo \z    bar]]
+      token.src_quote = [["]]
+      test([["foo \z    bar";]], {
+        token,
+        new_token(";", 16, 1, 16),
+      })
+    end)
+
+    for _, data in ipairs{
+      {str = "\n", label = "\\n"},
+      {str = "\r", label = "\\r"},
+      {str = "\n\r", label = "\\n\\r"},
+      {str = "\r\n", label = "\\r\\n"},
+    }
+    do
+      scope:register_test("containing escape sequence \\z with "..data.label, function()
+        local token = new_token("string", 1, 1, 1)
+        token.src_is_block_str = nil
+        token.value = "foo bar"
+        token.src_value = [[foo \z]]..data.str..[[  bar]]
+        token.src_quote = [["]]
+        local str = [["foo \z]]..data.str..[[  bar";]]
+        test(str, {
+          token,
+          new_token(";", #str, 2, 7),
+        })
+      end)
+    end
+
+    add_escape_sequence_test([[\a]], "\a")
+    add_escape_sequence_test([[\b]], "\b")
+    add_escape_sequence_test([[\f]], "\f")
+    add_escape_sequence_test([[\n]], "\n")
+    add_escape_sequence_test([[\r]], "\r")
+    add_escape_sequence_test([[\t]], "\t")
+    add_escape_sequence_test([[\v]], "\v")
+    add_escape_sequence_test([[\\]], "\\")
+    add_escape_sequence_test([[\"]], "\"")
+    add_escape_sequence_test([[\']], "\'")
+
+    add_escape_sequence_test([[\1]], "\1")
+    add_escape_sequence_test([[\12]], "\12")
+    add_escape_sequence_test([[\123]], "\123")
+    add_escape_sequence_test([[\255]], "\255")
+
+    scope:register_test("containing invalid escape sequence \\256 (too large)", function()
+      local token = new_token("invalid", 1, 1, 1)
+      token.value = [["foo \256 bar"]]
+      token.error_messages = {"Too large value in decimal escape sequence '\\256'"}
+      test([["foo \256 bar";]], {
+        token,
+        new_token(";", 15, 1, 15),
+      })
+    end)
+
+    scope:register_test("containing invalid escape sequences", function()
+      local all_valid_escaped_chars = invert{
+        "x",
+        "\r",
+        "\n",
+        "z",
+        "a",
+        "b",
+        "f",
+        "n",
+        "r",
+        "t",
+        "v",
+        "\\",
+        "\"",
+        "\'",
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+      }
+      local broken_bytes = {}
+      local errors = {}
+      for i = 1, 255 do
+        local c = string.char(i)
+        if not all_valid_escaped_chars[c] then
+          local success, err = pcall(function()
+            local token = new_token("invalid", 1, 1, 1)
+            token.value = [["foo \]]..c..[[ bar"]]
+            token.error_messages = {"Unrecognized escape '\\"..c.."'"}
+            test([["foo \]]..c..[[ bar";]], {
+              token,
+              new_token(";", 13, 1, 13),
+            })
+          end)
+          if not success then
+            broken_bytes[#broken_bytes+1] = string.format("0x%2x", i)
+            errors[#errors+1] = err
+          end
+        end
+      end
+      if errors[1] then
+        error(#errors.." invalid escape sequence bytes threw and error: "
+          ..table.concat(broken_bytes, ", ")
+          .."\n"..table.concat(errors, "\n")
+        )
+      end
+    end)
   end
 end

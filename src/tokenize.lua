@@ -130,7 +130,8 @@ end
 local escape_sequence_lut = {
   a = "\a", b = "\b", f = "\f", n = "\n",
   r = "\r", t = "\t", v = "\v", ["\\"] = "\\",
-  ['"'] = '"', ["'"] = "'", ["\r"] = "\r", ["\n"] = "\n",
+  ['"'] = '"', ["'"] = "'",
+  -- ["\r"] = "\r", ["\n"] = "\n", -- \r and \n are handled separately
 }
 
 local function read_string(str,index,quote,state)
@@ -224,7 +225,15 @@ local function read_string(str,index,quote,state)
     else
       local digits_start, skip, digits = str:find("^(%d%d?%d?)",i)
       if digits_start then
-        parts[#parts+1] = string.char(tonumber(digits, 10))
+        local number = tonumber(digits, 10)
+        if number > 255 then
+          token.token_type = "invalid"
+          token.error_messages = token.error_messages or {}
+          token.error_messages[#token.error_messages+1] =
+            "Too large value in decimal escape sequence '\\"..digits.."'"
+        else
+          parts[#parts+1] = string.char(number)
+        end
         i = skip + 1
         goto matching
       else
@@ -232,7 +241,7 @@ local function read_string(str,index,quote,state)
         token.error_messages = token.error_messages or {}
         token.error_messages[#token.error_messages+1] = "Unrecognized escape '\\".. next_char .. "'"
         -- nothing to skip
-      goto matching
+        goto matching
       end
     end
   end
