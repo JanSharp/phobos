@@ -534,4 +534,20 @@ do
     add_unterminated_test("unterminated at eof", "[[;")
     add_unterminated_test("unterminated at eof right after start", "[[")
   end
+
+  do
+    local scope = scope:new_scope("block comment")
+
+    scope:register_test("it's just a prefixed block string, so if this works it works", function()
+      local token = new_token("comment", 1, 1, 1)
+      token.value = ""
+      token.src_is_block_str = true
+      token.src_has_leading_newline = false
+      token.src_pad = ""
+      test("--[[]];", {
+        token,
+        new_token(";", 7, 1, 7),
+      })
+    end)
+  end
 end

@@ -408,8 +408,10 @@ local function next_token(state,index)
           read block string, build a token from that
         ]]
         local next_index,token = read_block_string(str,index+2,state)
-        token.token_type = "comment"
+        -- correct index and column
         token.index = index
+        token.column = token.column - 2
+        token.token_type = "comment"
         return next_index,token
       else
         local _,token_end,text = str:find("^([^\r\n]*)",index+2)
