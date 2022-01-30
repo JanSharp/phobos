@@ -110,20 +110,35 @@ local function new_token(token_type, index, line, column, value)
 end
 
 do
-  local scope = framework.scope:new_scope("tokenizer")
+  local main_scope = framework.scope:new_scope("tokenizer")
 
   do
-    local scope = scope:new_scope("basic tokens")
+    local scope = main_scope:new_scope("basic tokens")
 
     for _, token_type in flat_ipairs{basic_tokens, keywords} do
       scope:register_test("token '"..token_type.."'", function()
         test(token_type, {new_token(token_type, 1, 1, 1)})
       end)
     end
+
+    local function invalid_token(char)
+      scope:register_test("invalid token '"..char.."'", function()
+        local invalid = new_token("invalid", 1, 1, 1)
+        invalid.value = char
+        invalid.error_messages = {"Invalid token '"..char.."'"}
+        test(char..";", {
+          invalid,
+          new_token(";", 2, 1, 2),
+        })
+      end)
+    end
+
+    invalid_token("~") -- special because of ~= detection
+    invalid_token("\\") -- all the rest are the same, but testing each one is tedious
   end
 
   do
-    local scope = scope:new_scope("blank")
+    local scope = main_scope:new_scope("blank")
 
     scope:register_test("with space and tabs", function()
       test("  \t    ", {new_token("blank", 1, 1, 1, "  \t    ")})
@@ -157,7 +172,7 @@ do
   end
 
   do
-    local scope = scope:new_scope("non block comment")
+    local scope = main_scope:new_scope("non block comment")
 
     scope:register_test("nothing special", function()
       local token = new_token("comment", 1, 1, 1, " foo")
@@ -182,7 +197,7 @@ do
   end
 
   do
-    local scope = scope:new_scope("non block string")
+    local scope = main_scope:new_scope("non block string")
 
     for _, data in ipairs{
       {str = [["foo"]], quote = [["]], value = [[foo]], label = [[" quotes]]},
@@ -440,7 +455,7 @@ do
   end
 
   do
-    local scope = scope:new_scope("block string")
+    local scope = main_scope:new_scope("block string")
 
     scope:register_test("invalid open bracket", function()
       local token = new_token("invalid", 1, 1, 1)
@@ -536,7 +551,7 @@ do
   end
 
   do
-    local scope = scope:new_scope("block comment")
+    local scope = main_scope:new_scope("block comment")
 
     scope:register_test("it's just a prefixed block string, so if this works it works", function()
       local token = new_token("comment", 1, 1, 1)
@@ -547,6 +562,18 @@ do
       test("--[[]];", {
         token,
         new_token(";", 7, 1, 7),
+      })
+    end)
+  end
+
+  do
+    local scope = main_scope:new_scope("other")
+
+    scope:register_test("skip UTF8 BOM", function()
+      test("\xef\xbb\xbf;\n;", {
+        new_token(";", 4, 1, 1),
+        new_token("blank", 5, 1, 2, "\n"),
+        new_token(";", 6, 2, 1),
       })
     end)
   end
