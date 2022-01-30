@@ -379,4 +379,100 @@ do
       end
     end)
   end
+
+  do
+    local scope = scope:new_scope("block string")
+
+    scope:register_test("invalid open bracket", function()
+      local token = new_token("invalid", 1, 1, 1)
+      token.value = "["
+      token.error_messages = {"Invalid string open bracket"}
+      test("[==", {
+        token,
+        new_token("==", 2, 1, 2),
+      })
+    end)
+
+    scope:register_test("without padding", function()
+      local token = new_token("string", 1, 1, 1)
+      token.value = "foo"
+      token.src_is_block_str = true
+      token.src_has_leading_newline = false
+      token.src_pad = ""
+      test("[[foo]];", {
+        token,
+        new_token(";", 8, 1, 8),
+      })
+    end)
+
+    scope:register_test("with 3 padding", function()
+      local token = new_token("string", 1, 1, 1)
+      token.value = "foo"
+      token.src_is_block_str = true
+      token.src_has_leading_newline = false
+      token.src_pad = "==="
+      test("[===[foo]===];", {
+        token,
+        new_token(";", 14, 1, 14),
+      })
+    end)
+
+    scope:register_test("with 3 padding containing 2 padding", function()
+      local token = new_token("string", 1, 1, 1)
+      token.value = "[==[foo]==]"
+      token.src_is_block_str = true
+      token.src_has_leading_newline = false
+      token.src_pad = "==="
+      test("[===[[==[foo]==]]===];", {
+        token,
+        new_token(";", 22, 1, 22),
+      })
+    end)
+
+    for _, data in ipairs{
+      {str = "\n", label = "\\n"},
+      {str = "\r", label = "\\r"},
+      {str = "\n\r", label = "\\n\\r"},
+      {str = "\r\n", label = "\\r\\n"},
+    }
+    do
+      scope:register_test("leading "..data.label, function()
+        local token = new_token("string", 1, 1, 1)
+        token.value = "foo"
+        token.src_is_block_str = true
+        token.src_has_leading_newline = true
+        token.src_pad = ""
+        local str = "[["..data.str.."foo]];"
+        test(str, {
+          token,
+          new_token(";", #str, 2, 6),
+        })
+      end)
+
+      scope:register_test("containing "..data.label, function()
+        local token = new_token("string", 1, 1, 1)
+        token.value = "foo\nbar"
+        token.src_is_block_str = true
+        token.src_has_leading_newline = false
+        token.src_pad = ""
+        local str = "[[foo"..data.str.."bar]];"
+        test(str, {
+          token,
+          new_token(";", #str, 2, 6),
+        })
+      end)
+    end
+
+    local function add_unterminated_test(label, str)
+      scope:register_test(label, function()
+        local token = new_token("invalid", 1, 1, 1)
+        token.value = str
+        token.error_messages = {"Unterminated block string"}
+        test(str, {token})
+      end)
+    end
+
+    add_unterminated_test("unterminated at eof", "[[;")
+    add_unterminated_test("unterminated at eof right after start", "[[")
+  end
 end
