@@ -550,8 +550,50 @@ do
   do
     local scope = main_scope:new_scope("number")
 
-    scope:register_test("simple", function()
-    end)
+    local function add_test(str, value)
+      scope:register_test("number '"..str.."'", function()
+        local token = new_token("number", 1, 1, 1)
+        token.value = value
+        token.src_value = str
+        test(str..";", {
+          token,
+          new_token(";", #str + 1, 1, #str + 1),
+        })
+      end)
+    end
+
+    add_test("1234567890", 1234567890)
+    add_test(".1", .1)
+    add_test("1.1", 1.1)
+    add_test("1e1", 1e1)
+    add_test("1E1", 1E1)
+    add_test("1e+1", 1e+1)
+    add_test("1e-1", 1e-1)
+    add_test("0x1234567890", 0x1234567890)
+    add_test("0xabcdef", 0xabcdef)
+    add_test("0xABCDEF", 0xABCDEF)
+    add_test("0x1aA", 0x1aA)
+    add_test("0X1", 0X1)
+    add_test("0x.1", 0x.1)
+    add_test("0x1.1", 0x1.1)
+    add_test("0x1p1", 0x1p1)
+    add_test("0x1P1", 0x1P1)
+    add_test("0x1p+1", 0x1p+1)
+    add_test("0x1p-1", 0x1p-1)
+
+    local function malformed(str)
+      scope:register_test("malformed number '"..str.."'", function()
+        local token = new_token("invalid", 1, 1, 1)
+        token.value = str
+        token.error_messages = {"Malformed number '"..str.."'"}
+        test(str..";", {
+          token,
+          new_token(";", 3, 1, 3),
+        })
+      end)
+    end
+    malformed("0x")
+    malformed("0X")
   end
 
   do
