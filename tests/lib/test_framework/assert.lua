@@ -36,7 +36,7 @@ local function not_nan(got, msg)
   end
 end
 
-local function contents_equals(expected, got, msg)
+local function contents_equals(expected, got, msg, print_full_data_on_error)
   local equal, difference = deep_compare.deep_compare(expected, got)
   if not equal then
     local err
@@ -53,7 +53,13 @@ local function contents_equals(expected, got, msg)
     elseif difference.type == deep_compare.difference_type.size then
       err = "table size differs at "..difference.location
     end
-    error(add_msg(err, msg))
+    error(add_msg(err, msg)
+      ..(
+        print_full_data_on_error
+          and ("\nexpected: "..pretty_print(expected).."\n-----\ngot: "..pretty_print(got))
+          or ""
+      )
+    )
   end
 end
 
