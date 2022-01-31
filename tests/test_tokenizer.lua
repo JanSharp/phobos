@@ -626,16 +626,6 @@ do
         new_token(";", 12, 1, 12),
       })
     end)
-
-    scope:register_test("number plus ident '0foo'", function()
-      local token = new_token("number", 1, 1, 1)
-      token.value = 0
-      token.src_value = "0"
-      test("0foo", {
-        token,
-        new_token("ident", 2, 1, 2, "foo"),
-      })
-    end)
   end
 
   do
@@ -648,5 +638,41 @@ do
         new_token(";", 6, 2, 1),
       })
     end)
+
+    scope:register_test("number plus ident '0foo'", function()
+      local token = new_token("number", 1, 1, 1)
+      token.value = 0
+      token.src_value = "0"
+      test("0foo", {
+        token,
+        new_token("ident", 2, 1, 2, "foo"),
+      })
+    end)
+
+    local function with_sign(sign)
+      local function should_be_ident(str)
+        ---cSpell:ignore strtod
+        scope:register_test(
+          "number according to C strtod(), but ident in Lua: '"..(sign or "")..str.."'",
+          function()
+            local tokens = {}
+            if sign then
+              tokens[#tokens+1] = new_token(sign, 1, 1, 1)
+            end
+            tokens[#tokens+1] = new_token("ident", sign and 2 or 1, 1, sign and 2 or 1, str)
+            test((sign or "")..str, tokens)
+          end
+        )
+      end
+      should_be_ident("inf")
+      should_be_ident("INF")
+      should_be_ident("infinity")
+      should_be_ident("INFINITY")
+      should_be_ident("NaN")
+      should_be_ident("nan")
+    end
+    with_sign()
+    with_sign("+")
+    with_sign("-")
   end
 end
