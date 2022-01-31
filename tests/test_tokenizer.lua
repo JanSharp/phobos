@@ -597,6 +597,48 @@ do
   end
 
   do
+    local scope = main_scope:new_scope("ident")
+
+    scope:register_test("ident 'foo'", function()
+      test("foo;", {
+        new_token("ident", 1, 1, 1, "foo"),
+        new_token(";", 4, 1, 4),
+      })
+    end)
+
+    scope:register_test("alphabet and underscore", function()
+      test("abcdefghijklmnopqrstuvwxyz_ABCDEFGHIJKLMNOPQRSTUVWXYZ;", {
+        new_token("ident", 1, 1, 1, "abcdefghijklmnopqrstuvwxyz_ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
+        new_token(";", 54, 1, 54),
+      })
+    end)
+
+    scope:register_test("ident '_foo'", function()
+      test("_foo;", {
+        new_token("ident", 1, 1, 1, "_foo"),
+        new_token(";", 5, 1, 5),
+      })
+    end)
+
+    scope:register_test("ident '_0123456789'", function()
+      test("_0123456789;", {
+        new_token("ident", 1, 1, 1, "_0123456789"),
+        new_token(";", 12, 1, 12),
+      })
+    end)
+
+    scope:register_test("number plus ident '0foo'", function()
+      local token = new_token("number", 1, 1, 1)
+      token.value = 0
+      token.src_value = "0"
+      test("0foo", {
+        token,
+        new_token("ident", 2, 1, 2, "foo"),
+      })
+    end)
+  end
+
+  do
     local scope = main_scope:new_scope("other")
 
     scope:register_test("skip UTF8 BOM", function()
