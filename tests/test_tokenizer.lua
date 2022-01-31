@@ -5,61 +5,6 @@ local assert = require("assert")
 local invert = require("invert")
 local tokenizer = require("tokenize")
 
-local basic_tokens = {
-  "+",
-  "*",
-  "/",
-  "%",
-  "^",
-  "#",
-  ";",
-  ",",
-  "(",
-  ")",
-  "{",
-  "}",
-  "]",
-  "[",
-  "<",
-  "<=",
-  "=",
-  "==",
-  ">",
-  ">=",
-  "-",
-  "~=",
-  "::",
-  ":",
-  "...",
-  "..",
-  ".",
-}
-
-local keywords = {
-  "and",
-  "break",
-  "do",
-  "else",
-  "elseif",
-  "end",
-  "false",
-  "for",
-  "function",
-  "if",
-  "in",
-  "local",
-  "nil",
-  "not",
-  "or",
-  "repeat",
-  "return",
-  "then",
-  "true",
-  "until",
-  "while",
-  "goto",
-}
-
 local function test(str, expected_tokens)
   local iter, state, index = tokenizer(str)
   local got
@@ -78,27 +23,6 @@ end
 
 ---cSpell:ignore inext
 
-local function flat_inext(state, index)
-  local array = state.array_of_arrays[state.array_index]
-  if not array then
-    return
-  end
-  index = (index or 0) + 1
-  local element = array[index]
-  if not element then
-    state.array_index = state.array_index + 1
-    return flat_inext(state)
-  end
-  return index, element
-end
-
-local function flat_ipairs(array_of_arrays)
-  return flat_inext, {
-    array_of_arrays = array_of_arrays,
-    array_index = 1,
-  }
-end
-
 local function new_token(token_type, index, line, column, value)
   return {
     token_type = token_type,
@@ -115,10 +39,67 @@ do
   do
     local scope = main_scope:new_scope("basic tokens")
 
-    for _, token_type in flat_ipairs{basic_tokens, keywords} do
-      scope:register_test("token '"..token_type.."'", function()
-        test(token_type, {new_token(token_type, 1, 1, 1)})
-      end)
+    local basic_tokens = {
+      "+",
+      "*",
+      "/",
+      "%",
+      "^",
+      "#",
+      ";",
+      ",",
+      "(",
+      ")",
+      "{",
+      "}",
+      "]",
+      "[",
+      "<",
+      "<=",
+      "=",
+      "==",
+      ">",
+      ">=",
+      "-",
+      "~=",
+      "::",
+      ":",
+      "...",
+      "..",
+      ".",
+    }
+
+    local keywords = {
+      "and",
+      "break",
+      "do",
+      "else",
+      "elseif",
+      "end",
+      "false",
+      "for",
+      "function",
+      "if",
+      "in",
+      "local",
+      "nil",
+      "not",
+      "or",
+      "repeat",
+      "return",
+      "then",
+      "true",
+      "until",
+      "while",
+      "goto",
+    }
+
+    for _, tab in ipairs{basic_tokens, keywords} do
+      for _, token_type in ipairs(tab) do
+        scope:register_test("token '"..token_type.."'", function()
+          test(token_type, {new_token(token_type, 1, 1, 1)})
+        end)
+      end
     end
 
     local function invalid_token(char)
@@ -563,6 +544,13 @@ do
         token,
         new_token(";", 7, 1, 7),
       })
+    end)
+  end
+
+  do
+    local scope = main_scope:new_scope("number")
+
+    scope:register_test("simple", function()
     end)
   end
 
