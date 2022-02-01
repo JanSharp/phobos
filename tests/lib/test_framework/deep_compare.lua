@@ -11,6 +11,8 @@ local pretty_print = require("pretty_print")
 -- functions are compared by identity,
 -- if not equal then by bytecode and all their upvals
 
+local do_not_compare_flag = {}
+
 local deep_compare
 local difference_type = {
   value_type = 1, -- type of left and right are different
@@ -25,7 +27,7 @@ do
   local location_stack_size
   local compare_tables
   local difference
-  local compare_iteration_order
+  local _compare_iteration_order
 
   local function create_location()
     return table.concat(location_stack, nil, 1, location_stack_size)
@@ -43,6 +45,10 @@ do
   local function compare_values(left, right)
     -- compare nil, boolean, string, number (including NAN)
     if left == right or (left ~= left and right ~= right) then
+      return true
+    end
+    -- one of them is flagged as "don't compare these", so don't
+    if left == do_not_compare_flag or right == do_not_compare_flag then
       return true
     end
     if visited[left] then
@@ -94,7 +100,7 @@ do
   end
 
   function compare_tables(left, right)
-    if compare_iteration_order then
+    if _compare_iteration_order then
       local left_key, left_value = next(left)
       local right_key, right_value = next(right)
       location_stack_size = location_stack_size + 1
@@ -105,6 +111,7 @@ do
         location_stack[location_stack_size] = "[key #"..kvp_num.."]"
         if right_key == nil then
           -- TODO: add more info about table sizes
+          -- TODO: add support for do_not_compare
           create_difference(difference_type.size, left, right)
           return false
         end
@@ -123,6 +130,7 @@ do
       location_stack_size = location_stack_size - 1
       if right_key ~= nil then
         -- TODO: add more info about table sizes
+        -- TODO: add support for do_not_compare
         create_difference(difference_type.size, left, right)
         return false
       end
@@ -164,10 +172,10 @@ do
     return true
   end
 
-  function deep_compare(left, right, _compare_iteration_order)
-    compare_iteration_order = _compare_iteration_order
+  function deep_compare(left, right, compare_iteration_order, root_name)
+    _compare_iteration_order = compare_iteration_order
     visited = {}
-    location_stack = {"ROOT"}
+    location_stack = {root_name or "ROOT"}
     location_stack_size = 1
     local result = compare_values(left, right)
     location_stack = nil
@@ -181,4 +189,5 @@ end
 return {
   deep_compare = deep_compare,
   difference_type = difference_type,
+  do_not_compare_flag = do_not_compare_flag,
 }

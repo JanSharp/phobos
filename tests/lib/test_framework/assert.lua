@@ -36,8 +36,19 @@ local function not_nan(got, msg)
   end
 end
 
-local function contents_equals(expected, got, msg, print_full_data_on_error)
-  local equal, difference = deep_compare.deep_compare(expected, got)
+---@class ContentsEqualsOptions
+---@field compare_pairs_iteration_order boolean
+---@field print_full_data_on_error boolean
+---@field root_name string
+
+---@param options ContentsEqualsOptions
+local function contents_equals(expected, got, msg, options)
+  local equal, difference = deep_compare.deep_compare(
+    expected,
+    got,
+    options and options.compare_pairs_iteration_order,
+    options and options.root_name
+  )
   if not equal then
     local err
     if difference.type == deep_compare.difference_type.value_type then
@@ -55,7 +66,7 @@ local function contents_equals(expected, got, msg, print_full_data_on_error)
     end
     error(add_msg(err, msg)
       ..(
-        print_full_data_on_error
+        options and options.print_full_data_on_error
           and ("\nexpected: "..pretty_print(expected).."\n-----\ngot: "..pretty_print(got))
           or ""
       )
@@ -80,5 +91,6 @@ return {
   nan = nan,
   not_nan = not_nan,
   contents_equals = contents_equals,
+  do_not_compare_flag = deep_compare.do_not_compare_flag,
   errors = errors,
 }
