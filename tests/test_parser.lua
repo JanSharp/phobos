@@ -2,56 +2,13 @@
 local framework = require("test_framework")
 local assert = require("assert")
 
-local invert = require("invert")
+local tokenize = require("tokenize")
 local nodes = require("nodes")
 local parser = require("parser")
 local ill = require("indexed_linked_list")
 local ast = require("ast_util")
 
-local prevent_assert = nodes.new_invalid{
-  error_message = "<not assigned for this test>",
-}
-
-local function new_token_node(token_type, line, column, leading, value)
-  return nodes.new_token({
-    token_type = token_type,
-    line = line,
-    column = column,
-    leading = leading or {},
-    value = value,
-  })
-end
-
----intermediate state of tokens do have leading. blank and comment don't, so default is `nil`
----@param leading? Token[]
-local function new_token(token_type, line, column, value, leading)
-  return {
-    token_type = token_type,
-    index = assert.do_not_compare_flag,
-    line = line,
-    column = column,
-    value = value,
-    leading = leading,
-  }
-end
-
-local function new_token_node_with_blank_leading(token_type, line, column, value)
-  return new_token_node(token_type, line, column, {
-    new_token("blank", line, column - 1, " "),
-  }, value)
-end
-
-local function new_position(line, column, leading)
-  return {
-    line = line,
-    column = column,
-    leading = leading or {},
-  }
-end
-
-local function new_blank(line, column, value)
-  return new_token("blank", line, column, value)
-end
+local fake_stat_elem = assert.do_not_compare_flag
 
 local fake_env_scope = nodes.new_env_scope{}
 -- Lua emits _ENV as if it's a local in the parent scope
@@ -70,43 +27,72 @@ local fake_main = ast.append_stat(fake_env_scope, function(stat_elem)
     parent_scope = fake_env_scope,
     is_vararg = true,
   }
-  main.eof_token = new_token_node("eof")
+  main.eof_token = nodes.new_token({token_type = "eof", leading = {}})
   return main
 end)
-local fake_body = fake_main.body
-local fake_stat_elem = ill.append(fake_body, nil)
--- value set in test_stat
 
-local function test_stat(str, expected_stat, expected_invalid_nodes)
-  local main, invalid_nodes = parser(str, "=(test)")
-  fake_stat_elem.value = expected_stat
-  assert.contents_equals(fake_main, main, nil, {root_name = "main"})
-  assert.contents_equals(expected_invalid_nodes or {}, invalid_nodes, nil, {root_name = "invalid_nodes"})
-end
-
-local function add_statements_to_scope(scope, statements)
-  for _, stat in ipairs(statements) do
-    ast.append_stat(scope, function(stat_elem)
-      stat.stat_elem = stat_elem
-      return stat
-    end)
+local function get_tokens(str)
+  local leading = {}
+  local tokens = {}
+  for _, token in tokenize(str) do
+    if token.token_type == "blank" or token.token_type == "comment" then
+      leading[#leading+1] = token
+    else
+      token.leading = leading
+      leading = {}
+      tokens[#tokens+1] = token
+    end
   end
-  return scope
+  tokens[#tokens+1] = {
+    token_type = "eof",
+    leading = leading,
+  }
+  return tokens
 end
 
-local function add_empty_to_scope(line, column, leading, scope)
-  return add_statements_to_scope(scope, {nodes.new_empty{
-    stat_elem = prevent_assert,
-    semi_colon_token = new_token_node(";", line, column, leading),
-  }})
+do
+  local wrapped_nodes = {}
+  for name, func in pairs(nodes) do
+    if name == "set_position"
+      or name == "new_env_scope"
+      or name == "new_token"
+      or name == "new_invalid"
+    then
+      wrapped_nodes[name] = func
+    else
+      wrapped_nodes[name] = function(param)
+        param.stat_elem = param.stat_elem or fake_stat_elem
+        return func(param)
+      end
+    end
+  end
+  nodes = wrapped_nodes
 end
 
-local function new_dummy_true_expr(line, column)
+local function append_stat(scope, stat)
+  ast.append_stat(scope, function(stat_elem)
+    return stat
+  end)
+end
+
+---@param semi_colon_token_node AstTokenNode
+local function append_empty(scope, semi_colon_token_node)
+  append_stat(scope, nodes.new_empty{
+    semi_colon_token = semi_colon_token_node,
+  })
+end
+
+local function new_true_node(true_token)
   return nodes.new_boolean{
-    stat_elem = fake_stat_elem,
-    position = new_position(line, column, {new_blank(line, column - 1, " ")}),
+    position = true_token,
     value = true,
   }
+end
+
+local function test_stat(str, expected_invalid_nodes)
+  local main, invalid_nodes = parser(str, "=(test)")
+  assert.contents_equals(fake_main, main, nil, {root_name = "main"})
+  assert.contents_equals(expected_invalid_nodes or {}, invalid_nodes, nil, {root_name = "invalid_nodes"})
 end
 
 do
@@ -115,137 +101,183 @@ do
   do
     local stat_scope = main_scope:new_scope("statements")
 
-    stat_scope:register_test("empty", function()
-      test_stat(";", nodes.new_empty{
-        stat_elem = fake_stat_elem,
-        semi_colon_token = new_token_node(";", 1, 1),
-      })
+    local tokens
+    local next_token
+    local peek_next_token
+    local function add_stat_test(name, str, func)
+      stat_scope:register_test(name, function()
+        ill.clear(fake_main.body)
+        tokens = get_tokens(str)
+        local next_index = 1
+        function next_token()
+          next_index = next_index + 1
+          return tokens[next_index - 1]
+        end
+        function peek_next_token()
+          return tokens[next_index]
+        end
+        test_stat(str, func())
+      end)
+    end
+
+    local function next_token_node()
+      return nodes.new_token(next_token())
+    end
+
+    add_stat_test("empty", ";", function()
+      local stat = nodes.new_empty{
+        semi_colon_token = next_token_node(),
+      }
+      append_stat(fake_main, stat)
     end)
 
-    stat_scope:register_test("ifstat with 1 testblock", function()
-      test_stat("if true then;end", nodes.new_ifstat{
-        stat_elem = fake_stat_elem,
-        ifs = {
-          add_empty_to_scope(1, 13, nil, nodes.new_testblock{
-            stat_elem = fake_stat_elem,
-            parent_scope = fake_main,
-            if_token = new_token_node("if", 1, 1),
-            condition = new_dummy_true_expr(1, 4),
-            then_token = new_token_node_with_blank_leading("then", 1, 9),
-          }),
-        },
-        end_token = new_token_node("end", 1, 14),
-      })
-    end)
-
-    stat_scope:register_test("ifstat with 2 testblocks", function()
-      test_stat("if true then;elseif true then;end", nodes.new_ifstat{
-        stat_elem = fake_stat_elem,
-        ifs = {
-          add_empty_to_scope(1, 13, nil, nodes.new_testblock{
-            stat_elem = fake_stat_elem,
-            parent_scope = fake_main,
-            if_token = new_token_node("if", 1, 1),
-            condition = new_dummy_true_expr(1, 4),
-            then_token = new_token_node_with_blank_leading("then", 1, 9),
-          }),
-          add_empty_to_scope(1, 30, nil, nodes.new_testblock{
-            stat_elem = fake_stat_elem,
-            parent_scope = fake_main,
-            if_token = new_token_node("elseif", 1, 14),
-            condition = new_dummy_true_expr(1, 21),
-            then_token = new_token_node_with_blank_leading("then", 1, 26),
-          }),
-        },
-        end_token = new_token_node("end", 1, 31),
-      })
-    end)
-
-    stat_scope:register_test("ifstat with elseblock", function()
-      test_stat("if true then;else;end", nodes.new_ifstat{
-        stat_elem = fake_stat_elem,
-        ifs = {
-          add_empty_to_scope(1, 13, nil, nodes.new_testblock{
-            stat_elem = fake_stat_elem,
-            parent_scope = fake_main,
-            if_token = new_token_node("if", 1, 1),
-            condition = new_dummy_true_expr(1, 4),
-            then_token = new_token_node_with_blank_leading("then", 1, 9),
-          }),
-        },
-        elseblock = add_empty_to_scope(1, 18, nil, nodes.new_elseblock{
-          stat_elem = fake_stat_elem,
+    do
+      local function new_testblock()
+        local testblock = nodes.new_testblock{
           parent_scope = fake_main,
-          else_token = new_token_node("else", 1, 14),
-        }),
-        end_token = new_token_node("end", 1, 19),
-      })
+          if_token = next_token_node(),
+          condition = new_true_node(next_token()),
+          then_token = next_token_node(),
+        }
+        append_empty(testblock, next_token_node())
+        return testblock
+      end
+
+      add_stat_test("ifstat with 1 testblock", "if true then ; end", function()
+        local stat = nodes.new_ifstat{
+          ifs = {new_testblock()},
+          end_token = next_token_node(),
+        }
+        append_stat(fake_main, stat)
+      end)
+
+      add_stat_test("ifstat with 2 testblocks", "if true then ; elseif true then ; end", function()
+        local stat = nodes.new_ifstat{
+          ifs = {
+            new_testblock(),
+            new_testblock(),
+          },
+          end_token = next_token_node(),
+        }
+        append_stat(fake_main, stat)
+      end)
+
+      add_stat_test("ifstat with elseblock", "if true then ; else ; end", function()
+        local testblock = new_testblock()
+        local elseblock = nodes.new_elseblock{
+          parent_scope = fake_main,
+          else_token = next_token_node(),
+        }
+        append_empty(elseblock, next_token_node())
+        local stat = nodes.new_ifstat{
+          ifs = {testblock},
+          elseblock = elseblock,
+          end_token = next_token_node(),
+        }
+        append_stat(fake_main, stat)
+      end)
+
+      -- TODO: test failing
+      add_stat_test("ifstat without 'then'", "if true", function()
+        local testblock = nodes.new_testblock{
+          parent_scope = fake_main,
+          if_token = next_token_node(),
+          condition = new_true_node(next_token()),
+          then_token = nodes.new_invalid{
+            position = peek_next_token(),
+            error_message = assert.do_not_compare_flag,
+            tokens = assert.do_not_compare_flag,
+          },
+        }
+        local stat = nodes.new_ifstat{
+          ifs = {testblock},
+        }
+        append_stat(fake_main, stat)
+      end)
+
+      -- TODO: test failing
+      add_stat_test("ifstat without 'then' but with 'else'", "if true else", function()
+        local testblock = nodes.new_testblock{
+          parent_scope = fake_main,
+          if_token = next_token_node(),
+          condition = new_true_node(next_token()),
+          then_token = nodes.new_invalid{
+            position = peek_next_token(),
+            error_message = assert.do_not_compare_flag,
+            tokens = assert.do_not_compare_flag,
+          },
+        }
+        local stat = nodes.new_ifstat{
+          ifs = {testblock},
+        }
+        append_stat(fake_main, stat)
+
+        local invalid = nodes.new_invalid{
+          position = peek_next_token(),
+          error_message = assert.do_not_compare_flag,
+          tokens = {next_token()},
+        }
+        append_stat(fake_main, invalid)
+      end)
+    end
+
+    add_stat_test("whilestat", "while true do ; end", function()
+      local stat = nodes.new_whilestat{
+        parent_scope = fake_main,
+        while_token = next_token_node(),
+        condition = new_true_node(next_token()),
+        do_token = next_token_node(),
+      }
+      append_empty(stat, next_token_node())
+      stat.end_token = next_token_node()
+      append_stat(fake_main, stat)
     end)
 
-    stat_scope:register_test("whilestat", function()
-      test_stat("while true do;end", add_empty_to_scope(1, 14, nil, nodes.new_whilestat{
-        stat_elem = fake_stat_elem,
+    add_stat_test("dostat", "do ; end", function()
+      local stat = nodes.new_dostat{
         parent_scope = fake_main,
-        while_token = new_token_node("while", 1, 1),
-        condition = new_dummy_true_expr(1, 7),
-        do_token = new_token_node_with_blank_leading("do", 1, 12),
-        end_token = new_token_node("end", 1, 15),
-      }))
+        do_token = next_token_node(),
+      }
+      append_empty(stat, next_token_node())
+      stat.end_token = next_token_node()
+      append_stat(fake_main, stat)
     end)
 
-    stat_scope:register_test("dostat", function()
-      test_stat("do;end", add_empty_to_scope(1, 3, nil, nodes.new_dostat{
-        stat_elem = fake_stat_elem,
-        do_token = new_token_node("do", 1, 1),
-        end_token = new_token_node("end", 1, 4),
-        parent_scope = fake_main,
-      }))
-    end)
+    do
+      local function add_fornum_stat(has_step)
+        local for_token = next_token_node()
+        local var_def, var_ref = ast.create_local(next_token(), fake_main, fake_stat_elem)
+        var_def.whole_block = true
+        local stat = nodes.new_fornum{
+          parent_scope = fake_main,
+          for_token = for_token,
+          var = var_ref,
+          locals = {var_def},
+          eq_token = next_token_node(),
+          start = new_true_node(next_token()),
+          first_comma_token = next_token_node(),
+          stop = new_true_node(next_token()),
+        }
+        if has_step then
+          stat.second_comma_token = next_token_node()
+          stat.step = new_true_node(next_token())
+        end
+        stat.do_token = next_token_node()
+        append_empty(stat, next_token_node())
+        stat.end_token = next_token_node()
+        append_stat(fake_main, stat)
+      end
 
-    stat_scope:register_test("fornum without step", function()
-      local var_def, var_ref = ast.create_local(
-        new_token("ident", 1, 5, "i", {new_blank(1, 4, " ")}), fake_main, fake_stat_elem
-      )
-      var_def.whole_block = true
-      test_stat("for i = true, true do;end", add_empty_to_scope(1, 22, nil, nodes.new_fornum{
-        stat_elem = fake_stat_elem,
-        parent_scope = fake_main,
-        for_token = new_token_node("for", 1, 1),
-        var = var_ref,
-        locals = {var_def},
-        eq_token = new_token_node_with_blank_leading("=", 1, 7),
-        start = new_dummy_true_expr(1, 9),
-        first_comma_token = new_token_node(",", 1, 13),
-        stop = new_dummy_true_expr(1, 15),
-        do_token = new_token_node_with_blank_leading("do", 1, 20),
-        end_token = new_token_node("end", 1, 23),
-      }))
-    end)
+      add_stat_test("fornum without step", "for i = true, true do ; end", function()
+        add_fornum_stat(false)
+      end)
 
-    stat_scope:register_test("fornum with step", function()
-      local var_def, var_ref = ast.create_local(
-        new_token("ident", 1, 5, "i", {new_blank(1, 4, " ")}), fake_main, fake_stat_elem
-      )
-      var_def.whole_block = true
-      test_stat("for i = true, true, true do;end", add_empty_to_scope(1, 28, nil, nodes.new_fornum{
-        stat_elem = fake_stat_elem,
-        parent_scope = fake_main,
-        for_token = new_token_node("for", 1, 1),
-        var = var_ref,
-        locals = {var_def},
-        eq_token = new_token_node_with_blank_leading("=", 1, 7),
-        start = new_dummy_true_expr(1, 9),
-        first_comma_token = new_token_node(",", 1, 13),
-        stop = new_dummy_true_expr(1, 15),
-        second_comma_token = new_token_node(",", 1, 19),
-        step = new_dummy_true_expr(1, 21),
-        do_token = new_token_node_with_blank_leading("do", 1, 26),
-        end_token = new_token_node("end", 1, 29),
-      }))
-    end)
+      add_stat_test("fornum with step", "for i = true, true, true do ; end", function()
+        add_fornum_stat(true)
+      end)
+    end
   end
 
-  -- TODO: ifstat without 'then'
   -- TODO: ifstat without 'end'
   -- TODO: whilestat without 'do'
   -- TODO: whilestat without 'end'
