@@ -36,6 +36,7 @@ function ast.create_local(ident_token, scope, stat_elem)
     name = ident_token.value,
     reference_def = local_def,
   }
+  -- TODO: deal with `refs`
   return local_def, ref
 end
 

@@ -834,6 +834,7 @@ end
 ---@param scope AstScope
 ---@return AstForNum
 local function for_num(first_name, scope, stat_elem)
+  -- TODO: check this when doing IL: the scope of this is wrong imo... but I'm not sure.
   local var_local, var_ref = ast.create_local(first_name, scope, stat_elem)
   var_local.whole_block = true
   local invalid = assert_next("=")
