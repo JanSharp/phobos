@@ -175,12 +175,16 @@ do
       return nodes.new_token(next_token())
     end
 
-    add_stat_test("empty", ";", function()
-      local stat = nodes.new_empty{
-        semi_colon_token = next_token_node(),
-      }
-      append_stat(fake_main, stat)
-    end)
+    add_stat_test(
+      "empty",
+      ";",
+      function()
+        local stat = nodes.new_empty{
+          semi_colon_token = next_token_node(),
+        }
+        append_stat(fake_main, stat)
+      end
+    )
 
     do
       local function new_testblock()
@@ -194,90 +198,122 @@ do
         return testblock
       end
 
-      add_stat_test("ifstat with 1 testblock", "if true then ; end", function()
-        local stat = nodes.new_ifstat{
-          ifs = {new_testblock()},
-          end_token = next_token_node(),
-        }
-        append_stat(fake_main, stat)
-      end)
+      add_stat_test(
+        "ifstat with 1 testblock",
+        "if true then ; end",
+        function()
+          local stat = nodes.new_ifstat{
+            ifs = {new_testblock()},
+            end_token = next_token_node(),
+          }
+          append_stat(fake_main, stat)
+        end
+      )
 
-      add_stat_test("ifstat with 2 testblocks", "if true then ; elseif true then ; end", function()
-        local stat = nodes.new_ifstat{
-          ifs = {
-            new_testblock(),
-            new_testblock(),
-          },
-          end_token = next_token_node(),
-        }
-        append_stat(fake_main, stat)
-      end)
+      add_stat_test(
+        "ifstat with 2 testblocks",
+        "if true then ; elseif true then ; end",
+        function()
+          local stat = nodes.new_ifstat{
+            ifs = {
+              new_testblock(),
+              new_testblock(),
+            },
+            end_token = next_token_node(),
+          }
+          append_stat(fake_main, stat)
+        end
+      )
 
-      add_stat_test("ifstat with elseblock", "if true then ; else ; end", function()
-        local testblock = new_testblock()
-        local elseblock = nodes.new_elseblock{
-          parent_scope = fake_main,
-          else_token = next_token_node(),
-        }
-        append_empty(elseblock, next_token_node())
-        local stat = nodes.new_ifstat{
-          ifs = {testblock},
-          elseblock = elseblock,
-          end_token = next_token_node(),
-        }
-        append_stat(fake_main, stat)
-      end)
+      add_stat_test(
+        "ifstat with elseblock",
+        "if true then ; else ; end",
+        function()
+          local testblock = new_testblock()
+          local elseblock = nodes.new_elseblock{
+            parent_scope = fake_main,
+            else_token = next_token_node(),
+          }
+          append_empty(elseblock, next_token_node())
+          local stat = nodes.new_ifstat{
+            ifs = {testblock},
+            elseblock = elseblock,
+            end_token = next_token_node(),
+          }
+          append_stat(fake_main, stat)
+        end
+      )
 
-      add_stat_test("ifstat without 'then'", "if true", function()
-        local testblock = nodes.new_testblock{
-          parent_scope = fake_main,
-          if_token = next_token_node(),
-          condition = new_true_node(next_token()),
-          then_token = new_invalid(peek_next_token()),
-        }
-        local stat = nodes.new_ifstat{
-          ifs = {testblock},
-        }
-        append_stat(fake_main, stat)
-      end)
+      add_stat_test(
+        "ifstat without 'then'",
+        "if true",
+          function()
+          local testblock = nodes.new_testblock{
+            parent_scope = fake_main,
+            if_token = next_token_node(),
+            condition = new_true_node(next_token()),
+            then_token = new_invalid(peek_next_token()),
+          }
+          local stat = nodes.new_ifstat{
+            ifs = {testblock},
+          }
+          append_stat(fake_main, stat)
+        end
+      )
 
-      add_stat_test("ifstat without 'then' but with 'else'", "if true else", function()
-        local testblock = nodes.new_testblock{
-          parent_scope = fake_main,
-          if_token = next_token_node(),
-          condition = new_true_node(next_token()),
-          then_token = new_invalid(peek_next_token()),
-        }
-        local stat = nodes.new_ifstat{
-          ifs = {testblock},
-        }
-        append_stat(fake_main, stat)
-        append_stat(fake_main, new_invalid(peek_next_token()))
-        append_stat(fake_main, new_invalid(peek_next_token(), {next_token_node()}))
-      end)
+      local function add_ifstat_without_else_but_with(last_keyword)
+        add_stat_test(
+          "ifstat without 'then' but with '"..last_keyword.."'",
+          "if true "..last_keyword,
+          function()
+            local testblock = nodes.new_testblock{
+              parent_scope = fake_main,
+              if_token = next_token_node(),
+              condition = new_true_node(next_token()),
+              then_token = new_invalid(peek_next_token()),
+            }
+            local stat = nodes.new_ifstat{
+              ifs = {testblock},
+            }
+            append_stat(fake_main, stat)
+            append_stat(fake_main, new_invalid(peek_next_token()))
+            append_stat(fake_main, new_invalid(peek_next_token(), {next_token_node()}))
+          end
+        )
+      end
+      add_ifstat_without_else_but_with("else")
+      add_ifstat_without_else_but_with("end")
     end
 
-    add_stat_test("whilestat", "while true do ; end", function()
-      local stat = nodes.new_whilestat{
-        parent_scope = fake_main,
-        while_token = next_token_node(),
-        condition = new_true_node(next_token()),
-        do_token = next_token_node(),
-      }
-      append_empty(stat, next_token_node())
-      stat.end_token = next_token_node()
-      append_stat(fake_main, stat)
-    end)
+    add_stat_test(
+      "whilestat",
+      "while true do ; end",
+      function()
+        local stat = nodes.new_whilestat{
+          parent_scope = fake_main,
+          while_token = next_token_node(),
+          condition = new_true_node(next_token()),
+          do_token = next_token_node(),
+        }
+        append_empty(stat, next_token_node())
+        stat.end_token = next_token_node()
+        append_stat(fake_main, stat)
+      end
+    )
 
-    add_stat_test("dostat", "do ; end", function()
-      local stat = nodes.new_dostat{
-        parent_scope = fake_main,
-        do_token = next_token_node(),
-      }
-      append_empty(stat, next_token_node())
-      stat.end_token = next_token_node()
-      append_stat(fake_main, stat)
-    end)
+    add_stat_test(
+      "dostat",
+      "do ; end",
+      function()
+        local stat = nodes.new_dostat{
+          parent_scope = fake_main,
+          do_token = next_token_node(),
+        }
+        append_empty(stat, next_token_node())
+        stat.end_token = next_token_node()
+        append_stat(fake_main, stat)
+      end
+    )
 
     do
       local function add_fornum_stat(has_step)
@@ -304,13 +340,21 @@ do
         append_stat(fake_main, stat)
       end
 
-      add_stat_test("fornum without step", "for i = true, true do ; end", function()
-        add_fornum_stat(false)
-      end)
+      add_stat_test(
+        "fornum without step",
+        "for i = true, true do ; end",
+        function()
+          add_fornum_stat(false)
+        end
+      )
 
-      add_stat_test("fornum with step", "for i = true, true, true do ; end", function()
-        add_fornum_stat(true)
-      end)
+      add_stat_test(
+        "fornum with step",
+        "for i = true, true, true do ; end",
+        function()
+          add_fornum_stat(true)
+        end
+      )
     end
   end
 
