@@ -298,35 +298,84 @@ do
       )
     end -- end ifstat
 
-    add_stat_test(
-      "whilestat",
-      "while true do ; end",
-      function()
-        local stat = nodes.new_whilestat{
-          parent_scope = fake_main,
-          while_token = next_token_node(),
-          condition = new_true_node(next_token()),
-          do_token = next_token_node(),
-        }
-        append_empty(stat, next_token_node())
-        stat.end_token = next_token_node()
-        append_stat(fake_main, stat)
-      end
-    )
+    do -- whilestat
+      add_stat_test(
+        "whilestat",
+        "while true do ; end",
+        function()
+          local stat = nodes.new_whilestat{
+            parent_scope = fake_main,
+            while_token = next_token_node(),
+            condition = new_true_node(next_token()),
+            do_token = next_token_node(),
+          }
+          append_empty(stat, next_token_node())
+          stat.end_token = next_token_node()
+          append_stat(fake_main, stat)
+        end
+      )
 
-    add_stat_test(
-      "dostat",
-      "do ; end",
-      function()
-        local stat = nodes.new_dostat{
-          parent_scope = fake_main,
-          do_token = next_token_node(),
-        }
-        append_empty(stat, next_token_node())
-        stat.end_token = next_token_node()
-        append_stat(fake_main, stat)
-      end
-    )
+      add_stat_test(
+        "whilestat without do",
+        "while true ;",
+        function()
+          local stat = nodes.new_whilestat{
+            parent_scope = fake_main,
+            while_token = next_token_node(),
+            condition = new_true_node(next_token()),
+            do_token = new_invalid(peek_next_token()),
+          }
+          append_stat(fake_main, stat)
+          append_empty(fake_main, next_token_node())
+        end
+      )
+
+      add_stat_test(
+        "while without 'end'",
+        "while true do ;",
+        function()
+          local stat = nodes.new_whilestat{
+            parent_scope = fake_main,
+            while_token = next_token_node(),
+            condition = new_true_node(next_token()),
+            do_token = next_token_node(),
+          }
+          append_empty(stat, next_token_node())
+          stat.end_token = new_invalid(peek_next_token())
+          append_stat(fake_main, stat)
+        end
+      )
+    end -- end whilestat
+
+    do -- dostat
+      add_stat_test(
+        "dostat",
+        "do ; end",
+        function()
+          local stat = nodes.new_dostat{
+            parent_scope = fake_main,
+            do_token = next_token_node(),
+          }
+          append_empty(stat, next_token_node())
+          stat.end_token = next_token_node()
+          append_stat(fake_main, stat)
+        end
+      )
+
+      add_stat_test(
+        "dostat",
+        "do ;",
+        function()
+          local stat = nodes.new_dostat{
+            parent_scope = fake_main,
+            do_token = next_token_node(),
+          }
+          append_empty(stat, next_token_node())
+          stat.end_token = new_invalid(peek_next_token())
+          append_stat(fake_main, stat)
+        end
+      )
+    end -- end dostat
 
     do -- fornum
       local function add_fornum_stat(has_step)
@@ -368,15 +417,32 @@ do
           add_fornum_stat(true)
         end
       )
+
+      add_stat_test(
+        "fornum with invalid ident",
+        "for . ;",
+        function()
+          append_stat(fake_main, new_invalid(tokens[2], {next_token_node()})) -- invalid for
+          append_stat(fake_main, new_invalid(peek_next_token(), {next_token_node()})) -- unexpected .
+          append_empty(fake_main, next_token_node())
+        end
+      )
+
+      add_stat_test(
+        "fornum without '='",
+        "for i ;",
+        function()
+          append_stat(fake_main, new_invalid(tokens[2], {next_token_node()})) -- invalid for
+          append_stat(fake_main, new_invalid(tokens[3])) -- unexpected expression i
+          next_token()
+          append_empty(fake_main, next_token_node())
+        end
+      )
+
+      -- TODO: fornum without '='
+      -- TODO: fornum without first ','
+      -- TODO: fornum without 'do'
+      -- TODO: fornum without 'end'
     end -- end fornum
   end -- end statements
-
-  -- TODO: whilestat without 'do'
-  -- TODO: whilestat without 'end'
-  -- TODO: dostat without 'end'
-  -- TODO: fornum with invalid ident
-  -- TODO: fornum without '='
-  -- TODO: fornum without first ','
-  -- TODO: fornum without 'do'
-  -- TODO: fornum without 'end'
 end

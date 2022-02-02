@@ -462,7 +462,11 @@ local function primary_exp(scope, stat_elem)
     if token.token_type == "invalid" then
       return invalid_nodes[#invalid_nodes]
     else
-      return syntax_error("Unexpected symbol", "")
+      local invalid = syntax_error("Unexpected symbol", "")
+      -- consume the invalid token, it would infinitely loop otherwise
+      invalid.tokens[#invalid.tokens+1] = new_token_node()
+      next_token()
+      return invalid
     end
   end
 end
@@ -544,12 +548,15 @@ local function suffixed_exp(scope, stat_elem)
   --TODO: safe chaining adds optional '?' in front of each suffix
   local ex = primary_exp(scope, stat_elem)
   local should_break = false
-  repeat
+  while ex.node_type ~= "invalid" do
     ex = ((suffixed_lut)[token.token_type] or function(ex)
       should_break = true
       return ex
     end)(ex, scope, stat_elem)
-  until should_break
+    if should_break then
+      break
+    end
+  end
   return ex
 end
 
@@ -1097,9 +1104,10 @@ local function expr_stat(scope, stat_elem)
     if first_exp.node_type == "call" then
       return first_exp
     elseif first_exp.node_type == "invalid" then
-      ---@diagnostic disable-next-line: undefined-field
-      first_exp.tokens[#first_exp.tokens+1] = new_token_node()
-      next_token() -- consume the invalid token, it would infinitely loop otherwise
+      -- wherever this invalid node came from is responsible for consuming the
+      -- current token, or not consuming it. If it isn't, it has to make sure
+      -- that whichever token it is leaving unconsumed will not lead down the
+      -- same branches again, sine that would be an infinite loop
       return first_exp
     else
       -- TODO: store data about the expression (`first_exp`) that caused this error
