@@ -1,7 +1,7 @@
 
 local serpent = require("lib.serpent")
 
-local function pretty_print(value)
+local function pretty_print(value, serpent_opts)
   return ({
     ["number"] = function()
       if value ~= value then
@@ -25,7 +25,7 @@ local function pretty_print(value)
       return "nil"
     end,
     ["table"] = function()
-      return serpent.block(value, {name = "value"})
+      return serpent.block(value, serpent_opts)
     end,
     ["userdata"] = function()
       return tostring(value)

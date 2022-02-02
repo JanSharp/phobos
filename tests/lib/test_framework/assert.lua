@@ -40,6 +40,7 @@ end
 ---@field compare_pairs_iteration_order boolean
 ---@field print_full_data_on_error boolean
 ---@field root_name string
+---@field serpent_opts table
 
 ---@param options ContentsEqualsOptions
 local function contents_equals(expected, got, msg, options)
@@ -59,15 +60,16 @@ local function contents_equals(expected, got, msg, options)
     elseif difference.type == deep_compare.difference_type.function_bytecode then
       err = "function bytecode differs at "..difference.location
     elseif difference.type == deep_compare.difference_type.primitive_value then
-      err = "expected "..pretty_print(difference.left)..", got "
-        ..pretty_print(difference.right).." at "..difference.location
+      err = "expected "..pretty_print(difference.left, options.serpent_opts)..", got "
+        ..pretty_print(difference.right, options.serpent_opts).." at "..difference.location
     elseif difference.type == deep_compare.difference_type.size then
       err = "table size differs at "..difference.location
     end
     error(add_msg(err, msg)
       ..(
         options and options.print_full_data_on_error
-          and ("\nexpected: "..pretty_print(expected).."\n-----\ngot: "..pretty_print(got))
+          and ("\nexpected: "..pretty_print(expected, options.serpent_opts)
+            .."\n-----\ngot: "..pretty_print(got, options.serpent_opts))
           or ""
       )
     )

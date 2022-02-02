@@ -89,10 +89,33 @@ local function new_true_node(true_token)
   }
 end
 
+local serpent_opts = {
+  keyignore = {
+    first = true,
+    last = true,
+    next = true,
+    prev = true,
+    stat_elem = true,
+    scope = true,
+    list = true,
+    parent_scope = true,
+  },
+}
+
 local function test_stat(str, expected_invalid_nodes)
   local main, invalid_nodes = parser(str, "=(test)")
-  assert.contents_equals(fake_main, main, nil, {root_name = "main"})
-  assert.contents_equals(expected_invalid_nodes or {}, invalid_nodes, nil, {root_name = "invalid_nodes"})
+  assert.contents_equals(
+    fake_main,
+    main,
+    nil,
+    {root_name = "main", print_full_data_on_error = true, serpent_opts = serpent_opts}
+  )
+  assert.contents_equals(
+    expected_invalid_nodes or {},
+    invalid_nodes,
+    nil,
+    {root_name = "invalid_nodes", print_full_data_on_error = true, serpent_opts = serpent_opts}
+  )
 end
 
 do
