@@ -102,19 +102,46 @@ local serpent_opts = {
   },
 }
 
-local function test_stat(str, expected_invalid_nodes)
-  local main, invalid_nodes = parser(str, "=(test)")
+local expected_invalid_nodes
+
+---@param position Token
+---@param tokens? AstTokenNode[]
+local function new_invalid(position, tokens)
+  local invalid = nodes.new_invalid{
+    error_message = assert.do_not_compare_flag,
+    position = position,
+    tokens = tokens or {},
+  }
+  expected_invalid_nodes[#expected_invalid_nodes+1] = invalid
+  return invalid
+end
+
+local function before_each()
+  ill.clear(fake_main.body)
+  expected_invalid_nodes = {}
+end
+
+local function test_stat(str)
+  local main, got_invalid_nodes = parser(str, "=(test)")
   assert.contents_equals(
     fake_main,
     main,
     nil,
-    {root_name = "main", print_full_data_on_error = true, serpent_opts = serpent_opts}
+    {
+      root_name = "main",
+      print_full_data_on_error = print_full_data_on_error,
+      serpent_opts = serpent_opts,
+    }
   )
   assert.contents_equals(
     expected_invalid_nodes or {},
-    invalid_nodes,
+    got_invalid_nodes,
     nil,
-    {root_name = "invalid_nodes", print_full_data_on_error = true, serpent_opts = serpent_opts}
+    {
+      root_name = "invalid_nodes",
+      print_full_data_on_error = print_full_data_on_error,
+      serpent_opts = serpent_opts,
+    }
   )
 end
 
@@ -129,7 +156,7 @@ do
     local peek_next_token
     local function add_stat_test(name, str, func)
       stat_scope:register_test(name, function()
-        ill.clear(fake_main.body)
+        before_each()
         tokens = get_tokens(str)
         local next_index = 1
         function next_token()
@@ -139,7 +166,8 @@ do
         function peek_next_token()
           return tokens[next_index]
         end
-        test_stat(str, func())
+        func()
+        test_stat(str)
       end)
     end
 
@@ -200,17 +228,12 @@ do
         append_stat(fake_main, stat)
       end)
 
-      -- TODO: test failing
       add_stat_test("ifstat without 'then'", "if true", function()
         local testblock = nodes.new_testblock{
           parent_scope = fake_main,
           if_token = next_token_node(),
           condition = new_true_node(next_token()),
-          then_token = nodes.new_invalid{
-            position = peek_next_token(),
-            error_message = assert.do_not_compare_flag,
-            tokens = assert.do_not_compare_flag,
-          },
+          then_token = new_invalid(peek_next_token()),
         }
         local stat = nodes.new_ifstat{
           ifs = {testblock},
@@ -218,29 +241,19 @@ do
         append_stat(fake_main, stat)
       end)
 
-      -- TODO: test failing
       add_stat_test("ifstat without 'then' but with 'else'", "if true else", function()
         local testblock = nodes.new_testblock{
           parent_scope = fake_main,
           if_token = next_token_node(),
           condition = new_true_node(next_token()),
-          then_token = nodes.new_invalid{
-            position = peek_next_token(),
-            error_message = assert.do_not_compare_flag,
-            tokens = assert.do_not_compare_flag,
-          },
+          then_token = new_invalid(peek_next_token()),
         }
         local stat = nodes.new_ifstat{
           ifs = {testblock},
         }
         append_stat(fake_main, stat)
-
-        local invalid = nodes.new_invalid{
-          position = peek_next_token(),
-          error_message = assert.do_not_compare_flag,
-          tokens = {next_token()},
-        }
-        append_stat(fake_main, invalid)
+        append_stat(fake_main, new_invalid(peek_next_token()))
+        append_stat(fake_main, new_invalid(peek_next_token(), {next_token_node()}))
       end)
     end
 

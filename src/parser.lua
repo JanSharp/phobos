@@ -62,8 +62,7 @@ end
 ---is missing (like a closing }), but rather the actual token that was encountered that was unexpected
 ---Throw a Syntax Error at the current location
 ---@param msg string Error message
-local function syntax_error(msg, use_prev, location_descriptor)
-  local token_node = new_token_node(use_prev)
+local function syntax_error(msg, location_descriptor)
   if location_descriptor then
     location_descriptor = location_descriptor == "" and "" or " "..location_descriptor
   else
@@ -117,8 +116,8 @@ local function syntax_error(msg, use_prev, location_descriptor)
   local invalid = nodes.new_invalid{
     error_message = msg..location
       ..(token.token_type ~= "eof" and (" at "..token.line..":"..token.column) or ""),
-    position = token_node,
-    tokens = {token_node},
+    position = token,
+    tokens = {},
   }
   invalid_nodes[#invalid_nodes+1] = invalid
   return invalid
@@ -463,7 +462,7 @@ local function primary_exp(scope, stat_elem)
     if token.token_type == "invalid" then
       return invalid_nodes[#invalid_nodes]
     else
-      return syntax_error("Unexpected symbol", false, "")
+      return syntax_error("Unexpected symbol", "")
     end
   end
 end
@@ -601,7 +600,7 @@ local simple_lut = {
       scope = scope.parent_scope
     end
     if not scope.is_vararg then
-      return syntax_error("Cannot use '...' outside a vararg function", false, "at")
+      return syntax_error("Cannot use '...' outside a vararg function", "at")
     end
     return nodes.new_vararg{
       stat_elem = stat_elem,

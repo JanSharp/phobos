@@ -13,7 +13,9 @@ local function test(str, expected_tokens)
   while index do
     i = i + 1
     local expected = expected_tokens[i]
-    assert.contents_equals(expected, got, "token #"..i, {print_full_data_on_error = true})
+    assert.contents_equals(expected, got, "token #"..i, {
+      print_full_data_on_error = print_full_data_on_error,
+    })
     index, got = iter(state, index)
   end
   if expected_tokens[i + 1] then
