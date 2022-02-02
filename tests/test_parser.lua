@@ -186,7 +186,7 @@ do
       end
     )
 
-    do
+    do -- ifstat
       local function new_testblock()
         local testblock = nodes.new_testblock{
           parent_scope = fake_main,
@@ -246,7 +246,7 @@ do
 
       add_stat_test(
         "ifstat without 'then'",
-        "if true",
+        "if true ;",
           function()
           local testblock = nodes.new_testblock{
             parent_scope = fake_main,
@@ -258,6 +258,7 @@ do
             ifs = {testblock},
           }
           append_stat(fake_main, stat)
+          append_empty(fake_main, next_token_node())
         end
       )
 
@@ -283,7 +284,19 @@ do
       end
       add_ifstat_without_else_but_with("else")
       add_ifstat_without_else_but_with("end")
-    end
+
+      add_stat_test(
+        "ifstat without 'end'",
+        "if true then ;",
+        function()
+          local stat = nodes.new_ifstat{
+            ifs = {new_testblock()},
+            end_token = new_invalid(peek_next_token()),
+          }
+          append_stat(fake_main, stat)
+        end
+      )
+    end -- end ifstat
 
     add_stat_test(
       "whilestat",
@@ -315,7 +328,7 @@ do
       end
     )
 
-    do
+    do -- fornum
       local function add_fornum_stat(has_step)
         local for_token = next_token_node()
         local var_def, var_ref = ast.create_local(next_token(), fake_main, fake_stat_elem)
@@ -355,10 +368,9 @@ do
           add_fornum_stat(true)
         end
       )
-    end
-  end
+    end -- end fornum
+  end -- end statements
 
-  -- TODO: ifstat without 'end'
   -- TODO: whilestat without 'do'
   -- TODO: whilestat without 'end'
   -- TODO: dostat without 'end'
