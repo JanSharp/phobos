@@ -728,7 +728,7 @@ do
       )
 
       add_stat_test(
-        "forlist without 'do'",
+        "forlist without 'end'",
         "for foo in true do ;",
         function()
           local stat = nodes.new_forlist{
@@ -749,7 +749,7 @@ do
           append_empty(stat, next_token_node())
           stat.end_token = new_invalid(
             error_code_util.codes.expected_closing_match,
-            peek_next_token(), -- at ';'
+            peek_next_token(), -- at 'eof'
             {"end", "for", "1:1"}
           )
           append_stat(fake_main, stat)
