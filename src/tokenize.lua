@@ -1,4 +1,5 @@
 
+local error_code_util = require("error_code_util")
 local invert = require("invert")
 local keywords = invert{
   "and", "break", "do", "else", "elseif", "end", "false",
@@ -83,7 +84,7 @@ local keywords = invert{
 ---@field src_pad string @ the `=` chain for block `string` and `comment` tokens
 ---@field leading Token[] @ `blank` and `comment` tokens before this token. Set and used by the parser
 ---for `invalid` tokens
----@field error_messages string[]
+---@field error_code_insts ErrorCodeInstance[]
 
 ---@param token_type TokenType
 ---@param index number
@@ -97,6 +98,11 @@ local function new_token(token_type,index,line,column)
     line = line,
     column = column
   }
+end
+
+local function add_error_code_inst(token, inst)
+  token.error_code_insts = token.error_code_insts or {}
+  token.error_code_insts[#token.error_code_insts+1] = inst
 end
 
 ---@param str string
@@ -176,15 +182,23 @@ local function read_string(str,index,quote,state)
   elseif next_char == "" then
     token.token_type = "invalid"
     token.value = str:sub(index,i-1)
-    token.error_messages = token.error_messages or {}
-    token.error_messages[#token.error_messages+1] = "Unterminated string"
+    add_error_code_inst(token, error_code_util.new_error_code{
+      error_code = error_code_util.codes.unterminated_string,
+      source = state.source,
+      -- position at eof, so technically 1 char past the entire string
+      position = {line = state.line, column = i - state.line_offset},
+    })
     return i,token
   elseif newline_chars[next_char] then
     token.token_type = "invalid"
     token.value = str:sub(index,i-1)
-    token.error_messages = token.error_messages or {}
-    token.error_messages[#token.error_messages+1] =
-      "Unterminated string (at end of line " .. state.line..")"
+    add_error_code_inst(token, error_code_util.new_error_code{
+      error_code = error_code_util.codes.unterminated_string_at_eol,
+      message_args = {tostring(state.line)},
+      source = state.source,
+      -- position at the newline
+      position = {line = state.line, column = i - state.line_offset},
+    })
     return i,token
   elseif next_char == "\\" then
     -- advance past an escape sequence...
@@ -194,9 +208,15 @@ local function read_string(str,index,quote,state)
       local digits = str:match("^%x%x", i + 1)
       if not digits then
         token.token_type = "invalid"
-        token.error_messages = token.error_messages or {}
-        token.error_messages[#token.error_messages+1] = "Invalid escape sequence '\\x"
-          ..str:sub(i + 1, i + 2).."', '\\x' must be followed by 2 hexadecimal digits."
+        add_error_code_inst(token, error_code_util.new_error_code{
+          error_code = error_code_util.codes.invalid_hexadecimal_escape,
+          message_args = {str:sub(i + 1, i + 2)},
+          source = state.source,
+          -- start at \
+          start_position = {line = state.line, column = (i - 1) - state.line_offset},
+          -- stop at x
+          stop_position = {line = state.line, column = i - state.line_offset},
+        })
         i = i + 1 -- skip x
       else
         parts[#parts+1] = string.char(tonumber(digits, 16))
@@ -231,9 +251,15 @@ local function read_string(str,index,quote,state)
         local number = tonumber(digits, 10)
         if number > 255 then
           token.token_type = "invalid"
-          token.error_messages = token.error_messages or {}
-          token.error_messages[#token.error_messages+1] =
-            "Too large value in decimal escape sequence '\\"..digits.."'"
+          add_error_code_inst(token, error_code_util.new_error_code{
+            error_code = error_code_util.codes.too_large_decimal_escape,
+            message_args = {digits},
+            source = state.source,
+            -- start at at \
+            start_position = {line = state.line, column = (i - 1) - state.line_offset},
+            -- stop at the last digit
+            stop_position = {line = state.line, column = skip - state.line_offset},
+          })
         else
           parts[#parts+1] = string.char(number)
         end
@@ -241,8 +267,15 @@ local function read_string(str,index,quote,state)
         goto matching
       else
         token.token_type = "invalid"
-        token.error_messages = token.error_messages or {}
-        token.error_messages[#token.error_messages+1] = "Unrecognized escape '\\".. next_char .. "'"
+        add_error_code_inst(token, error_code_util.new_error_code{
+          error_code = error_code_util.codes.unrecognized_escape,
+          message_args = {next_char},
+          source = state.source,
+          -- start at \
+          start_position = {line = state.line, column = (i - 1) - state.line_offset},
+          -- stop at `next_char`
+          stop_position = {line = state.line, column = i - state.line_offset},
+        })
         -- nothing to skip
         goto matching
       end
@@ -257,7 +290,12 @@ local function read_block_string(str,index,state)
   if not pad then
     local token = new_token("invalid",index,state.line,index - state.line_offset)
     token.value = "["
-    token.error_messages = {"Invalid string open bracket"}
+    add_error_code_inst(token, error_code_util.new_error_code{
+      error_code = error_code_util.codes.invalid_block_string_open_bracket,
+      source = state.source,
+      -- position at [
+      position = {line = state.line, column = index - state.line_offset},
+    })
     return index+1,token
   end
 
@@ -294,9 +332,14 @@ local function read_block_string(str,index,state)
       end
     elseif stop_char == "" then
       local token = new_token("invalid", index, token_line, token_col)
-      token.error_messages = {"Unterminated block string"}
       parts[1] = "["..pad.."["
       token.value = table.concat(parts)
+      add_error_code_inst(token, error_code_util.new_error_code{
+        error_code = error_code_util.codes.unterminated_block_string,
+        source = state.source,
+        -- position at eof, so technically 1 char past the entire string
+        position = {line = state.line, column = stopped_at - state.line_offset},
+      })
       return stopped_at, token
     else
       parts[#parts+1] = "\n"
@@ -319,7 +362,15 @@ local function try_read_number(str, index, state)
       -- this actually only ever happens if the number is just 0x or 0X
       local token = new_token("invalid",index,state.line,index - state.line_offset)
       token.value = str:sub(hex_start,hex_end)
-      token.error_messages = {"Malformed number '"..token.value.."'"}
+      add_error_code_inst(token, error_code_util.new_error_code{
+        error_code = error_code_util.codes.malformed_number,
+        message_args = {token.value},
+        source = state.source,
+        -- start at the first char of the number
+        start_position = {line = state.line, column = hex_start - state.line_offset},
+        -- stop at the last char of the number
+        stop_position = {line = state.line, column = hex_end - state.line_offset},
+      })
       return hex_end+1,token
     else
       -- consume trailing dot
@@ -365,7 +416,13 @@ end
 local function simple_invalid_token(invalid_char, index, state)
   local token = new_token("invalid",index,state.line,index - state.line_offset)
   token.value = invalid_char
-  token.error_messages = {"Invalid token '"..invalid_char.."'"}
+  add_error_code_inst(token, error_code_util.new_error_code{
+    error_code = error_code_util.codes.invalid_token,
+    message_args = {invalid_char},
+    source = state.source,
+    -- position at index
+    position = {line = state.line, column = index - state.line_offset},
+  })
   return index+1,token
 end
 
@@ -483,13 +540,15 @@ end
 ---@field prev_line_offset integer|nil
 
 ---@param str string
+---@param source? string @ if provided it is used for the `source` field of error code instances
 ---@return fun(state: TokenizeState, index: integer|nil): integer|nil, Token next_token
 ---@return TokenizeState state
 ---@return number|nil index
-local function tokenize(str)
+local function tokenize(str, source)
   local index
   local state = {
     str = str,
+    source = source,
     line = 1,
     line_offset = 0, -- pretend the previous character was a newline. not too far fetched
   }

@@ -1290,8 +1290,8 @@ local function parse(text,source_name)
       else
         token.leading = leading
         if token.token_type == "invalid" then
-          for _, msg in ipairs(token.error_messages) do
-            syntax_error(msg)
+          for _, error_code_inst in ipairs(token.error_code_insts) do
+            syntax_error("-- TODO")
           end
         end
         break

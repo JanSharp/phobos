@@ -3,10 +3,13 @@ local framework = require("test_framework")
 local assert = require("assert")
 
 local invert = require("invert")
+local error_code_util = require("error_code_util")
 local tokenizer = require("tokenize")
 
+local test_source = "=(test source)"
+
 local function test(str, expected_tokens)
-  local iter, state, index = tokenizer(str)
+  local iter, state, index = tokenizer(str, test_source)
   local got
   index, got = iter(state, index)
   local i = 0
@@ -108,7 +111,12 @@ do
       scope:register_test("invalid token '"..char.."'", function()
         local invalid = new_token("invalid", 1, 1, 1)
         invalid.value = char
-        invalid.error_messages = {"Invalid token '"..char.."'"}
+        invalid.error_code_insts = {error_code_util.new_error_code{
+          error_code = error_code_util.codes.invalid_token,
+          message_args = {char},
+          source = test_source,
+          position = {line = 1, column = 1},
+        }}
         test(char..";", {
           invalid,
           new_token(";", 2, 1, 2),
@@ -202,7 +210,11 @@ do
     scope:register_test("unterminated at eof", function()
       local token = new_token("invalid", 1, 1, 1)
       token.value = [["foo]]
-      token.error_messages = {"Unterminated string"}
+      token.error_code_insts = {error_code_util.new_error_code{
+        error_code = error_code_util.codes.unterminated_string,
+        source = test_source,
+        position = {line = 1, column = 5},
+      }}
       test([["foo]], {token})
     end)
 
@@ -214,7 +226,12 @@ do
       scope:register_test("ending with "..data.label, function()
         local token = new_token("invalid", 1, 1, 1)
         token.value = [["foo]]
-        token.error_messages = {"Unterminated string (at end of line 1)"}
+        token.error_code_insts = {error_code_util.new_error_code{
+          error_code = error_code_util.codes.unterminated_string_at_eol,
+          message_args = {"1"},
+          source = test_source,
+          position = {line = 1, column = 5},
+        }}
         test([["foo]]..data.str, {
           token,
           new_token("blank", 5, 1, 5, "\n"),
@@ -246,9 +263,13 @@ do
       local token = new_token("invalid", 1, 1, 1)
       token.src_is_block_str = nil
       token.value = [["\x"]]
-      token.error_messages = {
-        "Invalid escape sequence '\\x\";', '\\x' must be followed by 2 hexadecimal digits."
-      }
+      token.error_code_insts = {error_code_util.new_error_code{
+        error_code = error_code_util.codes.invalid_hexadecimal_escape,
+        message_args = {[[";]]},
+        source = test_source,
+        start_position = {line = 1, column = 2},
+        stop_position = {line = 1, column = 3},
+      }}
       test([["\x";]], {
         token,
         new_token(";", 5, 1, 5),
@@ -259,9 +280,13 @@ do
       local token = new_token("invalid", 1, 1, 1)
       token.src_is_block_str = nil
       token.value = [["\x"]]
-      token.error_messages = {
-        "Invalid escape sequence '\\x\"', '\\x' must be followed by 2 hexadecimal digits."
-      }
+      token.error_code_insts = {error_code_util.new_error_code{
+        error_code = error_code_util.codes.invalid_hexadecimal_escape,
+        message_args = {[["]]},
+        source = test_source,
+        start_position = {line = 1, column = 2},
+        stop_position = {line = 1, column = 3},
+      }}
       test([["\x"]], {token})
     end)
 
@@ -338,7 +363,13 @@ do
     scope:register_test("containing invalid escape sequence \\256 (too large)", function()
       local token = new_token("invalid", 1, 1, 1)
       token.value = [["foo \256 bar"]]
-      token.error_messages = {"Too large value in decimal escape sequence '\\256'"}
+      token.error_code_insts = {error_code_util.new_error_code{
+        error_code = error_code_util.codes.too_large_decimal_escape,
+        message_args = {[[256]]},
+        source = test_source,
+        start_position = {line = 1, column = 6},
+        stop_position = {line = 1, column = 9},
+      }}
       test([["foo \256 bar";]], {
         token,
         new_token(";", 15, 1, 15),
@@ -380,7 +411,13 @@ do
           local success, err = pcall(function()
             local token = new_token("invalid", 1, 1, 1)
             token.value = [["foo \]]..c..[[ bar"]]
-            token.error_messages = {"Unrecognized escape '\\"..c.."'"}
+            token.error_code_insts = {error_code_util.new_error_code{
+              error_code = error_code_util.codes.unrecognized_escape,
+              message_args = {c},
+              source = test_source,
+              start_position = {line = 1, column = 6},
+              stop_position = {line = 1, column = 7},
+            }}
             test([["foo \]]..c..[[ bar";]], {
               token,
               new_token(";", 13, 1, 13),
@@ -401,24 +438,32 @@ do
     end)
 
     local function add_each_syntax_error_in_a_string(func)
-      func("invalid \\x", [[\xha]],
-        "Invalid escape sequence '\\xha', '\\x' must be followed by 2 hexadecimal digits."
-      )
-      func("invalid \\500", [[\500]],
-        "Too large value in decimal escape sequence '\\500'"
-      )
-      func("invalid escape", [[\_]],
-        "Unrecognized escape '\\_'"
-      )
+      func("invalid \\x", [[\xha]], error_code_util.codes.invalid_hexadecimal_escape)
+      func("invalid \\500", [[\500]], error_code_util.codes.too_large_decimal_escape)
+      func("invalid escape", [[\_]], error_code_util.codes.unrecognized_escape)
     end
-    local function initial_syntax_error(label1, str1, msg1)
-      local function consecutive_syntax_error(label2, str2, msg2)
-        local function ending_syntax_error_or_end_of_string(label3, str3, msg3, is_eol)
+    local function initial_syntax_error(label1, str1, error_code1)
+      local function consecutive_syntax_error(label2, str2, error_code2)
+        local function ending_syntax_error_or_end_of_string(label3, str3, error_code3, is_eol)
           scope:register_test("syntax error chain: "..label1.." + "..label2.." + "..label3, function()
             local token = new_token("invalid", 1, 1, 1)
             local str = [["]]..str1..str2
             token.value = str..(is_eol and "" or str3)
-            token.error_messages = {msg1, msg2, msg3}
+            local function create_error_code_inst(error_code)
+              return error_code_util.new_error_code{
+                error_code = error_code,
+                -- these are already tested by other tests
+                message_args = assert.do_not_compare_flag,
+                source = test_source,
+                -- same here
+                position = {line = assert.do_not_compare_flag, column = assert.do_not_compare_flag},
+              }
+            end
+            token.error_code_insts = {
+              create_error_code_inst(error_code1),
+              create_error_code_inst(error_code2),
+              error_code3 and create_error_code_inst(error_code3),
+            }
             str = str..str3
             test(str, {
               token,
@@ -427,9 +472,11 @@ do
           end)
         end
         ending_syntax_error_or_end_of_string("regular end of string", [["]], nil)
-        ending_syntax_error_or_end_of_string("unterminated at eof", "", "Unterminated string")
+        ending_syntax_error_or_end_of_string("unterminated at eof", "",
+          error_code_util.codes.unterminated_string
+        )
         ending_syntax_error_or_end_of_string("unterminated at eol", "\n",
-          "Unterminated string (at end of line 1)", true
+          error_code_util.codes.unterminated_string_at_eol, true
         )
       end
       add_each_syntax_error_in_a_string(consecutive_syntax_error)
@@ -443,7 +490,11 @@ do
     scope:register_test("invalid open bracket", function()
       local token = new_token("invalid", 1, 1, 1)
       token.value = "["
-      token.error_messages = {"Invalid string open bracket"}
+      token.error_code_insts = {error_code_util.new_error_code{
+        error_code = error_code_util.codes.invalid_block_string_open_bracket,
+        source = test_source,
+        position = {line = 1, column = 1},
+      }}
       test("[==", {
         token,
         new_token("==", 2, 1, 2),
@@ -524,7 +575,11 @@ do
       scope:register_test(label, function()
         local token = new_token("invalid", 1, 1, 1)
         token.value = str
-        token.error_messages = {"Unterminated block string"}
+        token.error_code_insts = {error_code_util.new_error_code{
+          error_code = error_code_util.codes.unterminated_block_string,
+          source = test_source,
+          position = {line = 1, column = #str + 1},
+        }}
         test(str, {token})
       end)
     end
@@ -587,7 +642,13 @@ do
       scope:register_test("malformed number '"..str.."'", function()
         local token = new_token("invalid", 1, 1, 1)
         token.value = str
-        token.error_messages = {"Malformed number '"..str.."'"}
+        token.error_code_insts = {error_code_util.new_error_code{
+          error_code = error_code_util.codes.malformed_number,
+          message_args = {str},
+          source = test_source,
+          start_position = {line = 1, column = 1},
+          stop_position = {line = 1, column = 2},
+        }}
         test(str..";", {
           token,
           new_token(";", 3, 1, 3),

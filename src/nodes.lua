@@ -172,7 +172,7 @@ do
       node.value = token.token_type
     end
     if token.token_type == "invalid" then
-      node.error_messages = token.error_messages
+      node.error_code_insts = token.error_code_insts
     end
     return node
   end

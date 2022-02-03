@@ -68,14 +68,14 @@
 ---each of these have a comment noting that their `value` is `nil`
 ---@field value string|nil
 ---if this was an invalid token from the tokenizer, these are the syntax errors
----@field error_messages string[]|nil
+---@field error_code_insts ErrorCodeInstance[]|nil
 
 ---uses line and column (but not leading) (indicating the location of the error)\
 ---indicates syntax errors
 ---TODO: maybe add an error id and respective enum
 ---@class AstInvalidNode : AstNode
 ---@field node_type '"invalid"'
----@field error_message string
+---@field error_code_inst ErrorCodeInstance
 ---@field tokens AstTokenNode[]|nil @ tokens that ended up being unused due to this syntax error
 
 ---@class AstStatement : AstNode
