@@ -11,6 +11,16 @@ local error_code_util = require("error_code_util")
 
 local fake_stat_elem = assert.do_not_compare_flag
 
+local test_source = "=(test)"
+
+local prevent_assert = nodes.new_invalid{
+  error_code_inst = error_code_util.new_error_code{
+    error_code = error_code_util.codes.incomplete_node,
+    source = test_source,
+    position = {line = 0, column = 0},
+  }
+}
+
 local fake_env_scope = nodes.new_env_scope{}
 -- Lua emits _ENV as if it's a local in the parent scope
 -- of the file. I'll probably change this one day to be
@@ -19,8 +29,6 @@ local fake_env_scope = nodes.new_env_scope{}
 local def = ast.create_local_def("_ENV", fake_env_scope)
 def.whole_block = true
 fake_env_scope.locals[1] = def
-
-local test_source = "=(test)"
 
 local fake_main = ast.append_stat(fake_env_scope, function(stat_elem)
   local main = nodes.new_functiondef{
@@ -491,9 +499,86 @@ do
         end
       )
 
-      -- TODO: fornum without first ','
-      -- TODO: fornum without 'do'
-      -- TODO: fornum without 'end'
+      add_stat_test(
+        "fornum without first ','",
+        "for i = true ;",
+        function()
+          local for_token = next_token_node()
+          local var_def, var_ref = ast.create_local(next_token(), fake_main, fake_stat_elem)
+          var_def.whole_block = true
+          local stat = nodes.new_fornum{
+            parent_scope = fake_main,
+            for_token = for_token,
+            var = var_ref,
+            locals = {var_def},
+            eq_token = next_token_node(),
+            start = new_true_node(next_token()),
+            first_comma_token = new_invalid(
+              error_code_util.codes.expected_token,
+              peek_next_token(), -- at ';'
+              {","}
+            ),
+            stop = prevent_assert,
+          }
+          append_stat(fake_main, stat)
+          append_empty(fake_main, next_token_node())
+        end
+      )
+
+      add_stat_test(
+        "fornum without 'do'",
+        "for i = true, true ;",
+        function()
+          local for_token = next_token_node()
+          local var_def, var_ref = ast.create_local(next_token(), fake_main, fake_stat_elem)
+          var_def.whole_block = true
+          local stat = nodes.new_fornum{
+            parent_scope = fake_main,
+            for_token = for_token,
+            var = var_ref,
+            locals = {var_def},
+            eq_token = next_token_node(),
+            start = new_true_node(next_token()),
+            first_comma_token = next_token_node(),
+            stop = new_true_node(next_token()),
+            do_token = new_invalid(
+              error_code_util.codes.expected_token,
+              peek_next_token(), -- at ';'
+              {"do"}
+            ),
+          }
+          append_stat(fake_main, stat)
+          append_empty(fake_main, next_token_node())
+        end
+      )
+
+      add_stat_test(
+        "fornum without 'end'",
+        "for i = true, true do ;",
+        function()
+          local for_token = next_token_node()
+          local var_def, var_ref = ast.create_local(next_token(), fake_main, fake_stat_elem)
+          var_def.whole_block = true
+          local stat = nodes.new_fornum{
+            parent_scope = fake_main,
+            for_token = for_token,
+            var = var_ref,
+            locals = {var_def},
+            eq_token = next_token_node(),
+            start = new_true_node(next_token()),
+            first_comma_token = next_token_node(),
+            stop = new_true_node(next_token()),
+            do_token = next_token_node(),
+          }
+          append_empty(stat, next_token_node())
+          stat.end_token = new_invalid(
+            error_code_util.codes.expected_closing_match,
+            peek_next_token(), -- at 'eof'
+            {"end", "for", "1:1"}
+          )
+          append_stat(fake_main, stat)
+        end
+      )
     end -- end fornum
   end -- end statements
 end

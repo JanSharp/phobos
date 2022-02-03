@@ -7,14 +7,9 @@ local error_code_util = require("error_code_util")
 ---a fake value to prevent assertions from failing during node creation
 ---since there are cases where not all required information is available yet,
 ---but a reference to the incomplete node is already needed. Like for scopes.\
----or just because it's easier to set a field later
-local prevent_assert = nodes.new_invalid{
-  error_code_inst = error_code_util.new_error_code{
-    error_code = error_code_util.codes.incomplete_node,
-    source = nil, -- set in the `parse` function
-    position = {line = 0, column = 0},
-  }
-}
+---or just because it's easier to set a field later\
+---**assigned in `parse`**
+local prevent_assert
 
 -- (outdated)
 -- these locals are kind of like registers in a register-machine if you are familiar with that concept
@@ -870,6 +865,8 @@ local function for_num(first_name, scope, stat_elem)
   -- TODO: check this when doing IL: the scope of this is wrong imo... but I'm not sure.
   local var_local, var_ref = ast.create_local(first_name, scope, stat_elem)
   var_local.whole_block = true
+  -- currently the only place calling for_num is for_stat which will only call
+  -- this function if the current token is '=', but we're handling invalid anyway
   local invalid = assert_next("=")
   local node = nodes.new_fornum{
     stat_elem = stat_elem,
@@ -881,13 +878,13 @@ local function for_num(first_name, scope, stat_elem)
     stop = prevent_assert,
   }
   if invalid then
-    return node
+    return node, true
   end
   node.start = expr(scope, stat_elem)
   invalid = assert_next(",")
   node.first_comma_token = invalid or new_token_node(true)
   if invalid then
-    return node
+    return node, true
   end
   node.stop = expr(scope, stat_elem)
   node.step = nil
@@ -900,7 +897,7 @@ local function for_num(first_name, scope, stat_elem)
   if not invalid then
     stat_list(node)
   end
-  return node
+  return node, not not invalid
 end
 
 --- Generic For Statement
@@ -927,7 +924,7 @@ local function for_list(first_name, scope, stat_elem)
       name_list[#name_list+1] = ident
       -- if it's an 'in' then basically just ignore the extra comma and continue with this node
       if token.token_type ~= "in" then
-        return node
+        return node, true
       end
     else
       node.locals[#node.locals+1], name_list[#name_list+1] = ast.create_local(ident, scope, stat_elem)
@@ -937,7 +934,7 @@ local function for_list(first_name, scope, stat_elem)
   local invalid = assert_next("in")
   node.in_token = invalid or new_token_node(true)
   if invalid then
-    return node
+    return node, true
   end
   node.exp_list, node.exp_list_comma_tokens = exp_list(scope, stat_elem)
   invalid = assert_next("do")
@@ -945,7 +942,7 @@ local function for_list(first_name, scope, stat_elem)
   if not invalid then
     stat_list(node)
   end
-  return node
+  return node, not not invalid
 end
 
 --- For Statement
@@ -962,10 +959,11 @@ local function for_stat(scope, stat_elem)
   end
   local t = token.token_type
   local node
+  local is_partially_invalid
   if t == "=" then
-    node = for_num(first_ident, scope, stat_elem)
+    node, is_partially_invalid = for_num(first_ident, scope, stat_elem)
   elseif t == "," or t == "in" then
-    node = for_list(first_ident, scope, stat_elem)
+    node, is_partially_invalid = for_list(first_ident, scope, stat_elem)
   else
     local invalid = syntax_error(new_error_code_inst{
       error_code = error_code_util.codes.expected_eq_comma_or_in,
@@ -975,7 +973,9 @@ local function for_stat(scope, stat_elem)
     return invalid
   end
   node.for_token = for_token
-  node.end_token = assert_match(for_token, "end") or new_token_node(true)
+  if not is_partially_invalid then
+    node.end_token = assert_match(for_token, "end") or new_token_node(true)
+  end
   return node
 end
 
@@ -1291,7 +1291,13 @@ end
 local tokenize = require("tokenize")
 local function parse(text,source_name)
   source = source_name
-  prevent_assert.error_code_inst.source = source_name
+  prevent_assert = nodes.new_invalid{
+    error_code_inst = error_code_util.new_error_code{
+      error_code = error_code_util.codes.incomplete_node,
+      source = source_name,
+      position = {line = 0, column = 0},
+    }
+  }
   invalid_nodes = {}
   local token_iter, index
   token_iter,token_iter_state,index = tokenize(text)
@@ -1353,7 +1359,7 @@ local function parse(text,source_name)
   local current_invalid_nodes = invalid_nodes
   invalid_nodes = nil
   source = nil
-  prevent_assert.error_code_inst.source = nil
+  prevent_assert = nil
   prev_token = nil
   token_iter_state = nil
   -- with token_iter_state cleared, next_token and peek_token
