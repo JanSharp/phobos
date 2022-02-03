@@ -7,6 +7,7 @@ local nodes = require("nodes")
 local parser = require("parser")
 local ill = require("indexed_linked_list")
 local ast = require("ast_util")
+local error_code_util = require("error_code_util")
 
 local fake_stat_elem = assert.do_not_compare_flag
 
@@ -19,11 +20,13 @@ local def = ast.create_local_def("_ENV", fake_env_scope)
 def.whole_block = true
 fake_env_scope.locals[1] = def
 
+local test_source = "=(test)"
+
 local fake_main = ast.append_stat(fake_env_scope, function(stat_elem)
   local main = nodes.new_functiondef{
     stat_elem = stat_elem,
     is_main = true,
-    source = "=(test)",
+    source = test_source,
     parent_scope = fake_env_scope,
     is_vararg = true,
   }
@@ -104,12 +107,15 @@ local serpent_opts = {
 
 local expected_invalid_nodes
 
----@param position Token
----@param tokens? AstTokenNode[]
-local function new_invalid(position, tokens)
+local function new_invalid(error_code, position, message_args, tokens)
   local invalid = nodes.new_invalid{
-    error_message = assert.do_not_compare_flag,
-    position = position,
+    error_code_inst = error_code_util.new_error_code{
+      error_code = error_code,
+      message_args = message_args,
+      source = test_source,
+      position = position,
+      location_str = assert.do_not_compare_flag, -- TODO: test the syntax_error location string logic
+    },
     tokens = tokens or {},
   }
   expected_invalid_nodes[#expected_invalid_nodes+1] = invalid
@@ -122,7 +128,7 @@ local function before_each()
 end
 
 local function test_stat(str)
-  local main, got_invalid_nodes = parser(str, "=(test)")
+  local main, got_invalid_nodes = parser(str, test_source)
   assert.contents_equals(
     fake_main,
     main,
@@ -252,7 +258,11 @@ do
             parent_scope = fake_main,
             if_token = next_token_node(),
             condition = new_true_node(next_token()),
-            then_token = new_invalid(peek_next_token()),
+            then_token = new_invalid(
+              error_code_util.codes.expected_token,
+              peek_next_token(),
+              {"then"}
+            ),
           }
           local stat = nodes.new_ifstat{
             ifs = {testblock},
@@ -271,14 +281,27 @@ do
               parent_scope = fake_main,
               if_token = next_token_node(),
               condition = new_true_node(next_token()),
-              then_token = new_invalid(peek_next_token()),
+              then_token = new_invalid(
+                error_code_util.codes.expected_token,
+                peek_next_token(),
+                {"then"}
+              ),
             }
             local stat = nodes.new_ifstat{
               ifs = {testblock},
             }
             append_stat(fake_main, stat)
-            append_stat(fake_main, new_invalid(peek_next_token()))
-            append_stat(fake_main, new_invalid(peek_next_token(), {next_token_node()}))
+            append_stat(fake_main, new_invalid(
+              error_code_util.codes.expected_token,
+              peek_next_token(),
+              {"eof"}
+            ))
+            append_stat(fake_main, new_invalid(
+              error_code_util.codes.unexpected_token,
+              peek_next_token(),
+              nil,
+              {next_token_node()} -- consuming `last_keyword`
+            ))
           end
         )
       end
@@ -291,7 +314,11 @@ do
         function()
           local stat = nodes.new_ifstat{
             ifs = {new_testblock()},
-            end_token = new_invalid(peek_next_token()),
+            end_token = new_invalid(
+              error_code_util.codes.expected_closing_match,
+              peek_next_token(),
+              {"end", "if", "1:1"}
+            ),
           }
           append_stat(fake_main, stat)
         end
@@ -323,7 +350,11 @@ do
             parent_scope = fake_main,
             while_token = next_token_node(),
             condition = new_true_node(next_token()),
-            do_token = new_invalid(peek_next_token()),
+            do_token = new_invalid(
+              error_code_util.codes.expected_token,
+              peek_next_token(),
+              {"do"}
+            ),
           }
           append_stat(fake_main, stat)
           append_empty(fake_main, next_token_node())
@@ -341,7 +372,11 @@ do
             do_token = next_token_node(),
           }
           append_empty(stat, next_token_node())
-          stat.end_token = new_invalid(peek_next_token())
+          stat.end_token = new_invalid(
+            error_code_util.codes.expected_closing_match,
+            peek_next_token(),
+            {"end", "while", "1:1"}
+          )
           append_stat(fake_main, stat)
         end
       )
@@ -363,7 +398,7 @@ do
       )
 
       add_stat_test(
-        "dostat",
+        "dostat without 'end'",
         "do ;",
         function()
           local stat = nodes.new_dostat{
@@ -371,7 +406,11 @@ do
             do_token = next_token_node(),
           }
           append_empty(stat, next_token_node())
-          stat.end_token = new_invalid(peek_next_token())
+          stat.end_token = new_invalid(
+            error_code_util.codes.expected_closing_match,
+            peek_next_token(),
+            {"end", "do", "1:1"}
+          )
           append_stat(fake_main, stat)
         end
       )
@@ -422,8 +461,18 @@ do
         "fornum with invalid ident",
         "for . ;",
         function()
-          append_stat(fake_main, new_invalid(tokens[2], {next_token_node()})) -- invalid for
-          append_stat(fake_main, new_invalid(peek_next_token(), {next_token_node()})) -- unexpected .
+          append_stat(fake_main, new_invalid(
+            error_code_util.codes.expected_ident,
+            tokens[2], -- at '.'
+            nil,
+            {next_token_node()} -- consuming 'for' token
+          ))
+          append_stat(fake_main, new_invalid(
+            error_code_util.codes.unexpected_token,
+            peek_next_token(), -- at '.'
+            nil,
+            {next_token_node()} -- consuming '.'
+          ))
           append_empty(fake_main, next_token_node())
         end
       )
@@ -432,14 +481,16 @@ do
         "fornum without '='",
         "for i ;",
         function()
-          append_stat(fake_main, new_invalid(tokens[2], {next_token_node()})) -- invalid for
-          append_stat(fake_main, new_invalid(tokens[3])) -- unexpected expression i
-          next_token()
+          append_stat(fake_main, new_invalid(
+            error_code_util.codes.expected_eq_comma_or_in,
+            tokens[3], -- at ';'
+            nil,
+            {next_token_node(), next_token_node()} -- consuming 'for' and 'i'
+          ))
           append_empty(fake_main, next_token_node())
         end
       )
 
-      -- TODO: fornum without '='
       -- TODO: fornum without first ','
       -- TODO: fornum without 'do'
       -- TODO: fornum without 'end'

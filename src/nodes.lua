@@ -178,15 +178,14 @@ do
   end
 end
 
----@class AstInvalidParams : AstPositionParams
----@field error_message string
+---@class AstInvalidParams
+---@field error_code_inst ErrorCodeInstance
 ---@field tokens AstTokenNode[]|nil
 
 ---@param params AstInvalidParams
 function nodes.new_invalid(params)
-  local node = new_node("invalid", params.position)
-  node.leading = nil -- doesn't use leading, period
-  node.error_message = assert_params_field(params, "error_message")
+  local node = new_node("invalid")
+  node.error_code_inst = assert_params_field(params, "error_code_inst")
   node.tokens = params.tokens or {}
   return node
 end

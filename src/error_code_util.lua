@@ -81,6 +81,11 @@ add_error_code(
 
 add_error_code(
   types.parser,
+  "incomplete_node",
+  "<incomplete due to prior syntax error in this node>"
+)
+add_error_code(
+  types.parser,
   "expected_ident",
   "<identifier> expected"
 )
@@ -142,6 +147,9 @@ add_error_code(
 ---@class ErrorCodeInstanceParams
 ---@field error_code ErrorCode
 ---@field message_args? string[]
+---a string describing where the error occurred.\
+---Will be concatenated as is to the end of the message if provided
+---@field location_str? string
 ---@field source string @ function source
 ---@field start_position SourcePosition @ inclusive
 ---@field stop_position SourcePosition @ inclusive
@@ -150,6 +158,9 @@ add_error_code(
 ---@class ErrorCodeInstance
 ---@field error_code ErrorCode
 ---@field message_args string[]
+---a string describing where the error occurred.\
+---Will be concatenated as is to the end of the message if provided
+---@field location_str? string
 ---@field source string @ function source
 ---@field start_position SourcePosition @ inclusive
 ---@field stop_position SourcePosition @ inclusive
@@ -167,6 +178,7 @@ local function new_error_code_inst(params)
   return {
     error_code = params.error_code,
     message_args = params.message_args or {},
+    location_str = params.location_str,
     source = params.source,
     start_position = get_position(params.start_position or params.position),
     stop_position = get_position(params.stop_position or params.position),

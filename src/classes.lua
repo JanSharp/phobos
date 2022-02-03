@@ -70,9 +70,8 @@
 ---if this was an invalid token from the tokenizer, these are the syntax errors
 ---@field error_code_insts ErrorCodeInstance[]|nil
 
----uses line and column (but not leading) (indicating the location of the error)\
----indicates syntax errors
----TODO: maybe add an error id and respective enum
+---the location of the error is defined in the ErrorCodeInstance\
+---indicates a syntax error
 ---@class AstInvalidNode : AstNode
 ---@field node_type '"invalid"'
 ---@field error_code_inst ErrorCodeInstance

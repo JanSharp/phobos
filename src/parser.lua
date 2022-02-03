@@ -2,13 +2,18 @@
 local ast = require("ast_util")
 local nodes = require("nodes")
 local invert = require("invert")
+local error_code_util = require("error_code_util")
 
 ---a fake value to prevent assertions from failing during node creation
 ---since there are cases where not all required information is available yet,
 ---but a reference to the incomplete node is already needed. Like for scopes.\
 ---or just because it's easier to set a field later
 local prevent_assert = nodes.new_invalid{
-  error_message = "<incomplete due to prior syntax error in this node>",
+  error_code_inst = error_code_util.new_error_code{
+    error_code = error_code_util.codes.incomplete_node,
+    source = nil, -- set in the `parse` function
+    position = {line = 0, column = 0},
+  }
 }
 
 -- (outdated)
@@ -19,6 +24,7 @@ local prevent_assert = nodes.new_invalid{
 -- this saves a lot of passing around of values through returns, parameters and locals
 -- without actually modifying the value at all
 
+local source
 local invalid_nodes
 
 local token_iter_state
@@ -57,12 +63,21 @@ local function new_token_node(use_prev, value)
   return nodes.new_token(use_prev and prev_token or token, value)
 end
 
+local function new_error_code_inst(params)
+  return error_code_util.new_error_code{
+    error_code = params.error_code,
+    message_args = params.message_args,
+    -- TODO: somehow figure out the stop_position of the token
+    position = token,
+  }
+end
+
 ---TODO: make the correct object in the error message the focus, the thing that is actually wrong.
 ---for example when an assertion of some token failed, it's most likely not that token that
 ---is missing (like a closing }), but rather the actual token that was encountered that was unexpected
 ---Throw a Syntax Error at the current location
----@param msg string Error message
-local function syntax_error(msg, location_descriptor)
+---@param error_code_inst ErrorCodeInstance
+local function syntax_error(error_code_inst, location_descriptor)
   if location_descriptor then
     location_descriptor = location_descriptor == "" and "" or " "..location_descriptor
   else
@@ -113,12 +128,10 @@ local function syntax_error(msg, location_descriptor)
   else
     location = location_descriptor.." '"..token.token_type.."'"
   end
-  local invalid = nodes.new_invalid{
-    error_message = msg..location
-      ..(token.token_type ~= "eof" and (" at "..token.line..":"..token.column) or ""),
-    position = token,
-    tokens = {},
-  }
+  location = location..(token.token_type ~= "eof" and (" at "..token.line..":"..token.column) or "")
+  error_code_inst.location_str = location
+  error_code_inst.source = source
+  local invalid = nodes.new_invalid{error_code_inst = error_code_inst}
   invalid_nodes[#invalid_nodes+1] = invalid
   return invalid
 end
@@ -127,7 +140,9 @@ end
 ---@return Token|AstInvalidNode ident_token
 local function assert_ident()
   if token.token_type ~= "ident" then
-    return syntax_error("<name> expected")
+    return syntax_error(new_error_code_inst{
+      error_code = error_code_util.codes.expected_ident,
+    })
   end
   local ident = token
   next_token()
@@ -151,7 +166,10 @@ end
 ---@param tok string
 local function assert_next(tok)
   if not test_next(tok) then
-    return syntax_error("'" .. tok .. "' expected")
+    return syntax_error(new_error_code_inst{
+      error_code = error_code_util.codes.expected_token,
+      message_args = {tok},
+    })
   end
 end
 
@@ -160,9 +178,10 @@ end
 ---@param close string
 local function assert_match(open_token, close)
   if not test_next(close) then
-    return syntax_error("'"..close.."' expected (to close '"..open_token.value
-      .."' at "..open_token.line..":"..open_token.column..")"
-    )
+    return syntax_error(new_error_code_inst{
+      error_code = error_code_util.codes.expected_closing_match,
+      message_args = {close, open_token.value, open_token.line..":"..open_token.column},
+    })
   end
 end
 
@@ -319,7 +338,9 @@ local function par_list(scope, stat_elem)
       next_token()
       return params
     else
-      params[#params+1] = syntax_error("<name> or '...' expected")
+      params[#params+1] = syntax_error(new_error_code_inst{
+        error_code = error_code_util.codes.expected_ident_or_vararg,
+      })
       return params
     end
     if test_next(",") then
@@ -347,7 +368,7 @@ local function functiondef(function_token, scope, is_method, stat_elem)
   local node = nodes.new_functiondef{
     stat_elem = stat_elem,
     parent_scope = scope,
-    source = parent_functiondef.source,
+    source = source,
     is_method = is_method,
     param_comma_tokens = {},
   }
@@ -427,7 +448,9 @@ local function func_args(node, scope, stat_elem)
       return {(constructor(scope, stat_elem))}, {}
     end,
   })[token.token_type] or function()
-    return {syntax_error("Function arguments expected")}
+    return {syntax_error(new_error_code_inst{
+      error_code = error_code_util.codes.expected_func_args,
+    })}
   end)()
 end
 
@@ -462,7 +485,9 @@ local function primary_exp(scope, stat_elem)
     if token.token_type == "invalid" then
       return invalid_nodes[#invalid_nodes]
     else
-      local invalid = syntax_error("Unexpected symbol", "")
+      local invalid = syntax_error(new_error_code_inst{
+        error_code = error_code_util.codes.unexpected_token,
+      }, "")
       -- consume the invalid token, it would infinitely loop otherwise
       invalid.tokens[#invalid.tokens+1] = new_token_node()
       next_token()
@@ -607,7 +632,9 @@ local simple_lut = {
       scope = scope.parent_scope
     end
     if not scope.is_vararg then
-      return syntax_error("Cannot use '...' outside a vararg function", "at")
+      return syntax_error(new_error_code_inst{
+        error_code = error_code_util.codes.vararg_outside_vararg_func,
+      }, "at")
     end
     return nodes.new_vararg{
       stat_elem = stat_elem,
@@ -940,8 +967,11 @@ local function for_stat(scope, stat_elem)
   elseif t == "," or t == "in" then
     node = for_list(first_ident, scope, stat_elem)
   else
-    local invalid = syntax_error("'=', ',' or 'in' expected")
+    local invalid = syntax_error(new_error_code_inst{
+      error_code = error_code_util.codes.expected_eq_comma_or_in,
+    })
     invalid.tokens[#invalid.tokens+1] = for_token
+    invalid.tokens[#invalid.tokens+1] = nodes.new_token(first_ident)
     return invalid
   end
   node.for_token = for_token
@@ -1111,7 +1141,9 @@ local function expr_stat(scope, stat_elem)
       return first_exp
     else
       -- TODO: store data about the expression (`first_exp`) that caused this error
-      return syntax_error("Unexpected expression")
+      return syntax_error(new_error_code_inst{
+        error_code = error_code_util.codes.unexpected_expression,
+      })
     end
   end
 end
@@ -1219,7 +1251,7 @@ function statement(scope, stat_elem)
 end
 
 
-local function main_func(chunk_name)
+local function main_func()
   local env_scope = nodes.new_env_scope{}
   -- Lua emits _ENV as if it's a local in the parent scope
   -- of the file. I'll probably change this one day to be
@@ -1233,7 +1265,7 @@ local function main_func(chunk_name)
     local main = nodes.new_functiondef{
       stat_elem = stat_elem,
       is_main = true,
-      source = chunk_name,
+      source = source,
       parent_scope = env_scope,
       is_vararg = true,
     }
@@ -1258,6 +1290,8 @@ end
 
 local tokenize = require("tokenize")
 local function parse(text,source_name)
+  source = source_name
+  prevent_assert.error_code_inst.source = source_name
   invalid_nodes = {}
   local token_iter, index
   token_iter,token_iter_state,index = tokenize(text)
@@ -1291,7 +1325,7 @@ local function parse(text,source_name)
         token.leading = leading
         if token.token_type == "invalid" then
           for _, error_code_inst in ipairs(token.error_code_insts) do
-            syntax_error("-- TODO")
+            syntax_error(error_code_inst)
           end
         end
         break
@@ -1311,13 +1345,15 @@ local function parse(text,source_name)
   end
 
   next_token()
-  local main = main_func(source_name)
+  local main = main_func()
 
   -- have to reset token, otherwise the next parse call will think its already reached the end
   token = nil
   -- clear these references to not hold on to memory
   local current_invalid_nodes = invalid_nodes
   invalid_nodes = nil
+  source = nil
+  prevent_assert.error_code_inst.source = nil
   prev_token = nil
   token_iter_state = nil
   -- with token_iter_state cleared, next_token and peek_token
