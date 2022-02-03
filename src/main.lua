@@ -11,6 +11,7 @@ local build_profile_arg_provider = require("build_profile_arg_provider")
 arg_parser.register_type(build_profile_arg_provider.arg_parser_build_profile_type_def)
 local io_util = require("io_util")
 local constants = require("constants")
+local error_code_util = require("error_code_util")
 
 local args = arg_parser.parse_and_print_on_error_or_help({...}, {
   options = {
@@ -366,7 +367,7 @@ local function compile(filename, source_name, ignore_syntax_errors, accept_bytec
     -- build error message
     local msgs = {}
     for i, invalid_node in ipairs(invalid_nodes) do
-      msgs[i] = invalid_node.error_message
+      msgs[i] = error_code_util.get_message(invalid_node.error_code_inst)
     end
     local error_count = #invalid_nodes
     syntax_error_count = syntax_error_count + error_count

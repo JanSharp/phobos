@@ -87,7 +87,7 @@ add_error_code(
 add_error_code(
   types.parser,
   "expected_ident",
-  "<identifier> expected"
+  "<name> expected"
 )
 add_error_code(
   types.parser,
@@ -102,7 +102,7 @@ add_error_code(
 add_error_code(
   types.parser,
   "expected_ident_or_vararg",
-  "<identifier> or '...' expected"
+  "<name> or '...' expected"
 )
 add_error_code(
   types.parser,
@@ -185,9 +185,17 @@ local function new_error_code_inst(params)
   }
 end
 
+local function get_message(error_code_inst)
+  return string.format(
+    error_code_inst.error_code.message,
+    table.unpack(error_code_inst.message_args)
+  )..(error_code_inst.location_str or "")
+end
+
 return {
   types = types,
   codes = error_codes,
   codes_by_id = error_codes_by_id,
   new_error_code = new_error_code_inst,
+  get_message = get_message,
 }

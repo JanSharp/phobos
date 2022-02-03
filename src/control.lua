@@ -11,6 +11,7 @@ local fold_const = require("optimize.fold_const")
 local fold_control_statements = require("optimize.fold_control_statements")
 local compiler = require("compiler")
 local dump = require("dump")
+local error_code_util = require("error_code_util")
 
 ---cSpell:ignore lualib
 local util = require("__core__.lualib.util")
@@ -70,7 +71,7 @@ local function phobos_command(args, silent, measured)
     local max_errors_shown = 8
     local msgs = {}
     for i = 1, math.min(#invalid_nodes, max_errors_shown) do
-      msgs[i] = invalid_nodes[i].error_message
+      msgs[i] = error_code_util.get_message(invalid_nodes[i].error_code_inst)
     end
     print_msg("Cannot execute command. "..(#invalid_nodes).." syntax errors"
       ..(#invalid_nodes > max_errors_shown and (", showing first "..max_errors_shown) or "")

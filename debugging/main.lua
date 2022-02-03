@@ -5,6 +5,7 @@ local disassembler = require("disassembler")
 local lfs = require("lfs")
 local Path = require("lib.LuaPath.path")
 Path.use_forward_slash_as_main_separator_on_windows()
+local error_code_util = require("error_code_util")
 
 local unsafe = true
 local print_progress = true
@@ -205,7 +206,7 @@ local function compile(filename)
     if invalid_nodes[1] then
       local msgs = {}
       for i, invalid_node in ipairs(invalid_nodes) do
-        msgs[i] = invalid_node.error_message
+        msgs[i] = error_code_util.get_message(invalid_node.error_code_inst)
       end
       error((#invalid_nodes).." syntax errors:\n"..table.concat(msgs, "\n"))
     end
