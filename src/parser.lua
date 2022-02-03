@@ -894,10 +894,11 @@ local function for_num(first_name, scope, stat_elem)
   end
   invalid = assert_next("do")
   node.do_token = invalid or new_token_node(true)
-  if not invalid then
-    stat_list(node)
+  if invalid then
+    return node, true
   end
-  return node, not not invalid
+  stat_list(node)
+  return node, false
 end
 
 --- Generic For Statement
@@ -939,10 +940,11 @@ local function for_list(first_name, scope, stat_elem)
   node.exp_list, node.exp_list_comma_tokens = exp_list(scope, stat_elem)
   invalid = assert_next("do")
   node.do_token = invalid or new_token_node(true)
-  if not invalid then
-    stat_list(node)
+  if invalid then
+    return node, true
   end
-  return node, not not invalid
+  stat_list(node)
+  return node, false
 end
 
 --- For Statement

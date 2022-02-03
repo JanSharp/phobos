@@ -424,6 +424,42 @@ do
       )
     end -- end dostat
 
+    do -- fornum and or forlist
+      add_stat_test(
+        "fornum/forlist with invalid ident",
+        "for . ;",
+        function()
+          append_stat(fake_main, new_invalid(
+            error_code_util.codes.expected_ident,
+            tokens[2], -- at '.'
+            nil,
+            {next_token_node()} -- consuming 'for' token
+          ))
+          append_stat(fake_main, new_invalid(
+            error_code_util.codes.unexpected_token,
+            peek_next_token(), -- at '.'
+            nil,
+            {next_token_node()} -- consuming '.'
+          ))
+          append_empty(fake_main, next_token_node())
+        end
+      )
+
+      add_stat_test(
+        "fornum without '=' and forlist without ',' or 'in'",
+        "for i ;",
+        function()
+          append_stat(fake_main, new_invalid(
+            error_code_util.codes.expected_eq_comma_or_in,
+            tokens[3], -- at ';'
+            nil,
+            {next_token_node(), next_token_node()} -- consuming 'for' and 'i'
+          ))
+          append_empty(fake_main, next_token_node())
+        end
+      )
+    end -- end fornum and or forlist
+
     do -- fornum
       local function add_fornum_stat(has_step)
         local for_token = next_token_node()
@@ -462,40 +498,6 @@ do
         "for i = true, true, true do ; end",
         function()
           add_fornum_stat(true)
-        end
-      )
-
-      add_stat_test(
-        "fornum with invalid ident",
-        "for . ;",
-        function()
-          append_stat(fake_main, new_invalid(
-            error_code_util.codes.expected_ident,
-            tokens[2], -- at '.'
-            nil,
-            {next_token_node()} -- consuming 'for' token
-          ))
-          append_stat(fake_main, new_invalid(
-            error_code_util.codes.unexpected_token,
-            peek_next_token(), -- at '.'
-            nil,
-            {next_token_node()} -- consuming '.'
-          ))
-          append_empty(fake_main, next_token_node())
-        end
-      )
-
-      add_stat_test(
-        "fornum without '='",
-        "for i ;",
-        function()
-          append_stat(fake_main, new_invalid(
-            error_code_util.codes.expected_eq_comma_or_in,
-            tokens[3], -- at ';'
-            nil,
-            {next_token_node(), next_token_node()} -- consuming 'for' and 'i'
-          ))
-          append_empty(fake_main, next_token_node())
         end
       )
 
@@ -580,5 +582,179 @@ do
         end
       )
     end -- end fornum
+
+    do -- forlist
+      add_stat_test(
+        "forlist with 1 name",
+        "for foo in true do ; end",
+        function()
+          local name_def, name_ref = ast.create_local(tokens[2], fake_main, fake_stat_elem)
+          name_def.whole_block = true
+          local stat = nodes.new_forlist{
+            parent_scope = fake_main,
+            for_token = next_token_node(),
+            name_list = {name_ref},
+            comma_tokens = {},
+            locals = {name_def},
+            -- skip 1 token
+            in_token = (function() next_token() return next_token_node() end)(),
+            exp_list = {new_true_node(next_token())},
+            -- both `{}` and `nil` are valid
+            exp_list_comma_tokens = assert.do_not_compare_flag,
+            do_token = next_token_node(),
+          }
+          append_empty(stat, next_token_node())
+          stat.end_token = next_token_node()
+          append_stat(fake_main, stat)
+        end
+      )
+
+      local function add_forlist_with_x_names_test(name_count, names_str)
+        add_stat_test(
+          "forlist with "..name_count.." names",
+          "for "..names_str.." in true do ; end",
+          function()
+            local stat = nodes.new_forlist{
+              parent_scope = fake_main,
+              for_token = next_token_node(),
+              comma_tokens = {},
+              exp_list = {prevent_assert},
+              -- both `{}` and `nil` are valid
+              exp_list_comma_tokens = assert.do_not_compare_flag,
+            }
+            for i = 1, name_count do
+              if i ~= 1 then
+                stat.comma_tokens[i - 1] = next_token_node()
+              end
+              local name_def, name_ref = ast.create_local(next_token(), fake_main, fake_stat_elem)
+              name_def.whole_block = true
+              stat.name_list[i] = name_ref
+              stat.locals[i] = name_def
+            end
+            stat.in_token = next_token_node()
+            stat.exp_list[1] = new_true_node(next_token())
+            stat.do_token = next_token_node()
+            append_empty(stat, next_token_node())
+            stat.end_token = next_token_node()
+            append_stat(fake_main, stat)
+          end
+        )
+      end
+      add_forlist_with_x_names_test(2, "foo, bar")
+      add_forlist_with_x_names_test(3, "foo, bar, baz")
+
+      add_stat_test(
+        "forlist with invalid name list",
+        "for foo, ;",
+        function()
+          local stat = nodes.new_forlist{
+            parent_scope = fake_main,
+            for_token = next_token_node(),
+            comma_tokens = {},
+            exp_list = {prevent_assert},
+            -- both `{}` and `nil` are valid
+            exp_list_comma_tokens = assert.do_not_compare_flag,
+          }
+          local name_def, name_ref = ast.create_local(next_token(), fake_main, fake_stat_elem)
+          name_def.whole_block = true
+          stat.name_list[1] = name_ref
+          stat.locals[1] = name_def
+          stat.comma_tokens[1] = next_token_node()
+          stat.name_list[2] = new_invalid(
+            error_code_util.codes.expected_ident,
+            peek_next_token() -- at ';'
+          )
+          append_stat(fake_main, stat)
+          append_empty(fake_main, next_token_node())
+        end
+      )
+
+      add_stat_test(
+        "forlist with invalid name list, but continuing with 'in'",
+        "for foo, in true do ; end",
+        function()
+          local stat = nodes.new_forlist{
+            parent_scope = fake_main,
+            for_token = next_token_node(),
+            comma_tokens = {},
+            exp_list = {prevent_assert},
+            -- both `{}` and `nil` are valid
+            exp_list_comma_tokens = assert.do_not_compare_flag,
+          }
+          local name_def, name_ref = ast.create_local(next_token(), fake_main, fake_stat_elem)
+          name_def.whole_block = true
+          stat.name_list[1] = name_ref
+          stat.locals[1] = name_def
+          stat.comma_tokens[1] = next_token_node()
+          stat.name_list[2] = new_invalid(
+            error_code_util.codes.expected_ident,
+            peek_next_token() -- at 'in'
+          )
+          stat.in_token = next_token_node()
+          stat.exp_list[1] = new_true_node(next_token())
+          stat.do_token = next_token_node()
+          append_empty(stat, next_token_node())
+          stat.end_token = next_token_node()
+          append_stat(fake_main, stat)
+        end
+      )
+
+      add_stat_test(
+        "forlist without 'do'",
+        "for foo in true ;",
+        function()
+          local stat = nodes.new_forlist{
+            parent_scope = fake_main,
+            for_token = next_token_node(),
+            comma_tokens = {},
+            exp_list = {prevent_assert},
+            -- both `{}` and `nil` are valid
+            exp_list_comma_tokens = assert.do_not_compare_flag,
+          }
+          local name_def, name_ref = ast.create_local(next_token(), fake_main, fake_stat_elem)
+          name_def.whole_block = true
+          stat.name_list[1] = name_ref
+          stat.locals[1] = name_def
+          stat.in_token = next_token_node()
+          stat.exp_list[1] = new_true_node(next_token())
+          stat.do_token = new_invalid(
+            error_code_util.codes.expected_token,
+            peek_next_token(), -- at ';'
+            {"do"}
+          )
+          append_stat(fake_main, stat)
+          append_empty(fake_main, next_token_node())
+        end
+      )
+
+      add_stat_test(
+        "forlist without 'do'",
+        "for foo in true do ;",
+        function()
+          local stat = nodes.new_forlist{
+            parent_scope = fake_main,
+            for_token = next_token_node(),
+            comma_tokens = {},
+            exp_list = {prevent_assert},
+            -- both `{}` and `nil` are valid
+            exp_list_comma_tokens = assert.do_not_compare_flag,
+          }
+          local name_def, name_ref = ast.create_local(next_token(), fake_main, fake_stat_elem)
+          name_def.whole_block = true
+          stat.name_list[1] = name_ref
+          stat.locals[1] = name_def
+          stat.in_token = next_token_node()
+          stat.exp_list[1] = new_true_node(next_token())
+          stat.do_token = next_token_node()
+          append_empty(stat, next_token_node())
+          stat.end_token = new_invalid(
+            error_code_util.codes.expected_closing_match,
+            peek_next_token(), -- at ';'
+            {"end", "for", "1:1"}
+          )
+          append_stat(fake_main, stat)
+        end
+      )
+    end -- end forlist
   end -- end statements
 end
