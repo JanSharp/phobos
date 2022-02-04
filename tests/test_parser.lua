@@ -955,5 +955,66 @@ do
         end
       )
     end -- end funcstat
+
+    do -- localfunc
+      add_stat_test(
+        "localfunc",
+        "local function foo() ; end",
+        function()
+          local local_token = next_token_node()
+          local function_token = next_token_node()
+          local name_def, name_ref = ast.create_local(next_token(), fake_main, fake_stat_elem)
+          fake_main.locals[1] = name_def
+          local stat = nodes.new_localfunc{
+            local_token = local_token,
+            name = name_ref,
+            func_def = nodes.new_functiondef{
+              parent_scope = fake_main,
+              source = test_source,
+              function_token = function_token,
+              open_paren_token = next_token_node(),
+              close_paren_token = next_token_node(),
+              -- technically both `{}` and `nil` are valid
+              param_comma_tokens = {},
+            }
+          }
+          fake_main.func_protos[1] = stat.func_def
+          name_def.start_at = stat
+          name_def.start_offset = 0
+          append_empty(stat.func_def, next_token_node())
+          stat.func_def.end_token = next_token_node()
+          append_stat(fake_main, stat)
+        end
+      )
+
+      add_stat_test(
+        "localfunc without ident",
+        "local function() ; end",
+        function()
+          local local_token = next_token_node()
+          local function_token = next_token_node()
+          local stat = nodes.new_localfunc{
+            local_token = local_token,
+            name = new_invalid(
+              error_code_util.codes.expected_ident,
+              peek_next_token() -- at ';'
+            ),
+            func_def = nodes.new_functiondef{
+              parent_scope = fake_main,
+              source = test_source,
+              function_token = function_token,
+              open_paren_token = next_token_node(),
+              close_paren_token = next_token_node(),
+              -- technically both `{}` and `nil` are valid
+              param_comma_tokens = {},
+            }
+          }
+          fake_main.func_protos[1] = stat.func_def
+          append_empty(stat.func_def, next_token_node())
+          stat.func_def.end_token = next_token_node()
+          append_stat(fake_main, stat)
+        end
+      )
+    end -- end localfunc
   end -- end statements
 end
