@@ -956,6 +956,115 @@ do
       )
     end -- end funcstat
 
+    do -- localstat
+      local function add_localstat_with_x_names_test(name_count, names_str)
+        add_stat_test(
+          "localstat with "..name_count.." name"..(name_count == 1 and "" or "s"),
+          "local "..names_str..";",
+          function()
+            local local_token = next_token_node()
+            local lhs = {}
+            -- technically both `{}` and `nil` are valid (if name_count == 1)
+            local lhs_comma_tokens = {}
+            for i = 1, name_count do
+              if i ~= 1 then
+                lhs_comma_tokens[i - 1] = next_token_node()
+              end
+              local name_def, name_ref = ast.create_local(next_token(), fake_main, fake_stat_elem)
+              fake_main.locals[i] = name_def
+              lhs[i] = name_ref
+            end
+            local stat = nodes.new_localstat{
+              local_token = local_token,
+              lhs = lhs,
+              lhs_comma_tokens = lhs_comma_tokens,
+              -- no rhs, this should be nil
+              rhs_comma_tokens = nil,
+            }
+            for _, ref in ipairs(stat.lhs) do
+              ref.reference_def.start_at = stat
+              ref.reference_def.start_offset = 1
+            end
+            append_stat(fake_main, stat)
+            append_empty(fake_main, next_token_node())
+          end
+        )
+      end
+      add_localstat_with_x_names_test(1, "foo")
+      add_localstat_with_x_names_test(2, "foo, bar")
+      add_localstat_with_x_names_test(3, "foo, bar, baz")
+
+      add_stat_test(
+        "localstat with rhs",
+        "local foo = true, true;",
+        function()
+          local local_token = next_token_node()
+          local name_def, name_ref = ast.create_local(next_token(), fake_main, fake_stat_elem)
+          fake_main.locals[1] = name_def
+          local stat = nodes.new_localstat{
+            local_token = local_token,
+            lhs = {name_ref},
+            -- technically both `{}` and `nil` are valid
+            lhs_comma_tokens = {},
+            eq_token = next_token_node(),
+            rhs = {new_true_node(next_token())},
+            rhs_comma_tokens = {next_token_node()},
+          }
+          name_def.start_at = stat
+          name_def.start_offset = 1
+          stat.rhs[2] = new_true_node(next_token())
+          append_stat(fake_main, stat)
+          append_empty(fake_main, next_token_node())
+        end
+      )
+
+      add_stat_test(
+        "localstat without ident",
+        "local ;",
+        function()
+          local stat = nodes.new_localstat{
+            local_token = next_token_node(),
+            lhs = {new_invalid(
+              error_code_util.codes.expected_ident,
+              peek_next_token() -- at ';'
+            )},
+            -- technically both `{}` and `nil` are valid
+            lhs_comma_tokens = {},
+            -- no rhs, this should be nil
+            rhs_comma_tokens = nil,
+          }
+          append_stat(fake_main, stat)
+          append_empty(fake_main, next_token_node())
+        end
+      )
+
+      add_stat_test(
+        "localstat with invalid ident but continuing with '='",
+        "local foo, = true;",
+        function()
+          local local_token = next_token_node()
+          local foo_def, foo_ref = ast.create_local(next_token(), fake_main, fake_stat_elem)
+          fake_main.locals[1] = foo_def
+          local stat = nodes.new_localstat{
+            local_token = local_token,
+            lhs = {foo_ref, new_invalid(
+              error_code_util.codes.expected_ident,
+              tokens[4] -- at '='
+            )},
+            lhs_comma_tokens = {next_token_node()},
+            eq_token = next_token_node(),
+            rhs = {new_true_node(next_token())},
+            -- technically both `{}` and `nil` are valid
+            rhs_comma_tokens = {},
+          }
+          foo_def.start_at = stat
+          foo_def.start_offset = 1
+          append_stat(fake_main, stat)
+          append_empty(fake_main, next_token_node())
+        end
+      )
+    end -- end localstat
+
     do -- localfunc
       add_stat_test(
         "localfunc",

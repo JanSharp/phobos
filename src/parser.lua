@@ -1080,16 +1080,19 @@ local function local_stat(local_token, scope, stat_elem)
     local ident = assert_ident()
     if is_invalid(ident) then
       node.lhs[#node.lhs+1] = ident
+      break
     else
       local_defs[#local_defs+1], node.lhs[#node.lhs+1] = ast.create_local(ident, scope, stat_elem)
       local_defs[#local_defs].start_at = node
       local_defs[#local_defs].start_offset = 1
     end
   until not test_comma()
+  -- just continue even if it was invalid, because an '=' token would just be another syntax error
   if test_next("=") then
     node.eq_token = new_token_node(true)
     node.rhs, node.rhs_comma_tokens = exp_list(scope, stat_elem)
   end
+  -- add the locals after the expression list has been parsed
   for _, name_local in ipairs(local_defs) do
     scope.locals[#scope.locals+1] = name_local
   end
