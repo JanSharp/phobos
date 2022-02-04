@@ -9,10 +9,7 @@ local ill = require("indexed_linked_list")
 local ast = require("ast_util")
 local error_code_util = require("error_code_util")
 
-local fake_stat_elem = assert.do_not_compare_flag
-
 local test_source = "=(test)"
-
 local prevent_assert = nodes.new_invalid{
   error_code_inst = error_code_util.new_error_code{
     error_code = error_code_util.codes.incomplete_node,
@@ -20,27 +17,31 @@ local prevent_assert = nodes.new_invalid{
     position = {line = 0, column = 0},
   }
 }
+local fake_main
+local fake_stat_elem = assert.do_not_compare_flag
 
-local fake_env_scope = nodes.new_env_scope{}
--- Lua emits _ENV as if it's a local in the parent scope
--- of the file. I'll probably change this one day to be
--- the first upval of the parent scope, since load()
--- clobbers the first upval anyway to be the new _ENV value
-local def = ast.create_local_def("_ENV", fake_env_scope)
-def.whole_block = true
-fake_env_scope.locals[1] = def
+local function make_fake_main()
+  local fake_env_scope = nodes.new_env_scope{}
+  -- Lua emits _ENV as if it's a local in the parent scope
+  -- of the file. I'll probably change this one day to be
+  -- the first upval of the parent scope, since load()
+  -- clobbers the first upval anyway to be the new _ENV value
+  local def = ast.create_local_def("_ENV", fake_env_scope)
+  def.whole_block = true
+  fake_env_scope.locals[1] = def
 
-local fake_main = ast.append_stat(fake_env_scope, function(stat_elem)
-  local main = nodes.new_functiondef{
-    stat_elem = stat_elem,
-    is_main = true,
-    source = test_source,
-    parent_scope = fake_env_scope,
-    is_vararg = true,
-  }
-  main.eof_token = nodes.new_token({token_type = "eof", leading = {}})
-  return main
-end)
+  fake_main = ast.append_stat(fake_env_scope, function(stat_elem)
+    local main = nodes.new_functiondef{
+      stat_elem = stat_elem,
+      is_main = true,
+      source = test_source,
+      parent_scope = fake_env_scope,
+      is_vararg = true,
+    }
+    main.eof_token = nodes.new_token({token_type = "eof", leading = {}})
+    return main
+  end)
+end
 
 local function get_tokens(str)
   local leading = {}
@@ -131,11 +132,12 @@ local function new_invalid(error_code, position, message_args, tokens)
 end
 
 local function before_each()
-  ill.clear(fake_main.body)
+  make_fake_main()
   expected_invalid_nodes = {}
 end
 
 local function test_stat(str)
+  assert.assert(fake_main, "must run make_fake_main before each test")
   local main, got_invalid_nodes = parser(str, test_source)
   assert.contents_equals(
     fake_main,
@@ -157,6 +159,7 @@ local function test_stat(str)
       serpent_opts = serpent_opts,
     }
   )
+  fake_main = nil
 end
 
 do
@@ -599,8 +602,8 @@ do
             -- skip 1 token
             in_token = (function() next_token() return next_token_node() end)(),
             exp_list = {new_true_node(next_token())},
-            -- both `{}` and `nil` are valid
-            exp_list_comma_tokens = assert.do_not_compare_flag,
+            -- technically both `{}` and `nil` are valid
+            exp_list_comma_tokens = {},
             do_token = next_token_node(),
           }
           append_empty(stat, next_token_node())
@@ -619,8 +622,8 @@ do
               for_token = next_token_node(),
               comma_tokens = {},
               exp_list = {prevent_assert},
-              -- both `{}` and `nil` are valid
-              exp_list_comma_tokens = assert.do_not_compare_flag,
+              -- technically both `{}` and `nil` are valid
+              exp_list_comma_tokens = {},
             }
             for i = 1, name_count do
               if i ~= 1 then
@@ -652,8 +655,8 @@ do
             for_token = next_token_node(),
             comma_tokens = {},
             exp_list = {prevent_assert},
-            -- both `{}` and `nil` are valid
-            exp_list_comma_tokens = assert.do_not_compare_flag,
+            -- technically both `{}` and `nil` are valid
+            exp_list_comma_tokens = nil,
           }
           local name_def, name_ref = ast.create_local(next_token(), fake_main, fake_stat_elem)
           name_def.whole_block = true
@@ -678,8 +681,8 @@ do
             for_token = next_token_node(),
             comma_tokens = {},
             exp_list = {prevent_assert},
-            -- both `{}` and `nil` are valid
-            exp_list_comma_tokens = assert.do_not_compare_flag,
+            -- technically both `{}` and `nil` are valid
+            exp_list_comma_tokens = {},
           }
           local name_def, name_ref = ast.create_local(next_token(), fake_main, fake_stat_elem)
           name_def.whole_block = true
@@ -708,8 +711,8 @@ do
             for_token = next_token_node(),
             comma_tokens = {},
             exp_list = {prevent_assert},
-            -- both `{}` and `nil` are valid
-            exp_list_comma_tokens = assert.do_not_compare_flag,
+            -- technically both `{}` and `nil` are valid
+            exp_list_comma_tokens = {},
           }
           local name_def, name_ref = ast.create_local(next_token(), fake_main, fake_stat_elem)
           name_def.whole_block = true
@@ -736,8 +739,8 @@ do
             for_token = next_token_node(),
             comma_tokens = {},
             exp_list = {prevent_assert},
-            -- both `{}` and `nil` are valid
-            exp_list_comma_tokens = assert.do_not_compare_flag,
+            -- technically both `{}` and `nil` are valid
+            exp_list_comma_tokens = {},
           }
           local name_def, name_ref = ast.create_local(next_token(), fake_main, fake_stat_elem)
           name_def.whole_block = true
@@ -756,5 +759,201 @@ do
         end
       )
     end -- end forlist
+
+    do -- repeatstat
+      add_stat_test(
+        "repeatstat",
+        "repeat ; until true",
+        function()
+          local stat = nodes.new_repeatstat{
+            parent_scope = fake_main,
+            repeat_token = next_token_node(),
+            condition = prevent_assert,
+          }
+          append_empty(stat, next_token_node())
+          stat.until_token = next_token_node()
+          stat.condition = new_true_node(next_token())
+          append_stat(fake_main, stat)
+        end
+      )
+
+      add_stat_test(
+        "repeatstat without 'until'",
+        "repeat ;",
+        function()
+          local stat = nodes.new_repeatstat{
+            parent_scope = fake_main,
+            repeat_token = next_token_node(),
+            condition = prevent_assert,
+          }
+          append_empty(stat, next_token_node())
+          stat.until_token = new_invalid(
+            error_code_util.codes.expected_closing_match,
+            peek_next_token(), -- at 'eof'
+            {"until", "repeat", "1:1"}
+          )
+          append_stat(fake_main, stat)
+        end
+      )
+    end -- end repeatstat
+
+    do -- funcstat
+      add_stat_test(
+        "funcstat",
+        "function foo() ; end",
+        function()
+          local function_token = next_token_node()
+          local stat = nodes.new_funcstat{
+            name = ast.get_ref(fake_main, fake_stat_elem, "foo", next_token()),
+            func_def = nodes.new_functiondef{
+              parent_scope = fake_main,
+              source = test_source,
+              function_token = function_token,
+              open_paren_token = next_token_node(),
+              close_paren_token = next_token_node(),
+              -- technically both `{}` and `nil` are valid
+              param_comma_tokens = {},
+            },
+          }
+          fake_main.func_protos[1] = stat.func_def
+          append_empty(stat.func_def, next_token_node())
+          stat.func_def.end_token = next_token_node()
+          append_stat(fake_main, stat)
+        end
+      )
+
+      local function index_into(ex)
+        return nodes.new_index{
+          ex = ex,
+          dot_token = next_token_node(),
+          suffix = nodes.new_string{
+            position = peek_next_token(),
+            value = next_token().value,
+            src_is_ident = true,
+          },
+        }
+      end
+
+      add_stat_test(
+        "funcstat with 'foo.bar.baz' name",
+        "function foo.bar.baz() ; end",
+        function()
+          local function_token = next_token_node()
+          local foo = ast.get_ref(fake_main, fake_stat_elem, "foo", next_token())
+          local bar = index_into(foo)
+          local baz = index_into(bar)
+          local stat = nodes.new_funcstat{
+            name = baz,
+            func_def = nodes.new_functiondef{
+              parent_scope = fake_main,
+              source = test_source,
+              function_token = function_token,
+              open_paren_token = next_token_node(),
+              close_paren_token = next_token_node(),
+              -- technically both `{}` and `nil` are valid
+              param_comma_tokens = {},
+            },
+          }
+          fake_main.func_protos[1] = stat.func_def
+          append_empty(stat.func_def, next_token_node())
+          stat.func_def.end_token = next_token_node()
+          append_stat(fake_main, stat)
+        end
+      )
+
+      add_stat_test(
+        "funcstat with 'foo:bar' name (method)",
+        "function foo:bar() ; end",
+        function()
+          local function_token = next_token_node()
+          local foo = ast.get_ref(fake_main, fake_stat_elem, "foo", next_token())
+          local bar = index_into(foo)
+          local stat = nodes.new_funcstat{
+            name = bar,
+            func_def = nodes.new_functiondef{
+              parent_scope = fake_main,
+              source = test_source,
+              is_method = true,
+              function_token = function_token,
+              open_paren_token = next_token_node(),
+              close_paren_token = next_token_node(),
+              -- technically both `{}` and `nil` are valid
+              param_comma_tokens = {},
+            },
+          }
+          local self_def = ast.create_local_def("self", stat.func_def)
+          self_def.whole_block = true
+          self_def.src_is_method_self = true
+          stat.func_def.locals[1] = self_def
+          fake_main.func_protos[1] = stat.func_def
+          append_empty(stat.func_def, next_token_node())
+          stat.func_def.end_token = next_token_node()
+          append_stat(fake_main, stat)
+        end
+      )
+
+      add_stat_test(
+        "funcstat without ident",
+        "function ;",
+        function()
+          local function_token = next_token_node()
+          append_stat(fake_main, new_invalid(
+            error_code_util.codes.expected_ident,
+            peek_next_token(), -- at ';'
+            nil,
+            {function_token} -- consuming 'function'
+          ))
+          append_empty(fake_main, next_token_node())
+        end
+      )
+
+      add_stat_test(
+        "funcstat with invalid 'foo:bar.baz' name",
+        "function foo:bar.baz ;",
+        function()
+          local function_token = next_token_node()
+          local foo = ast.get_ref(fake_main, fake_stat_elem, "foo", next_token())
+          local bar = index_into(foo)
+          local stat = nodes.new_funcstat{
+            name = bar,
+            func_def = nodes.new_functiondef{
+              parent_scope = fake_main,
+              source = test_source,
+              is_method = true,
+              function_token = function_token,
+              open_paren_token = new_invalid(
+                error_code_util.codes.expected_token,
+                peek_next_token(), -- at '.'
+                {"("}
+              ),
+              -- technically both `{}` and `nil` are valid
+              param_comma_tokens = {},
+            },
+          }
+          local self_def = ast.create_local_def("self", stat.func_def)
+          self_def.whole_block = true
+          self_def.src_is_method_self = true
+          stat.func_def.locals[1] = self_def
+          fake_main.func_protos[1] = stat.func_def
+          append_stat(fake_main, stat)
+          append_stat(fake_main, new_invalid(
+            error_code_util.codes.unexpected_token,
+            peek_next_token(), -- at '.'
+            nil,
+            {next_token_node()} -- consuming '.'
+          ))
+          ast.get_ref(fake_main, fake_stat_elem, "baz", peek_next_token())
+          local baz_token = next_token()
+          append_stat(fake_main, new_invalid(
+            error_code_util.codes.unexpected_expression,
+            peek_next_token(), -- at ';' (unfortunately... but might change?)
+            nil,
+            -- failing because the parser doesn't add the consumed tokens yet
+            {baz_token} -- consuming 'baz'
+          ))
+          append_empty(fake_main, next_token_node())
+        end
+      )
+    end -- end funcstat
   end -- end statements
 end

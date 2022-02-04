@@ -367,6 +367,8 @@ local function functiondef(function_token, scope, is_method, stat_elem)
     is_method = is_method,
     param_comma_tokens = {},
   }
+  -- add to parent before potential early returns
+  parent_functiondef.func_protos[#parent_functiondef.func_protos+1] = node
   if is_method then
     local self_local = ast.create_local_def("self", node)
     self_local.whole_block = true
@@ -375,6 +377,9 @@ local function functiondef(function_token, scope, is_method, stat_elem)
   end
   node.function_token = function_token
   node.open_paren_token = assert_next("(") or new_token_node(true)
+  if is_invalid(node.open_paren_token) then
+    return node
+  end
   node.params = par_list(node, stat_elem)
   -- if par list was invalid but the current token is `")"` then just continue
   -- because there is a good chance there merely was a trailing comma in the par list
@@ -382,9 +387,11 @@ local function functiondef(function_token, scope, is_method, stat_elem)
     return node
   end
   node.close_paren_token = assert_next(")") or new_token_node(true)
+  if is_invalid(node.close_paren_token) then
+    return node
+  end
   stat_list(node)
   node.end_token = assert_match(function_token, "end") or new_token_node(true)
-  parent_functiondef.func_protos[#parent_functiondef.func_protos+1] = node
   return node
 end
 
@@ -1091,13 +1098,13 @@ end
 
 ---@param scope AstScope
 ---@return boolean
----@return AstExpression name
+---@return AstExpression|AstInvalidNode name
 local function func_name(scope, stat_elem)
   -- func_name -> NAME {‘.’ NAME} [`:' NAME]
 
   local ident = assert_ident()
   if is_invalid(ident) then
-    return ident
+    return false, ident
   end
   local name = ast.get_ref(scope, stat_elem, ident.value, ident)
 
@@ -1118,6 +1125,11 @@ local function func_stat(scope, stat_elem)
   local function_token = new_token_node()
   next_token() -- skip FUNCTION
   local is_method, name = func_name(scope, stat_elem)
+  if is_invalid(name) then
+    -- using table.insert?! disgusting!! but we have to put the token first
+    table.insert(name.tokens, 1, function_token)
+    return name
+  end
   return nodes.new_funcstat{
     stat_elem = stat_elem,
     name = name,
