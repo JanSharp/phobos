@@ -43,7 +43,11 @@ function Scope:run_tests()
   local failed_count = 0
   for _, test in ipairs(self.tests) do
     count = count + 1
-    local success, err = pcall(test.func)
+    local stacktrace
+    local success, err = xpcall(test.func, function(msg)
+      stacktrace = debug.traceback(nil, 2)
+      return msg
+    end)
     test.passed = success
     if not success then
       failed_count = failed_count + 1
