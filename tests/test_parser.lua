@@ -1125,5 +1125,87 @@ do
         end
       )
     end -- end localfunc
+
+    do -- label
+      local function add_label_test(label, extra_str, extra_code)
+        add_stat_test(
+          label,
+          "::foo:: "..(extra_str or "").." ;",
+          function()
+            local stat = nodes.new_label{
+              open_token = next_token_node(),
+              name = peek_next_token().value,
+              name_token = next_token_node(),
+              close_token = next_token_node(),
+            }
+            stat.name_token.value = nil
+            fake_main.labels[stat.name] = stat
+            append_stat(fake_main, stat)
+            if extra_code then extra_code() end
+            append_empty(fake_main, next_token_node())
+          end
+        )
+      end
+
+      add_label_test("label")
+
+      add_stat_test(
+        "label without ident",
+        ":: ;",
+        function()
+          append_stat(fake_main, new_invalid(
+            error_code_util.codes.expected_ident,
+            tokens[2], -- at ';'
+            nil,
+            {next_token_node()} -- consuming '::'
+          ))
+          append_empty(fake_main, next_token_node())
+        end
+      )
+
+      add_stat_test(
+        "label without closing '::'",
+        "::foo ;",
+        function()
+          local stat = nodes.new_label{
+            open_token = next_token_node(),
+            name = peek_next_token().value,
+            name_token = next_token_node(),
+            close_token = new_invalid(
+              error_code_util.codes.expected_token,
+              peek_next_token(), -- at ';'
+              {"::"}
+            ),
+          }
+          stat.name_token.value = nil
+          fake_main.labels[stat.name] = stat
+          append_stat(fake_main, stat)
+          append_empty(fake_main, next_token_node())
+        end
+      )
+
+      add_label_test("label duplicate", "::foo::", function()
+        append_stat(fake_main, new_invalid(
+          error_code_util.codes.duplicate_label,
+          tokens[5], -- at the second 'foo'
+          {"foo", "1:3"},
+          {next_token_node(), next_token_node(), next_token_node()} -- consuming '::foo::'
+        ))
+      end)
+
+      add_label_test("label duplicate without closing '::'", "::foo", function()
+        append_stat(fake_main, new_invalid(
+          error_code_util.codes.duplicate_label,
+          tokens[5], -- at the second 'foo'
+          {"foo", "1:3"},
+          {next_token_node(), next_token_node()} -- consuming '::foo'
+        ))
+        append_stat(fake_main, new_invalid(
+          error_code_util.codes.expected_token,
+          peek_next_token(), -- at ';'
+          {"::"}
+        ))
+      end)
+    end -- end label
   end -- end statements
 end

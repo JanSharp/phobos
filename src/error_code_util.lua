@@ -121,6 +121,11 @@ add_error_code(
 )
 add_error_code(
   types.parser,
+  "duplicate_label",
+  "Duplicate label '%s' (previously defined at %s)"
+)
+add_error_code(
+  types.parser,
   "expected_eq_comma_or_in",
   "'=', ',' or 'in' expected"
 )

@@ -21,6 +21,12 @@ local prevent_assert
 
 local source
 local invalid_nodes
+---only used by labels, it's simply just an extra node that's going to be added
+---for 1 statement parse call. In other words: this is for when a statement has to
+---add 2 nodes to the statement list instead of 1\
+---**Important:** The extra_node cannot use `stat_elem` of any kind, so it's really just
+---for special nodes like invalid nodes
+local extra_node
 
 local token_iter_state
 local token ---@type Token
@@ -63,7 +69,7 @@ local function new_error_code_inst(params)
     error_code = params.error_code,
     message_args = params.message_args,
     -- TODO: somehow figure out the stop_position of the token
-    position = token,
+    position = params.position or token,
   }
 end
 
@@ -209,6 +215,12 @@ local function stat_list(scope)
     ast.append_stat(scope, function(stat_elem)
       return statement(scope, stat_elem)
     end)
+    if extra_node then
+      ast.append_stat(scope, function()
+        return extra_node
+      end)
+      extra_node = nil
+    end
     if stop then
       break
     end
@@ -794,29 +806,43 @@ local function label_stat(scope, stat_elem)
   local open_token = new_token_node()
   next_token() -- skip "::"
   local name_token = new_token_node()
-  name_token.value = nil
   local ident = assert_ident()
   if is_invalid(ident) then
     ident.tokens[#ident.tokens+1] = open_token
     return ident
   end
-  local node = nodes.new_label{
-    stat_elem = stat_elem,
-    name = ident.value,
-    open_token = open_token,
-    name_token = name_token,
-    close_token = assert_next("::") or new_token_node(true),
-  }
-  local prev_label = scope.labels[node.name]
+  local prev_label = scope.labels[ident.value]
   if prev_label then
-    error("Duplicate label '" .. node.name .. "' at "
-      .. name_token.line .. ":" .. name_token.column ..
-      " previously defined at "
-      .. prev_label.name_token.line .. ":" .. prev_label.name_token.column)
+    local invalid = syntax_error(new_error_code_inst{
+      error_code = error_code_util.codes.duplicate_label,
+      message_args = {ident.value, prev_label.name_token.line..":"..prev_label.name_token.column},
+      position = ident,
+    })
+    invalid.tokens[#invalid.tokens+1] = open_token
+    invalid.tokens[#invalid.tokens+1] = name_token
+    -- order is important, assert for :: after creating the previous syntax error
+    local close_token = assert_next("::") or new_token_node(true)
+    if is_invalid(close_token) then
+      -- add another node to the stat list which is the invalid node
+      -- because there wasn't a '::' token
+      extra_node = close_token
+    else
+      invalid.tokens[#invalid.tokens+1] = close_token
+    end
+    return invalid
   else
+    -- deduplicate the value, since it's stored in the `name` of the node
+    name_token.value = nil
+    local node = nodes.new_label{
+      stat_elem = stat_elem,
+      name = ident.value,
+      open_token = open_token,
+      name_token = name_token,
+      close_token = assert_next("::") or new_token_node(true),
+    }
     scope.labels[node.name] = node
+    return node
   end
-  return node
 end
 
 --- While Statement
