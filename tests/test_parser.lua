@@ -1312,5 +1312,36 @@ do
         end
       )
     end -- end breakstat
+
+    do -- gotostat
+      add_stat_test(
+        "gotostat",
+        "goto foo;",
+        function()
+          local stat = nodes.new_gotostat{
+            goto_token = next_token_node(),
+            target_name = "foo",
+            target_token = next_token_node(),
+          }
+          stat.target_token.value = nil
+          append_stat(fake_main, stat)
+          append_empty(fake_main, next_token_node())
+        end
+      )
+
+      add_stat_test(
+        "gotostat without ident",
+        "goto ;",
+        function()
+          append_stat(fake_main, new_invalid(
+            error_code_util.codes.expected_ident,
+            tokens[2], -- at ';'
+            nil,
+            {next_token_node()} -- consuming 'goto'
+          ))
+          append_empty(fake_main, next_token_node())
+        end
+      )
+    end -- end gotostat
   end -- end statements
 end
