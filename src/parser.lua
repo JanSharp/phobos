@@ -328,7 +328,7 @@ end
 ---@param scope AstFunctionDef
 ---@return AstLocalReference[]
 local function par_list(scope, stat_elem)
-  -- param_list -> [ param { `,' param } ]
+  -- param_list -> [ param { ',' param } ]
   local params = {}
   if token.token_type == ")" then
     return params
@@ -1088,7 +1088,7 @@ local function local_func(local_token, function_token, scope, stat_elem)
 end
 
 local function local_stat(local_token, scope, stat_elem)
-  -- stat -> LOCAL NAME {`,' NAME} [`=' exp_list]
+  -- stat -> LOCAL NAME {',' NAME} ['=' exp_list]
   local node = nodes.new_localstat{
     stat_elem = stat_elem,
     local_token = local_token,
@@ -1129,7 +1129,7 @@ end
 ---@return boolean
 ---@return AstExpression|AstInvalidNode name
 local function func_name(scope, stat_elem)
-  -- func_name -> NAME {‘.’ NAME} [`:' NAME]
+  -- func_name -> NAME {'.' NAME} [':' NAME]
 
   local ident = assert_ident()
   if is_invalid(ident) then
