@@ -191,7 +191,7 @@ local block_ends = invert{"else", "elseif", "end", "eof"}
 --- Test if the next token closes a block
 ---@param with_until boolean if true, "until" token will count as closing a block
 ---@return boolean
-local function block_follow(with_until)
+local function next_token_ends_block(with_until)
   if block_ends[token.token_type] then
     return true
   elseif token.token_type == "until" then
@@ -206,7 +206,7 @@ end
 ---@param scope AstScope
 local function stat_list(scope)
   local stop
-  while not block_follow(true) do
+  while not next_token_ends_block(true) do
     if token.token_type == "eof" then
       break
     elseif token.token_type == "return" then
@@ -1198,7 +1198,7 @@ local function retstat(scope, stat_elem)
     return_token = new_token_node(),
   }
   next_token() -- skip "return"
-  if block_follow(true) then
+  if next_token_ends_block(true) then
     -- return no values
   elseif token.token_type == ";" then
     -- also return no values

@@ -1206,5 +1206,97 @@ do
         ))
       end)
     end -- end label
+
+    do -- retstat
+      add_stat_test(
+        "retstat without results",
+        "return",
+        function()
+          local stat = nodes.new_retstat{
+            return_token = next_token_node(),
+            -- technically both `{}` and `nil` are valid
+            exp_list_comma_tokens = nil,
+          }
+          append_stat(fake_main, stat)
+        end
+      )
+
+      add_stat_test(
+        "retstat with 1 result",
+        "return true",
+        function()
+          local stat = nodes.new_retstat{
+            return_token = next_token_node(),
+            exp_list = {new_true_node(next_token())},
+            -- technically both `{}` and `nil` are valid
+            exp_list_comma_tokens = {},
+          }
+          append_stat(fake_main, stat)
+        end
+      )
+
+      add_stat_test(
+        "retstat with 2 results",
+        "return true, true",
+        function()
+          local stat = nodes.new_retstat{
+            return_token = next_token_node(),
+            exp_list = {new_true_node(next_token()), nil},
+            exp_list_comma_tokens = {next_token_node()},
+          }
+          stat.exp_list[2] = new_true_node(next_token())
+          append_stat(fake_main, stat)
+        end
+      )
+
+      add_stat_test(
+        "retstat without results with ';'",
+        "return;",
+        function()
+          local stat = nodes.new_retstat{
+            return_token = next_token_node(),
+            -- technically both `{}` and `nil` are valid
+            exp_list_comma_tokens = nil,
+            semi_colon_token = next_token_node(),
+          }
+          append_stat(fake_main, stat)
+        end
+      )
+
+      add_stat_test(
+        "retstat with 1 result and with ';'",
+        "return true;",
+        function()
+          local stat = nodes.new_retstat{
+            return_token = next_token_node(),
+            exp_list = {new_true_node(next_token())},
+            -- technically both `{}` and `nil` are valid
+            exp_list_comma_tokens = {},
+            semi_colon_token = next_token_node(),
+          }
+          append_stat(fake_main, stat)
+        end
+      )
+
+      add_stat_test(
+        "retstat ends the current block",
+        "return; ;",
+        function()
+          local stat = nodes.new_retstat{
+            return_token = next_token_node(),
+            -- technically both `{}` and `nil` are valid
+            exp_list_comma_tokens = nil,
+            semi_colon_token = next_token_node(),
+          }
+          append_stat(fake_main, stat)
+          append_stat(fake_main, new_invalid(
+            error_code_util.codes.expected_token,
+            peek_next_token(),
+            {"eof"}
+          ))
+          append_empty(fake_main, next_token_node())
+        end
+      )
+    end -- end retstat
   end -- end statements
 end
