@@ -1343,5 +1343,27 @@ do
         end
       )
     end -- end gotostat
+
+    do -- expression statements
+      do -- call
+        -- call statements are quite literally just call expressions in a different context
+        -- so if this works, they all work (or, well, work as well as the call expressions do)
+        add_stat_test(
+          "call statement",
+          "foo();",
+          function()
+            local stat = nodes.new_call{
+              ex = ast.get_ref(fake_main, fake_stat_elem, "foo", next_token()),
+              open_paren_token = next_token_node(),
+              close_paren_token = next_token_node(),
+              -- technically both `{}` and `nil` are valid
+              args_comma_tokens = nil,
+            }
+            append_stat(fake_main, stat)
+            append_empty(fake_main, next_token_node())
+          end
+        )
+      end -- end call
+    end -- end expression statements
   end -- end statements
 end
