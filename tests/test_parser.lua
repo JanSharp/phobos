@@ -1298,5 +1298,19 @@ do
         end
       )
     end -- end retstat
+
+    do -- breakstat
+      add_stat_test(
+        "breakstat",
+        "break;",
+        function()
+          local stat = nodes.new_breakstat{
+            break_token = next_token_node(),
+          }
+          append_stat(fake_main, stat)
+          append_empty(fake_main, next_token_node())
+        end
+      )
+    end -- end breakstat
   end -- end statements
 end
