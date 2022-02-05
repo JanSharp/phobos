@@ -5,7 +5,6 @@ local assert = require("assert")
 local tokenize = require("tokenize")
 local nodes = require("nodes")
 local parser = require("parser")
-local ill = require("indexed_linked_list")
 local ast = require("ast_util")
 local error_code_util = require("error_code_util")
 
