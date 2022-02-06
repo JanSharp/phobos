@@ -945,12 +945,11 @@ do
             nil,
             {next_token_node()} -- consuming '.'
           ))
-          local baz_token = next_token()
           append_stat(fake_main, new_invalid(
             error_code_util.codes.unexpected_expression,
-            peek_next_token(), -- TODO: should be at 'baz' but is at at ';'
+            peek_next_token(), -- at 'baz'
             nil,
-            {get_ref_helper("baz", baz_token)} -- consuming 'baz'
+            {get_ref_helper("baz", next_token())} -- consuming 'baz'
           ))
           append_empty(fake_main, next_token_node())
         end
@@ -1493,34 +1492,35 @@ do
         end
 
         add_invalid_lhs_assignment_tests("(true)", function()
-          local open_paren_token = next_token_node()
-          local expr = new_true_node(next_token())
-          expr.src_paren_wrappers = {
-              {
-              open_paren_token = open_paren_token,
-              close_paren_token = next_token_node(),
-            },
-          }
-          expr.force_single_result = true
           return new_invalid(
             error_code_util.codes.unexpected_expression,
-            peek_next_token(), -- TODO: should be at '(' but is after '(true)'
+            peek_next_token(), -- at '('
             nil,
-            {expr} -- consuming '(true)'
+            {(function()
+              local open_paren_token = next_token_node()
+              local expr = new_true_node(next_token())
+              expr.src_paren_wrappers = {
+                  {
+                  open_paren_token = open_paren_token,
+                  close_paren_token = next_token_node(),
+                },
+              }
+              expr.force_single_result = true
+              return expr
+            end)()} -- consuming '(true)'
           )
         end)
 
         add_invalid_lhs_assignment_tests("bar()", function()
-          local expr = nodes.new_call{
-            ex = get_ref_helper("bar", next_token()),
-            open_paren_token = next_token_node(),
-            close_paren_token = next_token_node(),
-          }
           return new_invalid(
             error_code_util.codes.unexpected_expression,
-            peek_next_token(), -- TODO: should be at the first '(' but is after 'bar()'
+            peek_next_token(), -- at the first '('
             nil,
-            {expr} -- consuming 'bar()'
+            {nodes.new_call{
+              ex = get_ref_helper("bar", next_token()),
+              open_paren_token = next_token_node(),
+              close_paren_token = next_token_node(),
+            }} -- consuming 'bar()'
           )
         end)
       end -- end assignment

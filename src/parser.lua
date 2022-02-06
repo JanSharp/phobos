@@ -779,22 +779,24 @@ end
 ---@param lhs_comma_tokens AstTokenNode[]
 ---@param scope AstScope
 ---@return AstAssignment
-local function assignment(lhs, lhs_comma_tokens, scope, stat_elem)
+local function assignment(lhs, lhs_comma_tokens, prev_lhs_first_token, scope, stat_elem)
   if lhs[#lhs].force_single_result or lhs[#lhs].node_type == "call" then
     -- TODO: position the error correctly
     -- TODO: maybe insert the syntax error at the correct location
     -- (so the order of syntax errors is in the same order as they appeared in the file)
     local invalid = syntax_error(new_error_code_inst{
       error_code = error_code_util.codes.unexpected_expression,
+      position = prev_lhs_first_token,
     })
     invalid.consumed_nodes[#invalid.consumed_nodes+1] = lhs[#lhs]
     lhs[#lhs] = invalid
   end
   if test_next(",") then
     lhs_comma_tokens[#lhs_comma_tokens+1] = new_token_node(true)
+    local first_token = token
     lhs[#lhs+1] = suffixed_exp(scope, stat_elem)
     -- TODO: disallow `(exp)` (so force single result expressions) and `exp()` (call expressions)
-    return assignment(lhs, lhs_comma_tokens, scope, stat_elem)
+    return assignment(lhs, lhs_comma_tokens, first_token, scope, stat_elem)
   else
     local invalid = assert_next("=")
     local node = nodes.new_assignment{
@@ -1179,10 +1181,11 @@ end
 
 local function expr_stat(scope, stat_elem)
   -- stat -> func | assignment
+  local first_token = token
   local first_exp = suffixed_exp(scope, stat_elem)
   if token.token_type == "=" or token.token_type == "," then
     -- stat -> assignment
-    return assignment({first_exp}, {}, scope, stat_elem)
+    return assignment({first_exp}, {}, first_token, scope, stat_elem)
   else
     -- stat -> func
     if first_exp.node_type == "call" then
@@ -1194,11 +1197,11 @@ local function expr_stat(scope, stat_elem)
       -- same branches again, sine that would be an infinite loop
       return first_exp
     else
-      -- TODO: position the error correctly
       -- TODO: maybe insert the syntax error at the correct location
       -- (so the order of syntax errors is in the same order as they appeared in the file)
       local invalid = syntax_error(new_error_code_inst{
         error_code = error_code_util.codes.unexpected_expression,
+        position = first_token,
       })
       invalid.consumed_nodes[#invalid.consumed_nodes+1] = first_exp
       return invalid
