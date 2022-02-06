@@ -168,32 +168,34 @@ end
 do
   local main_scope = framework.scope:new_scope("parser")
 
+  local current_testing_scope
+  local tokens
+  local next_token
+  local peek_next_token
+  local function add_stat_test(name, str, func)
+    current_testing_scope:register_test(name, function()
+      before_each()
+      tokens = get_tokens(str)
+      local next_index = 1
+      function next_token()
+        next_index = next_index + 1
+        return tokens[next_index - 1]
+      end
+      function peek_next_token()
+        return tokens[next_index]
+      end
+      func()
+      test_stat(str)
+    end)
+  end
+
+  local function next_token_node()
+    return nodes.new_token(next_token())
+  end
+
   do
     local stat_scope = main_scope:new_scope("statements")
-
-    local tokens
-    local next_token
-    local peek_next_token
-    local function add_stat_test(name, str, func)
-      stat_scope:register_test(name, function()
-        before_each()
-        tokens = get_tokens(str)
-        local next_index = 1
-        function next_token()
-          next_index = next_index + 1
-          return tokens[next_index - 1]
-        end
-        function peek_next_token()
-          return tokens[next_index]
-        end
-        func()
-        test_stat(str)
-      end)
-    end
-
-    local function next_token_node()
-      return nodes.new_token(next_token())
-    end
+    current_testing_scope = stat_scope
 
     add_stat_test(
       "empty",
@@ -1525,5 +1527,110 @@ do
         end)
       end -- end assignment
     end -- end expression statements
+
+    -- funcstat, localfunc, call are only partially tested. The rest for them is in expressions
+    -- ensuring that all expressions are evaluated in the right scope is also not tested here
+    -- TODO: it's tested later on (or, well, will be)
   end -- end statements
+
+  do -- expressions
+    local expr_scope = main_scope:new_scope("expressions")
+    current_testing_scope = expr_scope
+
+    local fake_scope
+    local function append_fake_scope(get_expr_node, parent_scope)
+      parent_scope = parent_scope or fake_main
+      fake_scope = nodes.new_repeatstat{
+        parent_scope = parent_scope,
+        repeat_token = next_token_node(),
+        until_token = next_token_node(),
+        condition = prevent_assert,
+      }
+      fake_scope.condition = get_expr_node()
+      append_stat(parent_scope, fake_scope)
+    end
+
+    do -- local_ref
+      add_stat_test(
+        "local_ref",
+        "local foo repeat until foo",
+        function()
+          local local_token = next_token_node()
+          local foo_def, foo_ref = ast.create_local(next_token(), fake_main, fake_stat_elem)
+          fake_main.locals[1] = foo_def
+          local localstat = nodes.new_localstat{
+            local_token = local_token,
+            lhs = {foo_ref},
+            -- technically both `{}` and `nil` are valid
+            lhs_comma_tokens = {},
+            -- technically both `{}` and `nil` are valid
+            rhs_comma_tokens = nil,
+          }
+          foo_def.start_at = localstat
+          foo_def.start_offset = 1
+          append_stat(fake_main, localstat)
+          append_fake_scope(function()
+            local expr = nodes.new_local_ref{
+              name = "foo",
+              position = next_token(),
+              reference_def = foo_def,
+            }
+            foo_def.refs[#foo_def.refs+1] = expr
+            return expr
+          end)
+        end
+      )
+    end -- end local_ref
+
+    do -- upval_ref
+      add_stat_test(
+        "upval_ref",
+        "local function foo() repeat until foo end",
+        function()
+          local local_token = next_token_node()
+          local function_token = next_token_node()
+          local foo_def, foo_ref = ast.create_local(next_token(), fake_main, fake_stat_elem)
+          fake_main.locals[1] = foo_def
+          local localfunc = nodes.new_localfunc{
+            local_token = local_token,
+            name = foo_ref,
+            func_def = nodes.new_functiondef{
+              parent_scope = fake_main,
+              source = test_source,
+              function_token = function_token,
+              open_paren_token = next_token_node(),
+              close_paren_token = next_token_node(),
+              -- technically both `{}` and `nil` are valid
+              param_comma_tokens = {},
+            },
+          }
+          foo_def.start_at = localfunc
+          foo_def.start_offset = 0
+          append_stat(fake_main, localfunc)
+          local func_scope = localfunc.func_def
+          fake_main.func_protos[#fake_main.func_protos+1] = func_scope
+          append_fake_scope(function()
+            local upval_def = {
+              def_type = "upval",
+              name = "foo",
+              scope = func_scope,
+              parent_def = foo_def,
+              child_defs = {},
+              refs = {},
+            }
+            foo_def.child_defs[#foo_def.child_defs+1] = upval_def
+            func_scope.upvals[#func_scope.upvals+1] = upval_def
+            local upval_ref = nodes.new_upval_ref{
+              name = "foo",
+              position = next_token(),
+              reference_def = upval_def,
+            }
+            upval_def.refs[#upval_def.refs+1] = upval_ref
+            return upval_ref
+          end, func_scope)
+          func_scope.end_token = next_token_node()
+        end
+      )
+    end -- end upval_ref
+  end -- end expressions
 end
