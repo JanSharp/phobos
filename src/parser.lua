@@ -21,6 +21,8 @@ local prevent_assert
 
 local source
 local invalid_nodes
+---used to carry the position token over from `new_error_code_inst` to `syntax_error`
+local err_pos_token
 ---only used by labels, it's simply just an extra node that's going to be added
 ---for 1 statement parse call. In other words: this is for when a statement has to
 ---add 2 nodes to the statement list instead of 1\
@@ -65,11 +67,13 @@ local function new_token_node(use_prev, value)
 end
 
 local function new_error_code_inst(params)
+  err_pos_token = params.position or token
   return error_code_util.new_error_code{
     error_code = params.error_code,
     message_args = params.message_args,
     -- TODO: somehow figure out the stop_position of the token
-    position = params.position or token,
+    -- if I ever do that, remember that there are some errors ranging across multiple tokens
+    position = err_pos_token,
   }
 end
 
@@ -85,27 +89,27 @@ local function syntax_error(error_code_inst, location_descriptor)
     location_descriptor = " near"
   end
   local location
-  if token.token_type == "blank" then
+  if err_pos_token.token_type == "blank" then
     -- this should never happen, blank tokens are all in `leading`
     location = location_descriptor.." <blank>"
-  elseif token.token_type == "comment" then
+  elseif err_pos_token.token_type == "comment" then
     -- same here
     location = location_descriptor.." <comment>"
-  elseif token.token_type == "string" then
+  elseif err_pos_token.token_type == "string" then
     local str
-    if token.src_is_block_str then
-      if token.src_has_leading_newline
-        or token.value:find("\n")
+    if err_pos_token.src_is_block_str then
+      if err_pos_token.src_has_leading_newline
+        or err_pos_token.value:find("\n")
       then
         location = location_descriptor.." <string>"
       else
-        str = "["..token.src_pad.."["..token.value.."]"..token.src_pad.."]"
+        str = "["..err_pos_token.src_pad.."["..err_pos_token.value.."]"..err_pos_token.src_pad.."]"
       end
     else -- regular string
-      if token.src_value:find("\n") then
+      if err_pos_token.src_value:find("\n") then
         location = location_descriptor.." <string>"
       else
-        str = token.src_quote..token.src_value..token.src_quote
+        str = err_pos_token.src_quote..err_pos_token.src_value..err_pos_token.src_quote
       end
     end
     if str then
@@ -118,18 +122,22 @@ local function syntax_error(error_code_inst, location_descriptor)
         location = location_descriptor.." "..str
       end
     end
-  elseif token.token_type == "number" then
-    location = location_descriptor.." '"..token.src_value.."'"
-  elseif token.token_type == "ident" then
-    location = location_descriptor.." "..token.value
-  elseif token.token_type == "invalid" then
+  elseif err_pos_token.token_type == "number" then
+    location = location_descriptor.." '"..err_pos_token.src_value.."'"
+  elseif err_pos_token.token_type == "ident" then
+    location = location_descriptor.." "..err_pos_token.value
+  elseif err_pos_token.token_type == "invalid" then
     location = ""
-  elseif token.token_type == "eof" then
+  elseif err_pos_token.token_type == "eof" then
     location = location_descriptor.." <eof>"
   else
-    location = location_descriptor.." '"..token.token_type.."'"
+    location = location_descriptor.." '"..err_pos_token.token_type.."'"
   end
-  location = location..(token.token_type ~= "eof" and (" at "..token.line..":"..token.column) or "")
+  location = location..(
+    err_pos_token.token_type ~= "eof"
+      and (" at "..err_pos_token.line..":"..err_pos_token.column)
+      or ""
+  )
   error_code_inst.location_str = location
   error_code_inst.source = source
   local invalid = nodes.new_invalid{error_code_inst = error_code_inst}
