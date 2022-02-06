@@ -75,7 +75,10 @@
 ---@class AstInvalidNode : AstNode
 ---@field node_type '"invalid"'
 ---@field error_code_inst ErrorCodeInstance
----@field tokens AstTokenNode[]|nil @ tokens that ended up being unused due to this syntax error
+---nodes that ended up being unused due to this syntax error\
+---99% of the time these are AstTokenNodes, however for unexpected_expression they
+---can be any expression
+---@field consumed_nodes AstNode[]|nil
 
 ---@class AstStatement : AstNode
 ---the element in the statement list of the scope this statement is in

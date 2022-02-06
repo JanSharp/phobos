@@ -115,7 +115,7 @@ local serpent_opts = {
 
 local expected_invalid_nodes
 
-local function new_invalid(error_code, position, message_args, tokens)
+local function new_invalid(error_code, position, message_args, consumed_nodes)
   local invalid = nodes.new_invalid{
     error_code_inst = error_code_util.new_error_code{
       error_code = error_code,
@@ -124,7 +124,7 @@ local function new_invalid(error_code, position, message_args, tokens)
       position = position,
       location_str = assert.do_not_compare_flag, -- TODO: test the syntax_error location string logic
     },
-    tokens = tokens or {},
+    consumed_nodes = consumed_nodes or {},
   }
   expected_invalid_nodes[#expected_invalid_nodes+1] = invalid
   return invalid
@@ -945,14 +945,12 @@ do
             nil,
             {next_token_node()} -- consuming '.'
           ))
-          ast.get_ref(fake_main, fake_stat_elem, "baz", peek_next_token())
           local baz_token = next_token()
           append_stat(fake_main, new_invalid(
             error_code_util.codes.unexpected_expression,
-            peek_next_token(), -- at ';' (unfortunately... but might change?)
+            peek_next_token(), -- TODO: should be at 'baz' but is at at ';'
             nil,
-            -- failing because the parser doesn't add the consumed tokens yet
-            {baz_token} -- consuming 'baz'
+            {get_ref_helper("baz", baz_token)} -- consuming 'baz'
           ))
           append_empty(fake_main, next_token_node())
         end
@@ -1495,21 +1493,34 @@ do
         end
 
         add_invalid_lhs_assignment_tests("(true)", function()
+          local open_paren_token = next_token_node()
+          local expr = new_true_node(next_token())
+          expr.src_paren_wrappers = {
+              {
+              open_paren_token = open_paren_token,
+              close_paren_token = next_token_node(),
+            },
+          }
+          expr.force_single_result = true
           return new_invalid(
             error_code_util.codes.unexpected_expression,
-            peek_next_token(), -- at '('
+            peek_next_token(), -- TODO: should be at '(' but is after '(true)'
             nil,
-            {next_token_node(), next_token_node(), next_token_node()} -- for now
+            {expr} -- consuming '(true)'
           )
         end)
 
-        add_invalid_lhs_assignment_tests("(true)()", function()
+        add_invalid_lhs_assignment_tests("bar()", function()
+          local expr = nodes.new_call{
+            ex = get_ref_helper("bar", next_token()),
+            open_paren_token = next_token_node(),
+            close_paren_token = next_token_node(),
+          }
           return new_invalid(
             error_code_util.codes.unexpected_expression,
-            peek_next_token(), -- at the first '('
+            peek_next_token(), -- TODO: should be at the first '(' but is after 'bar()'
             nil,
-            {next_token_node(), next_token_node(), next_token_node(),
-              next_token_node(), next_token_node()} -- for now
+            {expr} -- consuming 'bar()'
           )
         end)
       end -- end assignment

@@ -180,13 +180,13 @@ end
 
 ---@class AstInvalidParams
 ---@field error_code_inst ErrorCodeInstance
----@field tokens AstTokenNode[]|nil
+---@field consumed_nodes AstTokenNode[]|nil
 
 ---@param params AstInvalidParams
 function nodes.new_invalid(params)
   local node = new_node("invalid")
   node.error_code_inst = assert_params_field(params, "error_code_inst")
-  node.tokens = params.tokens or {}
+  node.consumed_nodes = params.consumed_nodes or {}
   return node
 end
 

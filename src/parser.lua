@@ -503,7 +503,7 @@ local function primary_exp(scope, stat_elem)
         error_code = error_code_util.codes.unexpected_token,
       }, "")
       -- consume the invalid token, it would infinitely loop otherwise
-      invalid.tokens[#invalid.tokens+1] = new_token_node()
+      invalid.consumed_nodes[#invalid.consumed_nodes+1] = new_token_node()
       next_token()
       return invalid
     end
@@ -780,6 +780,16 @@ end
 ---@param scope AstScope
 ---@return AstAssignment
 local function assignment(lhs, lhs_comma_tokens, scope, stat_elem)
+  if lhs[#lhs].force_single_result or lhs[#lhs].node_type == "call" then
+    -- TODO: position the error correctly
+    -- TODO: maybe insert the syntax error at the correct location
+    -- (so the order of syntax errors is in the same order as they appeared in the file)
+    local invalid = syntax_error(new_error_code_inst{
+      error_code = error_code_util.codes.unexpected_expression,
+    })
+    invalid.consumed_nodes[#invalid.consumed_nodes+1] = lhs[#lhs]
+    lhs[#lhs] = invalid
+  end
   if test_next(",") then
     lhs_comma_tokens[#lhs_comma_tokens+1] = new_token_node(true)
     lhs[#lhs+1] = suffixed_exp(scope, stat_elem)
@@ -809,7 +819,7 @@ local function label_stat(scope, stat_elem)
   local name_token = new_token_node()
   local ident = assert_ident()
   if is_invalid(ident) then
-    ident.tokens[#ident.tokens+1] = open_token
+    ident.consumed_nodes[#ident.consumed_nodes+1] = open_token
     return ident
   end
   local prev_label = scope.labels[ident.value]
@@ -819,8 +829,8 @@ local function label_stat(scope, stat_elem)
       message_args = {ident.value, prev_label.name_token.line..":"..prev_label.name_token.column},
       position = ident,
     })
-    invalid.tokens[#invalid.tokens+1] = open_token
-    invalid.tokens[#invalid.tokens+1] = name_token
+    invalid.consumed_nodes[#invalid.consumed_nodes+1] = open_token
+    invalid.consumed_nodes[#invalid.consumed_nodes+1] = name_token
     -- order is important, assert for :: after creating the previous syntax error
     local close_token = assert_next("::") or new_token_node(true)
     if is_invalid(close_token) then
@@ -828,7 +838,7 @@ local function label_stat(scope, stat_elem)
       -- because there wasn't a '::' token
       extra_node = close_token
     else
-      invalid.tokens[#invalid.tokens+1] = close_token
+      invalid.consumed_nodes[#invalid.consumed_nodes+1] = close_token
     end
     return invalid
   else
@@ -990,7 +1000,7 @@ local function for_stat(scope, stat_elem)
   next_token() -- skip FOR
   local first_ident = assert_ident()
   if is_invalid(first_ident) then
-    first_ident.tokens[#first_ident.tokens+1] = for_token
+    first_ident.consumed_nodes[#first_ident.consumed_nodes+1] = for_token
     return first_ident
   end
   local t = token.token_type
@@ -1004,8 +1014,8 @@ local function for_stat(scope, stat_elem)
     local invalid = syntax_error(new_error_code_inst{
       error_code = error_code_util.codes.expected_eq_comma_or_in,
     })
-    invalid.tokens[#invalid.tokens+1] = for_token
-    invalid.tokens[#invalid.tokens+1] = nodes.new_token(first_ident)
+    invalid.consumed_nodes[#invalid.consumed_nodes+1] = for_token
+    invalid.consumed_nodes[#invalid.consumed_nodes+1] = nodes.new_token(first_ident)
     return invalid
   end
   node.for_token = for_token
@@ -1157,7 +1167,7 @@ local function func_stat(scope, stat_elem)
   local is_method, name = func_name(scope, stat_elem)
   if is_invalid(name) then
     -- using table.insert?! disgusting!! but we have to put the token first
-    table.insert(name.tokens, 1, function_token)
+    table.insert(name.consumed_nodes, 1, function_token)
     return name
   end
   return nodes.new_funcstat{
@@ -1184,10 +1194,14 @@ local function expr_stat(scope, stat_elem)
       -- same branches again, sine that would be an infinite loop
       return first_exp
     else
-      -- TODO: store data about the expression (`first_exp`) that caused this error
-      return syntax_error(new_error_code_inst{
+      -- TODO: position the error correctly
+      -- TODO: maybe insert the syntax error at the correct location
+      -- (so the order of syntax errors is in the same order as they appeared in the file)
+      local invalid = syntax_error(new_error_code_inst{
         error_code = error_code_util.codes.unexpected_expression,
       })
+      invalid.consumed_nodes[#invalid.consumed_nodes+1] = first_exp
+      return invalid
     end
   end
 end
@@ -1278,7 +1292,7 @@ local statement_lut = {
     name_token.value = nil
     local target_ident = assert_ident()
     if is_invalid(target_ident) then
-      target_ident.tokens[#target_ident.tokens+1] = goto_token
+      target_ident.consumed_nodes[#target_ident.consumed_nodes+1] = goto_token
       return target_ident
     else
       return nodes.new_gotostat{
