@@ -130,8 +130,8 @@ local function new_invalid(error_code, position, message_args, consumed_nodes)
   return invalid
 end
 
-local function get_ref_helper(name, position)
-  return ast.get_ref(fake_main, fake_stat_elem, name, position)
+local function get_ref_helper(name, position, scope)
+  return ast.get_ref(scope or fake_main, fake_stat_elem, name, position)
 end
 
 local function before_each()
@@ -1632,5 +1632,87 @@ do
         end
       )
     end -- end upval_ref
+
+    do -- index
+      local function add_index_test(label, str, get_expr)
+        add_stat_test(
+          label,
+          "repeat until "..str,
+          function()
+            append_fake_scope(function()
+              local foo = get_ref_helper("foo", next_token(), fake_scope)
+              local expr = get_expr(foo)
+              return expr
+            end)
+          end
+        )
+      end
+
+      add_index_test(
+        "index with ident",
+        "foo.bar",
+        function(foo)
+          local expr = nodes.new_index{
+            ex = foo,
+            dot_token = next_token_node(),
+            suffix = nodes.new_string{
+              position = next_token(),
+              value = "bar",
+              src_is_ident = true,
+            },
+          }
+          return expr
+        end
+      )
+
+      add_index_test(
+        "index with '[]'",
+        "foo[true]",
+        function(foo)
+          local expr = nodes.new_index{
+            ex = foo,
+            suffix_open_token = next_token_node(),
+            suffix = new_true_node(next_token()),
+            suffix_close_token = next_token_node(),
+          }
+          return expr
+        end
+      )
+
+      add_index_test(
+        "index without ident",
+        "foo.",
+        function(foo)
+          local expr = nodes.new_index{
+            ex = foo,
+            dot_token = next_token_node(),
+            suffix = new_invalid(
+              error_code_util.codes.expected_ident,
+              peek_next_token() -- at 'eof'
+            ),
+          }
+          return expr
+        end
+      )
+
+      add_index_test(
+        "index with '[]' except without ']'",
+        "foo[true",
+        function(foo)
+          local suffix_open_token = next_token_node()
+          local expr = nodes.new_index{
+            ex = foo,
+            suffix_open_token = suffix_open_token,
+            suffix = new_true_node(next_token()),
+            suffix_close_token = new_invalid(
+              error_code_util.codes.expected_closing_match,
+              peek_next_token(), -- at 'eof'
+              {"]", "[", suffix_open_token.line..":"..suffix_open_token.column}
+            ),
+          }
+          return expr
+        end
+      )
+    end -- end index
   end -- end expressions
 end
