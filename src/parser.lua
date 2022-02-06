@@ -783,6 +783,7 @@ local function assignment(lhs, lhs_comma_tokens, scope, stat_elem)
   if test_next(",") then
     lhs_comma_tokens[#lhs_comma_tokens+1] = new_token_node(true)
     lhs[#lhs+1] = suffixed_exp(scope, stat_elem)
+    -- TODO: disallow `(exp)` (so force single result expressions) and `exp()` (call expressions)
     return assignment(lhs, lhs_comma_tokens, scope, stat_elem)
   else
     local invalid = assert_next("=")

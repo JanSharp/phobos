@@ -130,6 +130,10 @@ local function new_invalid(error_code, position, message_args, tokens)
   return invalid
 end
 
+local function get_ref_helper(name, position)
+  return ast.get_ref(fake_main, fake_stat_elem, name, position)
+end
+
 local function before_each()
   make_fake_main()
   expected_invalid_nodes = {}
@@ -803,7 +807,7 @@ do
         function()
           local function_token = next_token_node()
           local stat = nodes.new_funcstat{
-            name = ast.get_ref(fake_main, fake_stat_elem, "foo", next_token()),
+            name = get_ref_helper("foo", next_token()),
             func_def = nodes.new_functiondef{
               parent_scope = fake_main,
               source = test_source,
@@ -838,7 +842,7 @@ do
         "function foo.bar.baz() ; end",
         function()
           local function_token = next_token_node()
-          local foo = ast.get_ref(fake_main, fake_stat_elem, "foo", next_token())
+          local foo = get_ref_helper("foo", next_token())
           local bar = index_into(foo)
           local baz = index_into(bar)
           local stat = nodes.new_funcstat{
@@ -865,7 +869,7 @@ do
         "function foo:bar() ; end",
         function()
           local function_token = next_token_node()
-          local foo = ast.get_ref(fake_main, fake_stat_elem, "foo", next_token())
+          local foo = get_ref_helper("foo", next_token())
           local bar = index_into(foo)
           local stat = nodes.new_funcstat{
             name = bar,
@@ -911,7 +915,7 @@ do
         "function foo:bar.baz ;",
         function()
           local function_token = next_token_node()
-          local foo = ast.get_ref(fake_main, fake_stat_elem, "foo", next_token())
+          local foo = get_ref_helper("foo", next_token())
           local bar = index_into(foo)
           local stat = nodes.new_funcstat{
             name = bar,
@@ -1353,7 +1357,7 @@ do
           "foo();",
           function()
             local stat = nodes.new_call{
-              ex = ast.get_ref(fake_main, fake_stat_elem, "foo", next_token()),
+              ex = get_ref_helper("foo", next_token()),
               open_paren_token = next_token_node(),
               close_paren_token = next_token_node(),
               -- technically both `{}` and `nil` are valid
@@ -1364,6 +1368,151 @@ do
           end
         )
       end -- end call
+
+      do -- assignment
+        add_stat_test(
+          "assignment with 1 lhs, 1 rhs",
+          "foo = true;",
+          function()
+            local stat = nodes.new_assignment{
+              lhs = {get_ref_helper("foo", next_token())},
+              -- technically both `{}` and `nil` are valid
+              lhs_comma_tokens = {},
+              eq_token = next_token_node(),
+              rhs = {new_true_node(next_token())},
+              -- technically both `{}` and `nil` are valid
+              rhs_comma_tokens = {},
+            }
+            append_stat(fake_main, stat)
+            append_empty(fake_main, next_token_node())
+          end
+        )
+
+        local function get_foo_bar_lhs()
+          local lhs = {get_ref_helper("foo", next_token()), nil}
+          local lhs_comma_tokens = {next_token_node()}
+          lhs[2] = get_ref_helper("bar", next_token())
+          return lhs, lhs_comma_tokens
+        end
+
+        add_stat_test(
+          "assignment with 2 lhs, 1 rhs",
+          "foo, bar = true;",
+          function()
+            local lhs, lhs_comma_tokens = get_foo_bar_lhs()
+            local stat = nodes.new_assignment{
+              lhs = lhs,
+              lhs_comma_tokens = lhs_comma_tokens,
+              eq_token = next_token_node(),
+              rhs = {new_true_node(next_token())},
+              -- technically both `{}` and `nil` are valid
+              rhs_comma_tokens = {},
+            }
+            append_stat(fake_main, stat)
+            append_empty(fake_main, next_token_node())
+          end
+        )
+
+        add_stat_test(
+          "assignment with 1 lhs, 2 rhs",
+          "foo = true, true;",
+          function()
+            local stat = nodes.new_assignment{
+              lhs = {get_ref_helper("foo", next_token())},
+              -- technically both `{}` and `nil` are valid
+              lhs_comma_tokens = {},
+              eq_token = next_token_node(),
+              rhs = {new_true_node(next_token()), nil},
+              rhs_comma_tokens = {next_token_node()},
+            }
+            stat.rhs[2] = new_true_node(next_token())
+            append_stat(fake_main, stat)
+            append_empty(fake_main, next_token_node())
+          end
+        )
+
+        add_stat_test(
+          "assignment with 2 lhs without '='",
+          "foo, bar ;",
+          function()
+            -- needs 2 lhs otherwise it won't be considered an assignment to begin with
+            local lhs, lhs_comma_tokens = get_foo_bar_lhs()
+            local stat = nodes.new_assignment{
+              lhs = lhs,
+              lhs_comma_tokens = lhs_comma_tokens,
+              eq_token = new_invalid(
+                error_code_util.codes.expected_token,
+                peek_next_token(), -- at ';'
+                {"="}
+              ),
+              -- technically both `{}` and `nil` are valid
+              rhs_comma_tokens = nil,
+            }
+            append_stat(fake_main, stat)
+            append_empty(fake_main, next_token_node())
+          end
+        )
+
+        local function add_invalid_lhs_assignment_tests(str, get_invalid_lhs_node)
+          add_stat_test(
+            "assignment with '"..str.."' lhs",
+            str.." = true;",
+            function()
+              local stat = nodes.new_assignment{
+                lhs = {get_invalid_lhs_node()},
+                -- technically both `{}` and `nil` are valid
+                lhs_comma_tokens = {},
+                eq_token = next_token_node(),
+                rhs = {new_true_node(next_token())},
+                -- technically both `{}` and `nil` are valid
+                rhs_comma_tokens = {},
+              }
+              append_stat(fake_main, stat)
+              append_empty(fake_main, next_token_node())
+            end
+          )
+
+          -- the second lhs (and following) is/are parsed in a different part of the code
+          add_stat_test(
+            "assignment with 'foo, "..str.."' lhs",
+            "foo, "..str.." = true;",
+            function()
+              local lhs = {get_ref_helper("foo", next_token()), nil}
+              local lhs_comma_tokens = {next_token_node()}
+              lhs[2] = get_invalid_lhs_node()
+              local stat = nodes.new_assignment{
+                lhs = lhs,
+                lhs_comma_tokens = lhs_comma_tokens,
+                eq_token = next_token_node(),
+                rhs = {new_true_node(next_token())},
+                -- technically both `{}` and `nil` are valid
+                rhs_comma_tokens = {},
+              }
+              append_stat(fake_main, stat)
+              append_empty(fake_main, next_token_node())
+            end
+          )
+        end
+
+        add_invalid_lhs_assignment_tests("(true)", function()
+          return new_invalid(
+            error_code_util.codes.unexpected_expression,
+            peek_next_token(), -- at '('
+            nil,
+            {next_token_node(), next_token_node(), next_token_node()} -- for now
+          )
+        end)
+
+        add_invalid_lhs_assignment_tests("(true)()", function()
+          return new_invalid(
+            error_code_util.codes.unexpected_expression,
+            peek_next_token(), -- at the first '('
+            nil,
+            {next_token_node(), next_token_node(), next_token_node(),
+              next_token_node(), next_token_node()} -- for now
+          )
+        end)
+      end -- end assignment
     end -- end expression statements
   end -- end statements
 end
