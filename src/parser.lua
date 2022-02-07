@@ -779,7 +779,9 @@ local function sub_expr(limit, scope, stat_elem)
         table.insert(right_node.exp_list, 1, node)
         node = right_node
         table.insert(node.op_tokens, 1, op_token)
-      elseif node.node_type == "concat" then
+      elseif node.node_type == "concat" and not node.force_single_result then
+        -- only combines if the left node doesn't have `()` around it
+        -- ensures right associative
         -- ---@narrow node AstConcat
         node.exp_list[#node.exp_list+1] = right_node
         node.op_tokens[#node.op_tokens+1] = op_token
