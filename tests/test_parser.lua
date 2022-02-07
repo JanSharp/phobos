@@ -1728,6 +1728,9 @@ do
       "~=",
       ">",
       ">=",
+      "and",
+      "or",
+      "..",
     }
 
     do -- unop
@@ -1770,6 +1773,25 @@ do
         )
 
         for _, binop in ipairs(all_binops) do
+          local make_binop
+          if binop == ".." then
+            function make_binop(left)
+              return nodes.new_concat{
+                op_tokens = {next_token_node()},
+                exp_list = {left, new_true_node(next_token())},
+              }
+            end
+          else
+            function make_binop(left)
+              return nodes.new_binop{
+                left = left,
+                op = binop,
+                op_token = next_token_node(),
+                right = new_true_node(next_token()),
+              }
+            end
+          end
+
           if binop == "^" then
             add_stat_test(
               "unop '"..unop_str.."' does not take precedence over binop '"..binop.."'",
@@ -1779,12 +1801,7 @@ do
                   local expr = nodes.new_unop{
                     op = unop_str,
                     op_token = next_token_node(),
-                    ex = nodes.new_binop{
-                      left = new_true_node(next_token()),
-                      op = binop,
-                      op_token = next_token_node(),
-                      right = new_true_node(next_token()),
-                    },
+                    ex = make_binop(new_true_node(next_token())),
                   }
                   return expr
                 end)
@@ -1796,16 +1813,11 @@ do
               "repeat until "..unop_str.." true "..binop.." true",
               function()
                 append_fake_scope(function()
-                  local expr = nodes.new_binop{
-                    left = nodes.new_unop{
-                      op = unop_str,
-                      op_token = next_token_node(),
-                      ex = new_true_node(next_token()),
-                    },
-                    op = binop,
+                  local expr = make_binop(nodes.new_unop{
+                    op = unop_str,
                     op_token = next_token_node(),
-                    right = new_true_node(next_token()),
-                  }
+                    ex = new_true_node(next_token()),
+                  })
                   return expr
                 end)
               end
