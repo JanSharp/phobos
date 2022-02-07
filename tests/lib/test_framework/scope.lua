@@ -4,6 +4,7 @@ Scope.__index = Scope
 
 function Scope:new_scope(name)
   local scope = setmetatable({
+    is_scope = true,
     parent_scope = self,
     child_scopes = {},
     name = name,
@@ -13,12 +14,14 @@ function Scope:new_scope(name)
   }, Scope)
   if self then
     self.child_scopes[#self.child_scopes+1] = scope
+    self.tests[#self.tests+1] = scope
   end
   return scope
 end
 
-function Scope:register_test(name, func)
+function Scope:add_test(name, func)
   self.tests[#self.tests+1] = {
+    is_test = true,
     name = name,
     func = func,
   }
@@ -42,33 +45,30 @@ function Scope:run_tests()
   local count = 0
   local failed_count = 0
   for _, test in ipairs(self.tests) do
-    count = count + 1
-    local stacktrace
-    local success, err = xpcall(test.func, function(msg)
-      stacktrace = debug.traceback(nil, 2)
-      return msg
-    end)
-    test.passed = success
-    if not success then
-      failed_count = failed_count + 1
-      err = err:match(":%d+: (.*)")
-      test.error_message = err
+    if test.is_scope then
+      local result = test:run_tests()
+      count = count + result.count
+      failed_count = failed_count + result.failed_count
+    elseif test.is_test then
+      count = count + 1
+      local stacktrace
+      local success, err = xpcall(test.func, function(msg)
+        stacktrace = debug.traceback(nil, 2)
+        return msg
+      end)
+      test.passed = success
+      if not success then
+        failed_count = failed_count + 1
+        err = err:match(":%d+: (.*)")
+        test.error_message = err
+      end
+      print(get_indentation(self).."  "..test.name..": "..(success and "passed" or ("failed: "..err)))
     end
-
-    print(get_indentation(self).."  "..test.name..": "..(success and "passed" or ("failed: "..err)))
   end
   if self.after_all then
     self.after_all()
   end
   print(get_indentation(self)..(count - failed_count).."/"..count.." passed in "..self.name)
-  if self.child_scopes[1] then
-    for _, child_scope in ipairs(self.child_scopes) do
-      local result = child_scope:run_tests()
-      count = count + result.count
-      failed_count = failed_count + result.failed_count
-    end
-    print(get_indentation(self)..(count - failed_count).."/"..count.." passed in "..self.name.." and its child scopes")
-  end
   return {count = count, failed_count = failed_count}
 end
 

@@ -101,14 +101,14 @@ do
 
     for _, tab in ipairs{basic_tokens, keywords} do
       for _, token_type in ipairs(tab) do
-        scope:register_test("token '"..token_type.."'", function()
+        scope:add_test("token '"..token_type.."'", function()
           test(token_type, {new_token(token_type, 1, 1, 1)})
         end)
       end
     end
 
     local function invalid_token(char)
-      scope:register_test("invalid token '"..char.."'", function()
+      scope:add_test("invalid token '"..char.."'", function()
         local invalid = new_token("invalid", 1, 1, 1)
         invalid.value = char
         invalid.error_code_insts = {error_code_util.new_error_code{
@@ -131,15 +131,15 @@ do
   do
     local scope = main_scope:new_scope("blank")
 
-    scope:register_test("with space and tabs", function()
+    scope:add_test("with space and tabs", function()
       test("  \t    ", {new_token("blank", 1, 1, 1, "  \t    ")})
     end)
 
-    scope:register_test("1 newline", function()
+    scope:add_test("1 newline", function()
       test("  \n", {new_token("blank", 1, 1, 1, "  \n")})
     end)
 
-    scope:register_test("2 newlines", function()
+    scope:add_test("2 newlines", function()
       test("  \n  \n", {
         new_token("blank", 1, 1, 1, "  \n"),
         new_token("blank", 4, 2, 1, "  \n"),
@@ -153,7 +153,7 @@ do
       {str = "\r\n;", label = "\\r\\n"},
     }
     do
-      scope:register_test("ending with "..data.label, function()
+      scope:add_test("ending with "..data.label, function()
         test(data.str, {
           new_token("blank", 1, 1, 1, "\n"),
           new_token(";", #data.str, 2, 1),
@@ -165,7 +165,7 @@ do
   do
     local scope = main_scope:new_scope("non block comment")
 
-    scope:register_test("nothing special", function()
+    scope:add_test("nothing special", function()
       local token = new_token("comment", 1, 1, 1, " foo")
       token.src_is_block_str = nil
       test("-- foo", {token})
@@ -176,7 +176,7 @@ do
       {str = "\r", label = "\\r"},
     }
     do
-      scope:register_test("ending with "..data.label, function()
+      scope:add_test("ending with "..data.label, function()
         local token = new_token("comment", 1, 1, 1, " foo")
         token.src_is_block_str = nil
         test("-- foo"..data.str, {
@@ -197,7 +197,7 @@ do
       {str = [['foo"']], quote = [[']], value = [[foo"]], label = [[' quotes containing "]]},
     }
     do
-      scope:register_test(data.label, function()
+      scope:add_test(data.label, function()
         local token = new_token("string", 1, 1, 1)
         token.src_is_block_str = nil
         token.value = data.value
@@ -207,7 +207,7 @@ do
       end)
     end
 
-    scope:register_test("unterminated at eof", function()
+    scope:add_test("unterminated at eof", function()
       local token = new_token("invalid", 1, 1, 1)
       token.value = [["foo]]
       token.error_code_insts = {error_code_util.new_error_code{
@@ -223,7 +223,7 @@ do
       {str = "\r", label = "\\r"},
     }
     do
-      scope:register_test("ending with "..data.label, function()
+      scope:add_test("ending with "..data.label, function()
         local token = new_token("invalid", 1, 1, 1)
         token.value = [["foo]]
         token.error_code_insts = {error_code_util.new_error_code{
@@ -240,7 +240,7 @@ do
     end
 
     local function add_escape_sequence_test(str, value)
-      scope:register_test("containing escape sequence "..str, function()
+      scope:add_test("containing escape sequence "..str, function()
         local token = new_token("string", 1, 1, 1)
         token.src_is_block_str = nil
         token.value = "foo "..value.." bar"
@@ -259,7 +259,7 @@ do
     add_escape_sequence_test([[\xCF]], "\xCF")
     add_escape_sequence_test([[\xdD]], "\xdD")
 
-    scope:register_test("containing invalid escape sequence \\x", function()
+    scope:add_test("containing invalid escape sequence \\x", function()
       local token = new_token("invalid", 1, 1, 1)
       token.src_is_block_str = nil
       token.value = [["\x"]]
@@ -276,7 +276,7 @@ do
       })
     end)
 
-    scope:register_test("containing invalid \\x with string and file ending right after", function()
+    scope:add_test("containing invalid \\x with string and file ending right after", function()
       local token = new_token("invalid", 1, 1, 1)
       token.src_is_block_str = nil
       token.value = [["\x"]]
@@ -297,7 +297,7 @@ do
       {str = "\r\n", label = "\\r\\n"},
     }
     do
-      scope:register_test("containing escaped "..data.label, function()
+      scope:add_test("containing escaped "..data.label, function()
         local token = new_token("string", 1, 1, 1)
         token.src_is_block_str = nil
         token.value = "foo\nbar"
@@ -311,7 +311,7 @@ do
       end)
     end
 
-    scope:register_test("containing escape sequence \\z with spaces", function()
+    scope:add_test("containing escape sequence \\z with spaces", function()
       local token = new_token("string", 1, 1, 1)
       token.src_is_block_str = nil
       token.value = "foo bar"
@@ -330,7 +330,7 @@ do
       {str = "\r\n", label = "\\r\\n"},
     }
     do
-      scope:register_test("containing escape sequence \\z with "..data.label, function()
+      scope:add_test("containing escape sequence \\z with "..data.label, function()
         local token = new_token("string", 1, 1, 1)
         token.src_is_block_str = nil
         token.value = "foo bar"
@@ -360,7 +360,7 @@ do
     add_escape_sequence_test([[\123]], "\123")
     add_escape_sequence_test([[\255]], "\255")
 
-    scope:register_test("containing invalid escape sequence \\256 (too large)", function()
+    scope:add_test("containing invalid escape sequence \\256 (too large)", function()
       local token = new_token("invalid", 1, 1, 1)
       token.value = [["foo \256 bar"]]
       token.error_code_insts = {error_code_util.new_error_code{
@@ -376,7 +376,7 @@ do
       })
     end)
 
-    scope:register_test("containing invalid escape sequences", function()
+    scope:add_test("containing invalid escape sequences", function()
       local all_valid_escaped_chars = invert{
         "x",
         "\r",
@@ -445,7 +445,7 @@ do
     local function initial_syntax_error(label1, str1, error_code1)
       local function consecutive_syntax_error(label2, str2, error_code2)
         local function ending_syntax_error_or_end_of_string(label3, str3, error_code3, is_eol)
-          scope:register_test("syntax error chain: "..label1.." + "..label2.." + "..label3, function()
+          scope:add_test("syntax error chain: "..label1.." + "..label2.." + "..label3, function()
             local token = new_token("invalid", 1, 1, 1)
             local str = [["]]..str1..str2
             token.value = str..(is_eol and "" or str3)
@@ -487,7 +487,7 @@ do
   do
     local scope = main_scope:new_scope("block string")
 
-    scope:register_test("invalid open bracket", function()
+    scope:add_test("invalid open bracket", function()
       local token = new_token("invalid", 1, 1, 1)
       token.value = "["
       token.error_code_insts = {error_code_util.new_error_code{
@@ -501,7 +501,7 @@ do
       })
     end)
 
-    scope:register_test("without padding", function()
+    scope:add_test("without padding", function()
       local token = new_token("string", 1, 1, 1)
       token.value = "foo"
       token.src_is_block_str = true
@@ -513,7 +513,7 @@ do
       })
     end)
 
-    scope:register_test("with 3 padding", function()
+    scope:add_test("with 3 padding", function()
       local token = new_token("string", 1, 1, 1)
       token.value = "foo"
       token.src_is_block_str = true
@@ -525,7 +525,7 @@ do
       })
     end)
 
-    scope:register_test("with 3 padding containing 2 padding", function()
+    scope:add_test("with 3 padding containing 2 padding", function()
       local token = new_token("string", 1, 1, 1)
       token.value = "[==[foo]==]"
       token.src_is_block_str = true
@@ -544,7 +544,7 @@ do
       {str = "\r\n", label = "\\r\\n"},
     }
     do
-      scope:register_test("leading "..data.label, function()
+      scope:add_test("leading "..data.label, function()
         local token = new_token("string", 1, 1, 1)
         token.value = "foo"
         token.src_is_block_str = true
@@ -557,7 +557,7 @@ do
         })
       end)
 
-      scope:register_test("containing "..data.label, function()
+      scope:add_test("containing "..data.label, function()
         local token = new_token("string", 1, 1, 1)
         token.value = "foo\nbar"
         token.src_is_block_str = true
@@ -572,7 +572,7 @@ do
     end
 
     local function add_unterminated_test(label, str)
-      scope:register_test(label, function()
+      scope:add_test(label, function()
         local token = new_token("invalid", 1, 1, 1)
         token.value = str
         token.error_code_insts = {error_code_util.new_error_code{
@@ -591,7 +591,7 @@ do
   do
     local scope = main_scope:new_scope("block comment")
 
-    scope:register_test("it's just a prefixed block string, so if this works it works", function()
+    scope:add_test("it's just a prefixed block string, so if this works it works", function()
       local token = new_token("comment", 1, 1, 1)
       token.value = ""
       token.src_is_block_str = true
@@ -608,7 +608,7 @@ do
     local scope = main_scope:new_scope("number")
 
     local function add_test(str, value)
-      scope:register_test("number '"..str.."'", function()
+      scope:add_test("number '"..str.."'", function()
         local token = new_token("number", 1, 1, 1)
         token.value = value
         token.src_value = str
@@ -639,7 +639,7 @@ do
     add_test("0x1p-1", 0x1p-1)
 
     local function malformed(str)
-      scope:register_test("malformed number '"..str.."'", function()
+      scope:add_test("malformed number '"..str.."'", function()
         local token = new_token("invalid", 1, 1, 1)
         token.value = str
         token.error_code_insts = {error_code_util.new_error_code{
@@ -662,28 +662,28 @@ do
   do
     local scope = main_scope:new_scope("ident")
 
-    scope:register_test("ident 'foo'", function()
+    scope:add_test("ident 'foo'", function()
       test("foo;", {
         new_token("ident", 1, 1, 1, "foo"),
         new_token(";", 4, 1, 4),
       })
     end)
 
-    scope:register_test("alphabet and underscore", function()
+    scope:add_test("alphabet and underscore", function()
       test("abcdefghijklmnopqrstuvwxyz_ABCDEFGHIJKLMNOPQRSTUVWXYZ;", {
         new_token("ident", 1, 1, 1, "abcdefghijklmnopqrstuvwxyz_ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
         new_token(";", 54, 1, 54),
       })
     end)
 
-    scope:register_test("ident '_foo'", function()
+    scope:add_test("ident '_foo'", function()
       test("_foo;", {
         new_token("ident", 1, 1, 1, "_foo"),
         new_token(";", 5, 1, 5),
       })
     end)
 
-    scope:register_test("ident '_0123456789'", function()
+    scope:add_test("ident '_0123456789'", function()
       test("_0123456789;", {
         new_token("ident", 1, 1, 1, "_0123456789"),
         new_token(";", 12, 1, 12),
@@ -694,7 +694,7 @@ do
   do
     local scope = main_scope:new_scope("other")
 
-    scope:register_test("skip UTF8 BOM", function()
+    scope:add_test("skip UTF8 BOM", function()
       test("\xef\xbb\xbf;\n;", {
         new_token(";", 4, 1, 1),
         new_token("blank", 5, 1, 2, "\n"),
@@ -702,7 +702,7 @@ do
       })
     end)
 
-    scope:register_test("number plus ident '0foo'", function()
+    scope:add_test("number plus ident '0foo'", function()
       local token = new_token("number", 1, 1, 1)
       token.value = 0
       token.src_value = "0"
@@ -715,7 +715,7 @@ do
     local function with_sign(sign)
       local function should_be_ident(str)
         ---cSpell:ignore strtod
-        scope:register_test(
+        scope:add_test(
           "number according to C strtod(), but ident in Lua: '"..(sign or "")..str.."'",
           function()
             local tokens = {}

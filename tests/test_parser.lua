@@ -173,7 +173,7 @@ do
   local next_token
   local peek_next_token
   local function add_stat_test(name, str, func)
-    current_testing_scope:register_test(name, function()
+    current_testing_scope:add_test(name, function()
       before_each()
       tokens = get_tokens(str)
       local next_index = 1
