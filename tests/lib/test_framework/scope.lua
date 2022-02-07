@@ -37,8 +37,37 @@ local function get_indentation(scope)
   return string.rep("  ", count)
 end
 
+-- https://chrisyeh96.github.io/2020/03/28/terminal-colors.html
+-- https://www2.ccs.neu.edu/research/gpc/VonaUtils/vona/terminal/vtansi.htm
+local reset = "\x1b[0m"
+local bold = "\x1b[1m"
+local faint = "\x1b[2m"
+local singly_underlined = "\x1b[4m"
+local blink = "\x1b[5m"
+local reverse = "\x1b[7m"
+local hidden = "\x1b[8m"
+-- foreground colors:
+local black = "\x1b[30m"
+local red = "\x1b[31m"
+local green = "\x1b[32m"
+local yellow = "\x1b[33m"
+local blue = "\x1b[34m"
+local magenta = "\x1b[35m"
+local cyan = "\x1b[36m"
+local white = "\x1b[37m"
+-- background colors:
+local background_black = "\x1b[40m"
+local background_red = "\x1b[41m"
+local background_green = "\x1b[42m"
+local background_yellow = "\x1b[43m"
+local background_blue = "\x1b[44m"
+local background_magenta = "\x1b[45m"
+local background_cyan = "\x1b[46m"
+local background_white = "\x1b[47m"
+
 function Scope:run_tests()
-  print(get_indentation(self)..self.name..":")
+  local start_time = os and os.clock()
+  print(get_indentation(self)..bold..self.name..reset..":")
   if self.before_all then
     self.before_all()
   end
@@ -62,13 +91,17 @@ function Scope:run_tests()
         err = err:match(":%d+: (.*)")
         test.error_message = err
       end
-      print(get_indentation(self).."  "..test.name..": "..(success and "passed" or ("failed: "..err)))
+      print(get_indentation(self).."  "..test.name..": "
+        ..(success and (green.."passed"..reset) or (red.."failed"..reset..": "..err))
+      )
     end
   end
   if self.after_all then
     self.after_all()
   end
-  print(get_indentation(self)..(count - failed_count).."/"..count.." passed in "..self.name)
+  print(get_indentation(self)..(count - failed_count).."/"..count.." passed in "..bold..self.name..reset
+    ..(os and (" in "..(os.clock() - start_time).."s") or "")
+  )
   return {count = count, failed_count = failed_count}
 end
 
