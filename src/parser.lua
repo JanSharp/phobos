@@ -735,6 +735,11 @@ local binop_prio = {
   ["and"] = {left=2 ,right=2},
   ["or"]  = {left=1 ,right=1},
 }
+-- right associative doesn't affect the order in which the expressions
+-- get evaluated, but it affects the order the operators get evaluated
+-- in the case of ^ this is obvious since the right one ends up being the inner node:
+-- foo ^ bar ^ baz => (foo ^ (bar ^ baz))
+-- in the case of a concat
 
 --- sub_expression
 --- `sub_expr -> (simple_exp | unop sub_expr) { binop sub_expr }`

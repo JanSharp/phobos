@@ -1733,6 +1733,22 @@ do
       "..",
     }
 
+    local function make_binop(binop, left, get_right)
+      if binop == ".." then
+        return nodes.new_concat{
+          op_tokens = {next_token_node()},
+          exp_list = {left, get_right()},
+        }
+      else
+        return nodes.new_binop{
+          left = left,
+          op = binop,
+          op_token = next_token_node(),
+          right = get_right(),
+        }
+      end
+    end
+
     do -- unop
       local unop_scope = expr_scope:new_scope("unop")
       current_testing_scope = unop_scope
@@ -1773,25 +1789,6 @@ do
         )
 
         for _, binop in ipairs(all_binops) do
-          local make_binop
-          if binop == ".." then
-            function make_binop(left)
-              return nodes.new_concat{
-                op_tokens = {next_token_node()},
-                exp_list = {left, new_true_node(next_token())},
-              }
-            end
-          else
-            function make_binop(left)
-              return nodes.new_binop{
-                left = left,
-                op = binop,
-                op_token = next_token_node(),
-                right = new_true_node(next_token()),
-              }
-            end
-          end
-
           if binop == "^" then
             add_stat_test(
               "unop '"..unop_str.."' does not take precedence over binop '"..binop.."'",
@@ -1801,7 +1798,11 @@ do
                   local expr = nodes.new_unop{
                     op = unop_str,
                     op_token = next_token_node(),
-                    ex = make_binop(new_true_node(next_token())),
+                    ex = make_binop(
+                      binop,
+                      new_true_node(next_token()),
+                      function() return new_true_node(next_token()) end
+                    ),
                   }
                   return expr
                 end)
@@ -1813,11 +1814,15 @@ do
               "repeat until "..unop_str.." true "..binop.." true",
               function()
                 append_fake_scope(function()
-                  local expr = make_binop(nodes.new_unop{
-                    op = unop_str,
-                    op_token = next_token_node(),
-                    ex = new_true_node(next_token()),
-                  })
+                  local expr = make_binop(
+                    binop,
+                    nodes.new_unop{
+                      op = unop_str,
+                      op_token = next_token_node(),
+                      ex = new_true_node(next_token()),
+                    },
+                    function() return new_true_node(next_token()) end
+                  )
                   return expr
                 end)
               end
@@ -1832,5 +1837,94 @@ do
 
       current_testing_scope = expr_scope
     end -- end unop
+
+    do -- binop
+      local binop_scope = expr_scope:new_scope("binop")
+      current_testing_scope = binop_scope
+
+      for _, binop in ipairs(all_binops) do
+        add_stat_test(
+          "binop '"..binop.."'",
+          "repeat until true "..binop.." true",
+          function()
+            append_fake_scope(function()
+              local expr = make_binop(
+                binop,
+                new_true_node(next_token()),
+                function() return new_true_node(next_token_node()) end
+              )
+            return expr
+            end)
+          end
+        )
+      end
+
+      -- copy paste from the parser itself
+      local binop_prio = {
+        ["^"]   = {left=10,right=9}, -- right associative
+        ["*"]   = {left=7 ,right=7}, ["/"]  = {left=7,right=7},
+        ["%"]   = {left=7 ,right=7},
+        ["+"]   = {left=6 ,right=6}, ["-"]  = {left=6,right=6},
+        [".."]  = {left=5 ,right=4}, -- right associative
+        ["=="]  = {left=3 ,right=3},
+        ["<"]   = {left=3 ,right=3}, ["<="] = {left=3,right=3},
+        ["~="]  = {left=3 ,right=3},
+        [">"]   = {left=3 ,right=3}, [">="] = {left=3,right=3},
+        ["and"] = {left=2 ,right=2},
+        ["or"]  = {left=1 ,right=1},
+      }
+
+      local function add_binop_test(first, second)
+        if first == ".." and second == ".." then
+          return -- concat gets combined into a single node
+        end
+        local middle_is_prioritized_by_the_right = (binop_prio[second].left > binop_prio[first].right)
+        local label = middle_is_prioritized_by_the_right
+          and "(foo "..first.." (bar "..second.." baz))"
+          or "((foo "..first.." bar) "..second.." baz)"
+        add_stat_test(
+          "binops '"..label.."' (test without '()')",
+          "repeat until true "..first.." true "..second.." true",
+          function()
+            append_fake_scope(function()
+              local expr
+              local function make_inner_binop(binop)
+                return make_binop(
+                  binop,
+                  new_true_node(next_token()),
+                  function() return new_true_node(next_token()) end
+                )
+              end
+              if middle_is_prioritized_by_the_right then
+                -- the second op is the inner node
+                expr = make_binop(
+                  first,
+                  new_true_node(next_token()),
+                  function() return make_inner_binop(second) end
+                )
+              else
+                -- the first op is the inner node
+                expr = make_binop(
+                  second,
+                  make_inner_binop(first),
+                  function() return new_true_node(next_token()) end
+                )
+              end
+              return expr
+            end)
+          end
+        )
+      end
+
+      for _, first in ipairs(all_binops) do
+        for _, second in ipairs(all_binops) do
+          add_binop_test(first, second)
+        end
+      end
+
+      -- TODO: concat tests
+
+      current_testing_scope = expr_scope
+    end -- end binop
   end -- end expressions
 end
