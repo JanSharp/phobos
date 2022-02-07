@@ -1714,5 +1714,111 @@ do
         end
       )
     end -- end index
+
+    local all_binops = {
+      "^",
+      "*",
+      "/",
+      "%",
+      "+",
+      "-",
+      "==",
+      "<",
+      "<=",
+      "~=",
+      ">",
+      ">=",
+    }
+
+    do -- unop
+      local unop_scope = expr_scope:new_scope("unop")
+      current_testing_scope = unop_scope
+
+      local function add_unop_tests(unop_str)
+        add_stat_test(
+          "unop '"..unop_str.."'",
+          "repeat until "..unop_str.." true",
+          function()
+            append_fake_scope(function()
+              local expr = nodes.new_unop{
+                op = unop_str,
+                op_token = next_token_node(),
+                ex = new_true_node(next_token()),
+              }
+              return expr
+            end)
+          end
+        )
+
+        add_stat_test(
+          "unop double '"..unop_str.."'",
+          "repeat until "..unop_str.." "..unop_str.." true",
+          function()
+            append_fake_scope(function()
+              local expr = nodes.new_unop{
+                op = unop_str,
+                op_token = next_token_node(),
+                ex = nodes.new_unop{
+                  op = unop_str,
+                  op_token = next_token_node(),
+                  ex = new_true_node(next_token()),
+                },
+              }
+              return expr
+            end)
+          end
+        )
+
+        for _, binop in ipairs(all_binops) do
+          if binop == "^" then
+            add_stat_test(
+              "unop '"..unop_str.."' does not take precedence over binop '"..binop.."'",
+              "repeat until "..unop_str.." true "..binop.." true",
+              function()
+                append_fake_scope(function()
+                  local expr = nodes.new_unop{
+                    op = unop_str,
+                    op_token = next_token_node(),
+                    ex = nodes.new_binop{
+                      left = new_true_node(next_token()),
+                      op = binop,
+                      op_token = next_token_node(),
+                      right = new_true_node(next_token()),
+                    },
+                  }
+                  return expr
+                end)
+              end
+            )
+          else
+            add_stat_test(
+              "unop '"..unop_str.."' takes precedence over binop '"..binop.."'",
+              "repeat until "..unop_str.." true "..binop.." true",
+              function()
+                append_fake_scope(function()
+                  local expr = nodes.new_binop{
+                    left = nodes.new_unop{
+                      op = unop_str,
+                      op_token = next_token_node(),
+                      ex = new_true_node(next_token()),
+                    },
+                    op = binop,
+                    op_token = next_token_node(),
+                    right = new_true_node(next_token()),
+                  }
+                  return expr
+                end)
+              end
+            )
+          end
+        end
+      end
+
+      add_unop_tests("not")
+      add_unop_tests("-")
+      add_unop_tests("#")
+
+      current_testing_scope = expr_scope
+    end -- end unop
   end -- end expressions
 end

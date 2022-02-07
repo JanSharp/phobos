@@ -695,6 +695,33 @@ local unop_prio = {
   ["-"] = 8,
   ["#"] = 8,
 }
+-- the way to think about this, at least in my opinion is:
+-- if the left priority of the next operator is higher than
+-- the right priority of the previous operator then the current
+-- operator will evaluate first.
+-- evaluating first means creating a node first, which will then
+-- be the right side of the previous operator
+--
+-- and the way the unop prio plays into this is that it is basically
+-- like the right priority of binops.
+--
+-- examples:
+-- ((foo + bar) + baz)
+-- ((foo or (bar and baz)) or hi)
+-- (foo ^ (bar ^ baz))
+-- (-(foo ^ bar))
+--
+-- another way to think about this:
+-- looking at an expression "affected" by 2 operators, look at both their
+-- priorities. For example:
+-- foo + bar * baz
+--   <6-6> <7-7>
+-- the expression bar has both priority 6 and 7 "applied" to it.
+-- 7 is greater than 6, so that side will evaluate first; It will be the inner node
+-- another example:
+-- -foo ^ bar
+-- 8><10-9>
+-- 10 beats 8, so foo will be part of the inner node on the right
 local binop_prio = {
   ["^"]   = {left=10,right=9}, -- right associative
   ["*"]   = {left=7 ,right=7}, ["/"]  = {left=7,right=7},
