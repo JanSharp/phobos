@@ -19,6 +19,8 @@ local prevent_assert = nodes.new_invalid{
 local fake_main
 local fake_stat_elem = assert.do_not_compare_flag
 
+local empty_table_or_nil = assert.custom_comparator({[{}] = true}, true)
+
 local function make_fake_main()
   local fake_env_scope = nodes.new_env_scope{}
   -- Lua emits _ENV as if it's a local in the parent scope
@@ -607,8 +609,7 @@ do
             -- skip 1 token
             in_token = (function() next_token() return next_token_node() end)(),
             exp_list = {new_true_node(next_token())},
-            -- technically both `{}` and `nil` are valid
-            exp_list_comma_tokens = {},
+            exp_list_comma_tokens = empty_table_or_nil,
             do_token = next_token_node(),
           }
           append_empty(stat, next_token_node())
@@ -627,8 +628,7 @@ do
               for_token = next_token_node(),
               comma_tokens = {},
               exp_list = {prevent_assert},
-              -- technically both `{}` and `nil` are valid
-              exp_list_comma_tokens = {},
+              exp_list_comma_tokens = empty_table_or_nil,
             }
             for i = 1, name_count do
               if i ~= 1 then
@@ -660,8 +660,7 @@ do
             for_token = next_token_node(),
             comma_tokens = {},
             exp_list = {prevent_assert},
-            -- technically both `{}` and `nil` are valid
-            exp_list_comma_tokens = nil,
+            exp_list_comma_tokens = empty_table_or_nil,
           }
           local name_def, name_ref = ast.create_local(next_token(), fake_main, fake_stat_elem)
           name_def.whole_block = true
@@ -686,8 +685,7 @@ do
             for_token = next_token_node(),
             comma_tokens = {},
             exp_list = {prevent_assert},
-            -- technically both `{}` and `nil` are valid
-            exp_list_comma_tokens = {},
+            exp_list_comma_tokens = empty_table_or_nil,
           }
           local name_def, name_ref = ast.create_local(next_token(), fake_main, fake_stat_elem)
           name_def.whole_block = true
@@ -716,8 +714,7 @@ do
             for_token = next_token_node(),
             comma_tokens = {},
             exp_list = {prevent_assert},
-            -- technically both `{}` and `nil` are valid
-            exp_list_comma_tokens = {},
+            exp_list_comma_tokens = empty_table_or_nil,
           }
           local name_def, name_ref = ast.create_local(next_token(), fake_main, fake_stat_elem)
           name_def.whole_block = true
@@ -744,8 +741,7 @@ do
             for_token = next_token_node(),
             comma_tokens = {},
             exp_list = {prevent_assert},
-            -- technically both `{}` and `nil` are valid
-            exp_list_comma_tokens = {},
+            exp_list_comma_tokens = empty_table_or_nil,
           }
           local name_def, name_ref = ast.create_local(next_token(), fake_main, fake_stat_elem)
           name_def.whole_block = true
@@ -816,8 +812,7 @@ do
               function_token = function_token,
               open_paren_token = next_token_node(),
               close_paren_token = next_token_node(),
-              -- technically both `{}` and `nil` are valid
-              param_comma_tokens = {},
+              param_comma_tokens = empty_table_or_nil,
             },
           }
           fake_main.func_protos[1] = stat.func_def
@@ -855,8 +850,7 @@ do
               function_token = function_token,
               open_paren_token = next_token_node(),
               close_paren_token = next_token_node(),
-              -- technically both `{}` and `nil` are valid
-              param_comma_tokens = {},
+              param_comma_tokens = empty_table_or_nil,
             },
           }
           fake_main.func_protos[1] = stat.func_def
@@ -882,8 +876,7 @@ do
               function_token = function_token,
               open_paren_token = next_token_node(),
               close_paren_token = next_token_node(),
-              -- technically both `{}` and `nil` are valid
-              param_comma_tokens = {},
+              param_comma_tokens = empty_table_or_nil,
             },
           }
           local self_def = ast.create_local_def("self", stat.func_def)
@@ -931,8 +924,7 @@ do
                 peek_next_token(), -- at '.'
                 {"("}
               ),
-              -- technically both `{}` and `nil` are valid
-              param_comma_tokens = {},
+              param_comma_tokens = empty_table_or_nil,
             },
           }
           local self_def = ast.create_local_def("self", stat.func_def)
@@ -966,8 +958,8 @@ do
           function()
             local local_token = next_token_node()
             local lhs = {}
-            -- technically both `{}` and `nil` are valid (if name_count == 1)
-            local lhs_comma_tokens = {}
+            -- both `{}` and `nil` are valid (if name_count == 1)
+            local lhs_comma_tokens = empty_table_or_nil
             for i = 1, name_count do
               if i ~= 1 then
                 lhs_comma_tokens[i - 1] = next_token_node()
@@ -1006,8 +998,7 @@ do
           local stat = nodes.new_localstat{
             local_token = local_token,
             lhs = {name_ref},
-            -- technically both `{}` and `nil` are valid
-            lhs_comma_tokens = {},
+            lhs_comma_tokens = empty_table_or_nil,
             eq_token = next_token_node(),
             rhs = {new_true_node(next_token())},
             rhs_comma_tokens = {next_token_node()},
@@ -1030,8 +1021,7 @@ do
               error_code_util.codes.expected_ident,
               peek_next_token() -- at ';'
             )},
-            -- technically both `{}` and `nil` are valid
-            lhs_comma_tokens = {},
+            lhs_comma_tokens = empty_table_or_nil,
             -- no rhs, this should be nil
             rhs_comma_tokens = nil,
           }
@@ -1056,8 +1046,7 @@ do
             lhs_comma_tokens = {next_token_node()},
             eq_token = next_token_node(),
             rhs = {new_true_node(next_token())},
-            -- technically both `{}` and `nil` are valid
-            rhs_comma_tokens = {},
+            rhs_comma_tokens = empty_table_or_nil,
           }
           foo_def.start_at = stat
           foo_def.start_offset = 1
@@ -1085,8 +1074,7 @@ do
               function_token = function_token,
               open_paren_token = next_token_node(),
               close_paren_token = next_token_node(),
-              -- technically both `{}` and `nil` are valid
-              param_comma_tokens = {},
+              param_comma_tokens = empty_table_or_nil,
             }
           }
           fake_main.func_protos[1] = stat.func_def
@@ -1116,8 +1104,7 @@ do
               function_token = function_token,
               open_paren_token = next_token_node(),
               close_paren_token = next_token_node(),
-              -- technically both `{}` and `nil` are valid
-              param_comma_tokens = {},
+              param_comma_tokens = empty_table_or_nil,
             }
           }
           fake_main.func_protos[1] = stat.func_def
@@ -1217,8 +1204,7 @@ do
         function()
           local stat = nodes.new_retstat{
             return_token = next_token_node(),
-            -- technically both `{}` and `nil` are valid
-            exp_list_comma_tokens = nil,
+            exp_list_comma_tokens = empty_table_or_nil,
           }
           append_stat(fake_main, stat)
         end
@@ -1231,8 +1217,7 @@ do
           local stat = nodes.new_retstat{
             return_token = next_token_node(),
             exp_list = {new_true_node(next_token())},
-            -- technically both `{}` and `nil` are valid
-            exp_list_comma_tokens = {},
+            exp_list_comma_tokens = empty_table_or_nil,
           }
           append_stat(fake_main, stat)
         end
@@ -1258,8 +1243,7 @@ do
         function()
           local stat = nodes.new_retstat{
             return_token = next_token_node(),
-            -- technically both `{}` and `nil` are valid
-            exp_list_comma_tokens = nil,
+            exp_list_comma_tokens = empty_table_or_nil,
             semi_colon_token = next_token_node(),
           }
           append_stat(fake_main, stat)
@@ -1273,8 +1257,7 @@ do
           local stat = nodes.new_retstat{
             return_token = next_token_node(),
             exp_list = {new_true_node(next_token())},
-            -- technically both `{}` and `nil` are valid
-            exp_list_comma_tokens = {},
+            exp_list_comma_tokens = empty_table_or_nil,
             semi_colon_token = next_token_node(),
           }
           append_stat(fake_main, stat)
@@ -1287,8 +1270,7 @@ do
         function()
           local stat = nodes.new_retstat{
             return_token = next_token_node(),
-            -- technically both `{}` and `nil` are valid
-            exp_list_comma_tokens = nil,
+            exp_list_comma_tokens = empty_table_or_nil,
             semi_colon_token = next_token_node(),
           }
           append_stat(fake_main, stat)
@@ -1359,8 +1341,7 @@ do
               ex = get_ref_helper("foo", next_token()),
               open_paren_token = next_token_node(),
               close_paren_token = next_token_node(),
-              -- technically both `{}` and `nil` are valid
-              args_comma_tokens = nil,
+              args_comma_tokens = empty_table_or_nil,
             }
             append_stat(fake_main, stat)
             append_empty(fake_main, next_token_node())
@@ -1375,12 +1356,10 @@ do
           function()
             local stat = nodes.new_assignment{
               lhs = {get_ref_helper("foo", next_token())},
-              -- technically both `{}` and `nil` are valid
-              lhs_comma_tokens = {},
+              lhs_comma_tokens = empty_table_or_nil,
               eq_token = next_token_node(),
               rhs = {new_true_node(next_token())},
-              -- technically both `{}` and `nil` are valid
-              rhs_comma_tokens = {},
+              rhs_comma_tokens = empty_table_or_nil,
             }
             append_stat(fake_main, stat)
             append_empty(fake_main, next_token_node())
@@ -1404,8 +1383,7 @@ do
               lhs_comma_tokens = lhs_comma_tokens,
               eq_token = next_token_node(),
               rhs = {new_true_node(next_token())},
-              -- technically both `{}` and `nil` are valid
-              rhs_comma_tokens = {},
+              rhs_comma_tokens = empty_table_or_nil,
             }
             append_stat(fake_main, stat)
             append_empty(fake_main, next_token_node())
@@ -1418,8 +1396,7 @@ do
           function()
             local stat = nodes.new_assignment{
               lhs = {get_ref_helper("foo", next_token())},
-              -- technically both `{}` and `nil` are valid
-              lhs_comma_tokens = {},
+              lhs_comma_tokens = empty_table_or_nil,
               eq_token = next_token_node(),
               rhs = {new_true_node(next_token()), nil},
               rhs_comma_tokens = {next_token_node()},
@@ -1444,8 +1421,7 @@ do
                 peek_next_token(), -- at ';'
                 {"="}
               ),
-              -- technically both `{}` and `nil` are valid
-              rhs_comma_tokens = nil,
+              rhs_comma_tokens = empty_table_or_nil,
             }
             append_stat(fake_main, stat)
             append_empty(fake_main, next_token_node())
@@ -1459,12 +1435,10 @@ do
             function()
               local stat = nodes.new_assignment{
                 lhs = {get_invalid_lhs_node()},
-                -- technically both `{}` and `nil` are valid
-                lhs_comma_tokens = {},
+                lhs_comma_tokens = empty_table_or_nil,
                 eq_token = next_token_node(),
                 rhs = {new_true_node(next_token())},
-                -- technically both `{}` and `nil` are valid
-                rhs_comma_tokens = {},
+                rhs_comma_tokens = empty_table_or_nil,
               }
               append_stat(fake_main, stat)
               append_empty(fake_main, next_token_node())
@@ -1484,8 +1458,7 @@ do
                 lhs_comma_tokens = lhs_comma_tokens,
                 eq_token = next_token_node(),
                 rhs = {new_true_node(next_token())},
-                -- technically both `{}` and `nil` are valid
-                rhs_comma_tokens = {},
+                rhs_comma_tokens = empty_table_or_nil,
               }
               append_stat(fake_main, stat)
               append_empty(fake_main, next_token_node())
@@ -1561,10 +1534,8 @@ do
           local localstat = nodes.new_localstat{
             local_token = local_token,
             lhs = {foo_ref},
-            -- technically both `{}` and `nil` are valid
-            lhs_comma_tokens = {},
-            -- technically both `{}` and `nil` are valid
-            rhs_comma_tokens = nil,
+            lhs_comma_tokens = empty_table_or_nil,
+            rhs_comma_tokens = empty_table_or_nil,
           }
           foo_def.start_at = localstat
           foo_def.start_offset = 1
@@ -1600,8 +1571,7 @@ do
               function_token = function_token,
               open_paren_token = next_token_node(),
               close_paren_token = next_token_node(),
-              -- technically both `{}` and `nil` are valid
-              param_comma_tokens = {},
+              param_comma_tokens = empty_table_or_nil,
             },
           }
           foo_def.start_at = localfunc

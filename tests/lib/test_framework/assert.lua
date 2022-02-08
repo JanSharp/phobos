@@ -64,6 +64,14 @@ local function contents_equals(expected, got, msg, options)
         ..pretty_print(difference.right, options.serpent_opts).." at "..difference.location
     elseif difference.type == deep_compare.difference_type.size then
       err = "table size differs at "..difference.location
+    elseif difference.type == deep_compare.difference_type.identity_mismatch then
+      err = "got a reference value occurring multiple times even though it should be a different instance, \z
+        or expected a previously referenced reference value but did not get said value at "..difference.location
+    elseif difference.type == deep_compare.difference_type.custom_comparator_table then
+      err = "custom compare failed at "..difference.location
+    elseif difference.type == deep_compare.difference_type.custom_comparator_func then
+      err = "custom compare failed "..(difference.message and ("("..difference.message..") ") or "")
+        .."at "..difference.location
     end
     error(add_msg(err, msg)
       ..(
@@ -94,5 +102,6 @@ return {
   not_nan = not_nan,
   contents_equals = contents_equals,
   do_not_compare_flag = deep_compare.do_not_compare_flag,
+  custom_comparator = deep_compare.register_custom_comparator,
   errors = errors,
 }
