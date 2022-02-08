@@ -139,7 +139,7 @@ local function format(main)
     end,
     ---@param node AstConcat
     concat = function(node)
-      add_exp_list(node.exp_list, node.op_tokens)
+      add_exp_list(node.exp_list, node.op_tokens, node.concat_src_paren_wrappers)
     end,
     ---@param node AstNumber
     number = function(node)
@@ -203,7 +203,7 @@ local function format(main)
 
   ---@param node AstExpression
   function add_exp(node)
-    if node.force_single_result then
+    if node.force_single_result and node.node_type ~= "concat" then
       for i = #node.src_paren_wrappers, 1, -1 do
         add_token(node.src_paren_wrappers[i].open_paren_token)
       end
@@ -217,11 +217,25 @@ local function format(main)
   end
 
   ---@param list AstExpression[]
-  function add_exp_list(list, separator_tokens)
+  function add_exp_list(list, separator_tokens, concat_src_paren_wrappers)
+    ---cSpell:ignore cspw
+    local cspw = concat_src_paren_wrappers
     for i, node in ipairs(list) do
+      if cspw and cspw[i] then
+        for j = #cspw[i], 1, -1 do
+          add_token(cspw[i][j].open_paren_token)
+        end
+      end
       add_exp(node)
       if separator_tokens[i] then
         add_token(separator_tokens[i])
+      end
+    end
+    if cspw then
+      for i = #list - 1, 1, -1 do
+        for j = 1, #cspw[i] do
+          add_token(cspw[i][j].close_paren_token)
+        end
       end
     end
   end

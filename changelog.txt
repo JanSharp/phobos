@@ -9,6 +9,7 @@ Version: 0.1.3
     - Fix string and comment tokens sometimes having incorrect line:column positions
     - Fix ']' inside block strings disappearing
     - Fix `(foo..bar)..baz` performing `bar..baz` first. Only matters when using __concat
+    - Fix parenthesis inside of concat chains not being representable inside the AST (data loss)
 ---------------------------------------------------------------------------------------------------
 Version: 0.1.2
 Date: 2022-01-29

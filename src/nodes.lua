@@ -605,11 +605,15 @@ end
 
 ---@class AstConcatParams : AstExpressionBaseParams
 ---@field exp_list AstExpression[]
----@field op_tokens AstTokenNode|[]
+---@field op_tokens AstTokenNode[]|nil
+---@field src_paren_wrappers nil @ overridden
+---@field concat_src_paren_wrappers AstTokenNode[][]|nil
 
 ---@param params AstConcatParams
 function nodes.new_concat(params)
   local node = expr_base(new_node("concat"), params)
+  node.src_paren_wrappers = nil
+  node.concat_src_paren_wrappers = params.concat_src_paren_wrappers
   assert(params.exp_list and params.exp_list[1], "'concat' nodes without any expressions are invalid")
   node.exp_list = params.exp_list or {}
   node.op_tokens = params.op_tokens

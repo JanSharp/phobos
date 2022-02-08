@@ -356,6 +356,19 @@
 ---max length is `#exp_list - 1`\
 ---first one is position for the `concat` instruction
 ---@field op_tokens AstTokenNode[]
+---replaced by `concat_src_paren_wrappers`
+---@field src_paren_wrappers nil
+---replaces `src_paren_wrappers`. Think of each element in the main array
+---containing the paren wrappers for the expression at that index.
+---The `open_paren_token` comes before that expression, the `close_paren_token`
+---comes after the very last expression.\
+---For that reason this array will always be 1 shorter than the `exp_list`,
+---since the wrappers around the last expression are handled by it's own
+---`src_paren_wrappers`.\
+---a concat node is right associative, which means no paren wrapper can close
+---any earlier than after the last expression. That means an expression like
+---`(foo..bar)..baz` results in 2 concat nodes, while `foo..(bar..baz)` results in 1
+---@field concat_src_paren_wrappers AstParenWrapper[][]
 
 ---uses line, column and leading
 ---@class AstNumber : AstExpression

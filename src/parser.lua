@@ -476,6 +476,13 @@ local function func_args(node, scope, stat_elem)
   end)()
 end
 
+local function init_concat_src_paren_wrappers(node)
+  node.concat_src_paren_wrappers = node.concat_src_paren_wrappers or {}
+  for i = 1, #node.exp_list - 1 do
+    node.concat_src_paren_wrappers[i] = node.concat_src_paren_wrappers[i] or {}
+  end
+end
+
 --- Primary Expression
 ---@param scope AstScope
 ---@return AstExpression
@@ -491,11 +498,17 @@ local function primary_exp(scope, stat_elem)
     local ex = expr(scope, stat_elem)
     local close_paren_token = assert_match(open_paren_token, ")") or new_token_node(true)
     ex.force_single_result = true
-    ex.src_paren_wrappers = ex.src_paren_wrappers or {}
-    ex.src_paren_wrappers[#ex.src_paren_wrappers+1] = {
+    local wrapper = {
       open_paren_token = open_paren_token,
       close_paren_token = close_paren_token,
     }
+    if ex.node_type == "concat" then
+      init_concat_src_paren_wrappers(ex)
+      ex.concat_src_paren_wrappers[1][#ex.concat_src_paren_wrappers[1]+1] = wrapper
+    else
+      ex.src_paren_wrappers = ex.src_paren_wrappers or {}
+      ex.src_paren_wrappers[#ex.src_paren_wrappers+1] = wrapper
+    end
     return ex
   elseif token.token_type == "ident" then
     local ident = assert_ident()
@@ -774,17 +787,20 @@ local function sub_expr(limit, scope, stat_elem)
     local right_node, next_op = sub_expr(prio.right, scope, stat_elem)
     if binop == ".." then
       if right_node.node_type == "concat" then
-        -- TODO: add start and end locations within the exp_list for src_paren_wrappers
-        -- ---@narrow right_node AstConcat
+        -- needs to init before adding the node to the exp_list so that the
+        -- insert of another concat_src_paren_wrappers doesn't make the list too long
+        init_concat_src_paren_wrappers(right_node)
         table.insert(right_node.exp_list, 1, node)
         node = right_node
         table.insert(node.op_tokens, 1, op_token)
+        table.insert(node.concat_src_paren_wrappers, 1, {})
       elseif node.node_type == "concat" and not node.force_single_result then
-        -- only combines if the left node doesn't have `()` around it
-        -- ensures right associative
-        -- ---@narrow node AstConcat
-        node.exp_list[#node.exp_list+1] = right_node
-        node.op_tokens[#node.op_tokens+1] = op_token
+        error("Impossible -- TODO: explain why it's impossible. Note to jog my memory: \z
+          concat is right associative, so the right ones are going to be parsed first. \z
+          the only way for the current `node` to be a concat node is if the simple expression \z
+          at the very beginning parsed a concat node wrapped in parenthesis, however those are \z
+          excluded by the if condition."
+        )
       else
         local left_node = node
         node = nodes.new_concat{

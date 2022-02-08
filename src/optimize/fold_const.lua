@@ -75,6 +75,7 @@ local clear_exp_field_lut = {
 local function clear_exp_fields(exp)
   -- fields every expression have
   exp.src_paren_wrappers = nil
+  exp.concat_src_paren_wrappers = nil
   exp.force_single_result = nil -- we only output constant nodes where this never matters
   clear_exp_field_lut[exp.node_type](exp)
 end

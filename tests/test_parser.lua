@@ -1892,9 +1892,135 @@ do
         end
       end
 
-      -- TODO: concat tests
-
       current_testing_scope = expr_scope
     end -- end binop
+
+    do -- concat
+      -- note that standalone concats and concat precedence was already tested in the binop scope
+      -- however a concat chain and parenthesis are tested here
+
+      add_stat_test(
+        "concat chain of 2 concats",
+        "repeat until true..true..true",
+        function()
+          append_fake_scope(function()
+            local expr = nodes.new_concat{
+              exp_list = {new_true_node(next_token()), nil, nil},
+              op_tokens = {next_token_node(), nil},
+              concat_src_paren_wrappers = assert.custom_comparator({
+                [{}] = true,
+                [{{}}] = true,
+              }, true),
+            }
+            expr.exp_list[2] = new_true_node(next_token())
+            expr.op_tokens[2] = next_token_node()
+            expr.exp_list[3] = new_true_node(next_token())
+            return expr
+          end)
+        end
+      )
+
+      add_stat_test(
+        "concat with pointless '()'",
+        "repeat until (((true)..(((true)..(true)))))",
+        function()
+          append_fake_scope(function()
+            local function next_true_node()
+              local open_paren_token = next_token_node()
+              local node = new_true_node(next_token())
+              node.src_paren_wrappers = {
+                {
+                  open_paren_token = open_paren_token,
+                  close_paren_token = next_token_node(),
+                },
+              }
+              node.force_single_result = true
+              return node
+            end
+            local open_1 = next_token_node()
+            local open_2 = next_token_node()
+            local true_1 = next_true_node()
+            local op_1 = next_token_node()
+            local open_3 = next_token_node()
+            local open_4 = next_token_node()
+            local true_2 = next_true_node()
+            local op_2 = next_token_node()
+            local true_3 = next_true_node()
+            local close_4 = next_token_node()
+            local close_3 = next_token_node()
+            local close_2 = next_token_node()
+            local close_1 = next_token_node()
+            local expr = nodes.new_concat{
+              exp_list = {true_1, true_2, true_3},
+              op_tokens = {op_1, op_2},
+              force_single_result = true,
+              concat_src_paren_wrappers = {
+                {
+                  {
+                    open_paren_token = open_2,
+                    close_paren_token = close_2,
+                  },
+                  {
+                    open_paren_token = open_1,
+                    close_paren_token = close_1,
+                  },
+                },
+                {
+                  {
+                    open_paren_token = open_4,
+                    close_paren_token = close_4,
+                  },
+                  {
+                    open_paren_token = open_3,
+                    close_paren_token = close_3,
+                  },
+                },
+              }
+            }
+            return expr
+          end)
+        end
+      )
+
+      add_stat_test(
+        "concat with the left concat in '()'",
+        "repeat until (true..true)..true",
+        function()
+          append_fake_scope(function()
+            local open = next_token_node()
+            local true_1 = new_true_node(next_token())
+            local op_1 = next_token_node()
+            local true_2 = new_true_node(next_token())
+            local close = next_token_node()
+            local op_2 = next_token_node()
+            local true_3 = new_true_node(next_token())
+            local expr = nodes.new_concat{
+              exp_list = {
+                nodes.new_concat{
+                  exp_list = {true_1, true_2},
+                  op_tokens = {op_1},
+                  force_single_result = true,
+                  concat_src_paren_wrappers = {
+                    {
+                      {
+                        open_paren_token = open,
+                        close_paren_token = close,
+                      },
+                    },
+                  },
+                },
+                true_3
+              },
+              op_tokens = {op_2},
+              concat_src_paren_wrappers = assert.custom_comparator({
+                [{}] = true,
+                [{{}}] = true,
+              }, true),
+            }
+            return expr
+          end)
+        end
+      )
+    end -- end concat
   end -- end expressions
 end
