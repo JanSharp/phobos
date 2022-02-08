@@ -667,9 +667,11 @@ local simple_lut = {
       scope = scope.parent_scope
     end
     if not scope.is_vararg then
-      return syntax_error(new_error_code_inst{
+      local invalid = syntax_error(new_error_code_inst{
         error_code = error_code_util.codes.vararg_outside_vararg_func,
       }, "at")
+      invalid.consumed_nodes[#invalid.consumed_nodes+1] = new_token_node()
+      return invalid
     end
     return nodes.new_vararg{
       stat_elem = stat_elem,

@@ -2022,5 +2022,152 @@ do
         end
       )
     end -- end concat
+
+    do -- number
+      add_stat_test(
+        "number",
+        "repeat until 1",
+        function()
+          append_fake_scope(function()
+            local expr = nodes.new_number{
+              position = next_token(),
+              value = 1,
+              src_value = "1",
+            }
+            return expr
+          end)
+        end
+      )
+    end -- end number
+
+    do -- string
+      add_stat_test(
+        "string (regular)",
+        "repeat until 'hello world'",
+        function()
+          append_fake_scope(function()
+            local expr = nodes.new_string{
+              position = next_token(),
+              value = "hello world",
+              src_quote = [[']],
+              src_value = "hello world",
+            }
+            return expr
+          end)
+        end
+      )
+
+      add_stat_test(
+        "string (block)",
+        "repeat until [=[hello world]=]",
+        function()
+          append_fake_scope(function()
+            local expr = nodes.new_string{
+              position = next_token(),
+              value = "hello world",
+              src_is_block_str = true,
+              src_has_leading_newline = false,
+              src_pad = "=",
+            }
+            return expr
+          end)
+        end
+      )
+    end -- end string
+
+    do -- nil
+      add_stat_test(
+        "nil",
+        "repeat until nil",
+        function()
+          append_fake_scope(function()
+            local expr = nodes.new_nil{
+              position = next_token(),
+            }
+            return expr
+          end)
+        end
+      )
+    end -- end nil
+
+    do -- boolean
+      add_stat_test(
+        "true",
+        "repeat until true",
+        function()
+          append_fake_scope(function()
+            local expr = new_true_node(next_token())
+            return expr
+          end)
+        end
+      )
+
+      add_stat_test(
+        "false",
+        "repeat until false",
+        function()
+          append_fake_scope(function()
+            local expr = nodes.new_boolean{
+              position = next_token(),
+              value = false,
+            }
+            return expr
+          end)
+        end
+      )
+    end -- end boolean
+
+    do -- nil
+      add_stat_test(
+        "vararg in vararg function",
+        "repeat until ...",
+        function()
+          append_fake_scope(function()
+            local expr = nodes.new_vararg{
+              position = next_token(),
+            }
+            return expr
+          end)
+        end
+      )
+
+      add_stat_test(
+        "vararg outside vararg function",
+        "local function foo() repeat until ... end",
+        function()
+          local local_token = next_token_node()
+          local function_token = next_token_node()
+          local foo_def, foo_ref = ast.create_local(next_token(), fake_main, fake_stat_elem)
+          fake_main.locals[1] = foo_def
+          local localfunc = nodes.new_localfunc{
+            local_token = local_token,
+            name = foo_ref,
+            func_def = nodes.new_functiondef{
+              source = test_source,
+              parent_scope = fake_main,
+              function_token = function_token,
+              open_paren_token = next_token_node(),
+              close_paren_token = next_token_node(),
+              param_comma_tokens = empty_table_or_nil,
+            },
+          }
+          foo_def.start_at = localfunc
+          foo_def.start_offset = 0
+          local func_scope = localfunc.func_def
+          fake_main.func_protos[1] = func_scope
+          append_stat(fake_main, localfunc)
+          append_fake_scope(function()
+            local expr = new_invalid(
+              error_code_util.codes.vararg_outside_vararg_func,
+              peek_next_token(), -- at '...'
+              nil,
+              {next_token_node()} -- consuming '...'
+            )
+            return expr
+          end, func_scope)
+          func_scope.end_token = next_token_node()
+        end
+      )
+    end -- end nil
   end -- end expressions
 end
