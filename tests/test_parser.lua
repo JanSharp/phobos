@@ -2372,7 +2372,234 @@ do
       )
     end -- end func_proto/functiondef
 
-  -- TODO: constructor
+    do -- constructor
+      add_test_with_repeatstat(
+        "constructor empty",
+        "{}",
+        function()
+          local expr = nodes.new_constructor{
+            open_token = next_token_node(),
+            comma_tokens = empty_table_or_nil,
+            close_token = next_token_node(),
+          }
+          return expr
+        end
+      )
+
+      add_test_with_repeatstat(
+        "constructor with 1 list field",
+        "{true}",
+        function()
+          local expr = nodes.new_constructor{
+            open_token = next_token_node(),
+            fields = {
+              {type = "list", value = new_true_node(next_token())},
+            },
+            comma_tokens = empty_table_or_nil,
+            close_token = next_token_node(),
+          }
+          return expr
+        end
+      )
+
+      add_test_with_repeatstat(
+        "constructor with 1 list field starting with an ident",
+        "{foo}",
+        function(scope)
+          local expr = nodes.new_constructor{
+            open_token = next_token_node(),
+            fields = {
+              {type = "list", value = get_ref_helper("foo", next_token(), scope)},
+            },
+            comma_tokens = empty_table_or_nil,
+            close_token = next_token_node(),
+          }
+          return expr
+        end
+      )
+
+      add_test_with_repeatstat(
+        "constructor with 1 record field using '[]'",
+        "{[true] = true}",
+        function()
+          local expr = nodes.new_constructor{
+            open_token = next_token_node(),
+            fields = {
+              {
+                type = "rec",
+                key_open_token = next_token_node(),
+                key = new_true_node(next_token()),
+                key_close_token = next_token_node(),
+                eq_token = next_token_node(),
+                value = new_true_node(next_token()),
+              },
+            },
+            comma_tokens = empty_table_or_nil,
+            close_token = next_token_node(),
+          }
+          return expr
+        end
+      )
+
+      add_test_with_repeatstat(
+        "constructor with 1 record field using ident",
+        "{foo = true}",
+        function()
+          local expr = nodes.new_constructor{
+            open_token = next_token_node(),
+            fields = {
+              {
+                type = "rec",
+                key = nodes.new_string{
+                  value = "foo",
+                  position = next_token(),
+                  src_is_ident = true,
+                },
+                eq_token = next_token_node(),
+                value = new_true_node(next_token()),
+              },
+            },
+            comma_tokens = empty_table_or_nil,
+            close_token = next_token_node(),
+          }
+          return expr
+        end
+      )
+
+      add_test_with_repeatstat(
+        "constructor with 2 fields",
+        "{true, true}",
+        function()
+          local expr = nodes.new_constructor{
+            open_token = next_token_node(),
+            fields = {
+              {type = "list", value = new_true_node(next_token())},
+              nil,
+            },
+            comma_tokens = {next_token_node()},
+          }
+          expr.fields[2] = {type = "list", value = new_true_node(next_token())}
+          expr.close_token = next_token_node()
+          return expr
+        end
+      )
+
+      add_test_with_repeatstat(
+        "constructor with trailing comma",
+        "{true,}",
+        function()
+          local expr = nodes.new_constructor{
+            open_token = next_token_node(),
+            fields = {
+              {type = "list", value = new_true_node(next_token())},
+            },
+            comma_tokens = {next_token_node()},
+            close_token = next_token_node(),
+          }
+          return expr
+        end
+      )
+
+      add_test_with_repeatstat(
+        "constructor with 2 fields using ';' and a trailing ';'",
+        "{true; true;}",
+        function()
+          local expr = nodes.new_constructor{
+            open_token = next_token_node(),
+            fields = {
+              {type = "list", value = new_true_node(next_token())},
+              nil,
+            },
+            comma_tokens = {next_token_node()},
+          }
+          expr.fields[2] = {type = "list", value = new_true_node(next_token())}
+          expr.comma_tokens[2] = next_token_node()
+          expr.close_token = next_token_node()
+          return expr
+        end
+      )
+
+      add_test_with_repeatstat(
+        "constructor with record field using '[]' without '='",
+        "{[true]}",
+        function()
+          local expr = nodes.new_constructor{
+            open_token = next_token_node(),
+            fields = {
+              {
+                type = "rec",
+                key_open_token = next_token_node(),
+                key = new_true_node(next_token()),
+                key_close_token = next_token_node(),
+                eq_token = new_invalid(
+                  error_code_util.codes.expected_token,
+                  peek_next_token(), -- at '}'
+                  {"="}
+                ),
+                value = prevent_assert,
+              },
+            },
+            comma_tokens = empty_table_or_nil,
+            close_token = next_token_node(),
+          }
+          return expr
+        end
+      )
+
+      add_test_with_repeatstat(
+        "constructor with a standalone ','",
+        "{,}",
+        function()
+          local expr = nodes.new_constructor{
+            open_token = next_token_node(),
+            fields = {
+              {
+                type = "list",
+                value = new_invalid(
+                  error_code_util.codes.unexpected_token,
+                  peek_next_token(), -- at ','
+                  nil,
+                  {next_token_node()} -- consuming ','
+                )
+              },
+            },
+            comma_tokens = empty_table_or_nil,
+            close_token = next_token_node(),
+          }
+          return expr
+        end
+      )
+
+      add_test_with_repeatstat(
+        "constructor without '}'",
+        "{",
+        function()
+          local open_token = next_token_node()
+          local expr = nodes.new_constructor{
+            open_token = open_token,
+            fields = {
+              {
+                type = "list",
+                value = new_invalid(
+                  error_code_util.codes.unexpected_token,
+                  peek_next_token() -- at ','
+                  -- not consuming 'eof'
+                  -- TODO: failing because it is consuming 'eof'
+                )
+              },
+            },
+            comma_tokens = empty_table_or_nil,
+            close_token = new_invalid(
+              error_code_util.codes.expected_closing_match,
+              peek_next_token(), -- at 'eof'
+              {"}", "{", open_token.line..":"..open_token.column}
+            ),
+          }
+          return expr
+        end
+      )
+    end -- end constructor
+
   -- TODO: call
   -- TODO: expression list (using call, probably)
   end -- end expressions

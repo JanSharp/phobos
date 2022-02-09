@@ -244,11 +244,7 @@ local function index_expr(scope, stat_elem)
   local open_token = new_token_node()
   next_token()
   local e = expr(scope, stat_elem)
-  local close_token = new_token_node()
-  local invalid = assert_match(open_token, "]")
-  if invalid then
-    close_token = invalid
-  end
+  local close_token = assert_match(open_token, "]") or new_token_node(true)
   return e, open_token, close_token
 end
 
@@ -268,11 +264,10 @@ local function rec_field(scope, stat_elem)
   else
     field.key, field.key_open_token, field.key_close_token = index_expr(scope, stat_elem)
   end
-  field.eq_token = new_token_node()
-  local invalid = assert_next("=")
-  if invalid then
-    field.eq_token = nil
-    field.value = invalid
+  field.eq_token = assert_next("=") or new_token_node(true)
+  if is_invalid(field.eq_token) then
+    -- value should never be nil
+    field.value = prevent_assert
   else
     field.value = expr(scope, stat_elem)
   end
@@ -324,11 +319,7 @@ local function constructor(scope, stat_elem)
       break
     end
   end
-  node.close_token = new_token_node()
-  local invalid = assert_match(node.open_token, "}")
-  if invalid then
-    node.close_token = invalid
-  end
+  node.close_token = assert_match(node.open_token, "}") or new_token_node(true)
   return node
 end
 
