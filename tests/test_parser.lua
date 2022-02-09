@@ -227,6 +227,22 @@ do
     )
   end
 
+  local function append_dummy_local(scope)
+    scope = scope or fake_main
+    local local_token = next_token_node()
+    local foo_def, foo_ref = ast.create_local(next_token(), scope, fake_stat_elem)
+    scope.locals[1] = foo_def
+    local localstat = nodes.new_localstat{
+      local_token = local_token,
+      lhs = {foo_ref},
+      lhs_comma_tokens = empty_table_or_nil,
+      rhs_comma_tokens = empty_table_or_nil,
+    }
+    foo_def.start_at = localstat
+    foo_def.start_offset = 1
+    append_stat(scope, localstat)
+  end
+
   do
     local stat_scope = main_scope:new_scope("statements")
     current_testing_scope = stat_scope
@@ -828,6 +844,48 @@ do
           append_stat(fake_main, stat)
         end
       )
+
+      add_test(
+        "repeatstat condition scoping",
+        "local foo repeat ; ; local foo until foo",
+        function()
+          append_dummy_local()
+          local stat = nodes.new_repeatstat{
+            parent_scope = fake_main,
+            repeat_token = next_token_node(),
+            condition = prevent_assert,
+          }
+          -- TODO: this test if failing, see description below to get some idea as to why
+          -- the fix for it is disgusting (I can think of either adding a void statement
+          -- just to get a stat_elem with an appropriate index in the correct scope,
+          -- or making stat_elem optional when resolving the reference... however that
+          -- means making stat_elem optional for every expression and then having to
+          -- handle that everywhere else that is using `stat_elem`s
+          -- fun fact, this will be fixed with the removal of `stat_elem`s, (at least from the parser)
+          -- because we then have easy full control of what is visible at what point for
+          -- resolving references
+
+          -- need the empty stat such that the stat_elem index of the inner local
+          -- is the same as the stat_elem index of the repeatstat
+          -- this tests to make sure the correct index is used when resolving the reference,
+          -- since if it uses the wrong one it doesn't find the inner local, because it thinks
+          -- that one starts too late
+          append_empty(stat, next_token_node())
+          -- add a second one just for good measure. with just one we are relying on
+          -- start_offset working, which this test is not about
+          append_empty(stat, next_token_node())
+          append_dummy_local(stat)
+          stat.until_token = next_token_node()
+          stat.condition = nodes.new_local_ref{
+            name = "foo",
+            position = next_token(),
+            reference_def = stat.locals[1],
+          }
+          local refs = stat.locals[1].refs
+          refs[#refs+1] = stat.condition
+          append_stat(fake_main, stat)
+        end
+      )
     end -- end repeatstat
 
     do -- funcstat
@@ -1084,6 +1142,34 @@ do
           foo_def.start_offset = 1
           append_stat(fake_main, stat)
           append_empty(fake_main, next_token_node())
+        end
+      )
+
+      add_test(
+        "localstat expression scoping",
+        "local foo local foo = foo",
+        function()
+          append_dummy_local()
+          local local_token = next_token_node()
+          local name_def, name_ref = ast.create_local(next_token(), fake_main, fake_stat_elem)
+          fake_main.locals[2] = name_def
+          local stat = nodes.new_localstat{
+            local_token = local_token,
+            lhs = {name_ref},
+            lhs_comma_tokens = empty_table_or_nil,
+            eq_token = next_token_node(),
+            rhs = {nodes.new_local_ref{
+              name = "foo",
+              position = next_token(),
+              reference_def = fake_main.locals[1],
+            }},
+            rhs_comma_tokens = empty_table_or_nil,
+          }
+          local refs = fake_main.locals[1].refs
+          refs[#refs+1] = stat.rhs[1]
+          name_def.start_at = stat
+          name_def.start_offset = 1
+          append_stat(fake_main, stat)
         end
       )
     end -- end localstat
@@ -1514,7 +1600,7 @@ do
 
     -- funcstat, localfunc, call are only partially tested. The rest for them is in expressions
     -- ensuring that all expressions are evaluated in the right scope is also not tested here
-    -- TODO: it's tested later on (or, well, will be)
+    -- it's tested later on
   end -- end statements
 
   do -- expressions
@@ -1550,18 +1636,8 @@ do
         "local_ref",
         "local foo repeat until foo",
         function()
-          local local_token = next_token_node()
-          local foo_def, foo_ref = ast.create_local(next_token(), fake_main, fake_stat_elem)
-          fake_main.locals[1] = foo_def
-          local localstat = nodes.new_localstat{
-            local_token = local_token,
-            lhs = {foo_ref},
-            lhs_comma_tokens = empty_table_or_nil,
-            rhs_comma_tokens = empty_table_or_nil,
-          }
-          foo_def.start_at = localstat
-          foo_def.start_offset = 1
-          append_stat(fake_main, localstat)
+          append_dummy_local()
+          local foo_def = fake_main.locals[1]
           append_repeatstat(function()
             local expr = nodes.new_local_ref{
               name = "foo",
@@ -2114,5 +2190,14 @@ do
         end
       )
     end -- end nil
+
+  -- TODO: func_proto (with it functiondef)
+  -- TODO: constructor
+  -- TODO: call
+  -- TODO: expression list (using call, probably)
   end -- end expressions
+
+  -- NOTE: scoping for ifstat (testblock), whilestat, fornum, forlist, repeatstat will be more important
+  -- once local definition inside expressions will be a thing, however until then testing for it is difficult
+  -- the only way I can think of is using mocking which I consider disgusting
 end
