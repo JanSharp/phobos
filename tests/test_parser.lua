@@ -174,7 +174,7 @@ do
   local tokens
   local next_token
   local peek_next_token
-  local function add_stat_test(name, str, func)
+  local function add_test(name, str, func)
     current_testing_scope:add_test(name, function()
       before_each()
       tokens = get_tokens(str)
@@ -195,11 +195,43 @@ do
     return nodes.new_token(next_token())
   end
 
+  local function add_test_with_localfunc(name, str, func)
+    add_test(
+      name,
+      "local function foo() "..str.." end",
+      function()
+        local local_token = next_token_node()
+        local function_token = next_token_node()
+        local foo_def, foo_ref = ast.create_local(next_token(), fake_main, fake_stat_elem)
+        fake_main.locals[1] = foo_def
+        local localfunc = nodes.new_localfunc{
+          local_token = local_token,
+          name = foo_ref,
+          func_def = nodes.new_functiondef{
+            source = test_source,
+            parent_scope = fake_main,
+            function_token = function_token,
+            open_paren_token = next_token_node(),
+            close_paren_token = next_token_node(),
+            param_comma_tokens = empty_table_or_nil,
+          },
+        }
+        foo_def.start_at = localfunc
+        foo_def.start_offset = 0
+        local func_scope = localfunc.func_def
+        fake_main.func_protos[1] = func_scope
+        append_stat(fake_main, localfunc)
+        func(func_scope)
+        func_scope.end_token = next_token_node()
+      end
+    )
+  end
+
   do
     local stat_scope = main_scope:new_scope("statements")
     current_testing_scope = stat_scope
 
-    add_stat_test(
+    add_test(
       "empty",
       ";",
       function()
@@ -222,7 +254,7 @@ do
         return testblock
       end
 
-      add_stat_test(
+      add_test(
         "ifstat with 1 testblock",
         "if true then ; end",
         function()
@@ -234,7 +266,7 @@ do
         end
       )
 
-      add_stat_test(
+      add_test(
         "ifstat with 2 testblocks",
         "if true then ; elseif true then ; end",
         function()
@@ -249,7 +281,7 @@ do
         end
       )
 
-      add_stat_test(
+      add_test(
         "ifstat with elseblock",
         "if true then ; else ; end",
         function()
@@ -268,7 +300,7 @@ do
         end
       )
 
-      add_stat_test(
+      add_test(
         "ifstat without 'then'",
         "if true ;",
           function()
@@ -291,7 +323,7 @@ do
       )
 
       local function add_ifstat_without_else_but_with(last_keyword)
-        add_stat_test(
+        add_test(
           "ifstat without 'then' but with '"..last_keyword.."'",
           "if true "..last_keyword,
           function()
@@ -326,7 +358,7 @@ do
       add_ifstat_without_else_but_with("else")
       add_ifstat_without_else_but_with("end")
 
-      add_stat_test(
+      add_test(
         "ifstat without 'end'",
         "if true then ;",
         function()
@@ -344,7 +376,7 @@ do
     end -- end ifstat
 
     do -- whilestat
-      add_stat_test(
+      add_test(
         "whilestat",
         "while true do ; end",
         function()
@@ -360,7 +392,7 @@ do
         end
       )
 
-      add_stat_test(
+      add_test(
         "whilestat without do",
         "while true ;",
         function()
@@ -379,7 +411,7 @@ do
         end
       )
 
-      add_stat_test(
+      add_test(
         "while without 'end'",
         "while true do ;",
         function()
@@ -401,7 +433,7 @@ do
     end -- end whilestat
 
     do -- dostat
-      add_stat_test(
+      add_test(
         "dostat",
         "do ; end",
         function()
@@ -415,7 +447,7 @@ do
         end
       )
 
-      add_stat_test(
+      add_test(
         "dostat without 'end'",
         "do ;",
         function()
@@ -435,7 +467,7 @@ do
     end -- end dostat
 
     do -- fornum and or forlist
-      add_stat_test(
+      add_test(
         "fornum/forlist with invalid ident",
         "for . ;",
         function()
@@ -455,7 +487,7 @@ do
         end
       )
 
-      add_stat_test(
+      add_test(
         "fornum without '=' and forlist without ',' or 'in'",
         "for i ;",
         function()
@@ -495,7 +527,7 @@ do
         append_stat(fake_main, stat)
       end
 
-      add_stat_test(
+      add_test(
         "fornum without step",
         "for i = true, true do ; end",
         function()
@@ -503,7 +535,7 @@ do
         end
       )
 
-      add_stat_test(
+      add_test(
         "fornum with step",
         "for i = true, true, true do ; end",
         function()
@@ -511,7 +543,7 @@ do
         end
       )
 
-      add_stat_test(
+      add_test(
         "fornum without first ','",
         "for i = true ;",
         function()
@@ -537,7 +569,7 @@ do
         end
       )
 
-      add_stat_test(
+      add_test(
         "fornum without 'do'",
         "for i = true, true ;",
         function()
@@ -564,7 +596,7 @@ do
         end
       )
 
-      add_stat_test(
+      add_test(
         "fornum without 'end'",
         "for i = true, true do ;",
         function()
@@ -594,7 +626,7 @@ do
     end -- end fornum
 
     do -- forlist
-      add_stat_test(
+      add_test(
         "forlist with 1 name",
         "for foo in true do ; end",
         function()
@@ -619,7 +651,7 @@ do
       )
 
       local function add_forlist_with_x_names_test(name_count, names_str)
-        add_stat_test(
+        add_test(
           "forlist with "..name_count.." names",
           "for "..names_str.." in true do ; end",
           function()
@@ -651,7 +683,7 @@ do
       add_forlist_with_x_names_test(2, "foo, bar")
       add_forlist_with_x_names_test(3, "foo, bar, baz")
 
-      add_stat_test(
+      add_test(
         "forlist with invalid name list",
         "for foo, ;",
         function()
@@ -676,7 +708,7 @@ do
         end
       )
 
-      add_stat_test(
+      add_test(
         "forlist with invalid name list, but continuing with 'in'",
         "for foo, in true do ; end",
         function()
@@ -705,7 +737,7 @@ do
         end
       )
 
-      add_stat_test(
+      add_test(
         "forlist without 'do'",
         "for foo in true ;",
         function()
@@ -732,7 +764,7 @@ do
         end
       )
 
-      add_stat_test(
+      add_test(
         "forlist without 'end'",
         "for foo in true do ;",
         function()
@@ -762,7 +794,7 @@ do
     end -- end forlist
 
     do -- repeatstat
-      add_stat_test(
+      add_test(
         "repeatstat",
         "repeat ; until true",
         function()
@@ -778,7 +810,7 @@ do
         end
       )
 
-      add_stat_test(
+      add_test(
         "repeatstat without 'until'",
         "repeat ;",
         function()
@@ -799,7 +831,7 @@ do
     end -- end repeatstat
 
     do -- funcstat
-      add_stat_test(
+      add_test(
         "funcstat",
         "function foo() ; end",
         function()
@@ -834,7 +866,7 @@ do
         }
       end
 
-      add_stat_test(
+      add_test(
         "funcstat with 'foo.bar.baz' name",
         "function foo.bar.baz() ; end",
         function()
@@ -860,7 +892,7 @@ do
         end
       )
 
-      add_stat_test(
+      add_test(
         "funcstat with 'foo:bar' name (method)",
         "function foo:bar() ; end",
         function()
@@ -890,7 +922,7 @@ do
         end
       )
 
-      add_stat_test(
+      add_test(
         "funcstat without ident",
         "function ;",
         function()
@@ -905,7 +937,7 @@ do
         end
       )
 
-      add_stat_test(
+      add_test(
         "funcstat with invalid 'foo:bar.baz' name",
         "function foo:bar.baz ;",
         function()
@@ -952,7 +984,7 @@ do
 
     do -- localstat
       local function add_localstat_with_x_names_test(name_count, names_str)
-        add_stat_test(
+        add_test(
           "localstat with "..name_count.." name"..(name_count == 1 and "" or "s"),
           "local "..names_str..";",
           function()
@@ -988,7 +1020,7 @@ do
       add_localstat_with_x_names_test(2, "foo, bar")
       add_localstat_with_x_names_test(3, "foo, bar, baz")
 
-      add_stat_test(
+      add_test(
         "localstat with rhs",
         "local foo = true, true;",
         function()
@@ -1011,7 +1043,7 @@ do
         end
       )
 
-      add_stat_test(
+      add_test(
         "localstat without ident",
         "local ;",
         function()
@@ -1030,7 +1062,7 @@ do
         end
       )
 
-      add_stat_test(
+      add_test(
         "localstat with invalid ident but continuing with '='",
         "local foo, = true;",
         function()
@@ -1057,36 +1089,15 @@ do
     end -- end localstat
 
     do -- localfunc
-      add_stat_test(
+      add_test_with_localfunc(
         "localfunc",
-        "local function foo() ; end",
-        function()
-          local local_token = next_token_node()
-          local function_token = next_token_node()
-          local name_def, name_ref = ast.create_local(next_token(), fake_main, fake_stat_elem)
-          fake_main.locals[1] = name_def
-          local stat = nodes.new_localfunc{
-            local_token = local_token,
-            name = name_ref,
-            func_def = nodes.new_functiondef{
-              parent_scope = fake_main,
-              source = test_source,
-              function_token = function_token,
-              open_paren_token = next_token_node(),
-              close_paren_token = next_token_node(),
-              param_comma_tokens = empty_table_or_nil,
-            }
-          }
-          fake_main.func_protos[1] = stat.func_def
-          name_def.start_at = stat
-          name_def.start_offset = 0
-          append_empty(stat.func_def, next_token_node())
-          stat.func_def.end_token = next_token_node()
-          append_stat(fake_main, stat)
+        ";",
+        function(scope)
+          append_empty(scope, next_token_node())
         end
       )
 
-      add_stat_test(
+      add_test(
         "localfunc without ident",
         "local function() ; end",
         function()
@@ -1117,7 +1128,7 @@ do
 
     do -- label
       local function add_label_test(label, extra_str, extra_code)
-        add_stat_test(
+        add_test(
           label,
           "::foo:: "..(extra_str or "").." ;",
           function()
@@ -1138,7 +1149,7 @@ do
 
       add_label_test("label")
 
-      add_stat_test(
+      add_test(
         "label without ident",
         ":: ;",
         function()
@@ -1152,7 +1163,7 @@ do
         end
       )
 
-      add_stat_test(
+      add_test(
         "label without closing '::'",
         "::foo ;",
         function()
@@ -1198,7 +1209,7 @@ do
     end -- end label
 
     do -- retstat
-      add_stat_test(
+      add_test(
         "retstat without results",
         "return",
         function()
@@ -1210,7 +1221,7 @@ do
         end
       )
 
-      add_stat_test(
+      add_test(
         "retstat with 1 result",
         "return true",
         function()
@@ -1223,7 +1234,7 @@ do
         end
       )
 
-      add_stat_test(
+      add_test(
         "retstat with 2 results",
         "return true, true",
         function()
@@ -1237,7 +1248,7 @@ do
         end
       )
 
-      add_stat_test(
+      add_test(
         "retstat without results with ';'",
         "return;",
         function()
@@ -1250,7 +1261,7 @@ do
         end
       )
 
-      add_stat_test(
+      add_test(
         "retstat with 1 result and with ';'",
         "return true;",
         function()
@@ -1264,7 +1275,7 @@ do
         end
       )
 
-      add_stat_test(
+      add_test(
         "retstat ends the current block",
         "return; ;",
         function()
@@ -1285,7 +1296,7 @@ do
     end -- end retstat
 
     do -- breakstat
-      add_stat_test(
+      add_test(
         "breakstat",
         "break;",
         function()
@@ -1299,7 +1310,7 @@ do
     end -- end breakstat
 
     do -- gotostat
-      add_stat_test(
+      add_test(
         "gotostat",
         "goto foo;",
         function()
@@ -1314,7 +1325,7 @@ do
         end
       )
 
-      add_stat_test(
+      add_test(
         "gotostat without ident",
         "goto ;",
         function()
@@ -1333,7 +1344,7 @@ do
       do -- call
         -- call statements are quite literally just call expressions in a different context
         -- so if this works, they all work (or, well, work as well as the call expressions do)
-        add_stat_test(
+        add_test(
           "call statement",
           "foo();",
           function()
@@ -1350,7 +1361,7 @@ do
       end -- end call
 
       do -- assignment
-        add_stat_test(
+        add_test(
           "assignment with 1 lhs, 1 rhs",
           "foo = true;",
           function()
@@ -1373,7 +1384,7 @@ do
           return lhs, lhs_comma_tokens
         end
 
-        add_stat_test(
+        add_test(
           "assignment with 2 lhs, 1 rhs",
           "foo, bar = true;",
           function()
@@ -1390,7 +1401,7 @@ do
           end
         )
 
-        add_stat_test(
+        add_test(
           "assignment with 1 lhs, 2 rhs",
           "foo = true, true;",
           function()
@@ -1407,7 +1418,7 @@ do
           end
         )
 
-        add_stat_test(
+        add_test(
           "assignment with 2 lhs without '='",
           "foo, bar ;",
           function()
@@ -1429,7 +1440,7 @@ do
         )
 
         local function add_invalid_lhs_assignment_tests(str, get_invalid_lhs_node)
-          add_stat_test(
+          add_test(
             "assignment with '"..str.."' lhs",
             str.." = true;",
             function()
@@ -1446,7 +1457,7 @@ do
           )
 
           -- the second lhs (and following) is/are parsed in a different part of the code
-          add_stat_test(
+          add_test(
             "assignment with 'foo, "..str.."' lhs",
             "foo, "..str.." = true;",
             function()
@@ -1510,21 +1521,32 @@ do
     local expr_scope = main_scope:new_scope("expressions")
     current_testing_scope = expr_scope
 
-    local fake_scope
-    local function append_fake_scope(get_expr_node, parent_scope)
+    local function append_repeatstat(get_expr_node, parent_scope)
       parent_scope = parent_scope or fake_main
-      fake_scope = nodes.new_repeatstat{
+      local scope = nodes.new_repeatstat{
         parent_scope = parent_scope,
         repeat_token = next_token_node(),
         until_token = next_token_node(),
         condition = prevent_assert,
       }
-      fake_scope.condition = get_expr_node()
-      append_stat(parent_scope, fake_scope)
+      scope.condition = get_expr_node(scope)
+      append_stat(parent_scope, scope)
+    end
+
+    local function add_test_with_repeatstat(name, str, func)
+      add_test(
+        name,
+        "repeat until "..str,
+        function()
+          append_repeatstat(function(scope)
+            return func(scope)
+          end)
+        end
+      )
     end
 
     do -- local_ref
-      add_stat_test(
+      add_test(
         "local_ref",
         "local foo repeat until foo",
         function()
@@ -1540,7 +1562,7 @@ do
           foo_def.start_at = localstat
           foo_def.start_offset = 1
           append_stat(fake_main, localstat)
-          append_fake_scope(function()
+          append_repeatstat(function()
             local expr = nodes.new_local_ref{
               name = "foo",
               position = next_token(),
@@ -1554,32 +1576,12 @@ do
     end -- end local_ref
 
     do -- upval_ref
-      add_stat_test(
+      add_test_with_localfunc(
         "upval_ref",
-        "local function foo() repeat until foo end",
-        function()
-          local local_token = next_token_node()
-          local function_token = next_token_node()
-          local foo_def, foo_ref = ast.create_local(next_token(), fake_main, fake_stat_elem)
-          fake_main.locals[1] = foo_def
-          local localfunc = nodes.new_localfunc{
-            local_token = local_token,
-            name = foo_ref,
-            func_def = nodes.new_functiondef{
-              parent_scope = fake_main,
-              source = test_source,
-              function_token = function_token,
-              open_paren_token = next_token_node(),
-              close_paren_token = next_token_node(),
-              param_comma_tokens = empty_table_or_nil,
-            },
-          }
-          foo_def.start_at = localfunc
-          foo_def.start_offset = 0
-          append_stat(fake_main, localfunc)
-          local func_scope = localfunc.func_def
-          fake_main.func_protos[#fake_main.func_protos+1] = func_scope
-          append_fake_scope(function()
+        "repeat until foo",
+        function(func_scope)
+          local foo_def = fake_main.locals[1] -- defined by add_test_with_func
+          append_repeatstat(function()
             local upval_def = {
               def_type = "upval",
               name = "foo",
@@ -1598,22 +1600,19 @@ do
             upval_def.refs[#upval_def.refs+1] = upval_ref
             return upval_ref
           end, func_scope)
-          func_scope.end_token = next_token_node()
         end
       )
     end -- end upval_ref
 
     do -- index
       local function add_index_test(label, str, get_expr)
-        add_stat_test(
+        add_test_with_repeatstat(
           label,
-          "repeat until "..str,
-          function()
-            append_fake_scope(function()
-              local foo = get_ref_helper("foo", next_token(), fake_scope)
-              local expr = get_expr(foo)
-              return expr
-            end)
+          str,
+          function(scope)
+            local foo = get_ref_helper("foo", next_token(), scope)
+            local expr = get_expr(foo)
+            return expr
           end
         )
       end
@@ -1724,77 +1723,69 @@ do
       current_testing_scope = unop_scope
 
       local function add_unop_tests(unop_str)
-        add_stat_test(
+        add_test_with_repeatstat(
           "unop '"..unop_str.."'",
-          "repeat until "..unop_str.." true",
+          unop_str.." true",
           function()
-            append_fake_scope(function()
-              local expr = nodes.new_unop{
-                op = unop_str,
-                op_token = next_token_node(),
-                ex = new_true_node(next_token()),
-              }
-              return expr
-            end)
+            local expr = nodes.new_unop{
+              op = unop_str,
+              op_token = next_token_node(),
+              ex = new_true_node(next_token()),
+            }
+            return expr
           end
         )
 
-        add_stat_test(
+        add_test_with_repeatstat(
           "unop double '"..unop_str.."'",
-          "repeat until "..unop_str.." "..unop_str.." true",
+          unop_str.." "..unop_str.." true",
           function()
-            append_fake_scope(function()
-              local expr = nodes.new_unop{
+            local expr = nodes.new_unop{
+              op = unop_str,
+              op_token = next_token_node(),
+              ex = nodes.new_unop{
                 op = unop_str,
                 op_token = next_token_node(),
-                ex = nodes.new_unop{
-                  op = unop_str,
-                  op_token = next_token_node(),
-                  ex = new_true_node(next_token()),
-                },
-              }
-              return expr
-            end)
+                ex = new_true_node(next_token()),
+              },
+            }
+            return expr
           end
         )
 
         for _, binop in ipairs(all_binops) do
           if binop == "^" then
-            add_stat_test(
+            add_test_with_repeatstat(
               "unop '"..unop_str.."' does not take precedence over binop '"..binop.."'",
-              "repeat until "..unop_str.." true "..binop.." true",
+              unop_str.." true "..binop.." true",
               function()
-                append_fake_scope(function()
-                  local expr = nodes.new_unop{
-                    op = unop_str,
-                    op_token = next_token_node(),
-                    ex = make_binop(
-                      binop,
-                      new_true_node(next_token()),
-                      function() return new_true_node(next_token()) end
-                    ),
-                  }
-                  return expr
-                end)
+                local expr = nodes.new_unop{
+                  op = unop_str,
+                  op_token = next_token_node(),
+                  ex = make_binop(
+                    binop,
+                    new_true_node(next_token()),
+                    function() return new_true_node(next_token()) end
+                  ),
+                }
+                return expr
               end
             )
           else
-            add_stat_test(
+            add_test_with_repeatstat(
               "unop '"..unop_str.."' takes precedence over binop '"..binop.."'",
-              "repeat until "..unop_str.." true "..binop.." true",
+              unop_str.." true "..binop.." true",
               function()
-                append_fake_scope(function()
-                  local expr = make_binop(
-                    binop,
-                    nodes.new_unop{
-                      op = unop_str,
-                      op_token = next_token_node(),
-                      ex = new_true_node(next_token()),
-                    },
-                    function() return new_true_node(next_token()) end
-                  )
-                  return expr
-                end)
+                local expr = make_binop(
+                  binop,
+                  nodes.new_unop{
+                    op = unop_str,
+                    op_token = next_token_node(),
+                    ex = new_true_node(next_token()),
+                  },
+                  function() return new_true_node(next_token()) end
+                )
+                return expr
               end
             )
           end
@@ -1813,18 +1804,16 @@ do
       current_testing_scope = binop_scope
 
       for _, binop in ipairs(all_binops) do
-        add_stat_test(
+        add_test_with_repeatstat(
           "binop '"..binop.."'",
-          "repeat until true "..binop.." true",
+          "true "..binop.." true",
           function()
-            append_fake_scope(function()
-              local expr = make_binop(
-                binop,
-                new_true_node(next_token()),
-                function() return new_true_node(next_token_node()) end
-              )
+            local expr = make_binop(
+              binop,
+              new_true_node(next_token()),
+              function() return new_true_node(next_token_node()) end
+            )
             return expr
-            end)
           end
         )
       end
@@ -1852,36 +1841,34 @@ do
         local label = middle_is_prioritized_by_the_right
           and "(foo "..first.." (bar "..second.." baz))"
           or "((foo "..first.." bar) "..second.." baz)"
-        add_stat_test(
+        add_test_with_repeatstat(
           "binops '"..label.."' (test without '()')",
-          "repeat until true "..first.." true "..second.." true",
+          "true "..first.." true "..second.." true",
           function()
-            append_fake_scope(function()
-              local expr
-              local function make_inner_binop(binop)
-                return make_binop(
-                  binop,
-                  new_true_node(next_token()),
-                  function() return new_true_node(next_token()) end
-                )
-              end
-              if middle_is_prioritized_by_the_right then
-                -- the second op is the inner node
-                expr = make_binop(
-                  first,
-                  new_true_node(next_token()),
-                  function() return make_inner_binop(second) end
-                )
-              else
-                -- the first op is the inner node
-                expr = make_binop(
-                  second,
-                  make_inner_binop(first),
-                  function() return new_true_node(next_token()) end
-                )
-              end
-              return expr
-            end)
+            local expr
+            local function make_inner_binop(binop)
+              return make_binop(
+                binop,
+                new_true_node(next_token()),
+                function() return new_true_node(next_token()) end
+              )
+            end
+            if middle_is_prioritized_by_the_right then
+              -- the second op is the inner node
+              expr = make_binop(
+                first,
+                new_true_node(next_token()),
+                function() return make_inner_binop(second) end
+              )
+            else
+              -- the first op is the inner node
+              expr = make_binop(
+                second,
+                make_inner_binop(first),
+                function() return new_true_node(next_token()) end
+              )
+            end
+            return expr
           end
         )
       end
@@ -1899,264 +1886,223 @@ do
       -- note that standalone concats and concat precedence was already tested in the binop scope
       -- however a concat chain and parenthesis are tested here
 
-      add_stat_test(
+      add_test_with_repeatstat(
         "concat chain of 2 concats",
-        "repeat until true..true..true",
+        "true..true..true",
         function()
-          append_fake_scope(function()
-            local expr = nodes.new_concat{
-              exp_list = {new_true_node(next_token()), nil, nil},
-              op_tokens = {next_token_node(), nil},
-              concat_src_paren_wrappers = assert.custom_comparator({
-                [{}] = true,
-                [{{}}] = true,
-              }, true),
-            }
-            expr.exp_list[2] = new_true_node(next_token())
-            expr.op_tokens[2] = next_token_node()
-            expr.exp_list[3] = new_true_node(next_token())
-            return expr
-          end)
+          local expr = nodes.new_concat{
+            exp_list = {new_true_node(next_token()), nil, nil},
+            op_tokens = {next_token_node(), nil},
+            concat_src_paren_wrappers = assert.custom_comparator({
+              [{}] = true,
+              [{{}}] = true,
+            }, true),
+          }
+          expr.exp_list[2] = new_true_node(next_token())
+          expr.op_tokens[2] = next_token_node()
+          expr.exp_list[3] = new_true_node(next_token())
+          return expr
         end
       )
 
-      add_stat_test(
+      add_test_with_repeatstat(
         "concat with pointless '()'",
-        "repeat until (((true)..(((true)..(true)))))",
+        "(((true)..(((true)..(true)))))",
         function()
-          append_fake_scope(function()
-            local function next_true_node()
-              local open_paren_token = next_token_node()
-              local node = new_true_node(next_token())
-              node.src_paren_wrappers = {
-                {
-                  open_paren_token = open_paren_token,
-                  close_paren_token = next_token_node(),
-                },
-              }
-              node.force_single_result = true
-              return node
-            end
-            local open_1 = next_token_node()
-            local open_2 = next_token_node()
-            local true_1 = next_true_node()
-            local op_1 = next_token_node()
-            local open_3 = next_token_node()
-            local open_4 = next_token_node()
-            local true_2 = next_true_node()
-            local op_2 = next_token_node()
-            local true_3 = next_true_node()
-            local close_4 = next_token_node()
-            local close_3 = next_token_node()
-            local close_2 = next_token_node()
-            local close_1 = next_token_node()
-            local expr = nodes.new_concat{
-              exp_list = {true_1, true_2, true_3},
-              op_tokens = {op_1, op_2},
-              force_single_result = true,
-              concat_src_paren_wrappers = {
-                {
-                  {
-                    open_paren_token = open_2,
-                    close_paren_token = close_2,
-                  },
-                  {
-                    open_paren_token = open_1,
-                    close_paren_token = close_1,
-                  },
-                },
-                {
-                  {
-                    open_paren_token = open_4,
-                    close_paren_token = close_4,
-                  },
-                  {
-                    open_paren_token = open_3,
-                    close_paren_token = close_3,
-                  },
-                },
-              }
+          local function next_true_node()
+            local open_paren_token = next_token_node()
+            local node = new_true_node(next_token())
+            node.src_paren_wrappers = {
+              {
+                open_paren_token = open_paren_token,
+                close_paren_token = next_token_node(),
+              },
             }
-            return expr
-          end)
+            node.force_single_result = true
+            return node
+          end
+          local open_1 = next_token_node()
+          local open_2 = next_token_node()
+          local true_1 = next_true_node()
+          local op_1 = next_token_node()
+          local open_3 = next_token_node()
+          local open_4 = next_token_node()
+          local true_2 = next_true_node()
+          local op_2 = next_token_node()
+          local true_3 = next_true_node()
+          local close_4 = next_token_node()
+          local close_3 = next_token_node()
+          local close_2 = next_token_node()
+          local close_1 = next_token_node()
+          local expr = nodes.new_concat{
+            exp_list = {true_1, true_2, true_3},
+            op_tokens = {op_1, op_2},
+            force_single_result = true,
+            concat_src_paren_wrappers = {
+              {
+                {
+                  open_paren_token = open_2,
+                  close_paren_token = close_2,
+                },
+                {
+                  open_paren_token = open_1,
+                  close_paren_token = close_1,
+                },
+              },
+              {
+                {
+                  open_paren_token = open_4,
+                  close_paren_token = close_4,
+                },
+                {
+                  open_paren_token = open_3,
+                  close_paren_token = close_3,
+                },
+              },
+            }
+          }
+          return expr
         end
       )
 
-      add_stat_test(
+      add_test_with_repeatstat(
         "concat with the left concat in '()'",
-        "repeat until (true..true)..true",
+        "(true..true)..true",
         function()
-          append_fake_scope(function()
-            local open = next_token_node()
-            local true_1 = new_true_node(next_token())
-            local op_1 = next_token_node()
-            local true_2 = new_true_node(next_token())
-            local close = next_token_node()
-            local op_2 = next_token_node()
-            local true_3 = new_true_node(next_token())
-            local expr = nodes.new_concat{
-              exp_list = {
-                nodes.new_concat{
-                  exp_list = {true_1, true_2},
-                  op_tokens = {op_1},
-                  force_single_result = true,
-                  concat_src_paren_wrappers = {
+          local open = next_token_node()
+          local true_1 = new_true_node(next_token())
+          local op_1 = next_token_node()
+          local true_2 = new_true_node(next_token())
+          local close = next_token_node()
+          local op_2 = next_token_node()
+          local true_3 = new_true_node(next_token())
+          local expr = nodes.new_concat{
+            exp_list = {
+              nodes.new_concat{
+                exp_list = {true_1, true_2},
+                op_tokens = {op_1},
+                force_single_result = true,
+                concat_src_paren_wrappers = {
+                  {
                     {
-                      {
-                        open_paren_token = open,
-                        close_paren_token = close,
-                      },
+                      open_paren_token = open,
+                      close_paren_token = close,
                     },
                   },
                 },
-                true_3
               },
-              op_tokens = {op_2},
-              concat_src_paren_wrappers = assert.custom_comparator({
-                [{}] = true,
-                [{{}}] = true,
-              }, true),
-            }
-            return expr
-          end)
+              true_3
+            },
+            op_tokens = {op_2},
+            concat_src_paren_wrappers = assert.custom_comparator({
+              [{}] = true,
+              [{{}}] = true,
+            }, true),
+          }
+          return expr
         end
       )
     end -- end concat
 
     do -- number
-      add_stat_test(
+      add_test_with_repeatstat(
         "number",
-        "repeat until 1",
+        "1",
         function()
-          append_fake_scope(function()
-            local expr = nodes.new_number{
-              position = next_token(),
-              value = 1,
-              src_value = "1",
-            }
-            return expr
-          end)
+          local expr = nodes.new_number{
+            position = next_token(),
+            value = 1,
+            src_value = "1",
+          }
+          return expr
         end
       )
     end -- end number
 
     do -- string
-      add_stat_test(
+      add_test_with_repeatstat(
         "string (regular)",
-        "repeat until 'hello world'",
+        "'hello world'",
         function()
-          append_fake_scope(function()
-            local expr = nodes.new_string{
-              position = next_token(),
-              value = "hello world",
-              src_quote = [[']],
-              src_value = "hello world",
-            }
-            return expr
-          end)
+          local expr = nodes.new_string{
+            position = next_token(),
+            value = "hello world",
+            src_quote = [[']],
+            src_value = "hello world",
+          }
+          return expr
         end
       )
 
-      add_stat_test(
+      add_test_with_repeatstat(
         "string (block)",
-        "repeat until [=[hello world]=]",
+        "[=[hello world]=]",
         function()
-          append_fake_scope(function()
-            local expr = nodes.new_string{
-              position = next_token(),
-              value = "hello world",
-              src_is_block_str = true,
-              src_has_leading_newline = false,
-              src_pad = "=",
-            }
-            return expr
-          end)
+          local expr = nodes.new_string{
+            position = next_token(),
+            value = "hello world",
+            src_is_block_str = true,
+            src_has_leading_newline = false,
+            src_pad = "=",
+          }
+          return expr
         end
       )
     end -- end string
 
     do -- nil
-      add_stat_test(
+      add_test_with_repeatstat(
         "nil",
-        "repeat until nil",
+        "nil",
         function()
-          append_fake_scope(function()
-            local expr = nodes.new_nil{
-              position = next_token(),
-            }
-            return expr
-          end)
+          local expr = nodes.new_nil{
+            position = next_token(),
+          }
+          return expr
         end
       )
     end -- end nil
 
     do -- boolean
-      add_stat_test(
+      add_test_with_repeatstat(
         "true",
-        "repeat until true",
+        "true",
         function()
-          append_fake_scope(function()
-            local expr = new_true_node(next_token())
-            return expr
-          end)
+          local expr = new_true_node(next_token())
+          return expr
         end
       )
 
-      add_stat_test(
+      add_test_with_repeatstat(
         "false",
-        "repeat until false",
+        "false",
         function()
-          append_fake_scope(function()
-            local expr = nodes.new_boolean{
-              position = next_token(),
-              value = false,
-            }
-            return expr
-          end)
+          local expr = nodes.new_boolean{
+            position = next_token(),
+            value = false,
+          }
+          return expr
         end
       )
     end -- end boolean
 
     do -- nil
-      add_stat_test(
+      add_test_with_repeatstat(
         "vararg in vararg function",
-        "repeat until ...",
+        "...",
         function()
-          append_fake_scope(function()
-            local expr = nodes.new_vararg{
-              position = next_token(),
-            }
-            return expr
-          end)
+          local expr = nodes.new_vararg{
+            position = next_token(),
+          }
+          return expr
         end
       )
 
-      add_stat_test(
+      add_test_with_localfunc(
         "vararg outside vararg function",
-        "local function foo() repeat until ... end",
-        function()
-          local local_token = next_token_node()
-          local function_token = next_token_node()
-          local foo_def, foo_ref = ast.create_local(next_token(), fake_main, fake_stat_elem)
-          fake_main.locals[1] = foo_def
-          local localfunc = nodes.new_localfunc{
-            local_token = local_token,
-            name = foo_ref,
-            func_def = nodes.new_functiondef{
-              source = test_source,
-              parent_scope = fake_main,
-              function_token = function_token,
-              open_paren_token = next_token_node(),
-              close_paren_token = next_token_node(),
-              param_comma_tokens = empty_table_or_nil,
-            },
-          }
-          foo_def.start_at = localfunc
-          foo_def.start_offset = 0
-          local func_scope = localfunc.func_def
-          fake_main.func_protos[1] = func_scope
-          append_stat(fake_main, localfunc)
-          append_fake_scope(function()
+        "repeat until ...",
+        function(scope)
+          append_repeatstat(function()
             local expr = new_invalid(
               error_code_util.codes.vararg_outside_vararg_func,
               peek_next_token(), -- at '...'
@@ -2164,8 +2110,7 @@ do
               {next_token_node()} -- consuming '...'
             )
             return expr
-          end, func_scope)
-          func_scope.end_token = next_token_node()
+          end, scope)
         end
       )
     end -- end nil
