@@ -78,8 +78,8 @@ local keywords = invert{
 ---"comment" tokens with `not src_is_block_str` do not contain trailing `\n`
 ---@field value string|number
 ---@field src_is_block_str boolean @ for `string` and `comment` tokens
----@field src_quote string @ for non block `string` and `comment` tokens
----@field src_value string @ for non block `string`, `comment` and `number` tokens
+---@field src_quote string @ for non block `string` tokens
+---@field src_value string @ for non block `string` and `number` tokens
 ---@field src_has_leading_newline boolean @ for block `string` and `comment` tokens
 ---@field src_pad string @ the `=` chain for block `string` and `comment` tokens
 ---@field leading Token[] @ `blank` and `comment` tokens before this token. Set and used by the parser

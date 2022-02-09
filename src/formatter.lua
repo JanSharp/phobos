@@ -34,27 +34,43 @@ local function format(main)
     end
   end
 
+  local add_token
   local function add_leading(node)
-    ---@type Token
     for _, token in ipairs(node.leading) do
-      if token.token_type == "blank" then
-        add(token.value)
-      elseif token.token_type == "comment" then
-        add("--")
-        if token.src_is_block_str then
-          add_string(token)
-        else
-          add(token.value)
-        end
+      if token.token_type == "blank" or token.token_type == "comment" then
+        add_token(token)
       else
-        error("Invalid token_type '"..token.token_type.."'.")
+        error("Invalid leading token_type '"..token.token_type.."'.")
       end
     end
   end
 
-  local function add_token(token_node)
-    add_leading(token_node)
-    add(token_node.value)
+  function add_token(token_node)
+    if token_node.leading then
+      add_leading(token_node)
+    end
+    if token_node.token_type == "blank" then
+      add(token_node.value)
+    elseif token_node.token_type == "comment" then
+      add("--")
+      if token_node.src_is_block_str then
+        add_string(token_node)
+      else
+        add(token_node.value)
+      end
+    elseif token_node.token_type == "string" then
+      add_string(token_node)
+    elseif token_node.token_type == "number" then
+      add(token_node.src_value)
+    elseif token_node.token_type == "ident" then
+      add(token_node.value)
+    elseif token_node.token_type == "eof" then
+      -- nothing
+    elseif token_node.token_type == "invalid" then
+      add(token_node.value)
+    else
+      add(token_node.token_type)
+    end
   end
 
   ---@param node AstCall

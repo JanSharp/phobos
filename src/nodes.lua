@@ -150,32 +150,55 @@ function nodes.new_functiondef(params)
   return node
 end
 
-do
-  local have_their_own_value = invert{
-    "blank",
-    "comment",
-    "string",
-    "number",
-    "ident",
-    "invalid",
-  }
+---@class AstTokenParams : Token
+---@field index nil @ overridden to `nil`
 
-  ---@param token Token
-  ---@param value string|nil @ default: `token.value` for special token_type, `token.token_type` otherwise
-  function nodes.new_token(token, value)
-    local node = new_node("token", token)
-    if value then
-      node.value = value
-    elseif have_their_own_value[token.token_type] then
-      node.value = token.value
-    else
-      node.value = token.token_type
-    end
-    if token.token_type == "invalid" then
-      node.error_code_insts = token.error_code_insts
-    end
-    return node
+---@param params AstTokenParams
+function nodes.new_token(params)
+  local node = new_node("token", params);
+  node.token_type = assert_params_field(params, "token_type")
+  node.leading = params.leading or {}
+  local function block_string_specific_fields()
+    node.src_has_leading_newline = assert_params_field(params, "src_has_leading_newline")
+    node.src_pad = assert_params_field(params, "src_pad")
   end
+  (({
+    ["blank"] = function()
+      node.value = assert_params_field(params, "value")
+    end,
+    ["comment"] = function()
+      node.value = assert_params_field(params, "value")
+      node.src_is_block_str = params.src_is_block_str or false
+      if node.src_is_block_str then
+        block_string_specific_fields()
+      end
+    end,
+    ["string"] = function()
+      node.value = assert_params_field(params, "value")
+      node.src_is_block_str = params.src_is_block_str or false
+      node.src_value = assert_params_field(params, "src_value")
+    end,
+    ["number"] = function()
+      node.value = assert_params_field(params, "value")
+      node.src_value = assert_params_field(params, "src_value")
+    end,
+    ["ident"] = function()
+      node.value = assert_params_field(params, "value")
+    end,
+    -- no fields for eof, so commented out even though it is one of the special ones
+    -- ["eof"] = function()
+    -- end,
+    ["invalid"] = function()
+      -- Generally speaking make invalid nodes for invalid tokens instead of token nodes
+      -- but in the parser it creates some floating invalid nodes (meaning they aren't
+      -- in the AST anywhere, just in the syntax errors list) and then when such a token
+      -- eventually causes an unexpected token syntax error it gets consumed by that invalid
+      -- node which makes an invalid token node for that token
+      node.value = assert_params_field(params, "value")
+      node.error_code_insts = params.error_code_insts or {}
+    end,
+  })[node.token_type] or function() end)()
+  return node
 end
 
 ---@class AstInvalidParams

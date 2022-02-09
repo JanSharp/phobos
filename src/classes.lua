@@ -60,15 +60,9 @@
 
 ---uses line, column and leading\
 ---purely describing the syntax
----@class AstTokenNode : AstNode
+---@class AstTokenNode : AstNode, Token
 ---@field node_type '"token"'
----some token nodes are purely used for their line, column and leading data\
----specifically those with dynamic values where their value is already stored
----on the parent/main node\
----each of these have a comment noting that their `value` is `nil`
----@field value string|nil
----if this was an invalid token from the tokenizer, these are the syntax errors
----@field error_code_insts ErrorCodeInstance[]|nil
+---@field index nil @ overridden to `nil`
 
 ---the location of the error is defined in the ErrorCodeInstance\
 ---indicates a syntax error

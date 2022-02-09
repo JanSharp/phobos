@@ -63,7 +63,11 @@ end
 ---@param value? string @ Default: `(use_prev and prev_token.token_type or token.token_type)`
 ---@return AstTokenNode
 local function new_token_node(use_prev, value)
-  return nodes.new_token(use_prev and prev_token or token, value)
+  local node = nodes.new_token(use_prev and prev_token or token)
+  if value ~= nil then
+    node.value = value
+  end
+  return node
 end
 
 local function new_error_code_inst(params)
@@ -189,7 +193,7 @@ local function assert_match(open_token, close)
   if not test_next(close) then
     return syntax_error(new_error_code_inst{
       error_code = error_code_util.codes.expected_closing_match,
-      message_args = {close, open_token.value, open_token.line..":"..open_token.column},
+      message_args = {close, open_token.token_type, open_token.line..":"..open_token.column},
     })
   end
 end
@@ -895,8 +899,7 @@ local function label_stat(scope, stat_elem)
     end
     return invalid
   else
-    -- deduplicate the value, since it's stored in the `name` of the node
-    name_token.value = nil
+    -- storing the value both in `name` and `name_token.value`
     local node = nodes.new_label{
       stat_elem = stat_elem,
       name = ident.value,
@@ -1343,12 +1346,12 @@ local statement_lut = {
     local goto_token = new_token_node()
     next_token() -- skip GOTO
     local name_token = new_token_node()
-    name_token.value = nil
     local target_ident = assert_ident()
     if is_invalid(target_ident) then
       target_ident.consumed_nodes[#target_ident.consumed_nodes+1] = goto_token
       return target_ident
     else
+      -- storing the value both in `target_name` and `target_token.value`
       return nodes.new_gotostat{
         stat_elem = stat_elem,
         goto_token = goto_token,

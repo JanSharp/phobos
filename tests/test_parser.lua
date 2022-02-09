@@ -1224,7 +1224,6 @@ do
               name_token = next_token_node(),
               close_token = next_token_node(),
             }
-            stat.name_token.value = nil
             fake_main.labels[stat.name] = stat
             append_stat(fake_main, stat)
             if extra_code then extra_code() end
@@ -1263,7 +1262,6 @@ do
               {"::"}
             ),
           }
-          stat.name_token.value = nil
           fake_main.labels[stat.name] = stat
           append_stat(fake_main, stat)
           append_empty(fake_main, next_token_node())
@@ -1405,7 +1403,6 @@ do
             target_name = "foo",
             target_token = next_token_node(),
           }
-          stat.target_token.value = nil
           append_stat(fake_main, stat)
           append_empty(fake_main, next_token_node())
         end
