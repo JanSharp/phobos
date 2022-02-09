@@ -2191,7 +2191,187 @@ do
       )
     end -- end nil
 
-  -- TODO: func_proto (with it functiondef)
+    do -- func_proto/functiondef
+      local function add_func_proto_test(label, params_str, set_params)
+        add_test_with_repeatstat(
+          label,
+          "function("..params_str..") ; end",
+          function(scope)
+            local expr = nodes.new_func_proto{
+              func_def = nodes.new_functiondef{
+                parent_scope = scope,
+                source = test_source,
+                function_token = next_token_node(),
+                open_paren_token = next_token_node(),
+                -- default here, must be overwritten with a new table if comma tokens are expected
+                param_comma_tokens = empty_table_or_nil,
+              },
+            }
+            fake_main.func_protos[1] = expr.func_def
+            set_params(expr.func_def)
+            expr.func_def.close_paren_token = next_token_node()
+            append_empty(expr.func_def, next_token_node())
+            expr.func_def.end_token = next_token_node()
+            return expr
+          end
+        )
+      end
+
+      local function add_func_proto_test_with_x_params(params_str, num_params)
+        add_func_proto_test(
+          "func_proto with "..num_params.." param"..(num_params == 1 and "" or "s"),
+          params_str,
+          function(scope)
+            if num_params > 1 then
+              scope.param_comma_tokens = {}
+            end
+            for i = 1, num_params do
+              scope.locals[i], scope.params[i] = ast.create_local(next_token(), scope, fake_stat_elem)
+              scope.locals[i].whole_block = true
+              if i ~= num_params then
+                scope.param_comma_tokens[i] = next_token_node()
+              end
+            end
+          end
+        )
+      end
+
+      add_func_proto_test_with_x_params("", 0)
+      add_func_proto_test_with_x_params("foo", 1)
+      add_func_proto_test_with_x_params("foo, bar", 2)
+      add_func_proto_test_with_x_params("foo, bar, baz", 3)
+
+      add_func_proto_test(
+        "func_proto with vararg param",
+        "...",
+        function(scope)
+          scope.is_vararg = true
+          scope.vararg_token = next_token_node()
+        end
+      )
+
+      add_func_proto_test(
+        "func_proto with 1 param and vararg param",
+        "foo, ...",
+        function(scope)
+          scope.locals[1], scope.params[1] = ast.create_local(next_token(), scope, fake_stat_elem)
+          scope.locals[1].whole_block = true
+          scope.param_comma_tokens = {next_token_node()}
+          scope.is_vararg = true
+          scope.vararg_token = next_token_node()
+        end
+      )
+
+      add_test_with_repeatstat(
+        "func_proto without 'end'",
+        "function() ;",
+        function(scope)
+          local function_token = next_token_node()
+          local expr = nodes.new_func_proto{
+            func_def = nodes.new_functiondef{
+              parent_scope = scope,
+              source = test_source,
+              function_token = function_token,
+              open_paren_token = next_token_node(),
+              param_comma_tokens = empty_table_or_nil,
+              close_paren_token = next_token_node(),
+            },
+          }
+          fake_main.func_protos[1] = expr.func_def
+          append_empty(expr.func_def, next_token_node())
+          expr.func_def.end_token = new_invalid(
+            error_code_util.codes.expected_closing_match,
+            peek_next_token(), -- at 'eof'
+            {"end", "function", function_token.line..":"..function_token.column}
+          )
+          return expr
+        end
+      )
+
+      add_test(
+        "func_proto without ')'",
+        "repeat until function(... ;",
+        function()
+          append_repeatstat(function(scope)
+            local function_token = next_token_node()
+            local expr = nodes.new_func_proto{
+              func_def = nodes.new_functiondef{
+                parent_scope = scope,
+                source = test_source,
+                function_token = function_token,
+                open_paren_token = next_token_node(),
+                param_comma_tokens = empty_table_or_nil,
+                -- has to be vararg for this test, because that's the only early return
+                -- in par_list that doesn't already test the next token
+                is_vararg = true,
+                vararg_token = next_token_node(),
+                close_paren_token = new_invalid(
+                  error_code_util.codes.expected_token,
+                  peek_next_token(), -- at ';'
+                  {")"}
+                ),
+              },
+            }
+            fake_main.func_protos[1] = expr.func_def
+            return expr
+          end)
+          append_empty(fake_main, next_token_node())
+        end
+      )
+
+      add_test(
+        "func_proto without params",
+        "repeat until function( ;",
+        function()
+          append_repeatstat(function(scope)
+            local function_token = next_token_node()
+            local expr = nodes.new_func_proto{
+              func_def = nodes.new_functiondef{
+                parent_scope = scope,
+                source = test_source,
+                function_token = function_token,
+                open_paren_token = next_token_node(),
+                params = {new_invalid(
+                  error_code_util.codes.expected_ident_or_vararg,
+                  peek_next_token() -- at ';'
+                )},
+                param_comma_tokens = empty_table_or_nil,
+              },
+            }
+            fake_main.func_protos[1] = expr.func_def
+            return expr
+          end)
+          append_empty(fake_main, next_token_node())
+        end
+      )
+
+      add_test(
+        "func_proto without '('",
+        "repeat until function ;",
+        function()
+          append_repeatstat(function(scope)
+            local function_token = next_token_node()
+            local expr = nodes.new_func_proto{
+              func_def = nodes.new_functiondef{
+                parent_scope = scope,
+                source = test_source,
+                function_token = function_token,
+                open_paren_token = new_invalid(
+                  error_code_util.codes.expected_token,
+                  peek_next_token(), -- at ';'
+                  {"("}
+                ),
+                param_comma_tokens = empty_table_or_nil,
+              },
+            }
+            fake_main.func_protos[1] = expr.func_def
+            return expr
+          end)
+          append_empty(fake_main, next_token_node())
+        end
+      )
+    end -- end func_proto/functiondef
+
   -- TODO: constructor
   -- TODO: call
   -- TODO: expression list (using call, probably)
