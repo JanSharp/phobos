@@ -99,8 +99,11 @@ function Scope:run_tests()
   if self.after_all then
     self.after_all()
   end
-  print(get_indentation(self)..(count - failed_count).."/"..count.." passed in "..bold..self.name..reset
-    ..(os and (" in "..(os.clock() - start_time).."s") or "")
+  print(get_indentation(self)..(count - failed_count).."/"..count.." "..green.."passed"..reset
+    ..(failed_count > 0 and (" ("..failed_count.." "..faint..red.."failed"..reset..")") or "")
+    .." in "..bold..self.name..reset
+    -- this seems to be the max precision of os.clock, at least on my system
+    ..(os and (" in "..string.format("%0.3f", (os.clock() - start_time) * 1000).."ms") or "")
   )
   return {count = count, failed_count = failed_count}
 end
