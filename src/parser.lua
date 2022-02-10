@@ -845,7 +845,6 @@ end
 ---@return AstAssignment
 local function assignment(lhs, lhs_comma_tokens, prev_lhs_first_token, scope, stat_elem)
   if lhs[#lhs].force_single_result or lhs[#lhs].node_type == "call" then
-    -- TODO: position the error correctly
     -- TODO: maybe insert the syntax error at the correct location
     -- (so the order of syntax errors is in the same order as they appeared in the file)
     local invalid = syntax_error(new_error_code_inst{
