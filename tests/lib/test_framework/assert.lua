@@ -85,14 +85,25 @@ local function contents_equals(expected, got, msg, options)
     if options and options.print_full_data_on_error ~= nil then
       print_full_data_on_error = options.print_full_data_on_error
     end
-    error(add_msg(err, msg)
+    msg = add_msg(err, msg)
       ..(
         print_full_data_on_error
           and ("\nexpected: "..pretty_print(expected, options.serpent_opts)
             .."\n-----\ngot: "..pretty_print(got, options.serpent_opts))
           or ""
       )
-    )
+    local c = 0
+    local add_err_again_at_the_end = false
+    for _ in msg:gmatch("\n") do
+      c = c + 1
+      if c >= 15 then
+        -- with 15 newlines it is 16 lines total.
+        -- with the error duplicated at the end it will then be 17+ lines
+        add_err_again_at_the_end = true
+        break
+      end
+    end
+    error(msg..(add_err_again_at_the_end and ("\n^^^ "..err.." ^^^") or ""))
   end
 end
 
