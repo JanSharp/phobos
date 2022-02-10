@@ -9,8 +9,24 @@ local function format(main)
   local add_exp
   local add_exp_list
 
+  local exprs
+  local add_token
+  local add_invalid
+
   local function add(part)
     out[#out+1] = part
+  end
+
+  local function add_node(node)
+    if node.node_type == "token" then
+      add_token(node)
+    elseif node.node_type == "invalid" then
+      add_invalid(node)
+    elseif exprs[node.node_type] then
+      add_exp(node)
+    else
+      add_stat(node)
+    end
   end
 
   local function add_string(str)
@@ -34,7 +50,6 @@ local function format(main)
     end
   end
 
-  local add_token
   local function add_leading(node)
     for _, token in ipairs(node.leading) do
       if token.token_type == "blank" or token.token_type == "comment" then
@@ -70,6 +85,12 @@ local function format(main)
       add(token_node.value)
     else
       add(token_node.token_type)
+    end
+  end
+
+  function add_invalid(node)
+    for _, consumed_node in ipairs(node.consumed_nodes) do
+      add_node(consumed_node)
     end
   end
 
@@ -109,7 +130,7 @@ local function format(main)
     end
   end
 
-  local exprs = {
+  exprs = {
     ---@param node AstLocalReference
     local_ref = function(node)
       add_leading(node)
@@ -210,6 +231,8 @@ local function format(main)
     end,
 
     call = call,
+
+    invalid = add_invalid,
 
     ---@param node AstInlineIIFE
     inline_iife = function(node)
@@ -392,6 +415,8 @@ local function format(main)
     end,
 
     call = call,
+
+    invalid = add_invalid,
 
     ---@param node AstInlineIIFERetstat
     inline_iife_retstat = function(node)
