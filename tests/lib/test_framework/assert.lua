@@ -2,6 +2,14 @@
 local deep_compare = require("deep_compare")
 local pretty_print = require("pretty_print")
 
+local print_full_data_on_error_default = false
+local function set_print_full_data_on_error_default(value)
+  print_full_data_on_error_default = value
+end
+local function get_print_full_data_on_error_default()
+  return print_full_data_on_error_default
+end
+
 local function add_msg(err, msg)
   return err..(msg and ": "..msg or ".")
 end
@@ -73,9 +81,13 @@ local function contents_equals(expected, got, msg, options)
       err = "custom compare failed "..(difference.message and ("("..difference.message..") ") or "")
         .."at "..difference.location
     end
+    local print_full_data_on_error = print_full_data_on_error_default
+    if options and options.print_full_data_on_error ~= nil then
+      print_full_data_on_error = options.print_full_data_on_error
+    end
     error(add_msg(err, msg)
       ..(
-        options and options.print_full_data_on_error
+        print_full_data_on_error
           and ("\nexpected: "..pretty_print(expected, options.serpent_opts)
             .."\n-----\ngot: "..pretty_print(got, options.serpent_opts))
           or ""
@@ -95,6 +107,8 @@ local function errors(expected_pattern, got_func, msg)
 end
 
 return {
+  set_print_full_data_on_error_default = set_print_full_data_on_error_default,
+  get_print_full_data_on_error_default = get_print_full_data_on_error_default,
   assert = assert,
   equals = equals,
   not_equals = not_equals,

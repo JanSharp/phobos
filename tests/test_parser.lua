@@ -153,7 +153,6 @@ local function test_stat(str)
     nil,
     {
       root_name = "main",
-      print_full_data_on_error = print_full_data_on_error,
       serpent_opts = serpent_opts,
     }
   )
@@ -163,7 +162,6 @@ local function test_stat(str)
     nil,
     {
       root_name = "invalid_nodes",
-      print_full_data_on_error = print_full_data_on_error,
       serpent_opts = serpent_opts,
     }
   )

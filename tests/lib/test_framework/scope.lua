@@ -65,7 +65,7 @@ local background_magenta = "\x1b[45m"
 local background_cyan = "\x1b[46m"
 local background_white = "\x1b[47m"
 
-function Scope:run_tests()
+function Scope:run_tests(options)
   local start_time = os and os.clock()
   print(get_indentation(self)..bold..self.name..reset..":")
   if self.before_all then
@@ -75,7 +75,7 @@ function Scope:run_tests()
   local failed_count = 0
   for _, test in ipairs(self.tests) do
     if test.is_scope then
-      local result = test:run_tests()
+      local result = test:run_tests(options)
       count = count + result.count
       failed_count = failed_count + result.failed_count
     elseif test.is_test then
@@ -91,9 +91,11 @@ function Scope:run_tests()
         err = err:match(":%d+: (.*)")
         test.error_message = err
       end
-      print(get_indentation(self).."  "..test.name..": "
-        ..(success and (green.."passed"..reset) or (red.."failed"..reset..": "..err))
-      )
+      if not success or not options.only_print_failed then
+        print(get_indentation(self).."  "..test.name..": "
+          ..(success and (green.."passed"..reset) or (red.."failed"..reset..": "..err))
+        )
+      end
     end
   end
   if self.after_all then
