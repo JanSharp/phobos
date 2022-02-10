@@ -2586,7 +2586,6 @@ do
                   error_code_util.codes.unexpected_token,
                   peek_next_token() -- at ','
                   -- not consuming 'eof'
-                  -- TODO: failing because it is consuming 'eof'
                 )
               },
             },

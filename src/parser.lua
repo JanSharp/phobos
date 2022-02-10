@@ -81,6 +81,12 @@ local function new_error_code_inst(params)
   }
 end
 
+local function add_consumed_node(invalid, consumed_node)
+  if not (consumed_node.node_type == "token" and consumed_node.token_type == "eof") then
+    invalid.consumed_nodes[#invalid.consumed_nodes+1] = consumed_node
+  end
+end
+
 ---TODO: make the correct object in the error message the focus, the thing that is actually wrong.
 ---for example when an assertion of some token failed, it's most likely not that token that
 ---is missing (like a closing }), but rather the actual token that was encountered that was unexpected
@@ -514,7 +520,7 @@ local function primary_exp(scope, stat_elem)
   else
     if token.token_type == "invalid" then
       local invalid = invalid_nodes[#invalid_nodes]
-      invalid.consumed_nodes[#invalid.consumed_nodes+1] = new_token_node()
+      add_consumed_node(invalid, new_token_node())
       next_token()
       return invalid
     else
@@ -522,7 +528,7 @@ local function primary_exp(scope, stat_elem)
         error_code = error_code_util.codes.unexpected_token,
       }, "")
       -- consume the invalid token, it would infinitely loop otherwise
-      invalid.consumed_nodes[#invalid.consumed_nodes+1] = new_token_node()
+      add_consumed_node(invalid, new_token_node())
       next_token()
       return invalid
     end
@@ -668,7 +674,7 @@ local simple_lut = {
       local invalid = syntax_error(new_error_code_inst{
         error_code = error_code_util.codes.vararg_outside_vararg_func,
       }, "at")
-      invalid.consumed_nodes[#invalid.consumed_nodes+1] = new_token_node()
+      add_consumed_node(invalid, new_token_node())
       return invalid
     end
     return nodes.new_vararg{
@@ -846,7 +852,7 @@ local function assignment(lhs, lhs_comma_tokens, prev_lhs_first_token, scope, st
       error_code = error_code_util.codes.unexpected_expression,
       position = prev_lhs_first_token,
     })
-    invalid.consumed_nodes[#invalid.consumed_nodes+1] = lhs[#lhs]
+    add_consumed_node(invalid, lhs[#lhs])
     lhs[#lhs] = invalid
   end
   if test_next(",") then
@@ -879,7 +885,7 @@ local function label_stat(scope, stat_elem)
   local name_token = new_token_node()
   local ident = assert_ident()
   if is_invalid(ident) then
-    ident.consumed_nodes[#ident.consumed_nodes+1] = open_token
+    add_consumed_node(ident, open_token)
     return ident
   end
   local prev_label = scope.labels[ident.value]
@@ -889,8 +895,8 @@ local function label_stat(scope, stat_elem)
       message_args = {ident.value, prev_label.name_token.line..":"..prev_label.name_token.column},
       position = ident,
     })
-    invalid.consumed_nodes[#invalid.consumed_nodes+1] = open_token
-    invalid.consumed_nodes[#invalid.consumed_nodes+1] = name_token
+    add_consumed_node(invalid, open_token)
+    add_consumed_node(invalid, name_token)
     -- order is important, assert for :: after creating the previous syntax error
     local close_token = assert_next("::") or new_token_node(true)
     if is_invalid(close_token) then
@@ -898,7 +904,7 @@ local function label_stat(scope, stat_elem)
       -- because there wasn't a '::' token
       extra_node = close_token
     else
-      invalid.consumed_nodes[#invalid.consumed_nodes+1] = close_token
+      add_consumed_node(invalid, close_token)
     end
     return invalid
   else
@@ -1059,7 +1065,7 @@ local function for_stat(scope, stat_elem)
   next_token() -- skip FOR
   local first_ident = assert_ident()
   if is_invalid(first_ident) then
-    first_ident.consumed_nodes[#first_ident.consumed_nodes+1] = for_token
+    add_consumed_node(first_ident, for_token)
     return first_ident
   end
   local t = token.token_type
@@ -1073,8 +1079,8 @@ local function for_stat(scope, stat_elem)
     local invalid = syntax_error(new_error_code_inst{
       error_code = error_code_util.codes.expected_eq_comma_or_in,
     })
-    invalid.consumed_nodes[#invalid.consumed_nodes+1] = for_token
-    invalid.consumed_nodes[#invalid.consumed_nodes+1] = nodes.new_token(first_ident)
+    add_consumed_node(invalid, for_token)
+    add_consumed_node(invalid, nodes.new_token(first_ident))
     return invalid
   end
   node.for_token = for_token
@@ -1260,7 +1266,7 @@ local function expr_stat(scope, stat_elem)
         error_code = error_code_util.codes.unexpected_expression,
         position = first_token,
       })
-      invalid.consumed_nodes[#invalid.consumed_nodes+1] = first_exp
+      add_consumed_node(invalid, first_exp)
       return invalid
     end
   end
@@ -1351,7 +1357,7 @@ local statement_lut = {
     local name_token = new_token_node()
     local target_ident = assert_ident()
     if is_invalid(target_ident) then
-      target_ident.consumed_nodes[#target_ident.consumed_nodes+1] = goto_token
+      add_consumed_node(target_ident, goto_token)
       return target_ident
     else
       -- storing the value both in `target_name` and `target_token.value`
