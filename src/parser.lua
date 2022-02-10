@@ -513,7 +513,10 @@ local function primary_exp(scope, stat_elem)
     return ast.get_ref(scope, stat_elem, ident.value, ident)
   else
     if token.token_type == "invalid" then
-      return invalid_nodes[#invalid_nodes]
+      local invalid = invalid_nodes[#invalid_nodes]
+      invalid.consumed_nodes[#invalid.consumed_nodes+1] = new_token_node()
+      next_token()
+      return invalid
     else
       local invalid = syntax_error(new_error_code_inst{
         error_code = error_code_util.codes.unexpected_token,
@@ -1437,14 +1440,15 @@ local function parse(text,source_name)
           ---@tag three dashes, at-tag, and any text
           -- @tag two dashes, a space, at-tag, and any text
         ]]
-        if token.value:match("^%- ") or token.value:match("^[- ]@") then
-          -- print("found doc comment " .. token.value)
-        end
+        -- if token.value:match("^%- ") or token.value:match("^[- ]@") then
+        --   print("found doc comment " .. token.value)
+        -- end
       elseif token.token_type == "blank" then
         leading[#leading+1] = token
       else
         token.leading = leading
         if token.token_type == "invalid" then
+          err_pos_token = token
           for _, error_code_inst in ipairs(token.error_code_insts) do
             syntax_error(error_code_inst)
           end

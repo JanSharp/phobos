@@ -47,7 +47,7 @@ end
 local function get_tokens(str)
   local leading = {}
   local tokens = {}
-  for _, token in tokenize(str) do
+  for _, token in tokenize(str, test_source) do
     if token.token_type == "blank" or token.token_type == "comment" then
       leading[#leading+1] = token
     else
@@ -117,9 +117,12 @@ local serpent_opts = {
 
 local expected_invalid_nodes
 
-local function new_invalid(error_code, position, message_args, consumed_nodes)
+local function new_invalid(error_code, position, message_args, consumed_nodes, error_code_inst)
+  if error_code_inst then
+    error_code_inst.location_str = assert.do_not_compare_flag
+  end
   local invalid = nodes.new_invalid{
-    error_code_inst = error_code_util.new_error_code{
+    error_code_inst = error_code_inst or error_code_util.new_error_code{
       error_code = error_code,
       message_args = message_args,
       source = test_source,
@@ -170,7 +173,7 @@ end
 do
   local main_scope = framework.scope:new_scope("parser")
 
-  local current_testing_scope
+  local current_testing_scope = main_scope
   local tokens
   local next_token
   local peek_next_token
@@ -1598,6 +1601,8 @@ do
     -- funcstat, localfunc, call are only partially tested. The rest for them is in expressions
     -- ensuring that all expressions are evaluated in the right scope is also not tested here
     -- it's tested later on
+
+    current_testing_scope = main_scope
   end -- end statements
 
   do -- expressions
@@ -2598,8 +2603,49 @@ do
     end -- end constructor
 
   -- TODO: call
-  -- TODO: expression list (using call, probably)
+  -- TODO: expression list (using call, probably)'
+    current_testing_scope = main_scope
   end -- end expressions
+
+  add_test(
+    "invalid token generates syntax error",
+    "\1",
+    function()
+      local token_node = next_token_node()
+      local stat = new_invalid(
+        nil,
+        token_node, -- at '\1'
+        nil,
+        {token_node}, -- consuming '\1'
+        token_node.error_code_insts[1] -- reusing the already existing error_code_inst for correct references
+      )
+      append_stat(fake_main, stat)
+    end
+  )
+
+  add_test(
+    "invalid token generates syntax error",
+    [["\x]],
+    function()
+      local token_node = next_token_node()
+      -- "floating" invalid node, only in the invalid nodes array
+      new_invalid(
+        nil,
+        token_node, -- at '"\x'
+        nil,
+        nil,
+        token_node.error_code_insts[1] -- reusing the already existing error_code_inst for correct references
+      )
+      local stat = new_invalid(
+        nil,
+        token_node, -- at '"\x'
+        nil,
+        {token_node}, -- consuming '"\x'
+        token_node.error_code_insts[2] -- reusing the already existing error_code_inst for correct references
+      )
+      append_stat(fake_main, stat)
+    end
+  )
 
   -- NOTE: scoping for ifstat (testblock), whilestat, fornum, forlist, repeatstat will be more important
   -- once local definition inside expressions will be a thing, however until then testing for it is difficult
