@@ -1525,9 +1525,9 @@ do
           end
         )
 
-        local function add_invalid_lhs_assignment_tests(str, get_invalid_lhs_node)
+        local function add_invalid_lhs_assignment_tests(label, str_label, str, get_invalid_lhs_node)
           add_test(
-            "assignment with '"..str.."' lhs",
+            "assignment with '"..(str_label or str).."' lhs"..label,
             str.." = true;",
             function()
               local stat = nodes.new_assignment{
@@ -1544,7 +1544,7 @@ do
 
           -- the second lhs (and following) is/are parsed in a different part of the code
           add_test(
-            "assignment with 'foo, "..str.."' lhs",
+            "assignment with 'foo, "..(str_label or str).."' lhs"..label,
             "foo, "..str.." = true;",
             function()
               local lhs = {get_ref_helper("foo", next_token()), nil}
@@ -1563,7 +1563,7 @@ do
           )
         end
 
-        add_invalid_lhs_assignment_tests("(true)", function()
+        add_invalid_lhs_assignment_tests("", nil, "(true)", function()
           return new_invalid(
             error_code_util.codes.unexpected_expression,
             peek_next_token(), -- at '('
@@ -1572,7 +1572,7 @@ do
               local open_paren_token = next_token_node()
               local expr = new_true_node(next_token())
               expr.src_paren_wrappers = {
-                  {
+                {
                   open_paren_token = open_paren_token,
                   close_paren_token = next_token_node(),
                 },
@@ -1583,19 +1583,110 @@ do
           )
         end)
 
-        add_invalid_lhs_assignment_tests("bar()", function()
+        add_invalid_lhs_assignment_tests("", nil, "bar()", function()
           return new_invalid(
             error_code_util.codes.unexpected_expression,
-            peek_next_token(), -- at the first '('
+            peek_next_token(), -- at 'bar'
             nil,
             {nodes.new_call{
               ex = get_ref_helper("bar", next_token()),
               open_paren_token = next_token_node(),
+              args_comma_tokens = empty_table_or_nil,
               close_paren_token = next_token_node(),
             }} -- consuming 'bar()'
           )
         end)
+
+        add_invalid_lhs_assignment_tests(
+          " (invalid node order with invalid lhs which also contains a syntax error)",
+          "foo(\\1)",
+          "foo(\1)",
+          function()
+            local unexpected_token
+            local invalid = new_invalid(
+              error_code_util.codes.unexpected_expression,
+              peek_next_token(), -- at 'foo'
+              nil,
+              {nodes.new_call{
+                ex = get_ref_helper("foo", next_token()),
+                open_paren_token = next_token_node(),
+                args_comma_tokens = empty_table_or_nil,
+                close_paren_token = (function()
+                  unexpected_token = next_token_node()
+                  return next_token_node()
+                end)(),
+              }} -- consuming 'foo('
+            )
+            -- have to do this afterwards such that the unexpected expression
+            -- is the first in the invalid nodes list
+            -- since it cones first in the file
+            invalid.consumed_nodes[1].args[1] = new_invalid(
+              nil,
+              unexpected_token, -- at '\1'
+              nil,
+              {unexpected_token},
+              unexpected_token.error_code_insts[1]
+            )
+            return invalid
+          end
+        )
       end -- end assignment
+
+      add_test(
+        "expression statements pass along invalid nodes",
+        "then",
+        function()
+          append_stat(fake_main, new_invalid(
+            error_code_util.codes.unexpected_token,
+            peek_next_token(), -- at 'then'
+            nil,
+            {next_token_node()} -- consuming 'then'
+          ))
+        end
+      )
+
+      add_test(
+        "unexpected expression",
+        "foo", -- has be a suffixed expression
+        function()
+          local stat = new_invalid(
+            error_code_util.codes.unexpected_expression,
+            peek_next_token(), -- at 'foo'
+            nil,
+            {get_ref_helper("foo", next_token(), fake_main)} -- consuming 'foo'
+          )
+          append_stat(fake_main, stat)
+        end
+      )
+
+      add_test(
+        "unexpected expression invalid node order with an expression which also has a syntax error",
+        "foo.true", -- has be a suffixed expression
+        function()
+          local stat = new_invalid(
+            error_code_util.codes.unexpected_expression,
+            peek_next_token(), -- at 'foo'
+            nil,
+            {nodes.new_index{
+              ex = get_ref_helper("foo", next_token(), fake_main),
+              dot_token = next_token_node(),
+              suffix = prevent_assert,
+            }} -- consuming 'foo.'
+          )
+          -- add this invalid node to the invalid nodes array after the unexpected_expression
+          stat.consumed_nodes[1].suffix = new_invalid(
+            error_code_util.codes.expected_ident,
+            peek_next_token() -- at 'true'
+          )
+          append_stat(fake_main, stat)
+          append_stat(fake_main, new_invalid(
+            error_code_util.codes.unexpected_token,
+            peek_next_token(), -- at 'true'
+            nil,
+            {next_token_node()} -- consuming 'true'
+          ))
+        end
+      )
     end -- end expression statements
 
     -- funcstat, localfunc, call are only partially tested. The rest for them is in expressions

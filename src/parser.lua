@@ -87,12 +87,16 @@ local function add_consumed_node(invalid, consumed_node)
   end
 end
 
+local function get_invalid_nodes_count()
+  return #invalid_nodes
+end
+
 ---TODO: make the correct object in the error message the focus, the thing that is actually wrong.
 ---for example when an assertion of some token failed, it's most likely not that token that
 ---is missing (like a closing }), but rather the actual token that was encountered that was unexpected
 ---Throw a Syntax Error at the current location
 ---@param error_code_inst ErrorCodeInstance
-local function syntax_error(error_code_inst, location_descriptor)
+local function syntax_error(error_code_inst, location_descriptor, invalid_nodes_insertion_index)
   if location_descriptor then
     location_descriptor = location_descriptor == "" and "" or " "..location_descriptor
   else
@@ -151,7 +155,11 @@ local function syntax_error(error_code_inst, location_descriptor)
   error_code_inst.location_str = location
   error_code_inst.source = source
   local invalid = nodes.new_invalid{error_code_inst = error_code_inst}
-  invalid_nodes[#invalid_nodes+1] = invalid
+  if invalid_nodes_insertion_index then
+    table.insert(invalid_nodes, invalid_nodes_insertion_index, invalid)
+  else
+    invalid_nodes[#invalid_nodes+1] = invalid
+  end
   return invalid
 end
 
@@ -843,23 +851,30 @@ end
 ---@param lhs_comma_tokens AstTokenNode[]
 ---@param scope AstScope
 ---@return AstAssignment
-local function assignment(lhs, lhs_comma_tokens, prev_lhs_first_token, scope, stat_elem)
+local function assignment(lhs, lhs_comma_tokens, state_for_unexpected_expressions, scope, stat_elem)
   if lhs[#lhs].force_single_result or lhs[#lhs].node_type == "call" then
-    -- TODO: maybe insert the syntax error at the correct location
+    -- insert the syntax error at the correct location
     -- (so the order of syntax errors is in the same order as they appeared in the file)
     local invalid = syntax_error(new_error_code_inst{
       error_code = error_code_util.codes.unexpected_expression,
-      position = prev_lhs_first_token,
-    })
+      position = state_for_unexpected_expressions.position,
+    }, nil, state_for_unexpected_expressions.invalid_nodes_count + 1)
     add_consumed_node(invalid, lhs[#lhs])
     lhs[#lhs] = invalid
   end
   if test_next(",") then
     lhs_comma_tokens[#lhs_comma_tokens+1] = new_token_node(true)
     local first_token = token
+    local initial_invalid_nodes_count = get_invalid_nodes_count()
     lhs[#lhs+1] = suffixed_exp(scope, stat_elem)
     -- TODO: disallow `(exp)` (so force single result expressions) and `exp()` (call expressions)
-    return assignment(lhs, lhs_comma_tokens, first_token, scope, stat_elem)
+    return assignment(
+      lhs,
+      lhs_comma_tokens,
+      {position = first_token, invalid_nodes_count = initial_invalid_nodes_count},
+      scope,
+      stat_elem
+    )
   else
     local invalid = assert_next("=")
     local node = nodes.new_assignment{
@@ -1244,10 +1259,17 @@ end
 local function expr_stat(scope, stat_elem)
   -- stat -> func | assignment
   local first_token = token
+  local initial_invalid_nodes_count = get_invalid_nodes_count()
   local first_exp = suffixed_exp(scope, stat_elem)
   if token.token_type == "=" or token.token_type == "," then
     -- stat -> assignment
-    return assignment({first_exp}, {}, first_token, scope, stat_elem)
+    return assignment(
+      {first_exp},
+      {},
+      {position = first_token, invalid_nodes_count = initial_invalid_nodes_count},
+      scope,
+      stat_elem
+    )
   else
     -- stat -> func
     if first_exp.node_type == "call" then
@@ -1259,12 +1281,12 @@ local function expr_stat(scope, stat_elem)
       -- same branches again, sine that would be an infinite loop
       return first_exp
     else
-      -- TODO: maybe insert the syntax error at the correct location
+      -- insert the syntax error at the correct location
       -- (so the order of syntax errors is in the same order as they appeared in the file)
       local invalid = syntax_error(new_error_code_inst{
         error_code = error_code_util.codes.unexpected_expression,
         position = first_token,
-      })
+      }, nil, initial_invalid_nodes_count + 1)
       add_consumed_node(invalid, first_exp)
       return invalid
     end
