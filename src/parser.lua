@@ -520,10 +520,7 @@ local function primary_exp(scope, stat_elem)
     end
     return ex
   elseif token.token_type == "ident" then
-    local ident = assert_ident()
-    if is_invalid(ident) then
-      return ident
-    end
+    local ident = assert_ident() -- can't be invalid
     return ast.get_ref(scope, stat_elem, ident.value, ident)
   else
     if token.token_type == "invalid" then
