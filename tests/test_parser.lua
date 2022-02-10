@@ -2737,6 +2737,24 @@ do
     end
   )
 
+  add_test(
+    "blocks end early, expected eof",
+    "end",
+    function()
+      append_stat(fake_main, new_invalid(
+        error_code_util.codes.expected_token,
+        peek_next_token(), -- at 'end'
+        {"eof"}
+      ))
+      append_stat(fake_main, new_invalid(
+        error_code_util.codes.unexpected_token,
+        peek_next_token(), -- at 'end'
+        nil,
+        {next_token_node()} -- consuming 'end'
+      ))
+    end
+  )
+
   -- NOTE: scoping for ifstat (testblock), whilestat, fornum, forlist, repeatstat will be more important
   -- once local definition inside expressions will be a thing, however until then testing for it is difficult
   -- the only way I can think of is using mocking which I consider disgusting
