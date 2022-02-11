@@ -2915,7 +2915,34 @@ do
       )
     end -- end call
 
-  -- TODO: expression list (using call, probably)'
+    do -- expression list
+      local function add_expression_list_test(str, count)
+        add_test_with_repeatstat(
+          "expression list with "..count.." expression"..(count == 1 and "" or "s").." (tested with call)",
+          "(true)("..str..")",
+          function()
+            local expr = nodes.new_call{
+              ex = next_wrapped_true_node(),
+              open_paren_token = next_token_node(),
+              args_comma_tokens = count <= 1 and empty_table_or_nil or {},
+            }
+            for i = 1, count do
+              expr.args[i] = new_true_node(next_token_node())
+              if i ~= count then
+                expr.args_comma_tokens[i] = next_token_node()
+              end
+            end
+            expr.close_paren_token = next_token_node()
+            return expr
+          end
+        )
+      end
+      add_expression_list_test("true", 1)
+      add_expression_list_test("true, true", 2)
+      add_expression_list_test("true, true, true", 3)
+      add_expression_list_test("true, true, true, true", 4)
+    end -- end expression list
+
     current_testing_scope = main_scope
   end -- end expressions
 
