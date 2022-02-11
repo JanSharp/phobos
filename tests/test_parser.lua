@@ -196,6 +196,19 @@ do
     return nodes.new_token(next_token())
   end
 
+  local function next_wrapped_true_node()
+    local open_paren_token = next_token_node()
+    local node = new_true_node(next_token())
+    node.src_paren_wrappers = {
+      {
+        open_paren_token = open_paren_token,
+        close_paren_token = next_token_node(),
+      },
+    }
+    node.force_single_result = true
+    return node
+  end
+
   local function add_test_with_localfunc(name, str, func)
     add_test(
       name,
@@ -2076,27 +2089,15 @@ do
         "concat with pointless '()'",
         "(((true)..(((true)..(true)))))",
         function()
-          local function next_true_node()
-            local open_paren_token = next_token_node()
-            local node = new_true_node(next_token())
-            node.src_paren_wrappers = {
-              {
-                open_paren_token = open_paren_token,
-                close_paren_token = next_token_node(),
-              },
-            }
-            node.force_single_result = true
-            return node
-          end
           local open_1 = next_token_node()
           local open_2 = next_token_node()
-          local true_1 = next_true_node()
+          local true_1 = next_wrapped_true_node()
           local op_1 = next_token_node()
           local open_3 = next_token_node()
           local open_4 = next_token_node()
-          local true_2 = next_true_node()
+          local true_2 = next_wrapped_true_node()
           local op_2 = next_token_node()
-          local true_3 = next_true_node()
+          local true_3 = next_wrapped_true_node()
           local close_4 = next_token_node()
           local close_3 = next_token_node()
           local close_2 = next_token_node()
@@ -2690,7 +2691,230 @@ do
       )
     end -- end constructor
 
-  -- TODO: call
+    do -- call
+      add_test_with_repeatstat(
+        "call with '()'",
+        "(true)()",
+        function()
+          local expr = nodes.new_call{
+            ex = next_wrapped_true_node(),
+            open_paren_token = next_token_node(),
+            args_comma_tokens = empty_table_or_nil,
+            close_paren_token = next_token_node(),
+          }
+          return expr
+        end
+      )
+
+      add_test_with_repeatstat(
+        "call with '()' with 1 arg",
+        "(true)(true)",
+        function()
+          local expr = nodes.new_call{
+            ex = next_wrapped_true_node(),
+            open_paren_token = next_token_node(),
+            args = {new_true_node(next_token())},
+            args_comma_tokens = empty_table_or_nil,
+            close_paren_token = next_token_node(),
+          }
+          return expr
+        end
+      )
+
+      add_test_with_repeatstat(
+        "call with '()' with 2 args",
+        "(true)(true, true)",
+        function()
+          local expr = nodes.new_call{
+            ex = next_wrapped_true_node(),
+            open_paren_token = next_token_node(),
+            args = {new_true_node(next_token()), nil},
+            args_comma_tokens = {next_token_node()},
+          }
+          expr.args[2] = new_true_node(next_token())
+          expr.close_paren_token = next_token_node()
+          return expr
+        end
+      )
+
+      add_test_with_repeatstat(
+        "call with a regular string",
+        [[(true) "Hello World!"]],
+        function()
+          local expr = nodes.new_call{
+            ex = next_wrapped_true_node(),
+            args_comma_tokens = empty_table_or_nil,
+            args = {nodes.new_string{
+              position = next_token(),
+              value = "Hello World!",
+              src_value = "Hello World!",
+              src_quote = [["]],
+            }},
+          }
+          return expr
+        end
+      )
+
+      add_test_with_repeatstat(
+        "call with a block string",
+        "(true) [=[Hello World!]=]",
+        function()
+          local expr = nodes.new_call{
+            ex = next_wrapped_true_node(),
+            args_comma_tokens = empty_table_or_nil,
+            args = {nodes.new_string{
+              position = next_token(),
+              value = "Hello World!",
+              src_is_block_str = true,
+              src_has_leading_newline = false,
+              src_pad = "=",
+            }},
+          }
+          return expr
+        end
+      )
+
+      add_test_with_repeatstat(
+        "call with a constructor",
+        "(true){}",
+        function()
+          local expr = nodes.new_call{
+            ex = next_wrapped_true_node(),
+            args_comma_tokens = empty_table_or_nil,
+            args = {nodes.new_constructor{
+              open_token = next_token_node(),
+              comma_tokens = empty_table_or_nil,
+              close_token = next_token_node(),
+            }},
+          }
+          return expr
+        end
+      )
+
+      add_test_with_repeatstat(
+        "call with self and '()'",
+        "(true):foo()",
+        function()
+          local expr = nodes.new_call{
+            ex = next_wrapped_true_node(),
+            is_selfcall = true,
+            colon_token = next_token_node(),
+            suffix = nodes.new_string{
+              position = next_token(),
+              value = "foo",
+              src_is_ident = true,
+            },
+            open_paren_token = next_token_node(),
+            args_comma_tokens = empty_table_or_nil,
+            close_paren_token = next_token_node(),
+          }
+          return expr
+        end
+      )
+
+      add_test_with_repeatstat(
+        "call with self without func args",
+        "(true):foo",
+        function()
+          local expr = nodes.new_call{
+            ex = next_wrapped_true_node(),
+            is_selfcall = true,
+            colon_token = next_token_node(),
+            suffix = nodes.new_string{
+              position = next_token(),
+              value = "foo",
+              src_is_ident = true,
+            },
+            args = {new_invalid(
+              error_code_util.codes.expected_func_args,
+              peek_next_token() -- at 'eof'
+            )},
+            args_comma_tokens = empty_table_or_nil,
+          }
+          return expr
+        end
+      )
+
+      add_test_with_repeatstat(
+        "call with self without ident",
+        "(true):",
+        function()
+          local expr = nodes.new_call{
+            ex = next_wrapped_true_node(),
+            is_selfcall = true,
+            colon_token = next_token_node(),
+            suffix = new_invalid(
+              error_code_util.codes.expected_ident,
+              peek_next_token() -- at 'eof'
+            ),
+            args_comma_tokens = empty_table_or_nil,
+          }
+          return expr
+        end
+      )
+
+      local function add_call_with_self_without_ident_but_continuing_test(str, func)
+        add_test_with_repeatstat(
+          "call with self without ident but continuing with '"..str.."'",
+          "(true):"..str,
+          function()
+            local expr = nodes.new_call{
+              ex = next_wrapped_true_node(),
+              is_selfcall = true,
+              colon_token = next_token_node(),
+              suffix = new_invalid(
+                error_code_util.codes.expected_ident,
+                peek_next_token()
+              ),
+              args_comma_tokens = empty_table_or_nil,
+            }
+            func(expr)
+            return expr
+          end
+        )
+      end
+      add_call_with_self_without_ident_but_continuing_test("()", function(expr)
+        expr.open_paren_token = next_token_node()
+        expr.close_paren_token = next_token_node()
+      end)
+      add_call_with_self_without_ident_but_continuing_test([[""]], function(expr)
+        expr.args = {nodes.new_string{
+          position = next_token(),
+          value = "",
+          src_value = "",
+          src_quote = [["]],
+        }}
+      end)
+      add_call_with_self_without_ident_but_continuing_test("{}", function(expr)
+        expr.args = {nodes.new_constructor{
+          open_token = next_token_node(),
+          comma_tokens = empty_table_or_nil,
+          close_token = next_token_node(),
+        }}
+      end)
+
+      add_test_with_repeatstat(
+        "call with '(' but without ')'",
+        "(true)(true",
+        function()
+          local ex = next_wrapped_true_node()
+          local open_paren_token = next_token_node()
+          local expr = nodes.new_call{
+            ex = ex,
+            open_paren_token = open_paren_token,
+            args = {new_true_node(next_token())},
+            args_comma_tokens = empty_table_or_nil,
+            close_paren_token = new_invalid(
+              error_code_util.codes.expected_closing_match,
+              peek_next_token(), -- at 'eof'
+              {")", "(", open_paren_token.line..":"..open_paren_token.column}
+            ),
+          }
+          return expr
+        end
+      )
+    end -- end call
+
   -- TODO: expression list (using call, probably)'
     current_testing_scope = main_scope
   end -- end expressions

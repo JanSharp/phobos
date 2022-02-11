@@ -453,12 +453,7 @@ local function func_args(node, scope, stat_elem)
         return {}
       end
       local el, comma_tokens = exp_list(scope, stat_elem)
-      node.close_paren_token = new_token_node()
-      local invalid = assert_match(node.open_paren_token, ")")
-      if invalid then
-        node.close_paren_token = nil
-        el[#el+1] = invalid
-      end
+      node.close_paren_token = assert_match(node.open_paren_token, ")") or new_token_node(true)
       return el, comma_tokens
     end,
     ["string"] = function()
@@ -592,6 +587,10 @@ local suffixed_lut = {
     local ident = assert_ident()
     if is_invalid(ident) then
       node.suffix = ident
+      if token.token_type ~= "(" and token.token_type ~= "string" and token.token_type ~= "{" then
+        -- return early to prevent the additional syntax error
+        return node
+      end
     else
       node.suffix = nodes.new_string{
         stat_elem = stat_elem,
