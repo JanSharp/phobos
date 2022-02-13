@@ -2,6 +2,7 @@
 Version: 0.1.3
   Minor Features:
     - Add error codes. Makes errors much easier to distinguish when using Phobos as a library
+    - Keep all data about the source in the AST regardless of how many syntax errors there might be
   Bugfixes:
     - Fix '\r' and '\r\n' resulting in '\r' instead of '\n' in blank tokens
     - Fix unescaped '\r' in strings not causing syntax errors and breaking line numbers
@@ -11,7 +12,7 @@ Version: 0.1.3
     - Fix `(foo..bar)..baz` performing `bar..baz` first. Only matters when using __concat
     - Fix parenthesis inside of concat chains not being representable inside the AST (data loss)
     - Fix the condition for repeatstat resolving references starting at the parent scope
-      for example the condition in `repeat local foo; until foo` would index into `_ENV`
+      For example the condition in `repeat local foo; until foo` would index into `_ENV`
 ---------------------------------------------------------------------------------------------------
 Version: 0.1.2
 Date: 2022-01-29
