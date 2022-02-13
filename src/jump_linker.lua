@@ -1,8 +1,10 @@
 
 local invert = require("invert")
+local util = require("util")
 
 local function get_position(node)
-  return (node.line and node.column and (" at "..node.line..":"..node.column))
+  local position = util.get_main_position(node)
+  return (position.line and position.column and (" at "..position.line..":"..position.column))
 end
 
 local loop_node_types = invert{"whilestat", "fornum", "forlist", "repeatstat", "loopstat"}
@@ -56,6 +58,12 @@ local function link(func)
         local end_of_body
         function is_end_of_body()
           if end_of_body == nil then
+            -- repeatstat is special because variables may still be used past the end of the body
+            -- because the condition is inside the scope
+            if body.scope.node_type == "repeatstat" then
+              end_of_body = false
+              return end_of_body
+            end
             end_of_body = true
             local elem = stat_elem.next
             while elem do
