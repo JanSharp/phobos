@@ -970,7 +970,17 @@ local function repeat_stat(scope, stat_elem)
   local invalid = assert_match(node.repeat_token, "until")
   node.until_token = invalid or new_token_node(true)
   if not invalid then
-    node.condition = expr(node, stat_elem)
+    -- HACK: making a fake stat_elem that isn't actually in an ill [...]
+    -- this causes problems everywhere that is using the stat_elem of an expression,
+    -- since it is usually guaranteed that value, prev and next are all non-nil,
+    -- plus that the element actually exists in the ill and it's lookup
+    node.condition = expr(node, {
+      list = node.body,
+      value = nil,
+      index = 1/0,
+      prev = nil,
+      next = nil,
+    })
   end
   return node
 end
