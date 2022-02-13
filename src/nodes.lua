@@ -68,11 +68,8 @@ end
 ---@param params AstScopeBaseParams
 local function scope_base(node, params)
   assert(node)
-  node.body = params.body or (function()
-    local list = ill.new()
-    list.scope = params.parent_scope
-    return list
-  end)()
+  node.body = params.body or ill.new()
+  node.body.scope = node.body.scope or node
   node.parent_scope = params.parent_scope
   node.child_scopes = params.child_scopes or {}
   node.locals = params.locals or {}

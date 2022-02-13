@@ -13,6 +13,7 @@ Version: 0.1.3
     - Fix parenthesis inside of concat chains not being representable inside the AST (data loss)
     - Fix the condition for repeatstat resolving references starting at the parent scope
       For example the condition in `repeat local foo; until foo` would index into `_ENV`
+    - Fix scope bodies referring to the parent scope instead of the current scope
 ---------------------------------------------------------------------------------------------------
 Version: 0.1.2
 Date: 2022-01-29
