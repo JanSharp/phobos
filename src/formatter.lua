@@ -359,7 +359,7 @@ local function format(main)
         if node.func_def.is_method then
           assert(node.name.node_type == "index")
           ---@diagnostic disable-next-line: undefined-field
-          assert(node.name.dot_token.value == ":")
+          assert(node.name.dot_token.token_type == ":")
         end
         add_exp(node.name)
       end)
