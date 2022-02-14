@@ -1,4 +1,8 @@
 
+-- NOTE: this is not written with incomplete nodes in mind. It might work with most of them, but
+-- for now consider that undefined behavior. _for now_.
+-- I mean this entire file is not the most useful right now
+
 ---@param main AstMain
 local function format(main)
   local out = {}
@@ -61,6 +65,9 @@ local function format(main)
   end
 
   function add_token(token_node)
+    if not token_node then
+      return
+    end
     if token_node.leading then
       add_leading(token_node)
     end
@@ -456,6 +463,11 @@ local function format(main)
     while i <= c do
       local cur = out[i]
       if cur ~= "" then
+        -- there is at least 1 case where this adds an extra space where it doesn't need to,
+        -- which is for something like `0xk` where 0x is a malformed number and k is an identifier
+        -- but yea, I only know of this one case where it's only with invalid nodes anyway...
+        -- all in all this logic here shouldn't be needed at all, i just added it for fun
+        -- to see if it would work
         if prev:find("[a-z_A-Z0-9]$") and cur:find("^[a-z_A-Z0-9]") then
           table.insert(out, i, " ")
           i = i + 1
