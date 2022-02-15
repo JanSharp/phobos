@@ -8,7 +8,10 @@ local parser = require("parser")
 local ast = require("ast_util")
 local error_code_util = require("error_code_util")
 
-local test_source = "=(test)"
+local tutil = require("testing_util")
+local append_stat = tutil.append_stat
+local test_source = tutil.test_source
+
 local prevent_assert = nodes.new_invalid{
   error_code_inst = error_code_util.new_error_code{
     error_code = error_code_util.codes.incomplete_node,
@@ -19,29 +22,13 @@ local prevent_assert = nodes.new_invalid{
 local fake_main
 local fake_stat_elem = assert.do_not_compare_flag
 
+nodes = tutil.wrap_nodes_constructors(nodes, fake_stat_elem)
+
 local empty_table_or_nil = assert.custom_comparator({[{}] = true}, true)
 
 local function make_fake_main()
-  local fake_env_scope = nodes.new_env_scope{}
-  -- Lua emits _ENV as if it's a local in the parent scope
-  -- of the file. I'll probably change this one day to be
-  -- the first upval of the parent scope, since load()
-  -- clobbers the first upval anyway to be the new _ENV value
-  local def = ast.create_local_def("_ENV", fake_env_scope)
-  def.whole_block = true
-  fake_env_scope.locals[1] = def
-
-  fake_main = ast.append_stat(fake_env_scope, function(stat_elem)
-    local main = nodes.new_functiondef{
-      stat_elem = stat_elem,
-      is_main = true,
-      source = test_source,
-      parent_scope = fake_env_scope,
-      is_vararg = true,
-    }
-    main.eof_token = nodes.new_token({token_type = "eof", leading = {}})
-    return main
-  end)
+  fake_main = ast.new_main(test_source)
+  fake_main.eof_token = nodes.new_token({token_type = "eof", leading = {}})
 end
 
 local function get_tokens(str)
@@ -63,43 +50,11 @@ local function get_tokens(str)
   return tokens
 end
 
-do
-  local wrapped_nodes = {}
-  for name, func in pairs(nodes) do
-    if name == "set_position"
-      or name == "new_env_scope"
-      or name == "new_token"
-      or name == "new_invalid"
-    then
-      wrapped_nodes[name] = func
-    else
-      wrapped_nodes[name] = function(param)
-        param.stat_elem = param.stat_elem or fake_stat_elem
-        return func(param)
-      end
-    end
-  end
-  nodes = wrapped_nodes
-end
-
-local function append_stat(scope, stat)
-  ast.append_stat(scope, function(stat_elem)
-    return stat
-  end)
-end
-
 ---@param semi_colon_token_node AstTokenNode
 local function append_empty(scope, semi_colon_token_node)
   append_stat(scope, nodes.new_empty{
     semi_colon_token = semi_colon_token_node,
   })
-end
-
-local function new_true_node(true_token)
-  return nodes.new_boolean{
-    position = true_token,
-    value = true,
-  }
 end
 
 local serpent_opts = {
@@ -196,9 +151,16 @@ do
     return nodes.new_token(next_token())
   end
 
+  local function next_true_node()
+    return nodes.new_boolean{
+      position = next_token(),
+      value = true,
+    }
+  end
+
   local function next_wrapped_true_node()
     local open_paren_token = next_token_node()
-    local node = new_true_node(next_token())
+    local node = next_true_node()
     node.src_paren_wrappers = {
       {
         open_paren_token = open_paren_token,
@@ -277,7 +239,7 @@ do
         local testblock = nodes.new_testblock{
           parent_scope = fake_main,
           if_token = next_token_node(),
-          condition = new_true_node(next_token()),
+          condition = next_true_node(),
           then_token = next_token_node(),
         }
         append_empty(testblock, next_token_node())
@@ -337,7 +299,7 @@ do
           local testblock = nodes.new_testblock{
             parent_scope = fake_main,
             if_token = next_token_node(),
-            condition = new_true_node(next_token()),
+            condition = next_true_node(),
             then_token = new_invalid(
               error_code_util.codes.expected_token,
               peek_next_token(),
@@ -360,7 +322,7 @@ do
             local testblock = nodes.new_testblock{
               parent_scope = fake_main,
               if_token = next_token_node(),
-              condition = new_true_node(next_token()),
+              condition = next_true_node(),
               then_token = new_invalid(
                 error_code_util.codes.expected_token,
                 peek_next_token(),
@@ -413,7 +375,7 @@ do
           local stat = nodes.new_whilestat{
             parent_scope = fake_main,
             while_token = next_token_node(),
-            condition = new_true_node(next_token()),
+            condition = next_true_node(),
             do_token = next_token_node(),
           }
           append_empty(stat, next_token_node())
@@ -429,7 +391,7 @@ do
           local stat = nodes.new_whilestat{
             parent_scope = fake_main,
             while_token = next_token_node(),
-            condition = new_true_node(next_token()),
+            condition = next_true_node(),
             do_token = new_invalid(
               error_code_util.codes.expected_token,
               peek_next_token(),
@@ -448,7 +410,7 @@ do
           local stat = nodes.new_whilestat{
             parent_scope = fake_main,
             while_token = next_token_node(),
-            condition = new_true_node(next_token()),
+            condition = next_true_node(),
             do_token = next_token_node(),
           }
           append_empty(stat, next_token_node())
@@ -543,13 +505,13 @@ do
           var = var_ref,
           locals = {var_def},
           eq_token = next_token_node(),
-          start = new_true_node(next_token()),
+          start = next_true_node(),
           first_comma_token = next_token_node(),
-          stop = new_true_node(next_token()),
+          stop = next_true_node(),
         }
         if has_step then
           stat.second_comma_token = next_token_node()
-          stat.step = new_true_node(next_token())
+          stat.step = next_true_node()
         end
         stat.do_token = next_token_node()
         append_empty(stat, next_token_node())
@@ -586,7 +548,7 @@ do
             var = var_ref,
             locals = {var_def},
             eq_token = next_token_node(),
-            start = new_true_node(next_token()),
+            start = next_true_node(),
             first_comma_token = new_invalid(
               error_code_util.codes.expected_token,
               peek_next_token(), -- at ';'
@@ -612,9 +574,9 @@ do
             var = var_ref,
             locals = {var_def},
             eq_token = next_token_node(),
-            start = new_true_node(next_token()),
+            start = next_true_node(),
             first_comma_token = next_token_node(),
-            stop = new_true_node(next_token()),
+            stop = next_true_node(),
             do_token = new_invalid(
               error_code_util.codes.expected_token,
               peek_next_token(), -- at ';'
@@ -639,9 +601,9 @@ do
             var = var_ref,
             locals = {var_def},
             eq_token = next_token_node(),
-            start = new_true_node(next_token()),
+            start = next_true_node(),
             first_comma_token = next_token_node(),
-            stop = new_true_node(next_token()),
+            stop = next_true_node(),
             do_token = next_token_node(),
           }
           append_empty(stat, next_token_node())
@@ -670,7 +632,7 @@ do
             locals = {name_def},
             -- skip 1 token
             in_token = (function() next_token() return next_token_node() end)(),
-            exp_list = {new_true_node(next_token())},
+            exp_list = {next_true_node()},
             exp_list_comma_tokens = empty_table_or_nil,
             do_token = next_token_node(),
           }
@@ -702,7 +664,7 @@ do
               stat.locals[i] = name_def
             end
             stat.in_token = next_token_node()
-            stat.exp_list[1] = new_true_node(next_token())
+            stat.exp_list[1] = next_true_node()
             stat.do_token = next_token_node()
             append_empty(stat, next_token_node())
             stat.end_token = next_token_node()
@@ -759,7 +721,7 @@ do
             peek_next_token() -- at 'in'
           )
           stat.in_token = next_token_node()
-          stat.exp_list[1] = new_true_node(next_token())
+          stat.exp_list[1] = next_true_node()
           stat.do_token = next_token_node()
           append_empty(stat, next_token_node())
           stat.end_token = next_token_node()
@@ -783,7 +745,7 @@ do
           stat.name_list[1] = name_ref
           stat.locals[1] = name_def
           stat.in_token = next_token_node()
-          stat.exp_list[1] = new_true_node(next_token())
+          stat.exp_list[1] = next_true_node()
           stat.do_token = new_invalid(
             error_code_util.codes.expected_token,
             peek_next_token(), -- at ';'
@@ -810,7 +772,7 @@ do
           stat.name_list[1] = name_ref
           stat.locals[1] = name_def
           stat.in_token = next_token_node()
-          stat.exp_list[1] = new_true_node(next_token())
+          stat.exp_list[1] = next_true_node()
           stat.do_token = next_token_node()
           append_empty(stat, next_token_node())
           stat.end_token = new_invalid(
@@ -835,7 +797,7 @@ do
           }
           append_empty(stat, next_token_node())
           stat.until_token = next_token_node()
-          stat.condition = new_true_node(next_token())
+          stat.condition = next_true_node()
           append_stat(fake_main, stat)
         end
       )
@@ -869,7 +831,7 @@ do
             repeat_token = next_token_node(),
             condition = prevent_assert,
           }
-          -- TODO: this test if failing, see description below to get some idea as to why
+          -- TODO: this test is failing, see description below to get some idea as to why
           -- the fix for it is disgusting (I can think of either adding a void statement
           -- just to get a stat_elem with an appropriate index in the correct scope,
           -- or making stat_elem optional when resolving the reference... however that
@@ -1104,12 +1066,12 @@ do
             lhs = {name_ref},
             lhs_comma_tokens = empty_table_or_nil,
             eq_token = next_token_node(),
-            rhs = {new_true_node(next_token())},
+            rhs = {next_true_node()},
             rhs_comma_tokens = {next_token_node()},
           }
           name_def.start_at = stat
           name_def.start_offset = 1
-          stat.rhs[2] = new_true_node(next_token())
+          stat.rhs[2] = next_true_node()
           append_stat(fake_main, stat)
           append_empty(fake_main, next_token_node())
         end
@@ -1149,7 +1111,7 @@ do
             )},
             lhs_comma_tokens = {next_token_node()},
             eq_token = next_token_node(),
-            rhs = {new_true_node(next_token())},
+            rhs = {next_true_node()},
             rhs_comma_tokens = empty_table_or_nil,
           }
           foo_def.start_at = stat
@@ -1325,7 +1287,7 @@ do
         function()
           local stat = nodes.new_retstat{
             return_token = next_token_node(),
-            exp_list = {new_true_node(next_token())},
+            exp_list = {next_true_node()},
             exp_list_comma_tokens = empty_table_or_nil,
           }
           append_stat(fake_main, stat)
@@ -1338,10 +1300,10 @@ do
         function()
           local stat = nodes.new_retstat{
             return_token = next_token_node(),
-            exp_list = {new_true_node(next_token()), nil},
+            exp_list = {next_true_node(), nil},
             exp_list_comma_tokens = {next_token_node()},
           }
-          stat.exp_list[2] = new_true_node(next_token())
+          stat.exp_list[2] = next_true_node()
           append_stat(fake_main, stat)
         end
       )
@@ -1365,7 +1327,7 @@ do
         function()
           local stat = nodes.new_retstat{
             return_token = next_token_node(),
-            exp_list = {new_true_node(next_token())},
+            exp_list = {next_true_node()},
             exp_list_comma_tokens = empty_table_or_nil,
             semi_colon_token = next_token_node(),
           }
@@ -1466,7 +1428,7 @@ do
               lhs = {get_ref_helper("foo", next_token())},
               lhs_comma_tokens = empty_table_or_nil,
               eq_token = next_token_node(),
-              rhs = {new_true_node(next_token())},
+              rhs = {next_true_node()},
               rhs_comma_tokens = empty_table_or_nil,
             }
             append_stat(fake_main, stat)
@@ -1490,7 +1452,7 @@ do
               lhs = lhs,
               lhs_comma_tokens = lhs_comma_tokens,
               eq_token = next_token_node(),
-              rhs = {new_true_node(next_token())},
+              rhs = {next_true_node()},
               rhs_comma_tokens = empty_table_or_nil,
             }
             append_stat(fake_main, stat)
@@ -1506,10 +1468,10 @@ do
               lhs = {get_ref_helper("foo", next_token())},
               lhs_comma_tokens = empty_table_or_nil,
               eq_token = next_token_node(),
-              rhs = {new_true_node(next_token()), nil},
+              rhs = {next_true_node(), nil},
               rhs_comma_tokens = {next_token_node()},
             }
-            stat.rhs[2] = new_true_node(next_token())
+            stat.rhs[2] = next_true_node()
             append_stat(fake_main, stat)
             append_empty(fake_main, next_token_node())
           end
@@ -1545,7 +1507,7 @@ do
                 lhs = {get_invalid_lhs_node()},
                 lhs_comma_tokens = empty_table_or_nil,
                 eq_token = next_token_node(),
-                rhs = {new_true_node(next_token())},
+                rhs = {next_true_node()},
                 rhs_comma_tokens = empty_table_or_nil,
               }
               append_stat(fake_main, stat)
@@ -1565,7 +1527,7 @@ do
                 lhs = lhs,
                 lhs_comma_tokens = lhs_comma_tokens,
                 eq_token = next_token_node(),
-                rhs = {new_true_node(next_token())},
+                rhs = {next_true_node()},
                 rhs_comma_tokens = empty_table_or_nil,
               }
               append_stat(fake_main, stat)
@@ -1581,7 +1543,7 @@ do
             nil,
             {(function()
               local open_paren_token = next_token_node()
-              local expr = new_true_node(next_token())
+              local expr = next_true_node()
               expr.src_paren_wrappers = {
                 {
                   open_paren_token = open_paren_token,
@@ -1821,7 +1783,7 @@ do
           local expr = nodes.new_index{
             ex = foo,
             suffix_open_token = next_token_node(),
-            suffix = new_true_node(next_token()),
+            suffix = next_true_node(),
             suffix_close_token = next_token_node(),
           }
           return expr
@@ -1852,7 +1814,7 @@ do
           local expr = nodes.new_index{
             ex = foo,
             suffix_open_token = suffix_open_token,
-            suffix = new_true_node(next_token()),
+            suffix = next_true_node(),
             suffix_close_token = new_invalid(
               error_code_util.codes.expected_closing_match,
               peek_next_token(), -- at 'eof'
@@ -1910,7 +1872,7 @@ do
             local expr = nodes.new_unop{
               op = unop_str,
               op_token = next_token_node(),
-              ex = new_true_node(next_token()),
+              ex = next_true_node(),
             }
             return expr
           end
@@ -1926,7 +1888,7 @@ do
               ex = nodes.new_unop{
                 op = unop_str,
                 op_token = next_token_node(),
-                ex = new_true_node(next_token()),
+                ex = next_true_node(),
               },
             }
             return expr
@@ -1944,8 +1906,8 @@ do
                   op_token = next_token_node(),
                   ex = make_binop(
                     binop,
-                    new_true_node(next_token()),
-                    function() return new_true_node(next_token()) end
+                    next_true_node(),
+                    function() return next_true_node() end
                   ),
                 }
                 return expr
@@ -1961,9 +1923,9 @@ do
                   nodes.new_unop{
                     op = unop_str,
                     op_token = next_token_node(),
-                    ex = new_true_node(next_token()),
+                    ex = next_true_node(),
                   },
-                  function() return new_true_node(next_token()) end
+                  function() return next_true_node() end
                 )
                 return expr
               end
@@ -1990,8 +1952,8 @@ do
           function()
             local expr = make_binop(
               binop,
-              new_true_node(next_token()),
-              function() return new_true_node(next_token_node()) end
+              next_true_node(),
+              function() return next_true_node() end
             )
             return expr
           end
@@ -2029,15 +1991,15 @@ do
             local function make_inner_binop(binop)
               return make_binop(
                 binop,
-                new_true_node(next_token()),
-                function() return new_true_node(next_token()) end
+                next_true_node(),
+                function() return next_true_node() end
               )
             end
             if middle_is_prioritized_by_the_right then
               -- the second op is the inner node
               expr = make_binop(
                 first,
-                new_true_node(next_token()),
+                next_true_node(),
                 function() return make_inner_binop(second) end
               )
             else
@@ -2045,7 +2007,7 @@ do
               expr = make_binop(
                 second,
                 make_inner_binop(first),
-                function() return new_true_node(next_token()) end
+                function() return next_true_node() end
               )
             end
             return expr
@@ -2071,16 +2033,16 @@ do
         "true..true..true",
         function()
           local expr = nodes.new_concat{
-            exp_list = {new_true_node(next_token()), nil, nil},
+            exp_list = {next_true_node(), nil, nil},
             op_tokens = {next_token_node(), nil},
             concat_src_paren_wrappers = assert.custom_comparator({
               [{}] = true,
               [{{}}] = true,
             }, true),
           }
-          expr.exp_list[2] = new_true_node(next_token())
+          expr.exp_list[2] = next_true_node()
           expr.op_tokens[2] = next_token_node()
-          expr.exp_list[3] = new_true_node(next_token())
+          expr.exp_list[3] = next_true_node()
           return expr
         end
       )
@@ -2138,12 +2100,12 @@ do
         "(true..true)..true",
         function()
           local open = next_token_node()
-          local true_1 = new_true_node(next_token())
+          local true_1 = next_true_node()
           local op_1 = next_token_node()
-          local true_2 = new_true_node(next_token())
+          local true_2 = next_true_node()
           local close = next_token_node()
           local op_2 = next_token_node()
-          local true_3 = new_true_node(next_token())
+          local true_3 = next_true_node()
           local expr = nodes.new_concat{
             exp_list = {
               nodes.new_concat{
@@ -2236,7 +2198,7 @@ do
         "true",
         "true",
         function()
-          local expr = new_true_node(next_token())
+          local expr = next_true_node()
           return expr
         end
       )
@@ -2485,7 +2447,7 @@ do
           local expr = nodes.new_constructor{
             open_token = next_token_node(),
             fields = {
-              {type = "list", value = new_true_node(next_token())},
+              {type = "list", value = next_true_node()},
             },
             comma_tokens = empty_table_or_nil,
             close_token = next_token_node(),
@@ -2520,10 +2482,10 @@ do
               {
                 type = "rec",
                 key_open_token = next_token_node(),
-                key = new_true_node(next_token()),
+                key = next_true_node(),
                 key_close_token = next_token_node(),
                 eq_token = next_token_node(),
-                value = new_true_node(next_token()),
+                value = next_true_node(),
               },
             },
             comma_tokens = empty_table_or_nil,
@@ -2548,7 +2510,7 @@ do
                   src_is_ident = true,
                 },
                 eq_token = next_token_node(),
-                value = new_true_node(next_token()),
+                value = next_true_node(),
               },
             },
             comma_tokens = empty_table_or_nil,
@@ -2565,12 +2527,12 @@ do
           local expr = nodes.new_constructor{
             open_token = next_token_node(),
             fields = {
-              {type = "list", value = new_true_node(next_token())},
+              {type = "list", value = next_true_node()},
               nil,
             },
             comma_tokens = {next_token_node()},
           }
-          expr.fields[2] = {type = "list", value = new_true_node(next_token())}
+          expr.fields[2] = {type = "list", value = next_true_node()}
           expr.close_token = next_token_node()
           return expr
         end
@@ -2583,7 +2545,7 @@ do
           local expr = nodes.new_constructor{
             open_token = next_token_node(),
             fields = {
-              {type = "list", value = new_true_node(next_token())},
+              {type = "list", value = next_true_node()},
             },
             comma_tokens = {next_token_node()},
             close_token = next_token_node(),
@@ -2599,12 +2561,12 @@ do
           local expr = nodes.new_constructor{
             open_token = next_token_node(),
             fields = {
-              {type = "list", value = new_true_node(next_token())},
+              {type = "list", value = next_true_node()},
               nil,
             },
             comma_tokens = {next_token_node()},
           }
-          expr.fields[2] = {type = "list", value = new_true_node(next_token())}
+          expr.fields[2] = {type = "list", value = next_true_node()}
           expr.comma_tokens[2] = next_token_node()
           expr.close_token = next_token_node()
           return expr
@@ -2621,7 +2583,7 @@ do
               {
                 type = "rec",
                 key_open_token = next_token_node(),
-                key = new_true_node(next_token()),
+                key = next_true_node(),
                 key_close_token = next_token_node(),
                 eq_token = new_invalid(
                   error_code_util.codes.expected_token,
@@ -2713,7 +2675,7 @@ do
           local expr = nodes.new_call{
             ex = next_wrapped_true_node(),
             open_paren_token = next_token_node(),
-            args = {new_true_node(next_token())},
+            args = {next_true_node()},
             args_comma_tokens = empty_table_or_nil,
             close_paren_token = next_token_node(),
           }
@@ -2728,10 +2690,10 @@ do
           local expr = nodes.new_call{
             ex = next_wrapped_true_node(),
             open_paren_token = next_token_node(),
-            args = {new_true_node(next_token()), nil},
+            args = {next_true_node(), nil},
             args_comma_tokens = {next_token_node()},
           }
-          expr.args[2] = new_true_node(next_token())
+          expr.args[2] = next_true_node()
           expr.close_paren_token = next_token_node()
           return expr
         end
@@ -2902,7 +2864,7 @@ do
           local expr = nodes.new_call{
             ex = ex,
             open_paren_token = open_paren_token,
-            args = {new_true_node(next_token())},
+            args = {next_true_node()},
             args_comma_tokens = empty_table_or_nil,
             close_paren_token = new_invalid(
               error_code_util.codes.expected_closing_match,
@@ -2927,7 +2889,7 @@ do
               args_comma_tokens = count <= 1 and empty_table_or_nil or {},
             }
             for i = 1, count do
-              expr.args[i] = new_true_node(next_token_node())
+              expr.args[i] = next_true_node()
               if i ~= count then
                 expr.args_comma_tokens[i] = next_token_node()
               end
@@ -3003,6 +2965,9 @@ do
       ))
     end
   )
+
+  -- TODO: test 'eof' with leading
+  -- TODO: test 'return' ending the current block
 
   -- NOTE: scoping for ifstat (testblock), whilestat, fornum, forlist, repeatstat will be more important
   -- once local definition inside expressions will be a thing, however until then testing for it is difficult

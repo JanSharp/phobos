@@ -1,13 +1,13 @@
 
-local invert = require("invert")
 local util = require("util")
+local ast = require("ast_util")
 
 local function get_position(node)
-  local position = util.get_main_position(node)
+  local position = ast.get_main_position(node)
   return (position.line and position.column and (" at "..position.line..":"..position.column)) or ""
 end
 
-local loop_node_types = invert{"whilestat", "fornum", "forlist", "repeatstat", "loopstat"}
+local loop_node_types = util.invert{"whilestat", "fornum", "forlist", "repeatstat", "loopstat"}
 
 ---@param func AstFunctionDef
 local function link(func)

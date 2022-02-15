@@ -2,7 +2,7 @@
 local framework = require("test_framework")
 local assert = require("assert")
 
-local invert = require("invert")
+local util = require("util")
 local error_code_util = require("error_code_util")
 local tokenizer = require("tokenize")
 
@@ -375,7 +375,7 @@ do
     end)
 
     scope:add_test("containing invalid escape sequences", function()
-      local all_valid_escaped_chars = invert{
+      local all_valid_escaped_chars = util.invert{
         "x",
         "\r",
         "\n",

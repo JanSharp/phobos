@@ -1,6 +1,6 @@
 
+local util = require("util")
 local ill = require("indexed_linked_list")
-local invert = require("invert")
 
 local nodes = {}
 
@@ -594,7 +594,7 @@ end
 ---@field ex AstExpression
 ---@field op_token AstTokenNode|nil
 
-local unop_ops = invert{"not", "-", "#"}
+local unop_ops = util.invert{"not", "-", "#"}
 ---@param params AstUnOpParams
 function nodes.new_unop(params)
   local node = expr_base(new_node("unop"), params)
@@ -611,7 +611,7 @@ end
 ---@field right AstExpression
 ---@field op_token AstTokenNode|nil
 
-local binop_ops = invert{"^", "*", "/", "%", "+", "-", "==", "<", "<=", "~=", ">", ">=", "and", "or"}
+local binop_ops = util.invert{"^", "*", "/", "%", "+", "-", "==", "<", "<=", "~=", ">", ">=", "and", "or"}
 ---@param params AstBinOpParams
 function nodes.new_binop(params)
   local node = expr_base(new_node("binop"), params)

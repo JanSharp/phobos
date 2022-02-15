@@ -1,7 +1,7 @@
 
 local error_code_util = require("error_code_util")
-local invert = require("invert")
-local keywords = invert{
+local util = require("util")
+local keywords = util.invert{
   "and", "break", "do", "else", "elseif", "end", "false",
   "for", "function", "if", "in", "local", "nil", "not",
   "or", "repeat", "return", "then", "true", "until",
@@ -118,7 +118,7 @@ local function peek_equals(str,index,next_char,line,column)
   end
 end
 
-local newline_chars = invert{"\n", "\r"}
+local newline_chars = util.invert{"\n", "\r"}
 
 local function consume_newline(str, index, state, current_char)
   current_char = current_char or str:sub(index, index)

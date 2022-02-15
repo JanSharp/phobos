@@ -1,7 +1,7 @@
 
+local util = require("util")
 local ast = require("ast_util")
 local nodes = require("nodes")
-local invert = require("invert")
 local error_code_util = require("error_code_util")
 
 ---a fake value to prevent assertions from failing during node creation
@@ -212,19 +212,16 @@ local function assert_match(open_token, close)
   end
 end
 
-local block_ends = invert{"else", "elseif", "end", "eof"}
+local block_ends = util.invert{"else", "elseif", "until", "end", "eof"}
 
---- Test if the next token closes a block
----@param with_until boolean if true, "until" token will count as closing a block
+--- Test if the next token closes a block.\
+--- In regular lua's parser `until` can be excluded to be considered ending a block
+--- because it does not actually end the current scope, since the condition is also
+--- inside the scope. This is important for jump linking, but since jump linking is
+--- kept separate in phobos (at least at the moment) that logic is not needed here
 ---@return boolean
-local function next_token_ends_block(with_until)
-  if block_ends[token.token_type] then
-    return true
-  elseif token.token_type == "until" then
-    return with_until
-  else
-    return false
-  end
+local function next_token_ends_block()
+  return block_ends[token.token_type]
 end
 
 --- Read a list of Statements and append them to `scope.body`\
@@ -232,7 +229,7 @@ end
 ---@param scope AstScope
 local function stat_list(scope)
   local stop
-  while not next_token_ends_block(true) do
+  while not next_token_ends_block() do
     if token.token_type == "eof" then
       break
     elseif token.token_type == "return" then
@@ -1306,7 +1303,7 @@ local function retstat(scope, stat_elem)
     return_token = new_token_node(),
   }
   next_token() -- skip "return"
-  if next_token_ends_block(true) then
+  if next_token_ends_block() then
     -- return no values
   elseif token.token_type == ";" then
     -- also return no values
@@ -1403,39 +1400,21 @@ end
 
 
 local function main_func()
-  local env_scope = nodes.new_env_scope{}
-  -- Lua emits _ENV as if it's a local in the parent scope
-  -- of the file. I'll probably change this one day to be
-  -- the first upval of the parent scope, since load()
-  -- clobbers the first upval anyway to be the new _ENV value
-  local def = ast.create_local_def("_ENV", env_scope)
-  def.whole_block = true
-  env_scope.locals[1] = def
-
-  local main = ast.append_stat(env_scope, function(stat_elem)
-    local main = nodes.new_functiondef{
-      stat_elem = stat_elem,
-      is_main = true,
-      source = source,
-      parent_scope = env_scope,
-      is_vararg = true,
-    }
-    stat_list(main)
-    -- this will only fail either if there previously were syntax errors or an early return
-    local invalid = assert_next("eof")
-    if invalid then
-      ast.append_stat(main, function() return invalid end)
-      -- continue parsing the rest of the file as if it's part of the main body
-      -- because the main body is the highest scope we got
-      while not test_next("eof") do
-        ast.append_stat(main, function(stat_elem_2)
-          return statement(main, stat_elem_2)
-        end)
-      end
+  local main = ast.new_main(source)
+  stat_list(main)
+  -- this will only fail either if there previously were syntax errors or an early return
+  local invalid = assert_next("eof")
+  if invalid then
+    ast.append_stat(main, function() return invalid end)
+    -- continue parsing the rest of the file as if it's part of the main body
+    -- because the main body is the highest scope we got
+    while not test_next("eof") do
+      ast.append_stat(main, function(stat_elem_2)
+        return statement(main, stat_elem_2)
+      end)
     end
-    main.eof_token = new_token_node()
-    return main
-  end)
+  end
+  main.eof_token = new_token_node()
   return main
 end
 
