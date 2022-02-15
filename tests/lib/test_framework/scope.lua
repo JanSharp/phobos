@@ -93,7 +93,11 @@ function Scope:run_tests(options)
       end
       if not success or not options.only_print_failed then
         print(get_indentation(self).."  "..test.name..": "
-          ..(success and (green.."passed"..reset) or (red.."failed"..reset..": "..err))
+          ..(success and (green.."passed"..reset) or (red.."failed"..reset..":"..(
+            options.print_stacktrace
+              and ("\n"..faint..magenta..stacktrace:gsub("\t", "  ")..reset.."\n")
+              or " "
+          )..err))
         )
       end
     end

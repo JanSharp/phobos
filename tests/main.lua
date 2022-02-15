@@ -20,6 +20,13 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
                      printed.",
       flag = true,
     },
+    {
+      field = "print_stacktrace",
+      long = "print-stacktrace",
+      short = "s",
+      description = "Print the stack trace for failed tests.",
+      flag = true,
+    },
   },
 }, {label_length = 80 - 4 - 2 - 50})
 if not args then return end
@@ -33,4 +40,5 @@ require("test_parser")
 
 framework.scope:run_tests{
   only_print_failed = args.print_failed,
+  print_stacktrace = args.print_stacktrace,
 }
