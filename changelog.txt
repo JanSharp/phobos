@@ -15,6 +15,8 @@ Version: 0.1.3
       For example the condition in `repeat local foo; until foo` would index into `_ENV`
     - Fix scope bodies referring to the parent scope instead of the current scope
     - Fix 'goto's to the end of a repeatstat block being allowed no matter what
+    - Fix jump_linker attempting to concatenate nil when the given AST does not have debug
+      information and contains an invalid jump
 ---------------------------------------------------------------------------------------------------
 Version: 0.1.2
 Date: 2022-01-29

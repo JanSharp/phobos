@@ -4,7 +4,7 @@ local util = require("util")
 
 local function get_position(node)
   local position = util.get_main_position(node)
-  return (position.line and position.column and (" at "..position.line..":"..position.column))
+  return (position.line and position.column and (" at "..position.line..":"..position.column)) or ""
 end
 
 local loop_node_types = invert{"whilestat", "fornum", "forlist", "repeatstat", "loopstat"}
