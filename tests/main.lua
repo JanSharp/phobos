@@ -37,6 +37,7 @@ assert.set_print_full_data_on_error_default(args.full_output)
 
 require("test_tokenizer")
 require("test_parser")
+require("test_jump_linker")
 
 framework.scope:run_tests{
   only_print_failed = args.print_failed,

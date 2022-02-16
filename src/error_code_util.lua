@@ -20,13 +20,14 @@ end
 -- just better not with patch versions
 -- but I'm not sure, it might also just be worth it to keep ids consistent forever
 local next_id = 1
-local function add_error_code(type, name, message)
+local function add_error_code(type, name, message, location_str_is_inside_message)
   local error_code = {
     id = next_id,
     type = type,
     name = name,
     message = message,
     message_param_count = str_count(message, "%%s"),
+    location_str_is_inside_message = location_str_is_inside_message or false,
   }
   error_codes[name] = error_code
   error_codes_by_id[next_id] = error_code
@@ -135,6 +136,25 @@ add_error_code(
   "Unexpected expression"
 )
 
+add_error_code(
+  types.jump_linker,
+  "break_outside_loop",
+  "'break'${location_str} is not inside a loop",
+  true
+)
+add_error_code(
+  types.jump_linker,
+  "no_visible_label",
+  "No visible label '%s' for 'goto'"
+)
+add_error_code(
+  types.jump_linker,
+  "jump_to_label_in_scope_of_new_local",
+  "Unable to jump from 'goto' '%s'${location_str} to label at %s \z
+    because it is in the scope of the local '%s' at %s",
+  true
+)
+
 ---@alias ErrorCodeType integer
 
 ---@class ErrorCode
@@ -143,6 +163,7 @@ add_error_code(
 ---@field name string
 ---@field message string
 ---@field message_param_count integer
+---@field location_str_is_inside_message boolean
 
 ---@class SourcePosition
 ---@field line integer
@@ -190,11 +211,39 @@ local function new_error_code_inst(params)
   }
 end
 
+---@param error_code_inst ErrorCodeInstance
+---@return string
 local function get_message(error_code_inst)
+  if (error_code_inst.message_args and (#error_code_inst.message_args) or 0)
+    ~= error_code_inst.error_code.message_param_count
+  then
+    assert(false, "Expected "..error_code_inst.error_code.message_param_count.." message args for '"
+      ..error_code_inst.error_code.name.."', got "..(#error_code_inst.message_args).."."
+    )
+  end
+  local message = error_code_inst.error_code.message
+  if error_code_inst.error_code.location_str_is_inside_message then
+    message = message:gsub("${location_str}", error_code_inst.location_str or "")
+  end
   return string.format(
-    error_code_inst.error_code.message,
+    message,
     table.unpack(error_code_inst.message_args)
-  )..(error_code_inst.location_str or "")
+  )..((not error_code_inst.error_code.location_str_is_inside_message) and error_code_inst.location_str or "")
+end
+
+---@param errors_label string|'"syntax errors"' @ type annotations are suggested strings
+local function get_message_for_list(error_code_insts, errors_label, max_errors_shown)
+  if error_code_insts[1] then
+    local error_count = #error_code_insts
+    max_errors_shown = max_errors_shown or error_count
+    local msgs = {}
+    for i = 1, math.min(error_count, max_errors_shown) do
+      msgs[i] = get_message(error_code_insts[i])
+    end
+    return (error_count).." "..errors_label
+      ..(error_count > max_errors_shown and (", showing first "..max_errors_shown) or "")
+      ..":\n"..table.concat(msgs, "\n")
+  end
 end
 
 return {
@@ -203,4 +252,5 @@ return {
   codes_by_id = error_codes_by_id,
   new_error_code = new_error_code_inst,
   get_message = get_message,
+  get_message_for_list = get_message_for_list,
 }

@@ -199,20 +199,18 @@ local function compile(filename)
       file:close()
     end
 
-    local success, main, invalid_nodes = pcall(require("parser"), text, "@"..filename)
+    local success, main, parser_errors = pcall(require("parser"), text, "@"..filename)
     if not success then print(main) goto finish end
     -- print(serpent.block(main))
-
-    if invalid_nodes[1] then
-      local msgs = {}
-      for i, invalid_node in ipairs(invalid_nodes) do
-        msgs[i] = error_code_util.get_message(invalid_node.error_code_inst)
-      end
-      error((#invalid_nodes).." syntax errors:\n"..table.concat(msgs, "\n"))
+    if parser_errors[1] then
+      error(error_code_util.get_message_for_list(parser_errors, "syntax errors"))
     end
 
     success, err = pcall(require("jump_linker"), main)
     if not success then print(err) goto finish end
+    if err[1] then
+      error(error_code_util.get_message_for_list(err, "syntax errors"))
+    end
 
     if use_il then
       local il

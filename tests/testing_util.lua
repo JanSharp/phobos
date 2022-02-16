@@ -4,7 +4,7 @@ local ast = require("ast_util")
 local test_source = "=(test)"
 
 local function append_stat(scope, stat)
-  ast.append_stat(scope, function(stat_elem)
+  return ast.append_stat(scope, function(stat_elem)
     return stat
   end)
 end
@@ -28,8 +28,22 @@ local function wrap_nodes_constructors(nodes, stat_elem)
   return wrapped_nodes
 end
 
+local serpent_opts_for_ast = {
+  keyignore = {
+    first = true,
+    last = true,
+    next = true,
+    prev = true,
+    stat_elem = true,
+    scope = true,
+    list = true,
+    parent_scope = true,
+  },
+}
+
 return {
   test_source = test_source,
   append_stat = append_stat,
   wrap_nodes_constructors = wrap_nodes_constructors,
+  serpent_opts_for_ast = serpent_opts_for_ast,
 }

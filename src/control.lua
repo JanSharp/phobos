@@ -65,21 +65,18 @@ local function phobos_command(args, silent, measured)
     command_env = util.copy(_ENV)
   end
 
+  local max_errors_shown = 8
   local profiler = measured and game.create_profiler() or nil
-  local ast, invalid_nodes = parser(args.parameter, args.parameter)
-  if invalid_nodes[1] then
-    local max_errors_shown = 8
-    local msgs = {}
-    for i = 1, math.min(#invalid_nodes, max_errors_shown) do
-      msgs[i] = error_code_util.get_message(invalid_nodes[i].error_code_inst)
-    end
-    print_msg("Cannot execute command. "..(#invalid_nodes).." syntax errors"
-      ..(#invalid_nodes > max_errors_shown and (", showing first "..max_errors_shown) or "")
-      ..":\n"..table.concat(msgs, "\n")
-    )
+  local ast, parser_errors = parser(args.parameter, args.parameter)
+  if parser_errors[1] then
+    print_msg(error_code_util.get_message_for_list(parser_errors, "syntax errors", max_errors_shown))
     return
   end
-  jump_linker(ast)
+  local jump_linker_errors = jump_linker(ast)
+  if jump_linker_errors[1] then
+    print_msg(error_code_util.get_message_for_list(jump_linker_errors, "syntax errors", max_errors_shown))
+    return
+  end
   if measured then
     fold_const(ast)
     fold_control_statements(ast)
@@ -99,6 +96,7 @@ local function phobos_command(args, silent, measured)
   if measured then
     profiler.restart()
   end
+  local success
   success, err = xpcall(command, function(msg)
     if measured then
       profiler.stop()

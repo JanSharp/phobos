@@ -20,7 +20,8 @@ local prevent_assert
 -- without actually modifying the value at all
 
 local source
-local invalid_nodes
+local error_code_insts
+local last_invalid_node
 ---used to carry the position token over from `new_error_code_inst` to `syntax_error`
 local err_pos_token
 ---only used by labels, it's simply just an extra node that's going to be added
@@ -87,8 +88,8 @@ local function add_consumed_node(invalid, consumed_node)
   end
 end
 
-local function get_invalid_nodes_count()
-  return #invalid_nodes
+local function get_error_code_insts_count()
+  return #error_code_insts
 end
 
 ---TODO: make the correct object in the error message the focus, the thing that is actually wrong.
@@ -96,7 +97,7 @@ end
 ---is missing (like a closing }), but rather the actual token that was encountered that was unexpected
 ---Throw a Syntax Error at the current location
 ---@param error_code_inst ErrorCodeInstance
-local function syntax_error(error_code_inst, location_descriptor, invalid_nodes_insertion_index)
+local function syntax_error(error_code_inst, location_descriptor, error_code_insts_insertion_index)
   if location_descriptor then
     location_descriptor = location_descriptor == "" and "" or " "..location_descriptor
   else
@@ -155,11 +156,12 @@ local function syntax_error(error_code_inst, location_descriptor, invalid_nodes_
   error_code_inst.location_str = location
   error_code_inst.source = source
   local invalid = nodes.new_invalid{error_code_inst = error_code_inst}
-  if invalid_nodes_insertion_index then
-    table.insert(invalid_nodes, invalid_nodes_insertion_index, invalid)
+  if error_code_insts_insertion_index then
+    table.insert(error_code_insts, error_code_insts_insertion_index, error_code_inst)
   else
-    invalid_nodes[#invalid_nodes+1] = invalid
+    error_code_insts[#error_code_insts+1] = error_code_inst
   end
+  last_invalid_node = invalid
   return invalid
 end
 
@@ -516,10 +518,9 @@ local function primary_exp(scope, stat_elem)
     return ast.get_ref(scope, stat_elem, ident.value, ident)
   else
     if token.token_type == "invalid" then
-      local invalid = invalid_nodes[#invalid_nodes]
-      add_consumed_node(invalid, new_token_node())
+      add_consumed_node(last_invalid_node, new_token_node())
       next_token()
-      return invalid
+      return last_invalid_node
     else
       local invalid = syntax_error(new_error_code_inst{
         error_code = error_code_util.codes.unexpected_token,
@@ -851,20 +852,20 @@ local function assignment(lhs, lhs_comma_tokens, state_for_unexpected_expression
     local invalid = syntax_error(new_error_code_inst{
       error_code = error_code_util.codes.unexpected_expression,
       position = state_for_unexpected_expressions.position,
-    }, nil, state_for_unexpected_expressions.invalid_nodes_count + 1)
+    }, nil, state_for_unexpected_expressions.error_code_insts_count + 1)
     add_consumed_node(invalid, lhs[#lhs])
     lhs[#lhs] = invalid
   end
   if test_next(",") then
     lhs_comma_tokens[#lhs_comma_tokens+1] = new_token_node(true)
     local first_token = token
-    local initial_invalid_nodes_count = get_invalid_nodes_count()
+    local initial_error_code_insts_count = get_error_code_insts_count()
     lhs[#lhs+1] = suffixed_exp(scope, stat_elem)
     -- TODO: disallow `(exp)` (so force single result expressions) and `exp()` (call expressions)
     return assignment(
       lhs,
       lhs_comma_tokens,
-      {position = first_token, invalid_nodes_count = initial_invalid_nodes_count},
+      {position = first_token, error_code_insts_count = initial_error_code_insts_count},
       scope,
       stat_elem
     )
@@ -1262,14 +1263,14 @@ end
 local function expr_stat(scope, stat_elem)
   -- stat -> func | assignment
   local first_token = token
-  local initial_invalid_nodes_count = get_invalid_nodes_count()
+  local initial_error_code_insts_count = get_error_code_insts_count()
   local first_exp = suffixed_exp(scope, stat_elem)
   if token.token_type == "=" or token.token_type == "," then
     -- stat -> assignment
     return assignment(
       {first_exp},
       {},
-      {position = first_token, invalid_nodes_count = initial_invalid_nodes_count},
+      {position = first_token, error_code_insts_count = initial_error_code_insts_count},
       scope,
       stat_elem
     )
@@ -1289,7 +1290,7 @@ local function expr_stat(scope, stat_elem)
       local invalid = syntax_error(new_error_code_inst{
         error_code = error_code_util.codes.unexpected_expression,
         position = first_token,
-      }, nil, initial_invalid_nodes_count + 1)
+      }, nil, initial_error_code_insts_count + 1)
       add_consumed_node(invalid, first_exp)
       return invalid
     end
@@ -1428,7 +1429,7 @@ local function parse(text,source_name)
       position = {line = 0, column = 0},
     }
   }
-  invalid_nodes = {}
+  error_code_insts = {}
   local token_iter, index
   token_iter,token_iter_state,index = tokenize(text)
 
@@ -1487,8 +1488,8 @@ local function parse(text,source_name)
   -- have to reset token, otherwise the next parse call will think its already reached the end
   token = nil
   -- clear these references to not hold on to memory
-  local current_invalid_nodes = invalid_nodes
-  invalid_nodes = nil
+  local result_error_code_insts = error_code_insts
+  error_code_insts = nil
   source = nil
   prevent_assert = nil
   prev_token = nil
@@ -1496,7 +1497,7 @@ local function parse(text,source_name)
   -- with token_iter_state cleared, next_token and peek_token
   -- don't really have any other big upvals, so no need to clear them
 
-  return main, current_invalid_nodes
+  return main, result_error_code_insts
 end
 
 return parse

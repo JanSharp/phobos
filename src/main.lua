@@ -344,7 +344,24 @@ local dump = require("dump")
 local syntax_error_count = 0
 local files_with_syntax_error_count = 0
 local do_optimize = args.profile == "release"
+
 local function compile(filename, source_name, ignore_syntax_errors, accept_bytecode, inject_scripts)
+  local function check_and_print_errors(errors)
+    if errors[1] then
+      syntax_error_count = syntax_error_count + #errors
+      files_with_syntax_error_count = files_with_syntax_error_count + 1
+      local msg = error_code_util.get_message_for_list(errors, "syntax errors in "..source_name)
+      if ignore_syntax_errors then
+        if not args.no_syntax_error_messages then
+          print(msg)
+        end
+        return true
+      else
+        error(msg)
+      end
+    end
+  end
+
   local file
   if accept_bytecode then
     file = assert(io.open(filename:str(), "rb"))
@@ -362,28 +379,14 @@ local function compile(filename, source_name, ignore_syntax_errors, accept_bytec
   end
   local contents = file:read("*a")
   assert(file:close())
-  local ast, invalid_nodes = parser(contents, source_name)
-  if invalid_nodes[1] then
-    -- build error message
-    local msgs = {}
-    for i, invalid_node in ipairs(invalid_nodes) do
-      msgs[i] = error_code_util.get_message(invalid_node.error_code_inst)
-    end
-    local error_count = #invalid_nodes
-    syntax_error_count = syntax_error_count + error_count
-    files_with_syntax_error_count = files_with_syntax_error_count + 1
-    local msg = error_count.." syntax errors in "
-      ..source_name..":\n"..table.concat(msgs, "\n")
-    if ignore_syntax_errors then
-      if not args.no_syntax_error_messages then
-        print(msg)
-      end
-      return nil
-    else
-      error(msg)
-    end
+  local ast, parser_errors = parser(contents, source_name)
+  if check_and_print_errors(parser_errors) then
+    return nil
   end
-  jump_linker(ast)
+  local jump_linker_errors = jump_linker(ast)
+  if check_and_print_errors(jump_linker_errors) then
+    return nil
+  end
   if inject_scripts then
     for _, inject_script in ipairs(inject_scripts) do
       inject_script(ast)

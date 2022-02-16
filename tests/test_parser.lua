@@ -57,20 +57,7 @@ local function append_empty(scope, semi_colon_token_node)
   })
 end
 
-local serpent_opts = {
-  keyignore = {
-    first = true,
-    last = true,
-    next = true,
-    prev = true,
-    stat_elem = true,
-    scope = true,
-    list = true,
-    parent_scope = true,
-  },
-}
-
-local expected_invalid_nodes
+local expected_parser_errors
 
 local function new_invalid(error_code, position, message_args, consumed_nodes, error_code_inst)
   if error_code_inst then
@@ -86,7 +73,7 @@ local function new_invalid(error_code, position, message_args, consumed_nodes, e
     },
     consumed_nodes = consumed_nodes or {},
   }
-  expected_invalid_nodes[#expected_invalid_nodes+1] = invalid
+  expected_parser_errors[#expected_parser_errors+1] = invalid.error_code_inst
   return invalid
 end
 
@@ -96,28 +83,28 @@ end
 
 local function before_each()
   make_fake_main()
-  expected_invalid_nodes = {}
+  expected_parser_errors = {}
 end
 
 local function test_stat(str)
   assert.assert(fake_main, "must run make_fake_main before each test")
-  local main, got_invalid_nodes = parser(str, test_source)
+  local main, got_parser_errors = parser(str, test_source)
   assert.contents_equals(
     fake_main,
     main,
     nil,
     {
       root_name = "main",
-      serpent_opts = serpent_opts,
+      serpent_opts = tutil.serpent_opts_for_ast,
     }
   )
   assert.contents_equals(
-    expected_invalid_nodes or {},
-    got_invalid_nodes,
+    expected_parser_errors or {},
+    got_parser_errors,
     nil,
     {
       root_name = "invalid_nodes",
-      serpent_opts = serpent_opts,
+      serpent_opts = tutil.serpent_opts_for_ast,
     }
   )
   fake_main = nil
