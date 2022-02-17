@@ -192,7 +192,7 @@ add_error_code(
 ---@field stop_position SourcePosition @ inclusive
 
 local function get_position(position)
-  return {
+  return position and {
     line = position.line,
     column = position.column,
   }

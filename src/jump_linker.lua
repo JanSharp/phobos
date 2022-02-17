@@ -52,7 +52,7 @@ local function link(func)
       }
 
       -- solve backwards references
-      for j = 1, visible_label_count do
+      for j = visible_label_count, 1, -1 do
         local label = label_stack[j]
         if label.name == goto_stat.target_name then
           goto_stat.linked_label = label
