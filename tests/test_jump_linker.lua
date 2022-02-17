@@ -39,6 +39,10 @@ do
     end)
   end
 
+  local function get_position(position)
+    return position.line..":"..position.column
+  end
+
   local function for_each_loop_scope(func)
     func("whilestat", function(main)
       return append_stat(main, nodes.new_whilestat{
@@ -307,10 +311,6 @@ do
       end
     end)
 
-    local function get_position(position)
-      return position.line..":"..position.column
-    end
-
     for _, with_tokens in ipairs{true, false} do
       local go, label, bar_ref
       local function add_forwards_jump_into_scope_of_new_local_test(test_label, make_local)
@@ -500,7 +500,9 @@ do
           error_code_util.new_error_code{
             error_code = error_code_util.codes.no_visible_label,
             position = with_tokens and ast.get_main_position(go) or nil,
-            location_str = with_tokens and " at 1:1" or " at 0:0",
+            location_str = with_tokens
+              and (" at "..get_position(ast.get_main_position(go)))
+              or " at 0:0",
             message_args = {"foo"},
             source = test_source,
           },
@@ -623,7 +625,84 @@ do
 
     current_scope = main_scope
   end -- end goto
-end
 
--- break links to all types of loops
--- break outside of loop with and without tokens
+  do -- break
+    local break_scope = main_scope:new_scope("break")
+    current_scope = break_scope
+
+    local function link(breakstat, scope)
+      breakstat.linked_loop = scope
+      scope.linked_breaks[#scope.linked_breaks+1] = breakstat
+    end
+
+    for_each_loop_scope(function(scope_label, append_scope)
+      add_test("break in "..scope_label, function(main, should_link)
+        local scope = append_scope(main)
+        local breakstat = append_stat(scope, nodes.new_breakstat{})
+        if should_link then
+          link(breakstat, scope)
+        end
+      end)
+    end)
+
+    add_test("break breaks out of the inner loop", function(main, should_link)
+      local whilestat1 = append_stat(main, nodes.new_whilestat{
+        parent_scope = main,
+        condition = nodes.new_boolean{value = true},
+      })
+      local whilestat2 = append_stat(whilestat1, nodes.new_whilestat{
+        parent_scope = main,
+        condition = nodes.new_boolean{value = true},
+      })
+      local breakstat = append_stat(whilestat2, nodes.new_breakstat{})
+      if should_link then
+        link(breakstat, whilestat2)
+      end
+    end)
+
+    for _, with_tokens in ipairs{true, false} do
+      local breakstat
+      add_test("break outside of loops "..(with_tokens and "with tokens" or "without tokens"), function(main, should_link)
+        breakstat = append_stat(main, nodes.new_breakstat{
+          break_token = with_tokens and nodes.new_token{
+            token_type = "break",
+            line = 1,
+            column = 1,
+          } or nil,
+        })
+      end, function()
+        return {
+          error_code_util.new_error_code{
+            error_code = error_code_util.codes.break_outside_loop,
+            position = with_tokens and ast.get_main_position(breakstat) or nil,
+            location_str = with_tokens
+              and (" at "..get_position(ast.get_main_position(breakstat)))
+              or " at 0:0",
+            source = test_source,
+          }
+        }
+      end)
+    end
+
+    local function break_outside_loop()
+      return error_code_util.new_error_code{
+        error_code = error_code_util.codes.break_outside_loop,
+        position = nil,
+        location_str = " at 0:0",
+        source = test_source,
+      }
+    end
+
+    add_test("2 breaks outside of loops", function(main, should_link)
+      append_stat(main, nodes.new_breakstat{})
+      append_stat(main, nodes.new_breakstat{})
+    end, function()
+      return {
+        break_outside_loop(),
+        break_outside_loop(),
+      }
+    end)
+
+    break_scope = current_scope
+  end -- end break
+end
