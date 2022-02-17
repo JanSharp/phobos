@@ -60,23 +60,19 @@
 
 ---uses line, column and leading\
 ---purely describing the syntax
----@class AstTokenNode : AstNode
+---@class AstTokenNode : AstNode, Token
 ---@field node_type '"token"'
----some token nodes are purely used for their line, column and leading data\
----specifically those with dynamic values where their value is already stored
----on the parent/main node\
----each of these have a comment noting that their `value` is `nil`
----@field value string|nil
----if this was an invalid token from the tokenizer, these are the syntax errors
----@field error_messages string[]|nil
+---@field index nil @ overridden to `nil`
 
----uses line and column (but not leading) (indicating the location of the error)\
----indicates syntax errors
----TODO: maybe add an error id and respective enum
+---the location of the error is defined in the ErrorCodeInstance\
+---indicates a syntax error
 ---@class AstInvalidNode : AstNode
 ---@field node_type '"invalid"'
----@field error_message string
----@field tokens AstTokenNode[]|nil @ tokens that ended up being unused due to this syntax error
+---@field error_code_inst ErrorCodeInstance
+---nodes that ended up being unused due to this syntax error\
+---99% of the time these are AstTokenNodes, however for unexpected_expression they
+---can be any expression
+---@field consumed_nodes AstNode[]|nil
 
 ---@class AstStatement : AstNode
 ---the element in the statement list of the scope this statement is in
@@ -354,6 +350,19 @@
 ---max length is `#exp_list - 1`\
 ---first one is position for the `concat` instruction
 ---@field op_tokens AstTokenNode[]
+---replaced by `concat_src_paren_wrappers`
+---@field src_paren_wrappers nil
+---replaces `src_paren_wrappers`. Think of each element in the main array
+---containing the paren wrappers for the expression at that index.
+---The `open_paren_token` comes before that expression, the `close_paren_token`
+---comes after the very last expression.\
+---For that reason this array will always be 1 shorter than the `exp_list`,
+---since the wrappers around the last expression are handled by it's own
+---`src_paren_wrappers`.\
+---a concat node is right associative, which means no paren wrapper can close
+---any earlier than after the last expression. That means an expression like
+---`(foo..bar)..baz` results in 2 concat nodes, while `foo..(bar..baz)` results in 1
+---@field concat_src_paren_wrappers AstParenWrapper[][]
 
 ---uses line, column and leading
 ---@class AstNumber : AstExpression

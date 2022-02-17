@@ -1,7 +1,7 @@
 
 local ast_walker = require("ast_walker")
 local ill = require("indexed_linked_list")
-local util = require("util")
+local ast = require("ast_util")
 
 local remove_func_defs_in_scope
 do
@@ -43,14 +43,14 @@ end
 
 local on_open = {
   whilestat = function(node, context, _, stat_elem)
-    if util.is_falsy(node.condition) then -- falsy
+    if ast.is_falsy(node.condition) then -- falsy
       local func_def = context.scope
       while func_def.node_type ~= "functiondef" do
         func_def = func_def.parent_scope
       end
       remove_func_defs_in_scope(func_def, node)
       ill.remove(stat_elem) -- remove is the last operation on the ill
-    elseif util.is_const_node(node.condition) then -- truthy
+    elseif ast.is_const_node(node.condition) then -- truthy
       node.node_type = "loopstat"
       node.do_jump_back = true
       node.open_token = node.while_token
@@ -63,9 +63,9 @@ local on_open = {
   end,
 
   repeatstat = function(node)
-    if util.is_falsy(node.condition) then -- falsy
+    if ast.is_falsy(node.condition) then -- falsy
       convert_repeatstat(node, true)
-    elseif util.is_const_node(node.condition) then -- truthy
+    elseif ast.is_const_node(node.condition) then -- truthy
       convert_repeatstat(node, false)
     end
   end,
@@ -79,12 +79,12 @@ local on_open = {
     local c = #node.ifs
     while i <= c do
       local testblock = node.ifs[i]
-      if util.is_falsy(testblock.condition) then -- falsy
+      if ast.is_falsy(testblock.condition) then -- falsy
         remove_func_defs_in_scope(func_def, testblock)
         table.remove(node.ifs, i)
         i = i - 1
         c = c - 1
-      elseif util.is_const_node(testblock.condition) then -- truthy
+      elseif ast.is_const_node(testblock.condition) then -- truthy
         for j = #node.ifs, i + 1, -1 do
           remove_func_defs_in_scope(func_def, node.ifs[j])
           node.ifs[j] = nil

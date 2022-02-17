@@ -103,6 +103,7 @@ local compiler
 local dump
 local disassembler
 local formatter
+local error_code_util
 
 local compiled
 local raw_compiled
@@ -118,6 +119,7 @@ local function init()
   dump = req("dump")
   disassembler = req("disassembler")
   formatter = req("formatter")
+  error_code_util = require("error_code_util")
 end
 
 local serpent = require("lib.serpent")
@@ -131,7 +133,7 @@ local function compile(filename)
   if invalid_nodes[1] then
     local msgs = {}
     for i, invalid_node in ipairs(invalid_nodes) do
-      msgs[i] = invalid_node.error_message
+      msgs[i] = error_code_util.get_message(invalid_node.error_code_inst)
     end
     error((#invalid_nodes).." syntax errors in "
       ..filename..":\n"..table.concat(msgs, "\n")

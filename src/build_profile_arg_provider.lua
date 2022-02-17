@@ -1,12 +1,12 @@
 
-local invert = require("invert")
+local util = require("util")
 local serpent = require("lib.serpent")
 
 local profile_names = {
   "debug",
   "release",
 }
-local build_profiles = invert(profile_names)
+local build_profiles = util.invert(profile_names)
 
 local build_profile_type_id = "build_profile"
 local arg_parser_build_profile_type_def = {

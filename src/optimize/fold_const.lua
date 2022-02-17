@@ -1,6 +1,6 @@
 
 local ast_walker = require("ast_walker")
-local util = require("util")
+local ast = require("ast_util")
 
 local clear_exp_field_lut = {
   ["call"] = function(exp)
@@ -75,13 +75,14 @@ local clear_exp_field_lut = {
 local function clear_exp_fields(exp)
   -- fields every expression have
   exp.src_paren_wrappers = nil
+  exp.concat_src_paren_wrappers = nil
   exp.force_single_result = nil -- we only output constant nodes where this never matters
   clear_exp_field_lut[exp.node_type](exp)
 end
 
 ---only for constant `node_type`s
 local function fold_exp(parent_exp,node_type,position,value)
-  assert(util.is_const_node_type(node_type))
+  assert(ast.is_const_node_type(node_type))
   clear_exp_fields(parent_exp)
   parent_exp.node_type = node_type
   parent_exp.value = value
@@ -108,8 +109,8 @@ local fold_unop = {
   end,
   ["not"] = function(exp)
     -- boolean
-    if util.is_const_node(exp.ex) then
-      fold_exp(exp, "boolean", exp.op_token, util.is_falsy(exp.ex))
+    if ast.is_const_node(exp.ex) then
+      fold_exp(exp, "boolean", exp.op_token, ast.is_falsy(exp.ex))
     end
   end,
   ["#"] = function(exp)
@@ -187,38 +188,38 @@ local fold_binop = {
   end,
   ["=="] = function(exp)
     -- any type
-    if exp.left.node_type == exp.right.node_type and util.is_const_node(exp.left) then
+    if exp.left.node_type == exp.right.node_type and ast.is_const_node(exp.left) then
       local res = exp.left.value == exp.right.value
       fold_exp(exp, "boolean", exp.left, res)
-    elseif util.is_const_node(exp.left) and util.is_const_node(exp.right) then
+    elseif ast.is_const_node(exp.left) and ast.is_const_node(exp.right) then
       -- different types of constants
       fold_exp(exp, "boolean", exp.left, false)
     end
   end,
   ["~="] = function(exp)
     -- any type
-    if exp.left.node_type == exp.right.node_type and util.is_const_node(exp.left) then
+    if exp.left.node_type == exp.right.node_type and ast.is_const_node(exp.left) then
       local res = exp.left.value ~= exp.right.value
       fold_exp(exp, "boolean", exp.left, res)
-    elseif util.is_const_node(exp.left) and util.is_const_node(exp.right) then
+    elseif ast.is_const_node(exp.left) and ast.is_const_node(exp.right) then
       -- different types of constants
       fold_exp(exp, "boolean", exp.left, true)
     end
   end,
   ["and"] = function(exp)
     -- any type
-    if util.is_falsy(exp.left) then
+    if ast.is_falsy(exp.left) then
       fold_exp_merge(exp, exp.left)
-    elseif util.is_const_node(exp.left) then
+    elseif ast.is_const_node(exp.left) then
       -- the constants that failed the first test are all truthy
       fold_exp_merge(exp, exp.right)
     end
   end,
   ["or"] = function(exp)
     -- any type
-    if util.is_falsy(exp.left) then
+    if ast.is_falsy(exp.left) then
       fold_exp_merge(exp, exp.right)
-    elseif util.is_const_node(exp.left) then
+    elseif ast.is_const_node(exp.left) then
       -- the constants that failed the first test are all truthy
       fold_exp_merge(exp, exp.left)
     end

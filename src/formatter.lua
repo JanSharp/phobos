@@ -1,4 +1,8 @@
 
+-- NOTE: this is not written with incomplete nodes in mind. It might work with most of them, but
+-- for now consider that undefined behavior. _for now_.
+-- I mean this entire file is not the most useful right now
+
 ---@param main AstMain
 local function format(main)
   local out = {}
@@ -9,8 +13,24 @@ local function format(main)
   local add_exp
   local add_exp_list
 
+  local exprs
+  local add_token
+  local add_invalid
+
   local function add(part)
     out[#out+1] = part
+  end
+
+  local function add_node(node)
+    if node.node_type == "token" then
+      add_token(node)
+    elseif node.node_type == "invalid" then
+      add_invalid(node)
+    elseif exprs[node.node_type] then
+      add_exp(node)
+    else
+      add_stat(node)
+    end
   end
 
   local function add_string(str)
@@ -35,26 +55,50 @@ local function format(main)
   end
 
   local function add_leading(node)
-    ---@type Token
     for _, token in ipairs(node.leading) do
-      if token.token_type == "blank" then
-        add(token.value)
-      elseif token.token_type == "comment" then
-        add("--")
-        if token.src_is_block_str then
-          add_string(token)
-        else
-          add(token.value)
-        end
+      if token.token_type == "blank" or token.token_type == "comment" then
+        add_token(token)
       else
-        error("Invalid token_type '"..token.token_type.."'.")
+        error("Invalid leading token_type '"..token.token_type.."'.")
       end
     end
   end
 
-  local function add_token(token_node)
-    add_leading(token_node)
-    add(token_node.value)
+  function add_token(token_node)
+    if not token_node then
+      return
+    end
+    if token_node.leading then
+      add_leading(token_node)
+    end
+    if token_node.token_type == "blank" then
+      add(token_node.value)
+    elseif token_node.token_type == "comment" then
+      add("--")
+      if token_node.src_is_block_str then
+        add_string(token_node)
+      else
+        add(token_node.value)
+      end
+    elseif token_node.token_type == "string" then
+      add_string(token_node)
+    elseif token_node.token_type == "number" then
+      add(token_node.src_value)
+    elseif token_node.token_type == "ident" then
+      add(token_node.value)
+    elseif token_node.token_type == "eof" then
+      -- nothing
+    elseif token_node.token_type == "invalid" then
+      add(token_node.value)
+    else
+      add(token_node.token_type)
+    end
+  end
+
+  function add_invalid(node)
+    for _, consumed_node in ipairs(node.consumed_nodes) do
+      add_node(consumed_node)
+    end
   end
 
   ---@param node AstCall
@@ -93,7 +137,7 @@ local function format(main)
     end
   end
 
-  local exprs = {
+  exprs = {
     ---@param node AstLocalReference
     local_ref = function(node)
       add_leading(node)
@@ -139,7 +183,7 @@ local function format(main)
     end,
     ---@param node AstConcat
     concat = function(node)
-      add_exp_list(node.exp_list, node.op_tokens)
+      add_exp_list(node.exp_list, node.op_tokens, node.concat_src_paren_wrappers)
     end,
     ---@param node AstNumber
     number = function(node)
@@ -195,6 +239,8 @@ local function format(main)
 
     call = call,
 
+    invalid = add_invalid,
+
     ---@param node AstInlineIIFE
     inline_iife = function(node)
       error("Cannot format 'inline_iife' nodes.")
@@ -203,7 +249,7 @@ local function format(main)
 
   ---@param node AstExpression
   function add_exp(node)
-    if node.force_single_result then
+    if node.force_single_result and node.node_type ~= "concat" then
       for i = #node.src_paren_wrappers, 1, -1 do
         add_token(node.src_paren_wrappers[i].open_paren_token)
       end
@@ -217,11 +263,25 @@ local function format(main)
   end
 
   ---@param list AstExpression[]
-  function add_exp_list(list, separator_tokens)
+  function add_exp_list(list, separator_tokens, concat_src_paren_wrappers)
+    ---cSpell:ignore cspw
+    local cspw = concat_src_paren_wrappers
     for i, node in ipairs(list) do
+      if cspw and cspw[i] then
+        for j = #cspw[i], 1, -1 do
+          add_token(cspw[i][j].open_paren_token)
+        end
+      end
       add_exp(node)
       if separator_tokens[i] then
         add_token(separator_tokens[i])
+      end
+    end
+    if cspw then
+      for i = #list - 1, 1, -1 do
+        for j = 1, #cspw[i] do
+          add_token(cspw[i][j].close_paren_token)
+        end
       end
     end
   end
@@ -306,7 +366,7 @@ local function format(main)
         if node.func_def.is_method then
           assert(node.name.node_type == "index")
           ---@diagnostic disable-next-line: undefined-field
-          assert(node.name.dot_token.value == ":")
+          assert(node.name.dot_token.token_type == ":")
         end
         add_exp(node.name)
       end)
@@ -363,6 +423,8 @@ local function format(main)
 
     call = call,
 
+    invalid = add_invalid,
+
     ---@param node AstInlineIIFERetstat
     inline_iife_retstat = function(node)
       error("Cannot format 'inline_iife_retstat' nodes.")
@@ -401,6 +463,11 @@ local function format(main)
     while i <= c do
       local cur = out[i]
       if cur ~= "" then
+        -- there is at least 1 case where this adds an extra space where it doesn't need to,
+        -- which is for something like `0xk` where 0x is a malformed number and k is an identifier
+        -- but yea, I only know of this one case where it's only with invalid nodes anyway...
+        -- all in all this logic here shouldn't be needed at all, i just added it for fun
+        -- to see if it would work
         if prev:find("[a-z_A-Z0-9]$") and cur:find("^[a-z_A-Z0-9]") then
           table.insert(out, i, " ")
           i = i + 1

@@ -192,6 +192,13 @@ function ill:append(value)
   end
 end
 
+function ill:clear()
+  self.count = 0
+  self.first = nil
+  self.last = nil
+  self.lookup = {}
+end
+
 function ill.insert_before(node, value)
   if node.prev then
     return insert_between(node.list, node.prev, node, value, false)

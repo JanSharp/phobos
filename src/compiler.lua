@@ -1,7 +1,7 @@
 
-local invert = require("invert")
 local phobos_consts = require("constants")
 local util = require("util")
+local ast = require("ast_util")
 local opcode_util = require("opcode_util")
 local opcodes = opcode_util.opcodes
 
@@ -181,7 +181,7 @@ do
     if manage_temp then
       release_temp_reg(regs[0], func)
     end
-    if num_results > 1 and util.is_single_result_node(expr) then
+    if num_results > 1 and ast.is_single_result_node(expr) then
       -- in a case like `local foo, bar; foo, bar = (...)`
       -- this will LOADNIL into `bar` before the assignment MOVEs the temporary
       -- register into `foo`. Note that the index of the temp is higher than `bar`
@@ -218,7 +218,7 @@ do
         if num_results ~= -1 then
           this_expr_regs = regs
           expr_num_results = (num_results - num_exp) + 1
-        elseif util.is_vararg_node(expr) then
+        elseif ast.is_vararg_node(expr) then
           this_expr_regs = expr_regs
           expr_num_results = -1
           expr_regs[-1] = regs[1]
@@ -371,7 +371,7 @@ do
     end
   end
 
-  local const_node_types = invert{"boolean","nil","string","number"}
+  local const_node_types = util.invert{"boolean","nil","string","number"}
   local function const_or_local_or_fetch(expr,func,reg)
     if const_node_types[expr.node_type] then
       return bit32.bor(add_constant(expr,func),0x100), true
@@ -390,7 +390,7 @@ do
 
   local function eval_upval_indexes(target_func_proto, func)
     for _, upval in ipairs(target_func_proto.func_def.upvals) do
-      upval.in_stack = util.upval_is_in_stack(upval)
+      upval.in_stack = ast.upval_is_in_stack(upval)
       if upval.in_stack then
         local reg = upval.parent_def.register
         upval.local_idx = reg.index
@@ -548,7 +548,7 @@ do
         chain[#chain+1] = create_expr(expr, node.inverted, node.force_bool_result)
         chain[#chain].jump_target = jump_target
       else
-        chain[#chain+1] = create_test(node, util.get_main_position(node.expr), jump_if_true, jump_target)
+        chain[#chain+1] = create_test(node, ast.get_main_position(node.expr), jump_if_true, jump_target)
       end
     end
 
@@ -720,7 +720,7 @@ do
             generate_expr({
               node_type = "unop",
               op = "not",
-              op_token = util.get_main_position(test.expr),
+              op_token = ast.get_main_position(test.expr),
               ex = test.expr,
             }, 1, func, {reg})
           else
@@ -828,7 +828,7 @@ do
       args_regs[num_args - i + 1] = create_temp_reg(func, get_top(func) + i)
     end
     generate_exp_list(expr.args,-1,func,args_regs)
-    if num_args > 0 and util.is_vararg_node(expr.args[num_args]) then
+    if num_args > 0 and ast.is_vararg_node(expr.args[num_args]) then
       num_args = -1
     else
       num_args = num_args + (first_arg_reg and 1 or 0)
@@ -1030,7 +1030,7 @@ do
           -- if list accumulate values
           local temp_regs = {}
           local count = 1
-          if i == fields_count and util.is_vararg_node(field.value) then
+          if i == fields_count and ast.is_vararg_node(field.value) then
             count = -1
           end
           temp_regs[count] = create_temp_reg(func)
@@ -1122,7 +1122,7 @@ do
     index = function(expr,num_results,func,regs)
       local ex_reg, is_upval = upval_or_local_or_fetch(expr.ex,func)
       local suffix_reg, suffix_is_const = const_or_local_or_fetch(expr.suffix,func)
-      local position = util.get_main_position(expr)
+      local position = ast.get_main_position(expr)
       func.instructions[#func.instructions+1] = {
         op = is_upval and opcodes.gettabup or opcodes.gettable,
         a = use_reg(regs[num_results], func), b = ex_reg, c = suffix_reg,
@@ -1243,7 +1243,7 @@ do
       end
 
       local function generate_settabup_or_settable(left, lhs_expr, right_reg)
-        local position = util.get_main_position(lhs_expr)
+        local position = ast.get_main_position(lhs_expr)
         func.instructions[#func.instructions+1] = {
           op = left.ex_is_upval and opcodes.settabup or opcodes.settable,
           a = left.ex_reg, b = left.suffix_reg, c = right_reg,
@@ -1604,7 +1604,7 @@ do
               temp_regs[num_results - i + 1] = create_temp_reg(func, get_top(func) + i)
             end
             first_reg = temp_regs[num_results]
-            if util.is_vararg_node(stat.exp_list[num_results]) then
+            if ast.is_vararg_node(stat.exp_list[num_results]) then
               num_results = -1
             end
             generate_exp_list(stat.exp_list, num_results, func, temp_regs)
@@ -1810,7 +1810,7 @@ do
     -- TODO: temp until it can be determined if the end of the function is reachable
     do
       local position = functiondef.body.last
-        and util.get_main_position(functiondef.body.last.value)
+        and ast.get_main_position(functiondef.body.last.value)
       local line = get_last_used_line(func)
       if line and position and position.line > line then
         line = position.line
