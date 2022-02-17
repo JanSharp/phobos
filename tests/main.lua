@@ -39,6 +39,24 @@ require("test_tokenizer")
 require("test_parser")
 require("test_jump_linker")
 
+-- TODO: next ones to test:
+-- ast_util
+-- error_code_util
+-- indexed_linked_list
+-- io_util?
+-- nodes (the parts that actually contain logic)
+-- opcode_util
+-- util
+
+-- somehow test main.lua... not sure how I want to do that yet
+-- same for control.lua
+
+-- compiler, dump, disassembler, formatter, intermediate_language, optimize/*
+-- won't be tested yet because chances of them changing drastically are high
+-- even the test I've written so far are likely going change as I clean up the AST
+-- so for now, all of those steps we have have to hope that they "just work", which
+-- is obviously not the case. I'm certain there are bugs in there
+
 framework.scope:run_tests{
   only_print_failed = args.print_failed,
   print_stacktrace = args.print_stacktrace,
