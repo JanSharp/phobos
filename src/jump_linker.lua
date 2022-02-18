@@ -1,11 +1,26 @@
 
-local invert = require("invert")
+local util = require("util")
+local ast = require("ast_util")
+local error_code_util = require("error_code_util")
 
 local function get_position(node)
-  return (node.line and node.column and (" at "..node.line..":"..node.column))
+  local position = ast.get_main_position(node)
+  return (position and position.line or "0")..":"..(position and position.column or "0")
 end
 
-local loop_node_types = invert{"whilestat", "fornum", "forlist", "repeatstat", "loopstat"}
+local loop_node_types = util.invert{"whilestat", "fornum", "forlist", "repeatstat", "loopstat"}
+
+local error_code_insts
+
+local function add_error(func, error_code, position_node, message_args)
+  error_code_insts[#error_code_insts+1] = error_code_util.new_error_code{
+    error_code = error_code,
+    position = ast.get_main_position(position_node),
+    location_str = " at "..get_position(position_node),
+    source = func.source,
+    message_args = message_args,
+  }
+end
 
 ---@param func AstFunctionDef
 local function link(func)
@@ -33,10 +48,11 @@ local function link(func)
         stat = goto_stat,
         lowest_level = level,
         lowest_level_stat_elem = elem,
+        label_is_in_scope_but_jump_is_invalid = nil,
       }
 
       -- solve backwards references
-      for j = 1, visible_label_count do
+      for j = visible_label_count, 1, -1 do
         local label = label_stack[j]
         if label.name == goto_stat.target_name then
           goto_stat.linked_label = label
@@ -56,6 +72,12 @@ local function link(func)
         local end_of_body
         function is_end_of_body()
           if end_of_body == nil then
+            -- repeatstat is special because variables may still be used past the end of the body
+            -- because the condition is inside the scope
+            if body.scope.node_type == "repeatstat" then
+              end_of_body = false
+              return end_of_body
+            end
             end_of_body = true
             local elem = stat_elem.next
             while elem do
@@ -87,10 +109,12 @@ local function link(func)
             local local_ref = local_stat.node_type == "localfunc" and local_stat.name
               or local_stat.node_type == "localstat" and local_stat.lhs[#local_stat.lhs]
               or error("Impossible `local_stat.node_type` '"..local_stat.node_type.."'.")
-            error("Unable to jump from the 'goto' `"..go.stat.target_name.."`"..get_position(go.stat)
-              .." to the label"..get_position(label_stat)
-              .." because it is in the scope of the local `"
-              ..local_ref.name.."`"..get_position(local_ref).."."
+            go.label_is_in_scope_but_jump_is_invalid = true
+            add_error(
+              func,
+              error_code_util.codes.jump_to_label_in_scope_of_new_local,
+              go.stat,
+              {go.stat.target_name, get_position(label_stat), local_ref.name, get_position(local_ref)}
             )
           end
         end
@@ -104,7 +128,7 @@ local function link(func)
         loop.linked_breaks = loop.linked_breaks or {}
         loop.linked_breaks[#loop.linked_breaks+1] = break_stat
       else
-        error("'break'"..get_position(break_stat).." is not inside a loop.")
+        add_error(func, error_code_util.codes.break_outside_loop, break_stat)
       end
     end
 
@@ -160,8 +184,8 @@ local function link(func)
 
   -- all gotos without a label at the end of the function are unlinked and an error
   for _, go in ipairs(gotos) do
-    if not go.stat.linked_label then
-      error("No visible label `"..go.stat.target_name.."` for 'goto'"..get_position(go.stat)..".")
+    if not go.stat.linked_label and not go.label_is_in_scope_but_jump_is_invalid then
+      add_error(func, error_code_util.codes.no_visible_label, go.stat, {go.stat.target_name})
     end
   end
 end
@@ -174,4 +198,11 @@ local function link_recursive(func)
   end
 end
 
-return link_recursive
+---@param func AstFunctionDef
+return function(func)
+  error_code_insts = {}
+  local result_error_code_insts = error_code_insts
+  link_recursive(func)
+  error_code_insts = nil
+  return result_error_code_insts
+end

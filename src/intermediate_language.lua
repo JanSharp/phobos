@@ -1,5 +1,5 @@
 
-local util = require("util")
+local ast = require("ast_util")
 local nodes = require("nodes")
 
 ---same as in parser
@@ -307,7 +307,7 @@ local function local_or_fetch(expr, func)
 end
 
 local function const_or_local_or_fetch(expr, func)
-  if util.is_const_node(expr) then
+  if ast.is_const_node(expr) then
     return ({
       ["number"] = function()
         return new_number(expr.value)
@@ -347,7 +347,7 @@ local function generate_expr_list(expr_list, func, num_results, regs, allow_ptrs
       generate_expr(expr, func, 0)
     elseif i == num_expr then
       num_results = num_results == -1 and -1 or ((num_results - num_expr) + 1)
-      if allow_ptrs and (num_results == 1 or num_results == -1 and not util.is_vararg_node(expr)) then
+      if allow_ptrs and (num_results == 1 or num_results == -1 and not ast.is_vararg_node(expr)) then
         regs[#regs+1] = const_or_local_or_fetch(expr, func)
       else
         generate_expr(expr, func, num_results, regs)
@@ -450,7 +450,7 @@ do
     ["index"] = function(expr, func)
       local reg = new_reg()
       add_inst(func, new_get_table{
-        position = util.get_main_position(expr),
+        position = ast.get_main_position(expr),
         result_reg = reg,
         table_reg = local_or_fetch(expr.ex, func),
         key_ptr = const_or_local_or_fetch(expr.suffix, func),
@@ -573,7 +573,7 @@ do
       for i, field in ipairs(expr.fields) do
         if field.type == "list" then
           local right_ptr
-          if i == #expr.fields and util.is_vararg_node(field.value) then
+          if i == #expr.fields and ast.is_vararg_node(field.value) then
             right_ptr = generate_expr(field.value, func, -1)
           else
             right_ptr = const_or_local_or_fetch(field.value, func)
@@ -639,7 +639,7 @@ do
   ---@param regs ILRegister[]|nil @ will be filled by this function
   function generate_expr(expr, func, num_results, regs)
     num_results = num_results or 1
-    if util.is_single_result_node(expr) then
+    if ast.is_single_result_node(expr) then
       local reg = exprs[expr.node_type](expr, func)
       if num_results > 1 then
         assert(regs)
@@ -656,7 +656,7 @@ do
         return reg
       end
     else
-      if num_results == -1 and not util.is_vararg_node(expr) then
+      if num_results == -1 and not ast.is_vararg_node(expr) then
         num_results = 0
       end
       if num_results > 1 then
@@ -682,7 +682,7 @@ end
 do
   local function generate_test(condition, func, jump_if_true)
     local test = add_inst(func, new_test{
-      position = util.get_main_position(condition),
+      position = ast.get_main_position(condition),
       condition_ptr = const_or_local_or_fetch(condition, func),
       jump_if_true = jump_if_true,
       label = prevent_assert,
@@ -996,7 +996,7 @@ do
 
       local function generate_settable(left, lhs_expr, right_reg)
         add_inst(func, new_set_table{
-          position = util.get_main_position(lhs_expr),
+          position = ast.get_main_position(lhs_expr),
           table_reg = left.table_reg,
           key_ptr = left.key_ptr,
           right_ptr = right_reg,
@@ -1062,7 +1062,7 @@ do
           generate_settable(last_left, stat.lhs[#stat.lhs], reg)
         elseif last_left.type == "local" then
           add_inst(func, new_move{
-            position = util.get_main_position(last_expr),
+            position = ast.get_main_position(last_expr),
             result_reg = last_left.reg,
             right_ptr = const_or_local_or_fetch(last_expr, func),
           })

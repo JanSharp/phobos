@@ -1,5 +1,27 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.1.4
+---------------------------------------------------------------------------------------------------
 Version: 0.1.3
+Date: 2022-02-17
+  Minor Features:
+    - Add error codes. Makes errors much easier to distinguish when using Phobos as a library
+    - Keep all data about the source in the AST regardless of how many syntax errors there might be
+  Bugfixes:
+    - Fix every package missing the 'lib' and 'optimize' sub directories. 0.1.2 was/is unusable
+    - Fix '\r' and '\r\n' resulting in '\r' instead of '\n' in blank tokens
+    - Fix unescaped '\r' in strings not causing syntax errors and breaking line numbers
+    - Fix too large decimal escape sequences crashing in the tokenizer. For example '\256'
+    - Fix string and comment tokens sometimes having incorrect line:column positions
+    - Fix ']' inside block strings disappearing
+    - Fix `(foo..bar)..baz` performing `bar..baz` first. Only matters when using __concat
+    - Fix parenthesis inside of concat chains not being representable inside the AST (data loss)
+    - Fix the condition for repeatstat resolving references starting at the parent scope
+      For example the condition in `repeat local foo; until foo` would index into `_ENV`
+    - Fix scope bodies referring to the parent scope instead of the current scope
+    - Fix 'goto's to the end of a repeatstat block being allowed no matter what
+    - Fix jump_linker attempting to concatenate nil when the given AST does not have debug
+      information and contains an invalid jump
+    - Fix backwards 'goto' jumping to the outer most label with the same name instead of inner
 ---------------------------------------------------------------------------------------------------
 Version: 0.1.2
 Date: 2022-01-29

@@ -9,6 +9,7 @@ local changelog_util = require("scripts.changelog_util")
 
 local skip_able = {
   "skip_ensure_command_availability",
+  "skip_ensure_main_branch",
   "skip_ensure_clean_working_tree",
   "skip_tests",
   "skip_build",
@@ -81,6 +82,7 @@ local function seven_zip(...)
 end
 
 local main_branch = "main"
+local current_branch
 
 -- ensure git, gh (github cli) and 7z (7-zip) are available
 if not args.skip_ensure_command_availability then
@@ -103,12 +105,15 @@ end
 
 -- ensure git is clean and on main
 print("Checking git status")
-local foo = git("status", "--porcelain", "-b")
-if not foo[1]:find("^## "..main_branch.."%.%.%.") then
-  error("git must be on branch "..main_branch..".")
-end
-if not args.skip_ensure_clean_working_tree and foo[2] then
-  error("git working tree must be clean")
+do
+  current_branch = assert(git("branch", "--show-current")[1]):gsub("\n$", "")
+  if not args.skip_ensure_main_branch and current_branch ~= main_branch then
+    error("git must be on branch '"..main_branch.."', but is on '"..current_branch.."'.")
+  end
+  local git_status = git("status", "--porcelain")
+  if not args.skip_ensure_clean_working_tree and git_status[1] then
+    error("git working tree must be clean")
+  end
 end
 
 -- run all tests (currently testing is very crude, so just `tests/compile_test.lua`)
@@ -236,10 +241,10 @@ if not args.skip_package then
     print("Packaging "..zip_path:str())
 
     chdir((root_path / "out/src/release"):str())
-    seven_zip("a", "-tzip", "-mx9", "-r", ("../../.." / zip_path):str(), "*.lua")
+    seven_zip("a", "-tzip", "-mx9", "-r", escape_arg(("../../.." / zip_path):str()), escape_arg("*.lua"))
     if not no_lua_binaries then
       chdir((root_path / "bin" / platform):str())
-      seven_zip("a", "-tzip", "-mx9", "-r", ("../.." / zip_path):str(), "*")
+      seven_zip("a", "-tzip", "-mx9", "-r", escape_arg(("../.." / zip_path):str()), escape_arg("*"))
     end
     chdir(root_path:str())
 
@@ -250,7 +255,7 @@ if not args.skip_package then
     -- -- ~TODO: maybe ignore (don't add) the files that were ignored for this build?
     -- seven_zip("a", "-tzip", "-mx9", "-r", --[["-m0=PPMd",]] zip_path:str(), "src/*.lua")
 
-    seven_zip("a", "-tzip", "-mx9", zip_path:str(), table.unpack(root_filenames))
+    seven_zip("a", "-tzip", "-mx9", escape_arg(zip_path:str()), table.unpack(root_filenames))
   end
 
   create_zip("linux")
@@ -267,22 +272,26 @@ if not args.skip_package then
     chdir((root_path / build_root):str())
     -- "-m0=PPMd" because for factorio mods lua files have to be text files (for now)
     -- so this is more size efficient
-    seven_zip("a", "-tzip", "-mx9", "-r", --[["-m0=PPMd",]] ("../../../.." / zip_path):str(), "*.lua")
-    seven_zip("a", "-tzip", "-mx9", "-r", ("../../../.." / zip_path):str(), "thumbnail.png")
+    seven_zip("a", "-tzip", "-mx9", "-r",
+      --[["-m0=PPMd",]] escape_arg(("../../../.." / zip_path):str()), escape_arg("*.lua")
+    )
+    seven_zip("a", "-tzip", "-mx9", "-r",
+      escape_arg(("../../../.." / zip_path):str()), escape_arg("thumbnail.png")
+    )
     chdir(root_path:str())
 
     seven_zip((function()
       local result = {"a", "-tzip", "-mx9", "-r", --[["-m0=PPMd"]]}
       for _, ignore in ipairs(require("scripts.factorio_build_ignore_list")) do
-        result[#result+1] = "-x!src/"..(ignore:find("%.lua$") and ignore or (ignore.."/"))
+        result[#result+1] = escape_arg("-x!src/"..(ignore:find("%.lua$") and ignore or (ignore.."/")))
       end
-      result[#result+1] = zip_path:str()
-      result[#result+1] = "src/*.lua"
+      result[#result+1] = escape_arg(zip_path:str())
+      result[#result+1] = escape_arg("src/*.lua")
       return table.unpack(result)
     end)())
 
     root_filenames[#root_filenames+1] = "info.json"
-    seven_zip("a", "-tzip", "-mx9", zip_path:str(), table.unpack(root_filenames))
+    seven_zip("a", "-tzip", "-mx9", escape_arg(zip_path:str()), table.unpack(root_filenames))
     root_filenames[#root_filenames+1] = "thumbnail.png" -- added previously
 
     -- move all files in the zip archive into a `phobos` sub dir
@@ -321,7 +330,7 @@ if not args.skip_package then
     list_file:write(table.concat(list_file_lines, "\n"))
     assert(list_file:close())
 
-    seven_zip("rn", "-tzip", zip_path:str(), "@"..list_file_filename)
+    seven_zip("rn", "-tzip", escape_arg(zip_path:str()), escape_arg("@"..list_file_filename))
   end
 end
 
@@ -383,15 +392,16 @@ if not args.skip_github_release then
 
   -- create github release
   print("Creating github release v"..version_str)
-  gh("release", "create", "v"..version_str,
+  gh("release", "create", escape_arg("v"..version_str),
     escape_arg("temp/publish/phobos_windows_"..version_str..".zip#Phobos for windows"),
     escape_arg("temp/publish/phobos_linux_"..version_str..".zip#Phobos for linux"),
     escape_arg("temp/publish/phobos_osx_"..version_str..".zip#Phobos for osx"),
     escape_arg("temp/publish/phobos_raw_"..version_str..".zip#Phobos Raw (cmd tools and library)"),
     escape_arg("temp/publish/phobos_"..version_str..".zip#Phobos Factorio Mod"),
-    "--repo", "JanSharp/phobos",
-    "--notes-file", github_release_notes_filename,
-    "--title", "v"..version_str
+    "--repo", escape_arg("JanSharp/phobos"),
+    "--target", escape_arg(current_branch),
+    "--notes-file", escape_arg(github_release_notes_filename),
+    "--title", escape_arg("v"..version_str)
   )
   git("pull", "--tags")
 end
@@ -423,6 +433,6 @@ end
 -- create commit for moving to new version
 if not args.skip_increment_commit then
   print("Creating commit for moving to version "..version_str)
-  git("add", "*")
+  git("add", escape_arg("*"))
   git("commit", "-m", escape_arg("Move to version "..version_str))
 end
