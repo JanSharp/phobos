@@ -106,9 +106,9 @@ end
 -- ensure git is clean and on main
 print("Checking git status")
 do
-  current_branch = git("branch", "--show-current")
+  current_branch = assert(git("branch", "--show-current")[1]):gsub("\n$", "")
   if not args.skip_ensure_main_branch and current_branch ~= main_branch then
-    error("git must be on branch "..main_branch..", but is on "..current_branch..".")
+    error("git must be on branch '"..main_branch.."', but is on '"..current_branch.."'.")
   end
   local git_status = git("status", "--porcelain")
   if not args.skip_ensure_clean_working_tree and git_status[1] then
