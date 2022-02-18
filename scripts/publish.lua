@@ -82,6 +82,7 @@ local function seven_zip(...)
 end
 
 local main_branch = "main"
+local current_branch
 
 -- ensure git, gh (github cli) and 7z (7-zip) are available
 if not args.skip_ensure_command_availability then
@@ -105,11 +106,12 @@ end
 -- ensure git is clean and on main
 print("Checking git status")
 do
-  local git_status = git("status", "--porcelain", "-b")
-  if not args.skip_ensure_main_branch and not git_status[1]:find("^## "..main_branch.."%.%.%.") then
-    error("git must be on branch "..main_branch..".")
+  current_branch = git("branch", "--show-current")
+  if not args.skip_ensure_main_branch and current_branch ~= main_branch then
+    error("git must be on branch "..main_branch..", but is on "..current_branch..".")
   end
-  if not args.skip_ensure_clean_working_tree and git_status[2] then
+  local git_status = git("status", "--porcelain")
+  if not args.skip_ensure_clean_working_tree and git_status[1] then
     error("git working tree must be clean")
   end
 end
@@ -397,6 +399,7 @@ if not args.skip_github_release then
     escape_arg("temp/publish/phobos_raw_"..version_str..".zip#Phobos Raw (cmd tools and library)"),
     escape_arg("temp/publish/phobos_"..version_str..".zip#Phobos Factorio Mod"),
     "--repo", escape_arg("JanSharp/phobos"),
+    "--target", escape_arg(current_branch),
     "--notes-file", escape_arg(github_release_notes_filename),
     "--title", escape_arg("v"..version_str)
   )
