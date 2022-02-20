@@ -1,0 +1,52 @@
+#!/bin/sh
+
+# # https://www.baeldung.com/linux/bash-get-location-within-script
+# SCRIPT_PATH="${BASH_SOURCE}"
+# while [ -L "${SCRIPT_PATH}" ]; do
+#   SCRIPT_DIR="$(cd -P "$(dirname "${SCRIPT_PATH}")" >/dev/null 2>&1 && pwd)"
+#   SCRIPT_PATH="$(readlink "${SCRIPT_PATH}")"
+#   [[ ${SCRIPT_PATH} != /* ]] && SCRIPT_PATH="${SCRIPT_DIR}/${SCRIPT_PATH}"
+# done
+# SCRIPT_PATH="$(readlink -f "${SCRIPT_PATH}")"
+# SCRIPT_DIR="$(cd -P "$(dirname -- "${SCRIPT_PATH}")" >/dev/null 2>&1 && pwd)"
+
+# PREV_DIR=$PWD
+# cd "$SCRIPT_DIR/.."
+# bin/linux/lua -- dev_entry_point.lua src src/main.lua --working-dir "$PREV_DIR" "$@"
+# cd "$PREV_DIR"
+
+# # "$SCRIPT_DIR/../bin/linux/lua" -- "$SCRIPT_DIR/../dev_entry_point.lua"\
+# #   "$SCRIPT_DIR/../src" "$SCRIPT_DIR/../src/main.lua" --working-dir "$SCRIPT_DIR/.." "$@"
+
+# # echo "$SCRIPT_PATH"
+# # echo "$SCRIPT_DIR"
+# # git "$@" --porcelain
+# #!/bin/sh
+
+# https://www.baeldung.com/linux/bash-get-location-within-script
+SCRIPT_PATH="${BASH_SOURCE}"
+while [ -L "${SCRIPT_PATH}" ]; do
+  SCRIPT_DIR="$(cd -P "$(dirname "${SCRIPT_PATH}")" >/dev/null 2>&1 && pwd)"
+  SCRIPT_PATH="$(readlink "${SCRIPT_PATH}")"
+  [[ ${SCRIPT_PATH} != /* ]] && SCRIPT_PATH="${SCRIPT_DIR}/${SCRIPT_PATH}"
+done
+SCRIPT_PATH="$(readlink -f "${SCRIPT_PATH}")"
+SCRIPT_DIR="$(cd -P "$(dirname -- "${SCRIPT_PATH}")" >/dev/null 2>&1 && pwd)"
+
+# dev specific configuration
+# 'linux', 'osx' or 'windows'
+platform=$1
+# 'src' (for now), 'out/src/debug' or 'out/src/release'
+dir_with_phobos_files=$2
+# remove those 2 positional args such that "$@" evaluates to the rest that should be passed along
+shift 2
+
+# configuration
+root="$SCRIPT_DIR/../$dir_with_phobos_files"
+c_lib_root="$SCRIPT_DIR/../bin/$platform"
+c_lib_extension=".so"
+main_module="main"
+
+# run
+"$SCRIPT_DIR/../bin/$platform/lua" -- "$SCRIPT_DIR/../$dir_with_phobos_files/entry_point.lua"\
+  "$root" "$c_lib_root" "$c_lib_extension" "$main_module" "$@"

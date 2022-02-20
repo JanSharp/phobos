@@ -18,7 +18,7 @@
         "command": "bin/osx/lua",
       },
       "args": [
-        "--", "entry_point.lua",
+        "--", "dev_entry_point.lua",
         "src", "scripts/build_src.lua",
         "--profile", "debug",
       ],
@@ -42,7 +42,7 @@
         "command": "bin/osx/lua",
       },
       "args": [
-        "--", "entry_point.lua",
+        "--", "dev_entry_point.lua",
         "src", "scripts/build_factorio_mod.lua",
         "--profile", "debug",
       ],

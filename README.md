@@ -171,7 +171,7 @@ git submodule init
 git submodule update
 ```
 
-There are `scripts/build_src.lua` and `scripts/build_factorio_mod.lua` which have to be run through `entry_point.lua` (see that file itself for details).
+There are `scripts/build_src.lua` and `scripts/build_factorio_mod.lua` which have to be run through `dev_entry_point.lua` (see that file itself for details).
 
 If you're using vscode just run the build tasks from the command pallet.
 
@@ -181,12 +181,12 @@ Then to actually run src or those built "binaries" check the `.vscode/launch.jso
 <!--
 Currently there are Windows Lua and LFS binaries in the repo, so just clone the repo and try running this in the root directory. if it is successful, Phobos will most likely run properly.
 ```
-bin/windows/lua -- entry_point.lua src tests/compile_test.lua
+bin/windows/lua -- dev_entry_point.lua src tests/compile_test.lua
 ```
 (for other platforms you'll somehow have to get those binaries. LFS is on luarocks, for the record)
 
 To actually run the main.lua file you'll have to run src/main.lua like this (with additional args of course)
 ```
-bin/windows/lua -- entry_point.lua src src/main.lua
+bin/windows/lua -- dev_entry_point.lua src src/main.lua
 ```
 -->

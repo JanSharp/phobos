@@ -42,7 +42,7 @@
       ],
     },
 
-    // entry_point.lua args (copy paste from entry_point.lua itself)
+    // dev_entry_point.lua args (copy paste from dev_entry_point.lua itself)
     // arg 1: main dir path (src or when desired the path to some bin/** sub dir)
     // arg 2: actual entry point. may be binary or text
     // the rest: passed along to the actual entry point as vararg. the global `arg` remains broken
@@ -60,19 +60,19 @@
       "windows": {
         "program": {
           "lua": "bin/windows/lua",
-          "file": "entry_point.lua",
+          "file": "dev_entry_point.lua",
         },
       },
       "linux": {
         "program": {
           "lua": "bin/linux/lua",
-          "file": "entry_point.lua",
+          "file": "dev_entry_point.lua",
         },
       },
       "osx": {
         "program": {
           "lua": "bin/osx/lua",
-          "file": "entry_point.lua",
+          "file": "dev_entry_point.lua",
         },
       },
     },
@@ -90,19 +90,19 @@
       "windows": {
         "program": {
           "lua": "bin/windows/lua",
-          "file": "entry_point.lua",
+          "file": "dev_entry_point.lua",
         },
       },
       "linux": {
         "program": {
           "lua": "bin/linux/lua",
-          "file": "entry_point.lua",
+          "file": "dev_entry_point.lua",
         },
       },
       "osx": {
         "program": {
           "lua": "bin/osx/lua",
-          "file": "entry_point.lua",
+          "file": "dev_entry_point.lua",
         },
       },
     },
@@ -120,19 +120,19 @@
       "windows": {
         "program": {
           "lua": "bin/windows/lua",
-          "file": "entry_point.lua",
+          "file": "dev_entry_point.lua",
         },
       },
       "linux": {
         "program": {
           "lua": "bin/linux/lua",
-          "file": "entry_point.lua",
+          "file": "dev_entry_point.lua",
         },
       },
       "osx": {
         "program": {
           "lua": "bin/osx/lua",
-          "file": "entry_point.lua",
+          "file": "dev_entry_point.lua",
         },
       },
     },
@@ -149,19 +149,19 @@
       "windows": {
         "program": {
           "lua": "bin/windows/lua",
-          "file": "entry_point.lua",
+          "file": "dev_entry_point.lua",
         },
       },
       "linux": {
         "program": {
           "lua": "bin/linux/lua",
-          "file": "entry_point.lua",
+          "file": "dev_entry_point.lua",
         },
       },
       "osx": {
         "program": {
           "lua": "bin/osx/lua",
-          "file": "entry_point.lua",
+          "file": "dev_entry_point.lua",
         },
       },
     },
@@ -178,19 +178,19 @@
       "windows": {
         "program": {
           "lua": "bin/windows/lua",
-          "file": "entry_point.lua",
+          "file": "dev_entry_point.lua",
         },
       },
       "linux": {
         "program": {
           "lua": "bin/linux/lua",
-          "file": "entry_point.lua",
+          "file": "dev_entry_point.lua",
         },
       },
       "osx": {
         "program": {
           "lua": "bin/osx/lua",
-          "file": "entry_point.lua",
+          "file": "dev_entry_point.lua",
         },
       },
     },
@@ -212,19 +212,19 @@
       "windows": {
         "program": {
           "lua": "bin/windows/lua",
-          "file": "entry_point.lua",
+          "file": "dev_entry_point.lua",
         },
       },
       "linux": {
         "program": {
           "lua": "bin/linux/lua",
-          "file": "entry_point.lua",
+          "file": "dev_entry_point.lua",
         },
       },
       "osx": {
         "program": {
           "lua": "bin/osx/lua",
-          "file": "entry_point.lua",
+          "file": "dev_entry_point.lua",
         },
       },
     },
@@ -243,19 +243,19 @@
       "windows": {
         "program": {
           "lua": "bin/windows/lua",
-          "file": "entry_point.lua",
+          "file": "dev_entry_point.lua",
         },
       },
       "linux": {
         "program": {
           "lua": "bin/linux/lua",
-          "file": "entry_point.lua",
+          "file": "dev_entry_point.lua",
         },
       },
       "osx": {
         "program": {
           "lua": "bin/osx/lua",
-          "file": "entry_point.lua",
+          "file": "dev_entry_point.lua",
         },
       },
     },
@@ -274,19 +274,19 @@
       "windows": {
         "program": {
           "lua": "bin/windows/lua",
-          "file": "entry_point.lua",
+          "file": "dev_entry_point.lua",
         },
       },
       "linux": {
         "program": {
           "lua": "bin/linux/lua",
-          "file": "entry_point.lua",
+          "file": "dev_entry_point.lua",
         },
       },
       "osx": {
         "program": {
           "lua": "bin/osx/lua",
-          "file": "entry_point.lua",
+          "file": "dev_entry_point.lua",
         },
       },
     },
@@ -304,19 +304,19 @@
       "windows": {
         "program": {
           "lua": "bin/windows/lua",
-          "file": "entry_point.lua",
+          "file": "dev_entry_point.lua",
         },
       },
       "linux": {
         "program": {
           "lua": "bin/linux/lua",
-          "file": "entry_point.lua",
+          "file": "dev_entry_point.lua",
         },
       },
       "osx": {
         "program": {
           "lua": "bin/osx/lua",
-          "file": "entry_point.lua",
+          "file": "dev_entry_point.lua",
         },
       },
     },
@@ -334,19 +334,19 @@
       "windows": {
         "program": {
           "lua": "bin/windows/lua",
-          "file": "entry_point.lua",
+          "file": "dev_entry_point.lua",
         },
       },
       "linux": {
         "program": {
           "lua": "bin/linux/lua",
-          "file": "entry_point.lua",
+          "file": "dev_entry_point.lua",
         },
       },
       "osx": {
         "program": {
           "lua": "bin/osx/lua",
-          "file": "entry_point.lua",
+          "file": "dev_entry_point.lua",
         },
       },
     },
