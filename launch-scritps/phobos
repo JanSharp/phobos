@@ -14,8 +14,8 @@ SCRIPT_DIR="$(cd -P "$(dirname -- "${SCRIPT_PATH}")" >/dev/null 2>&1 && pwd)"
 root="$SCRIPT_DIR"
 c_lib_root="$SCRIPT_DIR/bin"
 c_lib_extension=".so"
-main_module="main"
+main_filename="$root/main.lua"
 
 # run
 "$SCRIPT_DIR/bin/lua" -- "$SCRIPT_DIR/entry_point.lua"\
-  "$root" "$c_lib_root" "$c_lib_extension" "$main_module" "$@"
+  "$root" "$c_lib_root" "$c_lib_extension" "$main_filename" "$@"

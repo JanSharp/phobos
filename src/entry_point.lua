@@ -16,7 +16,7 @@ local c_lib_root = args[2]
 -- third arg is the file extension for c libraries
 local c_lib_extension = args[3]
 -- fourth arg is the file to load and run with the rest of the args
-local main_module = args[4]
+local main_filename = args[4]
 
 package.path = table.concat({
   root..path_sep..substitution..".lua",
@@ -27,7 +27,5 @@ package.cpath = table.concat({
   package.cpath ~= "" and package.cpath or nil,
 }, template_sep)
 
-local main_filename = assert(package.searchpath(main_module, package.path))
-
-local main = assert(loadfile(main_filename, "bt"))
-main(table.unpack(args, 5))
+local main_chunk = assert(loadfile(main_filename, "bt"))
+main_chunk(table.unpack(args, 5))
