@@ -20,7 +20,7 @@ platform=$1
 dir_with_phobos_files=$2
 # main file relative to root
 relative_main=$3
-# remove those 2 positional args such that "$@" evaluates to the rest that should be passed along
+# remove those 3 positional args such that "$@" evaluates to the rest that should be passed along
 shift 3
 
 # configuration
