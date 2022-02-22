@@ -1,6 +1,9 @@
 
 @echo OFF
 
+@REM IMPORTANT: when using this to run any file other than the phobos main file
+@REM the current working directory has to be the root of the project
+
 @REM https://aticleworld.com/batch-file-variables-and-scope/
 SETLOCAL
 
@@ -47,7 +50,7 @@ GOTO _PARAMS_LOOP
 SET root=%script_dir%\..\%dir_with_phobos_files%
 SET c_lib_root=%script_dir%\..\bin\%platform%
 SET c_lib_extension=.dll
-SET main_filename=%root%\%relative_main%
+SET main_filename=%script_dir%\..\%relative_main%
 
 @REM run
 "%script_dir%\..\bin\%platform%\lua" -- "%script_dir%\..\%dir_with_phobos_files%\entry_point.lua"^

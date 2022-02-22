@@ -27,7 +27,7 @@ shift 3
 root="$SCRIPT_DIR/../$dir_with_phobos_files"
 c_lib_root="$SCRIPT_DIR/../bin/$platform"
 c_lib_extension=".so"
-main_filename="$root/$relative_main"
+main_filename="$SCRIPT_DIR/../$relative_main"
 
 # run
 "$SCRIPT_DIR/../bin/$platform/lua" -- "$SCRIPT_DIR/../$dir_with_phobos_files/entry_point.lua"\
