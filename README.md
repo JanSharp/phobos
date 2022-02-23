@@ -171,22 +171,20 @@ git submodule init
 git submodule update
 ```
 
-There are `scripts/build_src.lua` and `scripts/build_factorio_mod.lua` which have to be run through `dev_entry_point.lua` (see that file itself for details).
-
 If you're using vscode just run the build tasks from the command pallet.
 
-Then to actually run src or those built "binaries" check the `.vscode/launch.json` file.
+There are `scripts/build_src.lua` and `scripts/build_factorio_mod.lua` which have to be run through `launch-scripts/phobos_dev`. The `phobos_dev` script expects the current working directory to be the root of the phobos project and 3 additional positional arguments before the actual arguments that will be passed to the lua script. Those 3 args are:
+- your platform, so `linux`, `osx` or `windows`
+- the relative path to the phobos files to be run. So `out/src/debug`, `out/src/release` or `src` (as long as `src` is still using `.lua` files)
+- the relative path to the lua file to run. So in this case `scripts/build_src.lua` or `scripts/build_factorio_mod.lua`
 
-<!-- cSpell:ignore luarocks -->
-<!--
-Currently there are Windows Lua and LFS binaries in the repo, so just clone the repo and try running this in the root directory. if it is successful, Phobos will most likely run properly.
-```
-bin/windows/lua -- dev_entry_point.lua src tests/compile_test.lua
-```
-(for other platforms you'll somehow have to get those binaries. LFS is on luarocks, for the record)
+The launch scripts have a good amount of comments to assist in understanding and troubleshooting.
 
-To actually run the main.lua file you'll have to run src/main.lua like this (with additional args of course)
-```
-bin/windows/lua -- dev_entry_point.lua src src/main.lua
-```
--->
+## Running from Source
+
+First build from source, see above.
+
+Again, if you're using vscode just press F5. To select the right launch profile either use the side panel or press `CTRL + P`, type `debug`, then a space, and select the launch profile from there.\
+The `Phobos` and `Lua` prefixes are currently relevant since phobos itself is still written in `.lua` files. That means the `Lua` prefixed launch profiles will run directly from source while `Pho` will use phobos itself to compile `src` and then run and debug `out/src/debug`. This, however, uses the `Build Debug` task, which uses `src` to compile itself, which means if there is a bug then you can't use that to actually debug it. This will change once I require you to have a previous version of Phobos installed to compile Phobos.
+
+-- TODO: Running outside of vscode. Write this once the `phobos` scripts get copied into the output.

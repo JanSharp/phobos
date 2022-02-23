@@ -74,6 +74,8 @@
     "maxlength",
     "maxlevel",
     "maxnum",
+    "metatable",
+    "metatables",
     "metatostring",
     "mkdir",
     "nohuge",
