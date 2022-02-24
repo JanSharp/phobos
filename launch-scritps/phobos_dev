@@ -1,0 +1,34 @@
+#!/bin/sh
+
+# IMPORTANT: when using this to run any file other than the phobos main file
+# the current working directory has to be the root of the project
+
+# https://www.baeldung.com/linux/bash-get-location-within-script
+SCRIPT_PATH="${BASH_SOURCE}"
+while [ -L "${SCRIPT_PATH}" ]; do
+  SCRIPT_DIR="$(cd -P "$(dirname "${SCRIPT_PATH}")" >/dev/null 2>&1 && pwd)"
+  SCRIPT_PATH="$(readlink "${SCRIPT_PATH}")"
+  [[ ${SCRIPT_PATH} != /* ]] && SCRIPT_PATH="${SCRIPT_DIR}/${SCRIPT_PATH}"
+done
+SCRIPT_PATH="$(readlink -f "${SCRIPT_PATH}")"
+SCRIPT_DIR="$(cd -P "$(dirname -- "${SCRIPT_PATH}")" >/dev/null 2>&1 && pwd)"
+
+# dev specific configuration
+# 'linux', 'osx' or 'windows' (although running bash scripts on windows doesn't "just work" I think)
+platform=$1
+# 'src' (for now), 'out/src/debug' or 'out/src/release'
+dir_with_phobos_files=$2
+# main file relative to root
+relative_main=$3
+# remove those 3 positional args such that "$@" evaluates to the rest that should be passed along
+shift 3
+
+# configuration
+root="$SCRIPT_DIR/../$dir_with_phobos_files"
+c_lib_root="$SCRIPT_DIR/../bin/$platform"
+c_lib_extension=".so"
+main_filename="$SCRIPT_DIR/../$relative_main"
+
+# run
+"$SCRIPT_DIR/../bin/$platform/lua" -- "$SCRIPT_DIR/../$dir_with_phobos_files/entry_point.lua"\
+  "$root" "$c_lib_root" "$c_lib_extension" "$main_filename" "$@"

@@ -37,6 +37,8 @@ loadfile(assert(package.searchpath("main", package.path)))(table.unpack{
   -- this will probably change soon though
   "--pho-extension", ".lua",
   "--source-name", "@src/?",
+  -- HACK: have to --use-load until https://github.com/tomblind/local-lua-debugger-vscode/issues/56 is implemented
+  "--use-load",
   "--ignore",
   "control.lua",
   args.verbose and "--verbose" or nil,

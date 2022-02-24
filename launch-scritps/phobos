@@ -1,0 +1,21 @@
+#!/bin/sh
+
+# https://www.baeldung.com/linux/bash-get-location-within-script
+SCRIPT_PATH="${BASH_SOURCE}"
+while [ -L "${SCRIPT_PATH}" ]; do
+  SCRIPT_DIR="$(cd -P "$(dirname "${SCRIPT_PATH}")" >/dev/null 2>&1 && pwd)"
+  SCRIPT_PATH="$(readlink "${SCRIPT_PATH}")"
+  [[ ${SCRIPT_PATH} != /* ]] && SCRIPT_PATH="${SCRIPT_DIR}/${SCRIPT_PATH}"
+done
+SCRIPT_PATH="$(readlink -f "${SCRIPT_PATH}")"
+SCRIPT_DIR="$(cd -P "$(dirname -- "${SCRIPT_PATH}")" >/dev/null 2>&1 && pwd)"
+
+# configuration
+root="$SCRIPT_DIR"
+c_lib_root="$SCRIPT_DIR/bin"
+c_lib_extension=".so"
+main_filename="$root/main.lua"
+
+# run
+"$SCRIPT_DIR/bin/lua" -- "$SCRIPT_DIR/entry_point.lua"\
+  "$root" "$c_lib_root" "$c_lib_extension" "$main_filename" "$@"

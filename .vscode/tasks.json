@@ -4,48 +4,58 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "isBuildCommand": true,
-      "label": "Build Debug",
       "type": "process",
-      "command": "",
-      "windows": {
-        "command": "bin/windows/lua.exe",
-      },
+      "label": "Build Debug",
+      "group": "build",
+      // if launching it like this doesn't work on all platforms, let me know
+      "command": "launch-scritps/phobos_dev",
       "linux": {
-        "command": "bin/linux/lua",
+        "args": [
+          "linux", "src", "scripts/build_src.lua",
+          "--profile", "debug",
+        ],
       },
       "osx": {
-        "command": "bin/osx/lua",
+        "args": [
+          "osx", "src", "scripts/build_src.lua",
+          "--profile", "debug",
+        ],
       },
-      "args": [
-        "--", "entry_point.lua",
-        "src", "scripts/build_src.lua",
-        "--profile", "debug",
-      ],
+      "windows": {
+        "args": [
+          "windows", "src", "scripts/build_src.lua",
+          "--profile", "debug",
+        ],
+      },
       "presentation": {
         "reveal": "silent",
         "clear": true,
       },
     },
     {
-      "isBuildCommand": true,
-      "label": "Build Factorio Mod Debug",
       "type": "process",
-      "command": "",
-      "windows": {
-        "command": "bin/windows/lua.exe",
-      },
+      "label": "Build Factorio Mod Debug",
+      "group": "build",
+      // if launching it like this doesn't work on all platforms, let me know
+      "command": "launch-scritps/phobos_dev",
       "linux": {
-        "command": "bin/linux/lua",
+        "args": [
+          "linux", "src", "scripts/build_src.lua",
+          "--profile", "release",
+        ],
       },
       "osx": {
-        "command": "bin/osx/lua",
+        "args": [
+          "osx", "src", "scripts/build_src.lua",
+          "--profile", "release",
+        ],
       },
-      "args": [
-        "--", "entry_point.lua",
-        "src", "scripts/build_factorio_mod.lua",
-        "--profile", "debug",
-      ],
+      "windows": {
+        "args": [
+          "windows", "src", "scripts/build_src.lua",
+          "--profile", "release",
+        ],
+      },
       "presentation": {
         "reveal": "silent",
         "clear": true,
