@@ -1404,6 +1404,34 @@ do
             append_empty(fake_main, next_token_node())
           end
         )
+
+        add_test(
+          "call statement wrapped in '()' (invalid)",
+          "(foo());",
+          function()
+            local open_paren_token = next_token_node()
+            local node = nodes.new_call{
+              ex = get_ref_helper("foo", next_token()),
+              open_paren_token = next_token_node(),
+              close_paren_token = next_token_node(),
+              args_comma_tokens = empty_table_or_nil,
+            }
+            node.force_single_result = true
+            node.src_paren_wrappers = {
+              {
+                open_paren_token = open_paren_token,
+                close_paren_token = next_token_node(),
+              },
+            }
+            append_stat(fake_main, new_invalid(
+              error_code_util.codes.unexpected_expression,
+              open_paren_token,
+              nil,
+              {node}
+            ))
+            append_empty(fake_main, next_token_node())
+          end
+        )
       end -- end call
 
       do -- assignment
