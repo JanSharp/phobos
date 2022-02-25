@@ -1566,7 +1566,7 @@ do
       local is_tail_call = false
 
       if stat.exp_list and stat.exp_list[1] then
-        if func.use_tail_calls
+        if func.compiler_options and func.compiler_options.use_tail_calls
           and (not stat.exp_list[2])
           and (stat.exp_list[1].node_type == "call")
           and (not stat.exp_list[1].force_single_result)
@@ -1738,7 +1738,7 @@ do
       patch_breaks_to_jump_here(stat, func)
     end
   }
-  function generate_code(functiondef, use_tail_calls)
+  function generate_code(functiondef, compiler_options)
     local stack = create_stack()
     stack.max_stack_size = 2
     local func = {
@@ -1764,7 +1764,7 @@ do
       scope_levels = {},
       label_positions = {}, -- `pc` and `scope` labels are in, needed for backwards jmp `a` and `sbx`
       current_scope = nil, -- managed by generate_scope
-      use_tail_calls = use_tail_calls,
+      compiler_options = compiler_options,
     }
 
     local upvals = func.upvals
@@ -1890,7 +1890,7 @@ do
     func.scope_levels = nil
     func.label_positions = nil
     -- func.current_scope = nil -- is already `nil` after generate_scope
-    func.use_tail_calls = nil
+    func.compiler_options = nil
 
     -- inner_functions
     for i, func_proto in ipairs(functiondef.func_protos) do
