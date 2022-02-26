@@ -1,4 +1,8 @@
 
+local profile_util = {
+  current_root_directory = nil,
+}
+
 ---@alias ProfileType
 ---| '"build"'
 
@@ -30,13 +34,16 @@
 ---@field use_load boolean
 ---@field inject_scripts fun(ast:AstFunctionDef)[]
 ---@field paths ProfilePath[]
+---@field root_directory string
 
 
 local profiles = {}
 local profiles_by_name = {}
+profile_util.profiles = profiles
+profile_util.profiles_by_name = profiles_by_name
 
 ---@param profile Profile
-local function add_profile(profile)
+function profile_util.add_profile(profile)
   assert(profile.name, "Missing profile name.")
   assert(not profiles_by_name[profile.name], "Attempt to add 2 profiles with the name '"..profile.name.."'.")
   profiles_by_name[profile.name] = profile
@@ -52,12 +59,12 @@ end
 ---@field profile_type ProfileType
 ---**mandatory**\
 ---root path all other output paths have to be relative to\
----if this is a relative path it will be relative to the **current working directory**
+---if this is a relative path it will be relative to the **directory the build profile script entrypoint is in**
 ---@field output_dir string
 ---**mandatory**\
 ---directory all temporary files specific for this profile will be stored in\
 ---used, for example, for incremental builds (which are currently not implemented)\
----if this is a relative path it will be relative to the **current working directory**
+---if this is a relative path it will be relative to the **directory the build profile script entrypoint is in**
 ---@field temp_dir string
 ---**default:** `".pho"`
 ---@field phobos_extension string
@@ -73,7 +80,7 @@ end
 
 ---@param params NewProfileParams
 ---@return Profile
-local function new_profile(params)
+function profile_util.new_profile(params)
   local profile = {
     name = params.name,
     profile_type = params.profile_type,
@@ -84,9 +91,10 @@ local function new_profile(params)
     use_load = params.use_load or false,
     inject_scripts = params.inject_scripts or {},
     paths = {},
+    root_directory = profile_util.current_root_directory,
   }
   if params.add then
-    add_profile(profile)
+    profile_util.add_profile(profile)
   end
   return profile
 end
@@ -94,7 +102,7 @@ end
 ---@class IncludeParams
 ---@field profile Profile
 ---must be a path to a directory\
----if this is a relative path it will be relative to the **current working directory**
+---if this is a relative path it will be relative to the **directory the build profile script entrypoint is in**
 ---@field source_dir string
 ---must be a path to a directory\
 ---must be a relative path, will be relative to the **profile's output_dir**
@@ -113,7 +121,7 @@ end
 ---@field inject_scripts string[]
 
 ---@param params IncludeParams
-local function include(params)
+function profile_util.include(params)
   params.profile.paths[#params.profile.paths+1] = {
     type = "include",
     source_dir = params.source_dir,
@@ -130,13 +138,13 @@ end
 ---@class ExcludeParams
 ---@field profile Profile
 ---can be a path to a directory or a file\
----if this is a relative path it will be relative to the **current working directory**
+---if this is a relative path it will be relative to the **directory the build profile script entrypoint is in**
 ---@field path string
 ---**default:** `true`
 ---@field recursive boolean
 
 ---@param params ExcludeParams
-local function exclude(params)
+function profile_util.exclude(params)
   params.profile.paths[#params.profile.paths+1] = {
     type = "exclude",
     path = params.path,
@@ -151,11 +159,4 @@ end
 -- TODO: actually errors, warnings and infos should all be the same thing just with different severities
 -- TODO: monitor memory
 
-return {
-  profiles = profiles,
-  profiles_by_name = profiles_by_name,
-  add_profile = add_profile,
-  new_profile = new_profile,
-  include = include,
-  exclude = exclude,
-}
+return profile_util

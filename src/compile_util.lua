@@ -36,7 +36,7 @@ end
 ---@field use_load boolean
 
 ---@class CompilerOptions
----@field optimizations table<string, 'true'>
+---@field optimizations table<string, boolean>
 
 ---@class CompileUtilContext
 ---@field syntax_error_count integer

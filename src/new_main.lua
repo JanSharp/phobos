@@ -49,9 +49,10 @@ for _, profiles_file in ipairs(args.profiles_files) do
     filename = profiles_file,
     accept_bytecode = true,
   }, {}, profiles_context), nil, "b"))
+  local profiles_file_path = Path.new(profiles_file)
+  profiles.current_root_directory = profiles_file_path:sub(1, -2):to_fully_qualified():str()
   -- not sandboxed at all
   main_chunk()
-  -- TODO: make profiles relative to the file that defined them? but what if the file required another file?
 end
 
 -- local serpent = require("lib.serpent")
@@ -64,7 +65,7 @@ for _, name in ipairs(args.profile_names) do
     error("No profile with the name '"..name.."' registered.")
   end
 
-  local output_root = Path.new(profile.output_dir):to_fully_qualified()
+  local output_root = Path.new(profile.output_dir):to_fully_qualified(profile.root_directory):normalize()
   -- consider these to be opposites of each other, linking back and forth
   local count = 0
   local next_index = 1
@@ -74,7 +75,7 @@ for _, name in ipairs(args.profile_names) do
   local files_lut = {}
 
   local function process_include(path_def)
-    local root = Path.new(path_def.source_dir):to_fully_qualified()
+    local root = Path.new(path_def.source_dir):to_fully_qualified(profile.root_directory):normalize()
     local output_path = Path.new(path_def.output_dir):normalize()
     if output_path:is_absolute() then
       error("'output_dir' has to be a relative path (output_dir: '"..path_def.output_dir.."')")
