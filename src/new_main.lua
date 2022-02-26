@@ -111,6 +111,7 @@ for _, name in ipairs(args.profile_names) do
             local output_file = output_root / output_path / path / output_entry
             files[index] = {
               source_filename = str,
+              relative_source_filename = (path / entry):str(),
               output_filename = output_file,
               source_name = path_def.source_name,
               use_load = path_def.use_load,
@@ -180,6 +181,7 @@ for _, name in ipairs(args.profile_names) do
       local options = {
         source_name = file.source_name,
         filename = file.source_filename,
+        filename_for_source = file.relative_source_filename,
         use_load = file.use_load,
         -- inject_scripts = file.inject_scripts, -- TODO: compile inject scripts
         optimizations = profile.optimizations,
