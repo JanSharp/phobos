@@ -70,13 +70,53 @@ for _, name in ipairs(args.profile_names) do
   end
 
   local output_root = Path.new(profile.output_dir):to_fully_qualified(profile.root_dir):normalize()
-  -- consider these to be opposites of each other, linking back and forth
+
   local count = 0
   local next_index = 1
+  -- consider these to be opposites of each other, linking back and forth
+  ---it's not an array because it can have holes
   ---@type table<integer, table>
   local files = {}
+  ---indexed by fully qualified source filenames
   ---@type table<string, integer>
   local files_lut = {}
+
+  local inject_script_context = compile_util.new_context()
+  ---indexed by fully qualified paths of inject scripts
+  ---@type table<string, fun(ast:AstFunctionDef)>
+  local compiled_inject_script_files = {}
+  ---indexed by `inject_scripts` tables
+  ---@type table<table, fun(ast:AstFunctionDef)[]>
+  local compiled_inject_scripts_lut = {}
+
+  ---get the compiled inject scripts while making sure not to compile the same file twice (ignoring symlinks)\
+  ---also runs the main chunk of inject scripts to get the actual inject function
+  local function get_inject_scripts(inject_scripts)
+    if compiled_inject_scripts_lut[inject_scripts] then
+      return compiled_inject_scripts_lut[inject_scripts]
+    end
+    local result = {}
+    for i, filename in ipairs(inject_scripts) do
+      local full_filename = Path.new(filename):to_fully_qualified(profile.root_dir):normalize():str()
+      local compiled = compiled_inject_script_files[full_filename]
+      if not compiled then
+        -- print("compiling inject script "..full_filename)
+        local main_chunk = assert(load(compile_util.compile({
+          filename = full_filename,
+          source_name = "@?",
+          accept_bytecode = true,
+        }, inject_script_context), nil, "b"))
+        compiled = main_chunk()
+        assert(type(compiled) == "function",
+          "AST inject scripts must return a function. (script file: "..full_filename..")"
+        )
+        compiled_inject_script_files[full_filename] = compiled
+      end
+      result[i] = compiled
+    end
+    compiled_inject_scripts_lut[inject_scripts] = result
+    return result
+  end
 
   local function process_include(path_def)
     local root = Path.new(path_def.source_dir):to_fully_qualified(profile.root_dir):normalize()
@@ -115,7 +155,7 @@ for _, name in ipairs(args.profile_names) do
               output_filename = output_file,
               source_name = path_def.source_name,
               use_load = path_def.use_load,
-              inject_scripts = path_def.inject_scripts,
+              inject_scripts = get_inject_scripts(path_def.inject_scripts),
             }
           end
         end
@@ -183,7 +223,7 @@ for _, name in ipairs(args.profile_names) do
         filename = file.source_filename,
         filename_for_source = file.relative_source_filename,
         use_load = file.use_load,
-        -- inject_scripts = file.inject_scripts, -- TODO: compile inject scripts
+        inject_scripts = file.inject_scripts,
         optimizations = profile.optimizations,
       }
       local result = compile_util.compile(options, context)

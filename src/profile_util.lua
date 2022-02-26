@@ -81,6 +81,7 @@ end
 ---**default:** `false`
 ---@field use_load boolean
 ---**default:** `{}`
+---if there are relative paths they will be **relative to the root_dir**
 ---@field inject_scripts string[]
 ---**default:** `{}` (so all optimizations set to "false")
 ---@field optimizations Optimizations
