@@ -1,6 +1,8 @@
 
 local profile_util = {
-  current_root_directory = nil,
+  internal = {
+    current_root_dir = nil,
+  },
 }
 
 ---@alias ProfileType
@@ -34,7 +36,13 @@ local profile_util = {
 ---@field use_load boolean
 ---@field inject_scripts fun(ast:AstFunctionDef)[]
 ---@field paths ProfilePath[]
----@field root_directory string
+---@field optimizations Optimizations
+---@field root_dir string
+
+---@class Optimizations
+---@field fold_const boolean
+---@field fold_control_statements boolean
+---@field tail_calls boolean
 
 
 local profiles = {}
@@ -50,7 +58,7 @@ function profile_util.add_profile(profile)
   profiles[#profiles+1] = profile
 end
 
----All fields are mandatory
+---mandatory fields: `name`, `profile_type`, `output_dir`, `temp_dir`
 ---@class NewProfileParams
 ---**mandatory**\
 ---unique name of the profile
@@ -59,7 +67,7 @@ end
 ---@field profile_type ProfileType
 ---**mandatory**\
 ---root path all other output paths have to be relative to\
----if this is a relative path it will be relative to the **directory the build profile script entrypoint is in**
+---if this is a relative path it will be **relative to the root_dir**
 ---@field output_dir string
 ---**mandatory**\
 ---directory all temporary files specific for this profile will be stored in\
@@ -74,6 +82,12 @@ end
 ---@field use_load boolean
 ---**default:** `{}`
 ---@field inject_scripts string[]
+---**default:** `{}` (so all optimizations set to "false")
+---@field optimizations Optimizations
+---**default:** the directory the build profile script (entrypoint) is in.\
+---using `require` or some other method to run other files does not change this default directory.\
+---you can get this directory using `get_current_root_dir()`
+---@field root_dir string
 ---**default:** `false`\
 ---should this profile immediately be added to the list of registered profiles?
 ---@field add boolean
@@ -90,8 +104,9 @@ function profile_util.new_profile(params)
     lua_extension = params.lua_extension or ".lua",
     use_load = params.use_load or false,
     inject_scripts = params.inject_scripts or {},
+    optimizations = params.optimizations or {},
+    root_dir = params.root_dir or profile_util.internal.current_root_dir,
     paths = {},
-    root_directory = profile_util.current_root_directory,
   }
   if params.add then
     profile_util.add_profile(profile)
@@ -152,8 +167,25 @@ function profile_util.exclude(params)
   }
 end
 
--- TODO: compiler options
--- TODO: optimizer options
+---get the directory which is the current default for `profile.root_dir`.\
+---it is the the directory the build profile script (entrypoint) is in.\
+---using `require` or some other method to run other files does not change this directory.\
+---this dir is fully qualified and does not have a trailing `/`
+---@return string
+function profile_util.get_current_root_dir()
+  return profile_util.internal.current_root_dir
+end
+
+---get a new table with all optimizations set to `true`
+---@return Optimizations
+function profile_util.get_all_optimizations()
+  return {
+    fold_const = true,
+    fold_control_statements = true,
+    tail_calls = true,
+  }
+end
+
 -- TODO: ignore syntax errors (based on error codes?)
 -- TODO: ignore warnings (based on warning codes?)
 -- TODO: actually errors, warnings and infos should all be the same thing just with different severities

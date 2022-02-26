@@ -1566,7 +1566,9 @@ do
       local is_tail_call = false
 
       if stat.exp_list and stat.exp_list[1] then
-        if func.compiler_options and func.compiler_options.use_tail_calls
+        if func.compiler_options
+          and func.compiler_options.optimizations
+          and func.compiler_options.optimizations.tail_calls
           and (not stat.exp_list[2])
           and (stat.exp_list[1].node_type == "call")
           and (not stat.exp_list[1].force_single_result)

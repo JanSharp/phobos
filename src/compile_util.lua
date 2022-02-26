@@ -24,7 +24,7 @@ local function new_context()
   }
 end
 
----@class CompileUtilFileData
+---@class CompileUtilOptions
 ---@field filename string
 ---@field text string
 ---@field text_source string
@@ -34,28 +34,25 @@ end
 ---@field ignore_syntax_errors boolean
 ---@field no_syntax_error_messages boolean
 ---@field use_load boolean
-
----@class CompilerOptions
----@field optimizations table<string, boolean>
+---@field optimizations Optimizations
 
 ---@class CompileUtilContext
 ---@field syntax_error_count integer
 ---@field files_with_syntax_error_count integer
 
----@param file_data CompileUtilFileData
----@param compiler_options CompilerOptions
+---@param options CompileUtilOptions
 ---@param context CompileUtilContext
 ---@return string? loadable_chunk @ bytecode or a string using `load()`. Depends on `use_load`
-local function compile(file_data, compiler_options, context)
+local function compile(options, context)
   local function check_and_print_errors(errors)
     if errors[1] then
       context.syntax_error_count = context.syntax_error_count + #errors
       context.files_with_syntax_error_count = context.files_with_syntax_error_count + 1
       local msg = error_code_util.get_message_for_list(errors, "syntax errors in "
-        ..(file_data.text and file_data.text_source or file_data.filename)
+        ..(options.text and options.text_source or options.filename)
       )
-      if file_data.ignore_syntax_errors then
-        if not file_data.no_syntax_error_messages then
+      if options.ignore_syntax_errors then
+        if not options.no_syntax_error_messages then
           print(msg)
         end
         return true
@@ -65,11 +62,11 @@ local function compile(file_data, compiler_options, context)
     end
   end
 
-  local text = file_data.text or io_util.read_file(file_data.filename)
-  if file_data.accept_bytecode and text:sub(1, 4) == constants.lua_signature_str then
+  local text = options.text or io_util.read_file(options.filename)
+  if options.accept_bytecode and text:sub(1, 4) == constants.lua_signature_str then
     return text
   end
-  local ast, parser_errors = parser(text, get_source_name(file_data))
+  local ast, parser_errors = parser(text, get_source_name(options))
   if check_and_print_errors(parser_errors) then
     return nil
   end
@@ -77,22 +74,22 @@ local function compile(file_data, compiler_options, context)
   if check_and_print_errors(jump_linker_errors) then
     return nil
   end
-  if file_data.inject_scripts then
-    for _, inject_script in ipairs(file_data.inject_scripts) do
+  if options.inject_scripts then
+    for _, inject_script in ipairs(options.inject_scripts) do
       inject_script(ast)
     end
   end
-  if compiler_options.optimizations then
-    if compiler_options.optimizations.fold_const then
+  if options.optimizations then
+    if options.optimizations.fold_const then
       fold_const(ast)
     end
-    if compiler_options.optimizations.fold_control_statements then
+    if options.optimizations.fold_control_statements then
       fold_control_statements(ast)
     end
   end
-  local compiled = compiler(ast, compiler_options)
+  local compiled = compiler(ast, options)
   local bytecode = dump(compiled)
-  if file_data.use_load then
+  if options.use_load then
     return string.format("local main_chunk=assert(load(%q,nil,'b'))\nreturn main_chunk(...)", bytecode)
   else
     return bytecode

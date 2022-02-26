@@ -40,6 +40,7 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
 if not args then return end
 
 local profiles = require("profile_util")
+-- expose profile_util as a `profiles` global for the duration of running profiles scripts
 _ENV.profiles = profiles
 
 local profiles_context = compile_util.new_context()
@@ -48,12 +49,15 @@ for _, profiles_file in ipairs(args.profiles_files) do
     source_name = "@?",
     filename = profiles_file,
     accept_bytecode = true,
-  }, {}, profiles_context), nil, "b"))
+  }, profiles_context), nil, "b"))
   local profiles_file_path = Path.new(profiles_file)
-  profiles.current_root_directory = profiles_file_path:sub(1, -2):to_fully_qualified():str()
+  profiles.internal.current_root_dir = profiles_file_path:sub(1, -2):to_fully_qualified():str()
   -- not sandboxed at all
   main_chunk()
 end
+
+-- the global is no longer needed
+_ENV.profiles = nil
 
 -- local serpent = require("lib.serpent")
 -- print(serpent.block(profiles.profiles))
@@ -65,7 +69,7 @@ for _, name in ipairs(args.profile_names) do
     error("No profile with the name '"..name.."' registered.")
   end
 
-  local output_root = Path.new(profile.output_dir):to_fully_qualified(profile.root_directory):normalize()
+  local output_root = Path.new(profile.output_dir):to_fully_qualified(profile.root_dir):normalize()
   -- consider these to be opposites of each other, linking back and forth
   local count = 0
   local next_index = 1
@@ -75,7 +79,7 @@ for _, name in ipairs(args.profile_names) do
   local files_lut = {}
 
   local function process_include(path_def)
-    local root = Path.new(path_def.source_dir):to_fully_qualified(profile.root_directory):normalize()
+    local root = Path.new(path_def.source_dir):to_fully_qualified(profile.root_dir):normalize()
     local output_path = Path.new(path_def.output_dir):normalize()
     if output_path:is_absolute() then
       error("'output_dir' has to be a relative path (output_dir: '"..path_def.output_dir.."')")
@@ -169,18 +173,18 @@ for _, name in ipairs(args.profile_names) do
   -- print(serpent.block(files))
 
   local context = compile_util.new_context()
-  local compiler_options = {}
   for i = 1, next_index - 1 do
     if files[i] then
       local file = files[i]
-      ---@type CompileUtilFileData
-      local file_data = {
+      ---@type CompileUtilOptions
+      local options = {
         source_name = file.source_name,
         filename = file.source_filename,
         use_load = file.use_load,
         -- inject_scripts = file.inject_scripts, -- TODO: compile inject scripts
+        optimizations = profile.optimizations,
       }
-      local result = compile_util.compile(file_data, compiler_options, context)
+      local result = compile_util.compile(options, context)
       io_util.write_file(file.output_filename, result)
     end
   end
