@@ -123,15 +123,14 @@ for _, name in ipairs(args.profile_names) do
     if output_path.entries[1] == ".." then
       error("Attempt to output files outside of the output directory. (output_dir: '"..path_def.output_dir.."')")
     end
-    local function include_dir(path)
+    local function include_dir(path, depth)
+      if depth > path_def.recursion_depth then return end
       for entry in lfs.dir((root / path):str()) do
         if entry == "." or entry == ".." then goto continue end
         local entry_path = root / path / entry
         local mode = entry_path:attr("mode")
         if mode == "directory" then
-          if path_def.recursive then
-            include_dir(path / entry)
-          end
+          include_dir(path / entry, depth + 1)
         elseif mode == "file" then
           if entry_path:extension() == path_def.phobos_extension then
             local str = entry_path:str()
@@ -159,9 +158,9 @@ for _, name in ipairs(args.profile_names) do
       end
     end
     if not root:attr("mode") == "directory" then
-      error("Including anything but directories is not supported. (Path: '"..root:str().."')")
+      error("Including anything but directories is not supported. (source_dir: '"..root:str().."')")
     end
-    include_dir(Path.new())
+    include_dir(Path.new(), 1)
   end
 
   local function process_exclude(path_def)
@@ -173,15 +172,14 @@ for _, name in ipairs(args.profile_names) do
         count = count - 1
       end
     end
-    local function exclude_dir(path)
+    local function exclude_dir(path, depth)
+      if depth > path_def.recursion_depth then return end
       for entry in lfs.dir(path:str()) do
         if entry == "." or entry == ".." then goto continue end
         local entry_path = path / entry
         local mode = entry_path:attr("mode")
         if mode == "directory" then
-          if path_def.recursive then
-            exclude_dir(entry_path)
-          end
+          exclude_dir(entry_path, depth + 1)
         elseif mode == "file" then
           exclude_file(entry_path)
         end
@@ -191,7 +189,7 @@ for _, name in ipairs(args.profile_names) do
     local path = Path.new(path_def.path)
     local mode = path:attr("mode")
     if mode == "directory" then
-      exclude_dir(path)
+      exclude_dir(path, 1)
     elseif mode == "file" then
       exclude_file(path)
     end

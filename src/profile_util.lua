@@ -122,10 +122,11 @@ end
 ---@field output_dir string
 ---**mandatory**\
 ---@field source_name string
----**default:** `true`\
----All files in this directory will be included no matter what.\
----When `true` every file in sub directories will also be included.
----@field recursive boolean
+---**default:** `1/0` (infinite)\
+---How many directories and sub directories deep it should include.\
+---`0` means literally none, `1` means just the given directory, `2` means this directory
+---and all it's sub directories, but not sub directories in sub directories, and so on.
+---@field recursion_depth integer
 ---**default:** `profile.phobos_extension` (it's default is `".pho"`)\
 ---The file extension of Phobos files. Source files must have this extension.
 ---@field phobos_extension string
@@ -155,7 +156,7 @@ function profile_util.include(params)
     type = "include",
     source_dir = params.source_dir,
     output_dir = params.output_dir,
-    recursive = params.recursive == nil and true or params.recursive,
+    recursion_depth = params.recursion_depth or (1/0),
     source_name = params.source_name,
     phobos_extension = params.phobos_extension or params.profile.phobos_extension,
     lua_extension = params.lua_extension or params.profile.lua_extension,
@@ -171,18 +172,19 @@ end
 ---If this is a relative path it will be relative to the
 ---**directory the build profile script entrypoint is in**.
 ---@field path string
----**default:** `true`\
+---**default:** `1/0` (infinite)\
 ---Does nothing if `path` is a file.\
----All files in this directory will be excluded no matter what.\
----When `true` every file in sub directories will also be excluded.
----@field recursive boolean
+---How many directories and sub directories deep it should exclude.\
+---`0` means literally none, `1` means just the given directory, `2` means this directory
+---and all it's sub directories, but not sub directories in sub directories, and so on.
+---@field recursion_depth integer
 
 ---@param params ExcludeParams
 function profile_util.exclude(params)
   params.profile.file_collection_defs[#params.profile.file_collection_defs+1] = {
     type = "exclude",
     path = params.path,
-    recursive = params.recursive == nil and true or params.recursive,
+    recursion_depth = params.recursion_depth or (1/0),
   }
 end
 
@@ -205,7 +207,6 @@ function profile_util.get_all_optimizations()
   }
 end
 
--- TODO: recursion depth
 -- TODO: patterns for paths in include and exclude
 -- TODO: ignore syntax errors (based on error codes?)
 -- TODO: ignore warnings (based on warning codes?)
