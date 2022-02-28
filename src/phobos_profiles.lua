@@ -1,5 +1,5 @@
 
-local profile_util = {
+local phobos_profiles = {
   internal = {
     current_root_dir = nil,
   },
@@ -24,10 +24,10 @@ local profile_util = {
 ---@field tail_calls boolean
 
 
-local profiles = {}
+local all_profiles = {}
 local profiles_by_name = {}
-profile_util.profiles = profiles
-profile_util.profiles_by_name = profiles_by_name
+phobos_profiles.all_profiles = all_profiles
+phobos_profiles.profiles_by_name = profiles_by_name
 
 -- IMPORTANT: make sure to copy defaults and descriptions to FileCollectionIncludeDef for the fields:
 -- phobos_extension, lua_extension, use_load, inject_scripts
@@ -91,7 +91,7 @@ profile_util.profiles_by_name = profiles_by_name
 
 ---@param params AddProfileParams
 ---@return Profile
-function profile_util.add_profile(params)
+function phobos_profiles.add_profile(params)
   local profile = {
     name = params.name,
     output_dir = params.output_dir,
@@ -103,14 +103,14 @@ function profile_util.add_profile(params)
     inject_scripts = params.inject_scripts or {},
     optimizations = params.optimizations or {},
     measure_memory = params.measure_memory or false,
-    root_dir = params.root_dir or profile_util.internal.current_root_dir,
+    root_dir = params.root_dir or phobos_profiles.internal.current_root_dir,
     file_collection_defs = {},
   }
   -- add the profile
   assert(profile.name, "Missing profile name.")
   assert(not profiles_by_name[profile.name], "Attempt to add 2 profiles with the name '"..profile.name.."'.")
   profiles_by_name[profile.name] = profile
-  profiles[#profiles+1] = profile
+  all_profiles[#all_profiles+1] = profile
   return profile
 end
 
@@ -180,7 +180,7 @@ end
 ---@field inject_scripts string[]
 
 ---@param params IncludeParams
-function profile_util.include(params)
+function phobos_profiles.include(params)
   params.profile.file_collection_defs[#params.profile.file_collection_defs+1] = {
     type = "include",
     source_dir = params.source_dir,
@@ -228,7 +228,7 @@ end
 ---@field filename_pattern string
 
 ---@param params ExcludeParams
-function profile_util.exclude(params)
+function phobos_profiles.exclude(params)
   params.profile.file_collection_defs[#params.profile.file_collection_defs+1] = {
     type = "exclude",
     path = params.path,
@@ -242,13 +242,13 @@ end
 ---using `require()` or some other method to run other files does not change this directory.\
 ---this dir is fully qualified and does not have a trailing `/`
 ---@return string
-function profile_util.get_current_root_dir()
-  return profile_util.internal.current_root_dir
+function phobos_profiles.get_current_root_dir()
+  return phobos_profiles.internal.current_root_dir
 end
 
 ---get a new table with all optimizations set to `true`
 ---@return Optimizations
-function profile_util.get_all_optimizations()
+function phobos_profiles.get_all_optimizations()
   return {
     fold_const = true,
     fold_control_statements = true,
@@ -260,4 +260,4 @@ end
 -- TODO: ignore warnings (based on warning codes?)
 -- TODO: actually errors, warnings and infos should all be the same thing just with different severities
 
-return profile_util
+return phobos_profiles
