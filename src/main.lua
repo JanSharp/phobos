@@ -49,7 +49,7 @@ end
 _ENV.profiles = nil
 
 for _, name in ipairs(args.profile_names) do
-  local profile = phobos_profiles.profiles_by_name[name]
+  local profile = phobos_profiles.internal.profiles_by_name[name]
   if not profile then
     -- TODO: print list of profile names that were actually added
     error("No profile with the name '"..name.."' registered.")

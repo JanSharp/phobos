@@ -26,8 +26,8 @@ local phobos_profiles = {
 
 local all_profiles = {}
 local profiles_by_name = {}
-phobos_profiles.all_profiles = all_profiles
-phobos_profiles.profiles_by_name = profiles_by_name
+phobos_profiles.internal.all_profiles = all_profiles
+phobos_profiles.internal.profiles_by_name = profiles_by_name
 
 -- IMPORTANT: make sure to copy defaults and descriptions to FileCollectionIncludeDef for the fields:
 -- phobos_extension, lua_extension, use_load, inject_scripts
