@@ -65,6 +65,12 @@ for _, name in ipairs(args.profile_names) do
   end
   print("running profile '"..name.."'")
 
+  local total_memory_allocated = 0
+  if profile.measure_memory then
+    collectgarbage("stop")
+    total_memory_allocated = -collectgarbage("count")
+  end
+
   local output_root = Path.new(profile.output_dir):to_fully_qualified(profile.root_dir):normalize()
 
   local count = 0
@@ -218,6 +224,14 @@ for _, name in ipairs(args.profile_names) do
   local c = 0
   for i = 1, next_index - 1 do
     if files[i] then
+      if profile.measure_memory then
+        local prev_gc_count = collectgarbage("count")
+        if prev_gc_count > 4 * 1000 * 1000 then
+          collectgarbage("collect")
+          total_memory_allocated = total_memory_allocated + (prev_gc_count - collectgarbage("count"))
+        end
+      end
+
       c = c + 1
       local file = files[i]
       local compile_this_file = not profile.incremental
@@ -231,6 +245,7 @@ for _, name in ipairs(args.profile_names) do
           compile_this_file = true
         end
       end
+
       if compile_this_file then
         print("["..c.."/"..count.."] "..file.source_filename)
         ---@type CompileUtilOptions
@@ -251,6 +266,12 @@ for _, name in ipairs(args.profile_names) do
         end
       end
     end
+  end
+  if profile.measure_memory then
+    total_memory_allocated = total_memory_allocated + collectgarbage("count")
+    ---cSpell:ignore giga
+    print("total memory allocated "..(total_memory_allocated / (1000 * 1000)).." giga bytes")
+    collectgarbage("restart")
   end
   print("finished profile '"..name.."'")
 end

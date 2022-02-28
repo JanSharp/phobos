@@ -76,6 +76,11 @@ profile_util.profiles_by_name = profiles_by_name
 ---@field inject_scripts string[]
 ---**default:** `{}` (so all optimizations set to "false")
 ---@field optimizations Optimizations
+---**default:** `false`\
+---Monitors total memory allocated during the entire compilation process at the cost of ~10% longer
+---compilation times. (Stops incremental GC. Runs full garbage collection whenever it exceeds
+---4GB current memory usage. May overshoot by quite a bit.)
+---@field measure_memory boolean
 ---**default:** the directory the build profile script (entrypoint) is in.\
 ---Using `require()` or some other method to run other files does not change this default directory.\
 ---You can get the default directory using `get_current_root_dir()`.
@@ -97,6 +102,7 @@ function profile_util.add_profile(params)
     incremental = params.incremental == nil and true or params.incremental,
     inject_scripts = params.inject_scripts or {},
     optimizations = params.optimizations or {},
+    measure_memory = params.measure_memory or false,
     root_dir = params.root_dir or profile_util.internal.current_root_dir,
     file_collection_defs = {},
   }
@@ -253,6 +259,5 @@ end
 -- TODO: ignore syntax errors (based on error codes?)
 -- TODO: ignore warnings (based on warning codes?)
 -- TODO: actually errors, warnings and infos should all be the same thing just with different severities
--- TODO: monitor memory
 
 return profile_util
