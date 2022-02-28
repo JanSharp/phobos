@@ -5,36 +5,16 @@ local profile_util = {
   },
 }
 
----@alias ProfilePath ProfileIncludePath|ProfileExcludePath
+---@alias FileCollectionDefinition FileCollectionIncludeDef|FileCollectionExcludeDef
 
----@class ProfileIncludePath
+---@class FileCollectionIncludeDef : IncludeParams
 ---@field type '"include"'
----@field source_dir string
----@field output_dir string
----@field recursive boolean
----@field source_name string
----@field phobos_extension string
----@field lua_extension string
----@field use_load boolean
----@field inject_scripts fun(ast:AstFunctionDef)[]
 
----@class ProfileExcludePath
+---@class FileCollectionExcludeDef : ExcludeParams
 ---@field type '"exclude"'
----@field path string
----@field recursive boolean
 
----@class Profile
----@field name string
----@field output_dir string
----@field temp_dir string
----@field phobos_extension string
----@field lua_extension string
----@field use_load boolean
----@field incremental boolean
----@field inject_scripts fun(ast:AstFunctionDef)[]
----@field paths ProfilePath[]
----@field optimizations Optimizations
----@field root_dir string
+---@class Profile : AddProfileParams
+---@field file_collection_defs FileCollectionDefinition[]
 
 ---@class Optimizations
 ---@field fold_const boolean
@@ -47,54 +27,64 @@ local profiles_by_name = {}
 profile_util.profiles = profiles
 profile_util.profiles_by_name = profiles_by_name
 
----@param profile Profile
-function profile_util.add_profile(profile)
-  assert(profile.name, "Missing profile name.")
-  assert(not profiles_by_name[profile.name], "Attempt to add 2 profiles with the name '"..profile.name.."'.")
-  profiles_by_name[profile.name] = profile
-  profiles[#profiles+1] = profile
-end
+-- IMPORTANT: make sure to copy defaults and descriptions to FileCollectionIncludeDef for the fields:
+-- phobos_extension, lua_extension, use_load, inject_scripts
 
----mandatory fields: `name`, `profile_type`, `output_dir`, `temp_dir`
----@class NewProfileParams
+---mandatory fields: `name`, `output_dir`, `temp_dir`
+---@class AddProfileParams
 ---**mandatory**\
----unique name of the profile
+---Unique name of the profile.
 ---@field name string
 ---**mandatory**\
----root path all other output paths have to be relative to\
----if this is a relative path it will be **relative to the root_dir**
+---Root path all other output paths have to be relative to.\
+---\
+---If this is a relative path it will be **relative to the root_dir**.
 ---@field output_dir string
 ---**mandatory**\
----directory all temporary files specific for this profile will be stored in\
----used, for example, for future incremental builds (once compilation requires context from multiple files)\
----if this is a relative path it will be relative to the **directory the build profile script entrypoint is in**
+---Directory all temporary files specific for this profile will be stored in.\
+---Used, for example, for future incremental builds (once compilation requires context from multiple files).\
+---\
+---If this is a relative path it will be relative to the
+---**directory the build profile script entrypoint is in**.
 ---@field temp_dir string
----**default:** `".pho"`
+---**default:** `".pho"`\
+---The file extension of Phobos files. Source files must have this extension.
 ---@field phobos_extension string
----**default:** `".lua"`
+---**default:** `".lua"`\
+---The file extension of Lua files. Output files will have this extension.
 ---@field lua_extension string
 ---**default:** `false`\
----should the generated output be regular text files using `load` to load bytecode and then run it?
+---Should `load()` be used in the generated output to load the bytecode
+---instead of outputting raw bytecode files?
 ---@field use_load boolean
 ---**default:** `true`\
----should only files with a newer modification time get compiled?
+---Should only files with a newer modification time get compiled?
 ---@field incremental boolean
----**default:** `{}`
+---**default:** `{}`\
+---Filenames of files to run which modify the AST of every compiled file.
+---The extension of these files is ignored; They will load as bytecode if they are bytecode files,
+---otherwise Phobos will compile them just in time with purely default settings, no optimizations.\
+---These files must return a function taking a single argument which will be the AST of whichever
+---file is currently being compiled.\
+---If multiple are provided they will be run in the order they are defined in.\
+---These files will be run before any optimizations.\
+---These files may `require` any Phobos file, such as the 'ast_walker' or 'nodes' for example.\
+---**NOTE:** This feature is far from complete.\
 ---if there are relative paths they will be **relative to the root_dir**
 ---@field inject_scripts string[]
 ---**default:** `{}` (so all optimizations set to "false")
 ---@field optimizations Optimizations
 ---**default:** the directory the build profile script (entrypoint) is in.\
----using `require` or some other method to run other files does not change this default directory.\
----you can get this directory using `get_current_root_dir()`
+---Using `require()` or some other method to run other files does not change this default directory.\
+---You can get the default directory using `get_current_root_dir()`.
 ---@field root_dir string
 ---**default:** `false`\
----should this profile immediately be added to the list of registered profiles?
----@field add boolean
+---Should this profile immediately be added to the list of registered profiles?
+---@field add_profile boolean
 
----@param params NewProfileParams
+---@param params AddProfileParams
 ---@return Profile
-function profile_util.new_profile(params)
+function profile_util.add_profile(params)
   local profile = {
     name = params.name,
     output_dir = params.output_dir,
@@ -106,38 +96,62 @@ function profile_util.new_profile(params)
     inject_scripts = params.inject_scripts or {},
     optimizations = params.optimizations or {},
     root_dir = params.root_dir or profile_util.internal.current_root_dir,
-    paths = {},
+    file_collection_defs = {},
   }
-  if params.add then
-    profile_util.add_profile(profile)
-  end
+  -- add the profile
+  assert(profile.name, "Missing profile name.")
+  assert(not profiles_by_name[profile.name], "Attempt to add 2 profiles with the name '"..profile.name.."'.")
+  profiles_by_name[profile.name] = profile
+  profiles[#profiles+1] = profile
   return profile
 end
 
 ---@class IncludeParams
+---**mandatory**\
+---The profile to add this definition to.
 ---@field profile Profile
----must be a path to a directory\
----if this is a relative path it will be relative to the **directory the build profile script entrypoint is in**
+---**mandatory**\
+---Must be a path to a directory.\
+---\
+---If this is a relative path it will be relative to the
+---**directory the build profile script entrypoint is in**.
 ---@field source_dir string
+---**mandatory**\
 ---must be a path to a directory\
----must be a relative path, will be relative to the **profile's output_dir**
+---must be a relative path, will be relative to the **profile's `output_dir`**
 ---@field output_dir string
----**default:** `true`\
----should all sub directories also be included?
----@field recursive boolean
+---**mandatory**\
 ---@field source_name string
----**default:** `profile.phobos_extension`
+---**default:** `true`\
+---All files in this directory will be included no matter what.\
+---When `true` every file in sub directories will also be included.
+---@field recursive boolean
+---**default:** `profile.phobos_extension` (it's default is `".pho"`)\
+---The file extension of Phobos files. Source files must have this extension.
 ---@field phobos_extension string
----**default:** `profile.lua_extension`
+---**default:** `profile.lua_extension` (it's default is `".lua"`)\
+---The file extension of Lua files. Output files will have this extension.
 ---@field lua_extension string
----**default:** `profile.use_load`
+---**default:** `profile.use_load` (it's default is `false`)\
+---Should `load()` be used in the generated output to load the bytecode
+---instead of outputting raw bytecode files?
 ---@field use_load boolean
----**default:** `profile.inject_scripts`
+---**default:** `profile.inject_scripts` (it's default is `{}`)\
+---Filenames of files to run which modify the AST of every compiled file.
+---The extension of these files is ignored; They will load as bytecode if they are bytecode files,
+---otherwise Phobos will compile them just in time with purely default settings, no optimizations.\
+---These files must return a function taking a single argument which will be the AST of whichever
+---file is currently being compiled.\
+---If multiple are provided they will be run in the order they are defined in.\
+---These files will be run before any optimizations.\
+---These files may `require` any Phobos file, such as the 'ast_walker' or 'nodes' for example.\
+---**NOTE:** This feature is far from complete.\
+---if there are relative paths they will be **relative to the root_dir**
 ---@field inject_scripts string[]
 
 ---@param params IncludeParams
 function profile_util.include(params)
-  params.profile.paths[#params.profile.paths+1] = {
+  params.profile.file_collection_defs[#params.profile.file_collection_defs+1] = {
     type = "include",
     source_dir = params.source_dir,
     output_dir = params.output_dir,
@@ -152,15 +166,20 @@ end
 
 ---@class ExcludeParams
 ---@field profile Profile
----can be a path to a directory or a file\
----if this is a relative path it will be relative to the **directory the build profile script entrypoint is in**
+---Can be a path to a directory or a file.\
+---\
+---If this is a relative path it will be relative to the
+---**directory the build profile script entrypoint is in**.
 ---@field path string
----**default:** `true`
+---**default:** `true`\
+---Does nothing if `path` is a file.\
+---All files in this directory will be excluded no matter what.\
+---When `true` every file in sub directories will also be excluded.
 ---@field recursive boolean
 
 ---@param params ExcludeParams
 function profile_util.exclude(params)
-  params.profile.paths[#params.profile.paths+1] = {
+  params.profile.file_collection_defs[#params.profile.file_collection_defs+1] = {
     type = "exclude",
     path = params.path,
     recursive = params.recursive == nil and true or params.recursive,
@@ -169,7 +188,7 @@ end
 
 ---get the directory which is the current default for `profile.root_dir`.\
 ---it is the the directory the build profile script (entrypoint) is in.\
----using `require` or some other method to run other files does not change this directory.\
+---using `require()` or some other method to run other files does not change this directory.\
 ---this dir is fully qualified and does not have a trailing `/`
 ---@return string
 function profile_util.get_current_root_dir()
@@ -186,6 +205,8 @@ function profile_util.get_all_optimizations()
   }
 end
 
+-- TODO: recursion depth
+-- TODO: patterns for paths in include and exclude
 -- TODO: ignore syntax errors (based on error codes?)
 -- TODO: ignore warnings (based on warning codes?)
 -- TODO: actually errors, warnings and infos should all be the same thing just with different severities

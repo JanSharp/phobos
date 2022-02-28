@@ -5,8 +5,6 @@ local Path = require("lib.LuaPath.path")
 Path.use_forward_slash_as_main_separator_on_windows()
 local arg_parser = require("lib.LuaArgParser.arg_parser")
 arg_parser.register_type(Path.arg_parser_path_type_def)
-local build_profile_arg_provider = require("build_profile_arg_provider")
-arg_parser.register_type(build_profile_arg_provider.arg_parser_build_profile_type_def)
 local io_util = require("io_util")
 local constants = require("constants")
 local error_code_util = require("error_code_util")
@@ -199,13 +197,13 @@ for _, name in ipairs(args.profile_names) do
     end
   end
 
-  for _, path_def in ipairs(profile.paths) do
-    if path_def.type == "include" then
-      process_include(path_def)
-    elseif path_def.type == "exclude" then
-      process_exclude(path_def)
+  for _, fc_def in ipairs(profile.file_collection_defs) do
+    if fc_def.type == "include" then
+      process_include(fc_def)
+    elseif fc_def.type == "exclude" then
+      process_exclude(fc_def)
     else
-      error("Impossible path definition type '"..(path_def.type or "<nil>").."'.")
+      error("Impossible path definition type '"..(fc_def.type or "<nil>").."'.")
     end
   end
 
