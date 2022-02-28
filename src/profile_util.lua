@@ -5,9 +5,6 @@ local profile_util = {
   },
 }
 
----@alias ProfileType
----| '"build"'
-
 ---@alias ProfilePath ProfileIncludePath|ProfileExcludePath
 
 ---@class ProfileIncludePath
@@ -28,7 +25,6 @@ local profile_util = {
 
 ---@class Profile
 ---@field name string
----@field profile_type ProfileType
 ---@field output_dir string
 ---@field temp_dir string
 ---@field phobos_extension string
@@ -64,8 +60,6 @@ end
 ---**mandatory**\
 ---unique name of the profile
 ---@field name string
----**mandatory**\
----@field profile_type ProfileType
 ---**mandatory**\
 ---root path all other output paths have to be relative to\
 ---if this is a relative path it will be **relative to the root_dir**
@@ -103,7 +97,6 @@ end
 function profile_util.new_profile(params)
   local profile = {
     name = params.name,
-    profile_type = params.profile_type,
     output_dir = params.output_dir,
     temp_dir = params.temp_dir,
     phobos_extension = params.phobos_extension or ".pho",
