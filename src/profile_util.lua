@@ -8,9 +8,11 @@ local profile_util = {
 ---@alias FileCollectionDefinition FileCollectionIncludeDef|FileCollectionExcludeDef
 
 ---@class FileCollectionIncludeDef : IncludeParams
+---@field profile 'nil' @ no longer in the table
 ---@field type '"include"'
 
 ---@class FileCollectionExcludeDef : ExcludeParams
+---@field profile 'nil' @ no longer in the table
 ---@field type '"exclude"'
 
 ---@class Profile : AddProfileParams
@@ -36,14 +38,14 @@ profile_util.profiles_by_name = profiles_by_name
 ---Unique name of the profile.
 ---@field name string
 ---**mandatory**\
----Root path all other output paths have to be relative to.\
----\
+---Root path all other output paths have to be relative to.
+---
 ---If this is a relative path it will be **relative to the root_dir**.
 ---@field output_dir string
 ---**mandatory**\
 ---Directory all temporary files specific for this profile will be stored in.\
----Used, for example, for future incremental builds (once compilation requires context from multiple files).\
----\
+---Used, for example, for future incremental builds (once compilation requires context from multiple files).
+---
 ---If this is a relative path it will be relative to the
 ---**directory the build profile script entrypoint is in**.
 ---@field temp_dir string
@@ -106,13 +108,16 @@ function profile_util.add_profile(params)
   return profile
 end
 
+---IMPORTANT: `recursion_depth` and `filename_pattern` descriptions are
+---99% copy paste between include and exclude
+
 ---@class IncludeParams
 ---**mandatory**\
 ---The profile to add this definition to.
 ---@field profile Profile
 ---**mandatory**\
----Must be a path to a directory.\
----\
+---Must be a path to a directory.
+---
 ---If this is a relative path it will be relative to the
 ---**directory the build profile script entrypoint is in**.
 ---@field source_dir string
@@ -127,6 +132,24 @@ end
 ---`0` means literally none, `1` means just the given directory, `2` means this directory
 ---and all it's sub directories, but not sub directories in sub directories, and so on.
 ---@field recursion_depth integer
+---**default:** `""` (matches everything)\
+---Only files matching this Lua pattern will be excluded.\
+---The paths matched against this pattern will...
+---- be relative to `source_dir`
+---- have a leading `/` for convenience (so you can use `/` as an anchor for "the start of any entry")
+---- use `/` as separators
+---- include the file extension.
+---
+---Filtering for `phobos_extension` happens before this pattern gets applied.\
+---
+---If you're used to "file globs" here are respective equivalents:
+---- `*` => `[^/]*` - Match a part of filename or directory of undetermined length.
+---- `/**/` => `/.*/` - Match any amount of directories.
+---- `?` => `[^/]` - Match any single character within a filename or directory.
+---
+---For more details refer to the
+---[Lua manual for string patterns](http://www.lua.org/manual/5.2/manual.html#6.4.1).
+---@field filename_pattern string
 ---**default:** `profile.phobos_extension` (it's default is `".pho"`)\
 ---The file extension of Phobos files. Source files must have this extension.
 ---@field phobos_extension string
@@ -157,6 +180,7 @@ function profile_util.include(params)
     source_dir = params.source_dir,
     output_dir = params.output_dir,
     recursion_depth = params.recursion_depth or (1/0),
+    filename_pattern = params.filename_pattern or "",
     source_name = params.source_name,
     phobos_extension = params.phobos_extension or params.profile.phobos_extension,
     lua_extension = params.lua_extension or params.profile.lua_extension,
@@ -167,8 +191,8 @@ end
 
 ---@class ExcludeParams
 ---@field profile Profile
----Can be a path to a directory or a file.\
----\
+---Can be a path to a directory or a file.
+---
 ---If this is a relative path it will be relative to the
 ---**directory the build profile script entrypoint is in**.
 ---@field path string
@@ -178,6 +202,24 @@ end
 ---`0` means literally none, `1` means just the given directory, `2` means this directory
 ---and all it's sub directories, but not sub directories in sub directories, and so on.
 ---@field recursion_depth integer
+---**default:** `""` (matches everything)\
+---Only files matching this Lua pattern will be excluded.\
+---The paths matched against this pattern will...
+---- be relative to `path`
+---- have a leading `/` for convenience (so you can use `/` as an anchor for "the start of any entry")
+---- use `/` as separators
+---- include the file extension.
+---
+---Note that excluding a file that isn't included is not a problem, it just does nothing.
+---
+---If you're used to "file globs" here are respective equivalents:
+---- `*` => `[^/]*` - Match a part of filename or directory of undetermined length.
+---- `/**/` => `/.*/` - Match any amount of directories.
+---- `?` => `[^/]` - Match any single character within a filename or directory.
+---
+---For more details refer to the
+---[Lua manual for string patterns](http://www.lua.org/manual/5.2/manual.html#6.4.1).
+---@field filename_pattern string
 
 ---@param params ExcludeParams
 function profile_util.exclude(params)
@@ -185,6 +227,7 @@ function profile_util.exclude(params)
     type = "exclude",
     path = params.path,
     recursion_depth = params.recursion_depth or (1/0),
+    filename_pattern = params.filename_pattern or "",
   }
 end
 
@@ -207,7 +250,6 @@ function profile_util.get_all_optimizations()
   }
 end
 
--- TODO: patterns for paths in include and exclude
 -- TODO: ignore syntax errors (based on error codes?)
 -- TODO: ignore warnings (based on warning codes?)
 -- TODO: actually errors, warnings and infos should all be the same thing just with different severities

@@ -128,11 +128,16 @@ for _, name in ipairs(args.profile_names) do
       for entry in lfs.dir((root / path):str()) do
         if entry == "." or entry == ".." then goto continue end
         local entry_path = root / path / entry
-        local mode = entry_path:attr("mode")
+        local mode = assert(entry_path:attr("mode"))
         if mode == "directory" then
           include_dir(path / entry, depth + 1)
         elseif mode == "file" then
-          if entry_path:extension() == path_def.phobos_extension then
+          local included = entry_path:extension() == path_def.phobos_extension
+          -- "" matches everything, don't waste time processing all of this
+          if path_def.filename_pattern ~= "" and included then
+            included = ("/"..(path / entry):str()):find(path_def.filename_pattern)
+          end
+          if included then
             local str = entry_path:str()
             local index = files_lut[str]
             if not index then
@@ -157,13 +162,14 @@ for _, name in ipairs(args.profile_names) do
         ::continue::
       end
     end
-    if not root:attr("mode") == "directory" then
+    if not assert(root:attr("mode")) == "directory" then
       error("Including anything but directories is not supported. (source_dir: '"..root:str().."')")
     end
     include_dir(Path.new(), 1)
   end
 
   local function process_exclude(path_def)
+    local root = Path.new(path_def.path):to_fully_qualified(profile.root_dir):normalize()
     local function exclude_file(path)
       local index = files_lut[path:str()]
       if index then
@@ -174,24 +180,27 @@ for _, name in ipairs(args.profile_names) do
     end
     local function exclude_dir(path, depth)
       if depth > path_def.recursion_depth then return end
-      for entry in lfs.dir(path:str()) do
+      for entry in lfs.dir((root / path):str()) do
         if entry == "." or entry == ".." then goto continue end
         local entry_path = path / entry
-        local mode = entry_path:attr("mode")
+        local mode = assert((root / entry_path):attr("mode"))
         if mode == "directory" then
           exclude_dir(entry_path, depth + 1)
         elseif mode == "file" then
-          exclude_file(entry_path)
+          if path_def.filename_pattern == ""
+            or ("/"..entry_path:str()):find(path_def.filename_pattern)
+          then
+            exclude_file(root / entry_path)
+          end
         end
         ::continue::
       end
     end
-    local path = Path.new(path_def.path)
-    local mode = path:attr("mode")
+    local mode = assert(root:attr("mode"))
     if mode == "directory" then
-      exclude_dir(path, 1)
+      exclude_dir(Path.new(), 1)
     elseif mode == "file" then
-      exclude_file(path)
+      exclude_file(root)
     end
   end
 
