@@ -34,6 +34,7 @@ local profile_util = {
 ---@field phobos_extension string
 ---@field lua_extension string
 ---@field use_load boolean
+---@field incremental boolean
 ---@field inject_scripts fun(ast:AstFunctionDef)[]
 ---@field paths ProfilePath[]
 ---@field optimizations Optimizations
@@ -71,15 +72,19 @@ end
 ---@field output_dir string
 ---**mandatory**\
 ---directory all temporary files specific for this profile will be stored in\
----used, for example, for incremental builds (which are currently not implemented)\
+---used, for example, for future incremental builds (once compilation requires context from multiple files)\
 ---if this is a relative path it will be relative to the **directory the build profile script entrypoint is in**
 ---@field temp_dir string
 ---**default:** `".pho"`
 ---@field phobos_extension string
 ---**default:** `".lua"`
 ---@field lua_extension string
----**default:** `false`
+---**default:** `false`\
+---should the generated output be regular text files using `load` to load bytecode and then run it?
 ---@field use_load boolean
+---**default:** `true`\
+---should only files with a newer modification time get compiled?
+---@field incremental boolean
 ---**default:** `{}`
 ---if there are relative paths they will be **relative to the root_dir**
 ---@field inject_scripts string[]
@@ -104,6 +109,7 @@ function profile_util.new_profile(params)
     phobos_extension = params.phobos_extension or ".pho",
     lua_extension = params.lua_extension or ".lua",
     use_load = params.use_load or false,
+    incremental = params.incremental == nil and true or params.incremental,
     inject_scripts = params.inject_scripts or {},
     optimizations = params.optimizations or {},
     root_dir = params.root_dir or profile_util.internal.current_root_dir,

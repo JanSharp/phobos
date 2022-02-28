@@ -59,15 +59,13 @@ end
 -- the global is no longer needed
 _ENV.profiles = nil
 
--- local serpent = require("lib.serpent")
--- print(serpent.block(profiles.profiles))
-
 for _, name in ipairs(args.profile_names) do
   local profile = profiles.profiles_by_name[name]
   if not profile then
     -- TODO: print list of profile names that were actually added
     error("No profile with the name '"..name.."' registered.")
   end
+  print("running profile '"..name.."'")
 
   local output_root = Path.new(profile.output_dir):to_fully_qualified(profile.root_dir):normalize()
 
@@ -148,7 +146,7 @@ for _, name in ipairs(args.profile_names) do
             end
             entry = Path.new(entry)
             local output_entry = entry:sub(1, -2) / (entry:filename()..path_def.lua_extension)
-            local output_file = output_root / output_path / path / output_entry
+            local output_file = (output_root / output_path / path / output_entry):str()
             files[index] = {
               source_filename = str,
               relative_source_filename = (path / entry):str(),
@@ -211,23 +209,45 @@ for _, name in ipairs(args.profile_names) do
     end
   end
 
-  -- print(serpent.block(files))
-
   local context = compile_util.new_context()
+  local c = 0
   for i = 1, next_index - 1 do
     if files[i] then
+      c = c + 1
       local file = files[i]
-      ---@type CompileUtilOptions
-      local options = {
-        source_name = file.source_name,
-        filename = file.source_filename,
-        filename_for_source = file.relative_source_filename,
-        use_load = file.use_load,
-        inject_scripts = file.inject_scripts,
-        optimizations = profile.optimizations,
-      }
-      local result = compile_util.compile(options, context)
-      io_util.write_file(file.output_filename, result)
+      local compile_this_file = not profile.incremental
+      if not compile_this_file then
+        if Path.new(file.output_filename):exists() then
+          local source_modification = lfs.attributes(file.source_filename, "modification")
+          local output_modification = lfs.attributes(file.output_filename, "modification")
+          compile_this_file = os.difftime(source_modification, output_modification) > 0
+        else
+          -- output doesn't exist, so compile it
+          compile_this_file = true
+        end
+      end
+      if compile_this_file then
+        print("["..c.."/"..count.."] "..file.source_filename)
+        ---@type CompileUtilOptions
+        local options = {
+          source_name = file.source_name,
+          filename = file.source_filename,
+          filename_for_source = file.relative_source_filename,
+          use_load = file.use_load,
+          inject_scripts = file.inject_scripts,
+          optimizations = profile.optimizations,
+
+          ignore_syntax_errors = true,
+          no_syntax_error_messages = true,
+        }
+        local result = compile_util.compile(options, context)
+        if result then
+          io_util.write_file(file.output_filename, result)
+        end
+      end
     end
   end
+  print("finished profile '"..name.."'")
 end
+
+print(string.format("total time elapsed: %.3fs", os.clock()))
