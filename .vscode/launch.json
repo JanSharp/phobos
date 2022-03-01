@@ -634,7 +634,7 @@
       },
     },
     {
-      "name": "Lua new_main",
+      "name": "Lua src/main (debug profile)",
       "type": "lua-local",
       "request": "launch",
       "linux": {
@@ -646,12 +646,12 @@
           // c_lib_extension
           ".so",
           // main_filename
-          "src/new_main.lua",
+          "src/main.lua",
           // arguments passed along to the main file
           "-p",
-          "temp/test_profiles.pho",
+          ".phobos_profiles",
           "-n",
-          "main",
+          "debug",
         ],
         "program": {
           "file": "src/entry_point.lua",
@@ -667,12 +667,12 @@
           // c_lib_extension
           ".so",
           // main_filename
-          "src/new_main.lua",
+          "src/main.lua",
           // arguments passed along to the main file
           "-p",
-          "temp/test_profiles.pho",
+          ".phobos_profiles",
           "-n",
-          "main",
+          "debug",
         ],
         "program": {
           "file": "src/entry_point.lua",
@@ -688,12 +688,12 @@
           // c_lib_extension
           ".dll",
           // main_filename
-          "src/new_main.lua",
+          "src/main.lua",
           // arguments passed along to the main file
           "-p",
-          "temp/test_profiles.pho",
+          ".phobos_profiles",
           "-n",
-          "main",
+          "debug",
         ],
         "program": {
           "file": "src/entry_point.lua",
@@ -702,7 +702,7 @@
       },
     },
     {
-      "name": "Phobos new_main",
+      "name": "Phobos src/main (debug profile)",
       "type": "lua-local",
       "request": "launch",
       "preLaunchTask": "Build Debug",
@@ -715,12 +715,12 @@
           // c_lib_extension
           ".so",
           // main_filename
-          "out/src/debug/new_main.lua",
+          "out/src/debug/main.lua",
           // arguments passed along to the main file
           "-p",
-          "temp/test_profiles.pho",
+          ".phobos_profiles",
           "-n",
-          "main",
+          "debug",
         ],
         "program": {
           "file": "out/src/debug/entry_point.lua",
@@ -736,12 +736,12 @@
           // c_lib_extension
           ".so",
           // main_filename
-          "out/src/debug/new_main.lua",
+          "out/src/debug/main.lua",
           // arguments passed along to the main file
           "-p",
-          "temp/test_profiles.pho",
+          ".phobos_profiles",
           "-n",
-          "main",
+          "debug",
         ],
         "program": {
           "file": "out/src/debug/entry_point.lua",
@@ -757,12 +757,12 @@
           // c_lib_extension
           ".dll",
           // main_filename
-          "out/src/debug/new_main.lua",
+          "out/src/debug/main.lua",
           // arguments passed along to the main file
           "-p",
-          "temp/test_profiles.pho",
+          ".phobos_profiles",
           "-n",
-          "main",
+          "debug",
         ],
         "program": {
           "file": "out/src/debug/entry_point.lua",

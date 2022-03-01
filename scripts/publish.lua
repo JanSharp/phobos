@@ -132,6 +132,8 @@ if not args.skip_tests then
 end
 
 if not args.skip_build then
+  -- TODO: update for new main.lua
+
   -- compile src to `out/src/release`
   print("Building src")
   loadfile("scripts/build_src.lua")(table.unpack{

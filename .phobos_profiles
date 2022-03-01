@@ -1,0 +1,75 @@
+
+local profiles = require("phobos_profiles")
+
+local factorio_specific_paths = {
+  "control",
+}
+local standalone_specific_paths = {
+  "main",
+  "io_util",
+  "lib/LFSClasses",
+  "lib/LuaArgParser",
+  "lib/LuaPath",
+}
+
+local phobos_extension = ".lua"
+
+local function standalone_profile(name, clean, optimizations)
+  local profile = profiles.add_profile{
+    name = name..(clean and "_clean" or ""),
+    add_profile = true,
+    output_dir = "out/"..name,
+    temp_dir = "temp/"..name,
+    phobos_extension = phobos_extension,
+    optimizations = optimizations,
+    -- HACK: until https://github.com/tomblind/local-lua-debugger-vscode/issues/56 is implemented
+    use_load = true,
+  }
+
+  profiles.include{
+    profile = profile,
+    source_dir = "src",
+    source_name = "@src/?",
+    output_dir = ".",
+  }
+
+  for _, filename in ipairs(factorio_specific_paths) do
+    profiles.exclude{
+      profile = profile,
+      path = "src/"..filename..phobos_extension,
+    }
+  end
+end
+
+local function factorio_profile(name, clean, optimizations)
+  local profile = profiles.add_profile{
+    name = "factorio_"..name..(clean and "_clean" or ""),
+    add_profile = true,
+    output_dir = "out/factorio_"..name.."/phobos",
+    temp_dir = "temp/factorio_"..name,
+    phobos_extension = phobos_extension,
+    optimizations = optimizations,
+    use_load = true,
+  }
+
+  profiles.include{
+    profile = profile,
+    source_dir = "src",
+    source_name = "@src/?",
+    output_dir = ".",
+  }
+
+  for _, filename in ipairs(standalone_specific_paths) do
+    profiles.exclude{
+      profile = profile,
+      path = "src/"..filename..phobos_extension,
+    }
+  end
+end
+
+for _, clean in ipairs{false, true} do
+  standalone_profile("debug", clean, nil)
+  standalone_profile("release", clean, profiles.get_all_optimizations())
+  factorio_profile("debug", clean, nil)
+  factorio_profile("release", clean, profiles.get_all_optimizations())
+end

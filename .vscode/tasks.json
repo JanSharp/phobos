@@ -61,5 +61,26 @@
         "clear": true,
       },
     },
+    {
+      "type": "process",
+      "label": "Generate vscode launch json",
+      "args": [
+        "--", "scripts/generate_vscode_launch_json.lua",
+      ],
+      "command": "", // vscode complains otherwise
+      "linux": {
+        "command": "bin/linux/lua",
+      },
+      "osx": {
+        "command": "bin/osx/lua",
+      },
+      "windows": {
+        "command": "bin/windows/lua",
+      },
+      "presentation": {
+        "reveal": "silent",
+        "clear": true,
+      },
+    },
   ],
 }

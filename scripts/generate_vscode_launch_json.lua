@@ -152,9 +152,9 @@ add_phobos_profiles{
   main_filename = "tests/main.lua",
 }
 add_phobos_profiles{
-  name = "new_main",
-  main_filename_in_phobos_root = "new_main.lua",
-  args = {"-p", "temp/test_profiles.pho", "-n", "main"},
+  name = "src/main (debug profile)",
+  main_filename_in_phobos_root = "main.lua",
+  args = {"-p", ".phobos_profiles", "-n", "debug"},
 }
 
 local file = assert(io.open(".vscode/launch.json", "w"))
