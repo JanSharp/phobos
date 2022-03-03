@@ -22,7 +22,7 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
       short = "n",
       type = "string",
       min_params = 1,
-    }
+    },
   },
 })
 if not args then return end

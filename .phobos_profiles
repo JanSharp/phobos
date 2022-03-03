@@ -17,11 +17,11 @@ local phobos_extension = ".lua"
 local function standalone_profile(name, clean, optimizations)
   local profile = profiles.add_profile{
     name = name..(clean and "_clean" or ""),
-    add_profile = true,
     output_dir = "out/"..name,
     temp_dir = "temp/"..name,
     phobos_extension = phobos_extension,
     optimizations = optimizations,
+    incremental = not clean,
     -- HACK: until https://github.com/tomblind/local-lua-debugger-vscode/issues/56 is implemented
     use_load = true,
   }
@@ -44,7 +44,6 @@ end
 local function factorio_profile(name, clean, optimizations)
   local profile = profiles.add_profile{
     name = "factorio_"..name..(clean and "_clean" or ""),
-    add_profile = true,
     output_dir = "out/factorio_"..name.."/phobos",
     temp_dir = "temp/factorio_"..name,
     phobos_extension = phobos_extension,

@@ -85,9 +85,6 @@ phobos_profiles.internal.profiles_by_name = profiles_by_name
 ---Using `require()` or some other method to run other files does not change this default directory.\
 ---You can get the default directory using `get_current_root_dir()`.
 ---@field root_dir string
----**default:** `false`\
----Should this profile immediately be added to the list of registered profiles?
----@field add_profile boolean
 
 ---@param params AddProfileParams
 ---@return Profile
@@ -131,7 +128,7 @@ end
 ---must be a path to a directory\
 ---must be a relative path, will be relative to the **profile's `output_dir`**
 ---@field output_dir string
----**mandatory**\
+---**mandatory**
 ---@field source_name string
 ---**default:** `1/0` (infinite)\
 ---How many directories and sub directories deep it should include.\
