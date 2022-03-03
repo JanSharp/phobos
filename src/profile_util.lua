@@ -6,6 +6,65 @@ Path.use_forward_slash_as_main_separator_on_windows()
 local io_util = require("io_util")
 local compile_util = require("compile_util")
 
+-- TODO: validate input
+
+---`root_dir` does not have an explicit default when using this function.\
+---Technically it will be using the current working directory if it's `nil` because of `Path.to_fully_qualified`.
+---@param params NewProfileParams
+local function new_profile(params)
+  local profile = {
+    name = params.name,
+    output_dir = params.output_dir,
+    temp_dir = params.temp_dir,
+    phobos_extension = params.phobos_extension or ".pho",
+    lua_extension = params.lua_extension or ".lua",
+    use_load = params.use_load or false,
+    incremental = params.incremental == nil and true or params.incremental,
+    inject_scripts = params.inject_scripts or {},
+    optimizations = params.optimizations or {},
+    measure_memory = params.measure_memory or false,
+    root_dir = params.root_dir,
+    file_collection_defs = {},
+  }
+  return profile
+end
+
+---@param params IncludeParams
+local function include(params)
+  params.profile.file_collection_defs[#params.profile.file_collection_defs+1] = {
+    type = "include",
+    source_dir = params.source_dir,
+    output_dir = params.output_dir,
+    recursion_depth = params.recursion_depth or (1/0),
+    filename_pattern = params.filename_pattern or "",
+    source_name = params.source_name,
+    phobos_extension = params.phobos_extension or params.profile.phobos_extension,
+    lua_extension = params.lua_extension or params.profile.lua_extension,
+    use_load = params.use_load or params.profile.use_load,
+    inject_scripts = params.inject_scripts or params.profile.inject_scripts,
+  }
+end
+
+---@param params ExcludeParams
+local function exclude(params)
+  params.profile.file_collection_defs[#params.profile.file_collection_defs+1] = {
+    type = "exclude",
+    path = params.path,
+    recursion_depth = params.recursion_depth or (1/0),
+    filename_pattern = params.filename_pattern or "",
+  }
+end
+
+---get a new table with all optimizations set to `true`
+---@return Optimizations
+local function get_all_optimizations()
+  return {
+    fold_const = true,
+    fold_control_statements = true,
+    tail_calls = true,
+  }
+end
+
 local function run_profile(profile, print)
   print = print or function() end
   print("running profile '"..profile.name.."'")
@@ -222,5 +281,9 @@ local function run_profile(profile, print)
 end
 
 return {
+  new_profile = new_profile,
+  include = include,
+  exclude = exclude,
+  get_all_optimizations = get_all_optimizations,
   run_profile = run_profile,
 }
