@@ -22,6 +22,7 @@ local function new_profile(params)
     incremental = params.incremental == nil and true or params.incremental,
     inject_scripts = params.inject_scripts or {},
     optimizations = params.optimizations or {},
+    error_message_count = params.error_message_count or 8,
     measure_memory = params.measure_memory or false,
     root_dir = params.root_dir,
     file_collection_defs = {},
@@ -41,6 +42,7 @@ local function include(params)
     phobos_extension = params.phobos_extension or params.profile.phobos_extension,
     lua_extension = params.lua_extension or params.profile.lua_extension,
     use_load = params.use_load or params.profile.use_load,
+    error_message_count = params.error_message_count or params.profile.error_message_count,
     inject_scripts = params.inject_scripts or params.profile.inject_scripts,
   }
 end
@@ -165,6 +167,7 @@ local function run_profile(profile, print)
               output_filename = output_file,
               source_name = path_def.source_name,
               use_load = path_def.use_load,
+              error_message_count = path_def.error_message_count,
               inject_scripts = get_inject_scripts(path_def.inject_scripts),
             }
           end
@@ -260,6 +263,7 @@ local function run_profile(profile, print)
           use_load = file.use_load,
           inject_scripts = file.inject_scripts,
           optimizations = profile.optimizations,
+          error_message_count = file.error_message_count,
         }
         local result = compile_util.compile(options, context)
         if result then

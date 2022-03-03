@@ -34,8 +34,8 @@ end
 ---@field source_name string @ `?` is a placeholder for `filename`
 ---@field accept_bytecode boolean
 ---@field inject_scripts fun(ast:AstFunctionDef)[]
+---@field error_message_count integer
 ---@field ignore_syntax_errors boolean
----@field no_syntax_error_messages boolean
 ---@field use_load boolean
 ---@field optimizations Optimizations
 
@@ -52,12 +52,10 @@ local function compile(options, context)
       context.syntax_error_count = context.syntax_error_count + #errors
       context.files_with_syntax_error_count = context.files_with_syntax_error_count + 1
       local msg = error_code_util.get_message_for_list(errors, "syntax errors in "
-        ..(options.text and options.text_source or options.filename)
+        ..(options.text and options.text_source or options.filename), options.error_message_count
       )
       if options.ignore_syntax_errors then
-        if not options.no_syntax_error_messages then
-          print(msg)
-        end
+        print(msg)
         return true
       else
         error(msg)

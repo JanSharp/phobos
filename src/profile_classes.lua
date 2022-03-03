@@ -20,7 +20,7 @@
 
 
 -- IMPORTANT: make sure to copy defaults and descriptions to FileCollectionIncludeDef for the fields:
--- phobos_extension, lua_extension, use_load, inject_scripts
+-- phobos_extension, lua_extension, use_load, inject_scripts, error_message_count
 
 ---mandatory fields: `name`, `output_dir`, `temp_dir`
 ---@class NewProfileParams
@@ -66,6 +66,9 @@
 ---@field inject_scripts string[]
 ---**default:** `{}` (so all optimizations set to "false")
 ---@field optimizations Optimizations
+---**default:** `8`\
+---The amount of info/warn/error messages to print per file
+---@field error_message_count integer
 ---**default:** `false`\
 ---Monitors total memory allocated during the entire compilation process at the cost of ~10% longer
 ---compilation times. (Stops incremental GC. Runs full garbage collection whenever it exceeds
@@ -130,6 +133,9 @@
 ---Should `load()` be used in the generated output to load the bytecode
 ---instead of outputting raw bytecode files?
 ---@field use_load boolean
+---**default:** `profile.error_message_count` (it's default is `8`)\
+---The amount of info/warn/error messages to print per file
+---@field error_message_count integer
 ---**default:** `profile.inject_scripts` (it's default is `{}`)\
 ---Filenames of files to run which modify the AST of every compiled file.
 ---The extension of these files is ignored; They will load as bytecode if they are bytecode files,
