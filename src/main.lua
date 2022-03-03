@@ -13,7 +13,7 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
       field = "profiles_files",
       long = "profiles-files",
       short = "p",
-      type = "string",
+      type = "path",
       min_params = 1,
     },
     {
@@ -28,14 +28,13 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
 if not args then return end
 
 local profiles_context = compile_util.new_context()
-for _, profiles_file in ipairs(args.profiles_files) do
+for _, profiles_path in ipairs(args.profiles_files) do
   local main_chunk = assert(load(compile_util.compile({
     source_name = "@?",
-    filename = profiles_file,
+    filename = profiles_path:str(),
     accept_bytecode = true,
   }, profiles_context), nil, "b"))
-  local profiles_file_path = Path.new(profiles_file)
-  phobos_profiles.internal.current_root_dir = profiles_file_path:sub(1, -2):to_fully_qualified():str()
+  phobos_profiles.internal.current_root_dir = profiles_path:sub(1, -2):to_fully_qualified():str()
   -- not sandboxed at all
   main_chunk()
 end
