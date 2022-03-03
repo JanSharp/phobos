@@ -260,9 +260,6 @@ local function run_profile(profile, print)
           use_load = file.use_load,
           inject_scripts = file.inject_scripts,
           optimizations = profile.optimizations,
-
-          ignore_syntax_errors = true,
-          no_syntax_error_messages = true,
         }
         local result = compile_util.compile(options, context)
         if result then
