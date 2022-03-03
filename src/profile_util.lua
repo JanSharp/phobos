@@ -7,6 +7,9 @@ local io_util = require("io_util")
 local compile_util = require("compile_util")
 
 -- TODO: validate input
+-- TODO: copy files to output
+-- TODO: create symbolic links in output
+-- TODO: delete files in output
 
 ---`root_dir` does not have an explicit default when using this function.\
 ---Technically it will be using the current working directory if it's `nil` because of `Path.to_fully_qualified`.

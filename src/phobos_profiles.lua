@@ -41,8 +41,4 @@ function phobos_profiles.get_all_optimizations()
   return profile_util.get_all_optimizations()
 end
 
--- TODO: ignore syntax errors (based on error codes?)
--- TODO: ignore warnings (based on warning codes?)
--- TODO: actually errors, warnings and infos should all be the same thing just with different severities
-
 return phobos_profiles
