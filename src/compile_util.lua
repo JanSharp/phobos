@@ -35,7 +35,6 @@ end
 ---@field accept_bytecode boolean
 ---@field inject_scripts fun(ast:AstFunctionDef)[]
 ---@field error_message_count integer
----@field ignore_syntax_errors boolean
 ---@field use_load boolean
 ---@field optimizations Optimizations
 
@@ -54,13 +53,10 @@ local function compile(options, context)
       local msg = error_code_util.get_message_for_list(errors, "syntax errors in "
         ..(options.text and options.text_source or options.filename), options.error_message_count
       )
-      if options.ignore_syntax_errors then
-        print(msg)
-        return true
-      else
-        error(msg)
-      end
+      print(msg)
+      return false
     end
+    return true
   end
 
   local text = options.text or io_util.read_file(options.filename)
@@ -68,11 +64,11 @@ local function compile(options, context)
     return text
   end
   local ast, parser_errors = parser(text, get_source_name(options))
-  if check_and_print_errors(parser_errors) then
+  if not check_and_print_errors(parser_errors) then
     return nil
   end
   local jump_linker_errors = jump_linker(ast)
-  if check_and_print_errors(jump_linker_errors) then
+  if not check_and_print_errors(jump_linker_errors) then
     return nil
   end
   if options.inject_scripts then
