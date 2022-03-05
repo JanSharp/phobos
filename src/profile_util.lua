@@ -169,13 +169,13 @@ local function process_include(include_def, collection)
   local include_entry
 
   local function include_file(relative_entry_path)
-    local str = relative_entry_path:str()
-    local index = collection.files_lut[str]
+    local source_filename = (root / relative_entry_path):str()
+    local index = collection.files_lut[source_filename]
     if not index then -- doesn't exist yet, so it's not overwriting but defining a new file
       index = collection.next_index
       collection.next_index = collection.next_index + 1
       collection.count = collection.count + 1
-      collection.files_lut[str] = index
+      collection.files_lut[source_filename] = index
     end
     local relative_output_entry_path = collection.is_compilation_collection
       and replace_extension(relative_entry_path, include_def.lua_extension)
@@ -190,7 +190,7 @@ local function process_include(include_def, collection)
       )
     end
     collection.files[index] = {
-      source_filename = str,
+      source_filename = source_filename,
       relative_source_filename = relative_entry_path:str(),
       output_filename = (output_root / relative_output_entry_path):str(),
       source_name = include_def.source_name,
