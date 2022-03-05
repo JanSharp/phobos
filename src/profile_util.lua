@@ -143,13 +143,6 @@ local function new_file_collection(output_root, root_dir, is_compilation_collect
     ---indexed by fully qualified source filenames
     ---@type table<string, integer>
     files_lut = {},
-    output_tree = {
-      ["."] = {
-        mode = "directory",
-        name = output_root,
-        entries = {},
-      },
-    },
     root_dir = root_dir,
     is_compilation_collection = is_compilation_collection,
   }
@@ -172,32 +165,6 @@ local function process_include(include_def, collection)
   end
   local source_root = root
   local output_root = collection.output_root / relative_output_path
-
-  local add_to_output_tree
-  local function get_output_tree_node(path, mode)
-    local node = collection.output_tree[path:str()]
-    if node then
-      util.release_assert(node.mode == mode,
-        "Attempt to output an entry both as a directory and a file: '"..(output_root / path):str().."'."
-      )
-      return node
-    end
-    return add_to_output_tree(path, mode)
-  end
-  function add_to_output_tree(relative_entry_path, mode)
-    local path_in_tree = relative_output_path / relative_entry_path
-    local parent_path = path_in_tree:sub(1, -2)
-    local parent_node = get_output_tree_node(parent_path, "directory")
-    local new_node = {
-      mode = mode,
-      name = relative_entry_path:sub(-1):str(),
-      parent_node = parent_node,
-      entries = mode == "directory" and {} or nil,
-    }
-    parent_node.entries[#parent_node.entries+1] = new_node
-    collection.output_tree[path_in_tree:str()] = new_node
-    return new_node
-  end
 
   local include_entry
 
@@ -222,7 +189,6 @@ local function process_include(include_def, collection)
         (source_path: '"..include_def.source_dir.."', source_name: '"..include_def.source_name.."')"
       )
     end
-    add_to_output_tree(relative_output_entry_path, "file")
     collection.files[index] = {
       source_filename = str,
       relative_source_filename = relative_entry_path:str(),
