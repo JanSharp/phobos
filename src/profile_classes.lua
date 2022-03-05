@@ -1,16 +1,27 @@
 
----@alias FileCollectionDefinition FileCollectionIncludeDef|FileCollectionExcludeDef
+---@alias IncludeOrExcludeInCompilationDef IncludeInCompilationDef|ExcludeInCompilationDef
 
----@class FileCollectionIncludeDef : IncludeParams
+---@class IncludeInCompilationDef : IncludeParams
 ---@field profile 'nil' @ no longer in the table
 ---@field type '"include"'
 
----@class FileCollectionExcludeDef : ExcludeParams
+---@class ExcludeInCompilationDef : ExcludeParams
+---@field profile 'nil' @ no longer in the table
+---@field type '"exclude"'
+
+---@alias IncludeOrExcludeCopyDef IncludeInCopyDef|ExcludeInCopyDef
+
+---@class IncludeInCopyDef : IncludeCopyParams
+---@field profile 'nil' @ no longer in the table
+---@field type '"include"'
+
+---@class ExcludeInCopyDef : ExcludeCopyParams
 ---@field profile 'nil' @ no longer in the table
 ---@field type '"exclude"'
 
 ---@class Profile : NewProfileParams
----@field file_collection_defs FileCollectionDefinition[]
+---@field include_exclude_definitions IncludeOrExcludeInCompilationDef[]
+---@field include_exclude_copy_definitions IncludeOrExcludeCopyDef[]
 
 ---@class Optimizations
 ---@field fold_const boolean
@@ -19,7 +30,7 @@
 
 
 
--- IMPORTANT: make sure to copy defaults and descriptions to FileCollectionIncludeDef for the fields:
+-- IMPORTANT: make sure to copy defaults and descriptions to IncludeInCompilationDef for the fields:
 -- phobos_extension, lua_extension, use_load, inject_scripts, error_message_count
 
 ---mandatory fields: `name`, `output_dir`, `temp_dir`
@@ -155,9 +166,9 @@
 ---
 ---If this is a relative path it will be relative to the
 ---**directory the build profile script entrypoint is in**.
----@field path string
+---@field source_path string
 ---**default:** `1/0` (infinite)\
----Does nothing if `path` is a file.\
+---Does nothing if `source_path` is a file.\
 ---How many directories and sub directories deep it should exclude.\
 ---`0` means literally none, `1` means just the given directory, `2` means this directory
 ---and all it's sub directories, but not sub directories in sub directories, and so on.
@@ -165,7 +176,7 @@
 ---**default:** `""` (matches everything)\
 ---Only files matching this Lua pattern will be excluded.\
 ---The paths matched against this pattern will...
----- be relative to `path`
+---- be relative to `source_path`
 ---- have a leading `/` for convenience (so you can use `/` as an anchor for "the start of any entry")
 ---- use `/` as separators
 ---- include the file extension.
@@ -180,3 +191,15 @@
 ---For more details refer to the
 ---[Lua manual for string patterns](http://www.lua.org/manual/5.2/manual.html#6.4.1).
 ---@field filename_pattern string
+
+
+
+---@class IncludeCopyParams
+---@field profile Profile
+---@field source_path string
+---@field output_path string
+
+---@class ExcludeCopyParams
+---@field profile Profile
+---@field source_path string
+---@field output_path string
