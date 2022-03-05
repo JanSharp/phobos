@@ -3,6 +3,7 @@
 local lfs = require("lfs")
 local Path = require("lib.LuaPath.path")
 Path.use_forward_slash_as_main_separator_on_windows()
+local util = require("util")
 local io_util = require("io_util")
 local compile_util = require("compile_util")
 
@@ -129,8 +130,9 @@ local function get_inject_scripts(inject_scripts, cache)
   return result
 end
 
-local function new_file_collection(output_root, root_dir)
+local function new_file_collection(output_root, root_dir, is_compilation_collection)
   return {
+    ---fully qualified and normalized
     output_root = output_root,
     count = 0,
     next_index = 1,
@@ -141,65 +143,125 @@ local function new_file_collection(output_root, root_dir)
     ---indexed by fully qualified source filenames
     ---@type table<string, integer>
     files_lut = {},
+    output_tree = {
+      ["."] = {
+        mode = "directory",
+        name = output_root,
+        entries = {},
+      },
+    },
     root_dir = root_dir,
+    is_compilation_collection = is_compilation_collection,
   }
+end
+
+local function replace_extension(path, extension)
+  return path:sub(1, -2) / (path:filename()..extension)
 end
 
 local function process_include(include_def, collection)
   local root = Path.new(include_def.source_dir):to_fully_qualified(collection.root_dir):normalize()
-  local output_path = Path.new(include_def.output_dir):normalize()
-  if output_path:is_absolute() then
-    error("'output_dir' has to be a relative path (output_dir: '"..include_def.output_dir.."')")
+  local relative_output_path = Path.new(include_def.output_dir):normalize()
+  if relative_output_path:is_absolute() then
+    util.abort("'output_dir' has to be a relative path (output_dir: '"..include_def.output_dir.."')")
   end
-  if output_path.entries[1] == ".." then
-    error("Attempt to output files outside of the output directory. \z
-      (output_dir: '"..include_def.output_dir.."')"
+  if relative_output_path.entries[1] == ".." then
+    util.abort("Attempt to output files outside of the output directory. \z
+      (output_dir: '"..include_def.output_dir.."', normalized: '"..relative_output_path:str().."')"
     )
   end
-  local function include_dir(path, depth)
+  local source_root = root
+  local output_root = collection.output_root / relative_output_path
+
+  local add_to_output_tree
+  local function get_output_tree_node(path, mode)
+    local node = collection.output_tree[path:str()]
+    if node then
+      util.release_assert(node.mode == mode,
+        "Attempt to output an entry both as a directory and a file: '"..(output_root / path):str().."'."
+      )
+      return node
+    end
+    return add_to_output_tree(path, mode)
+  end
+  function add_to_output_tree(relative_entry_path, mode)
+    local path_in_tree = relative_output_path / relative_entry_path
+    local parent_path = path_in_tree:sub(1, -2)
+    local parent_node = get_output_tree_node(parent_path, "directory")
+    local new_node = {
+      mode = mode,
+      name = relative_entry_path:sub(-1):str(),
+      parent_node = parent_node,
+      entries = mode == "directory" and {} or nil,
+    }
+    parent_node.entries[#parent_node.entries+1] = new_node
+    collection.output_tree[path_in_tree:str()] = new_node
+    return new_node
+  end
+
+  local include_entry
+
+  local function include_file(relative_entry_path)
+    local str = relative_entry_path:str()
+    local index = collection.files_lut[str]
+    if not index then -- doesn't exist yet, so it's not overwriting but defining a new file
+      index = collection.next_index
+      collection.next_index = collection.next_index + 1
+      collection.count = collection.count + 1
+      collection.files_lut[str] = index
+    end
+    local relative_output_entry_path = collection.is_compilation_collection
+      and replace_extension(relative_entry_path, include_def.lua_extension)
+      or relative_entry_path
+    if collection.is_compilation_collection
+      and not relative_output_entry_path.entries[1]
+      and include_def.source_name:find("?", 1, true)
+    then
+      util.abort("When including a single file for compilation the 'source_name' must not contain '?'. \z
+        It must instead define the entire source_name - it is not a pattern. \z
+        (source_path: '"..include_def.source_dir.."', source_name: '"..include_def.source_name.."')"
+      )
+    end
+    add_to_output_tree(relative_output_entry_path, "file")
+    collection.files[index] = {
+      source_filename = str,
+      relative_source_filename = relative_entry_path:str(),
+      output_filename = (output_root / relative_output_entry_path):str(),
+      source_name = include_def.source_name,
+      use_load = include_def.use_load,
+      error_message_count = include_def.error_message_count,
+      inject_scripts = include_def.inject_scripts,
+    }
+  end
+
+  local function include_dir(relative_entry_path, depth)
     if depth > include_def.recursion_depth then return end
-    for entry in lfs.dir((root / path):str()) do
-      if entry == "." or entry == ".." then goto continue end
-      local entry_path = root / path / entry
-      local mode = assert(entry_path:attr("mode"))
-      if mode == "directory" then
-        include_dir(path / entry, depth + 1)
-      elseif mode == "file" then
-        local included = entry_path:extension() == include_def.phobos_extension
-        -- "" matches everything, don't waste time processing all of this
-        if include_def.filename_pattern ~= "" and included then
-          included = ("/"..(path / entry):str()):find(include_def.filename_pattern)
-        end
-        if included then
-          local str = entry_path:str()
-          local index = collection.files_lut[str]
-          if not index then
-            index = collection.next_index
-            collection.next_index = collection.next_index + 1
-            collection.count = collection.count + 1
-            collection.files_lut[str] = index
-          end
-          entry = Path.new(entry)
-          local output_entry = entry:sub(1, -2) / (entry:filename()..include_def.lua_extension)
-          local output_file = (collection.output_root / output_path / path / output_entry):str()
-          collection.files[index] = {
-            source_filename = str,
-            relative_source_filename = (path / entry):str(),
-            output_filename = output_file,
-            source_name = include_def.source_name,
-            use_load = include_def.use_load,
-            error_message_count = include_def.error_message_count,
-            inject_scripts = include_def.inject_scripts,
-          }
-        end
+    for entry in lfs.dir((source_root / relative_entry_path):str()) do
+      if entry ~= "." and entry ~= ".." then
+        include_entry(relative_entry_path / entry, depth)
       end
-      ::continue::
     end
   end
-  if not assert(root:attr("mode")) == "directory" then
-    error("Including anything but directories is not supported. (source_dir: '"..root:str().."')")
+
+  function include_entry(relative_entry_path, depth)
+    local mode = util.release_assert((source_root / relative_entry_path):attr("mode"))
+    if mode == "directory" then
+      include_dir(relative_entry_path, depth + 1)
+    elseif mode == "file" then
+      -- phobos_extension is only used for compilation includes
+      local included = not collection.is_compilation_collection
+        or relative_entry_path:extension() == include_def.phobos_extension
+      -- "" matches everything, don't waste time processing all of this
+      if include_def.filename_pattern ~= "" and included then
+        included = ("/"..relative_entry_path:str()):find(include_def.filename_pattern)
+      end
+      if included then
+        include_file(relative_entry_path)
+      end
+    end
   end
-  include_dir(Path.new(), 1)
+
+  include_entry(Path.new(), 1)
 end
 
 local function process_exclude(path_def, collection)
@@ -263,7 +325,7 @@ local function run_profile(profile, print)
   end
 
   local output_root = Path.new(profile.output_dir):to_fully_qualified(profile.root_dir):normalize()
-  local compilation_file_collection = new_file_collection(output_root, profile.root_dir)
+  local compilation_file_collection = new_file_collection(output_root, profile.root_dir, true)
 
   for _, include_or_exclude_def in ipairs(profile.include_exclude_definitions) do
     if include_or_exclude_def.type == "include" then

@@ -50,9 +50,34 @@ local function invert(t)
   return tt
 end
 
+local function abort(message)
+  if os then -- factorio doesn't have `os`
+    if message then
+      print(message)
+    end
+    os.exit(false)
+  else
+    error(message)
+  end
+end
+
+local function debug_assert(value, message)
+  return assert(value, message)
+end
+
+local function release_assert(value, message)
+  if not value then
+    abort(message or "Assertion failed!")
+  end
+  return value
+end
+
 return {
   number_to_floating_byte = number_to_floating_byte,
   floating_byte_to_number = floating_byte_to_number,
   invert = invert,
   clear_table = clear_table,
+  abort = abort,
+  debug_assert = debug_assert,
+  release_assert = release_assert,
 }
