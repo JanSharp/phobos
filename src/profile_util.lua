@@ -231,39 +231,41 @@ local function process_include(include_def, collection)
 end
 
 local function process_exclude(path_def, collection)
-  local root = Path.new(path_def.source_path):to_fully_qualified(collection.root_dir):normalize()
-  local function exclude_file(path)
-    local index = collection.files_lut[path:str()]
+  local exclude_entry
+
+  local function exclude_file(entry_path)
+    local index = collection.files_lut[entry_path:str()]
     if index then
-      collection.files_lut[path:str()] = nil
+      collection.files_lut[entry_path:str()] = nil
       collection.files[index] = nil -- leaves hole
       collection.count = collection.count - 1
     end
   end
-  local function exclude_dir(path, depth)
+
+  local function exclude_dir(entry_path, depth)
     if depth > path_def.recursion_depth then return end
-    for entry in lfs.dir((root / path):str()) do
-      if entry == "." or entry == ".." then goto continue end
-      local entry_path = path / entry
-      local mode = assert((root / entry_path):attr("mode"))
-      if mode == "directory" then
-        exclude_dir(entry_path, depth + 1)
-      elseif mode == "file" then
-        if path_def.filename_pattern == ""
-          or ("/"..entry_path:str()):find(path_def.filename_pattern)
-        then
-          exclude_file(root / entry_path)
-        end
+    for entry in lfs.dir(entry_path:str()) do
+      if entry ~= "." or entry ~= ".." then
+        exclude_entry(entry_path / entry)
       end
-      ::continue::
     end
   end
-  local mode = assert(root:attr("mode"))
-  if mode == "directory" then
-    exclude_dir(Path.new(), 1)
-  elseif mode == "file" then
-    exclude_file(root)
+
+  function exclude_entry(entry_path, depth)
+    local mode = util.release_assert(entry_path:attr("mode"))
+    if mode == "directory" then
+      exclude_dir(entry_path, depth + 1)
+    elseif mode == "file" then
+      -- filename_pattern "" matches everything => should exclude
+      if path_def.filename_pattern == ""
+        or ("/"..entry_path:str()):find(path_def.filename_pattern)
+      then
+        exclude_file(entry_path)
+      end
+    end
   end
+
+  exclude_entry(Path.new(path_def.source_path):to_fully_qualified(collection.root_dir):normalize())
 end
 
 local function should_compile(file, incremental)
