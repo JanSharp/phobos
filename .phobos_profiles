@@ -28,9 +28,9 @@ local function standalone_profile(name, clean, optimizations)
 
   profiles.include{
     profile = profile,
-    source_dir = "src",
+    source_path = "src",
     source_name = "@src/?",
-    output_dir = ".",
+    output_path = ".",
   }
 
   for _, path in ipairs(factorio_specific_paths) do
@@ -53,9 +53,9 @@ local function factorio_profile(name, clean, optimizations)
 
   profiles.include{
     profile = profile,
-    source_dir = "src",
+    source_path = "src",
     source_name = "@src/?",
-    output_dir = ".",
+    output_path = ".",
   }
 
   for _, path in ipairs(standalone_specific_paths) do

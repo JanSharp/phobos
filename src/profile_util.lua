@@ -36,8 +36,8 @@ end
 local function include(params)
   params.profile.include_exclude_definitions[#params.profile.include_exclude_definitions+1] = {
     type = "include",
-    source_dir = params.source_dir,
-    output_dir = params.output_dir,
+    source_path = params.source_path,
+    output_path = params.output_path,
     recursion_depth = params.recursion_depth or (1/0),
     filename_pattern = params.filename_pattern or "",
     source_name = params.source_name,
@@ -73,7 +73,6 @@ local function exclude_copy(params)
   params.profile.include_exclude_copy_definitions[#params.profile.include_exclude_copy_definitions+1] = {
     type = "include",
     source_path = params.source_path,
-    output_path = params.output_path,
   }
 end
 
@@ -153,14 +152,14 @@ local function replace_extension(path, extension)
 end
 
 local function process_include(include_def, collection)
-  local root = Path.new(include_def.source_dir):to_fully_qualified(collection.root_dir):normalize()
-  local relative_output_path = Path.new(include_def.output_dir):normalize()
+  local root = Path.new(include_def.source_path):to_fully_qualified(collection.root_dir):normalize()
+  local relative_output_path = Path.new(include_def.output_path):normalize()
   if relative_output_path:is_absolute() then
-    util.abort("'output_dir' has to be a relative path (output_dir: '"..include_def.output_dir.."')")
+    util.abort("'output_path' has to be a relative path (output_path: '"..include_def.output_path.."')")
   end
   if relative_output_path.entries[1] == ".." then
     util.abort("Attempt to output files outside of the output directory. \z
-      (output_dir: '"..include_def.output_dir.."', normalized: '"..relative_output_path:str().."')"
+      (output_path: '"..include_def.output_path.."', normalized: '"..relative_output_path:str().."')"
     )
   end
   local source_root = root
@@ -186,7 +185,7 @@ local function process_include(include_def, collection)
     then
       util.abort("When including a single file for compilation the 'source_name' must not contain '?'. \z
         It must instead define the entire source_name - it is not a pattern. \z
-        (source_path: '"..include_def.source_dir.."', source_name: '"..include_def.source_name.."')"
+        (source_path: '"..include_def.source_path.."', source_name: '"..include_def.source_name.."')"
       )
     end
     collection.files[index] = {
