@@ -12,6 +12,12 @@ function phobos_profiles.include(params) end
 ---@param params ExcludeParams
 function phobos_profiles.exclude(params) end
 
+---@param params IncludeCopyParams
+function phobos_profiles.include_copy(params) end
+
+---@param params ExcludeCopyParams
+function phobos_profiles.exclude_copy(params) end
+
 ---get the directory which is the current default for `profile.root_dir`.\
 ---it is the the directory the build profile script (entrypoint) is in.\
 ---using `require()` or some other method to run other files does not change this directory.\

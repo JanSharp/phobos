@@ -39,6 +39,19 @@ local function standalone_profile(name, clean, optimizations)
       source_path = "src/"..path..phobos_extension,
     }
   end
+
+  -- HACK: a quick test for now
+  for _, to_copy in ipairs{
+    {"bin/linux", "bin"},
+    {"launch-scritps/phobos", "phobos"},
+  }
+  do
+    profiles.include_copy{
+      profile = profile,
+      source_path = to_copy[1],
+      output_path = to_copy[2],
+    }
+  end
 end
 
 local function factorio_profile(name, clean, optimizations)

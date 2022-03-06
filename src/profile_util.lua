@@ -8,6 +8,7 @@ local io_util = require("io_util")
 local compile_util = require("compile_util")
 
 -- TODO: validate input
+-- TODO: ensure build scripts don't attempt to output to the same path twice
 
 ---`root_dir` does not have an explicit default when using this function.\
 ---Technically it will be using the current working directory if it's `nil` because of `Path.to_fully_qualified`.
@@ -65,6 +66,8 @@ local function include_copy(params)
     type = "include",
     source_path = params.source_path,
     output_path = params.output_path,
+    recursion_depth = params.recursion_depth or (1/0),
+    filename_pattern = params.filename_pattern or "",
   }
 end
 
@@ -73,6 +76,9 @@ local function exclude_copy(params)
   params.profile.include_exclude_copy_definitions[#params.profile.include_exclude_copy_definitions+1] = {
     type = "include",
     source_path = params.source_path,
+    recursion_depth = params.recursion_depth or (1/0),
+    filename_pattern = params.filename_pattern or "",
+    pop = params.pop,
   }
 end
 
@@ -137,7 +143,7 @@ local function new_file_collection(output_root, root_dir, is_compilation_collect
     next_index = 1,
     -- consider these to be opposites of each other, linking back and forth
     ---it's not an array because it can have holes
-    ---@type table<integer, table>
+    ---@type table<integer, table|table[]>
     files = {},
     ---indexed by fully qualified source filenames
     ---@type table<string, integer>
@@ -152,6 +158,7 @@ local function replace_extension(path, extension)
 end
 
 local function process_include(include_def, collection)
+  local is_compilation_collection = collection.is_compilation_collection
   local root = Path.new(include_def.source_path):to_fully_qualified(collection.root_dir):normalize()
   local relative_output_path = Path.new(include_def.output_path):normalize()
   if relative_output_path:is_absolute() then
@@ -170,16 +177,24 @@ local function process_include(include_def, collection)
   local function include_file(relative_entry_path)
     local source_filename = (root / relative_entry_path):str()
     local index = collection.files_lut[source_filename]
+    if not is_compilation_collection or not index then
+      -- Only increment count if this is not overwriting an already included file.
+      -- It is overwriting if it is a compilation collection and the source file was already added
+      -- the other case is handled near the end of the function
+      collection.count = collection.count + 1
+    end
     if not index then -- doesn't exist yet, so it's not overwriting but defining a new file
       index = collection.next_index
       collection.next_index = collection.next_index + 1
-      collection.count = collection.count + 1
       collection.files_lut[source_filename] = index
+      if not is_compilation_collection then
+        collection.files[index] = {} -- new array
+      end
     end
-    local relative_output_entry_path = collection.is_compilation_collection
+    local relative_output_entry_path = is_compilation_collection
       and replace_extension(relative_entry_path, include_def.lua_extension)
       or relative_entry_path
-    if collection.is_compilation_collection
+    if is_compilation_collection
       and not relative_output_entry_path.entries[1]
       and include_def.source_name:find("?", 1, true)
     then
@@ -188,15 +203,33 @@ local function process_include(include_def, collection)
         (source_path: '"..include_def.source_path.."', source_name: '"..include_def.source_name.."')"
       )
     end
-    collection.files[index] = {
-      source_filename = source_filename,
-      relative_source_filename = relative_entry_path:str(),
-      output_filename = (output_root / relative_output_entry_path):str(),
-      source_name = include_def.source_name,
-      use_load = include_def.use_load,
-      error_message_count = include_def.error_message_count,
-      inject_scripts = include_def.inject_scripts,
-    }
+    if is_compilation_collection then
+      -- not an array of files because compilation collections disallow compiling the same file twice anyway
+      collection.files[index] = {
+        source_filename = source_filename,
+        relative_source_filename = relative_entry_path:str(),
+        output_filename = (output_root / relative_output_entry_path):str(),
+        source_name = include_def.source_name,
+        use_load = include_def.use_load,
+        error_message_count = include_def.error_message_count,
+        inject_scripts = include_def.inject_scripts,
+      }
+    else
+      local files = collection.files[index]
+      local output_filename = (output_root / relative_output_entry_path):str()
+      -- if the source an output filename combination already then exists just ignore this one
+      for _, file in ipairs(files) do
+        if file.source_filename == source_filename and file.output_filename == output_filename then
+          collection.count = collection.count - 1
+          goto ignore
+        end
+      end
+      files[#files+1] = {
+        source_filename = source_filename,
+        output_filename = output_filename,
+      }
+      ::ignore::
+    end
   end
 
   local function include_dir(relative_entry_path, depth)
@@ -209,16 +242,17 @@ local function process_include(include_def, collection)
   end
 
   function include_entry(relative_entry_path, depth)
-    local mode = util.release_assert((source_root / relative_entry_path):attr("mode"))
+    local source_rooted_entry_path = source_root / relative_entry_path
+    local mode = util.release_assert(source_rooted_entry_path:attr("mode"))
     if mode == "directory" then
       include_dir(relative_entry_path, depth + 1)
     elseif mode == "file" then
       -- phobos_extension is only used for compilation includes
-      local included = not collection.is_compilation_collection
-        or relative_entry_path:extension() == include_def.phobos_extension
+      local included = not is_compilation_collection
+        or source_rooted_entry_path:extension() == include_def.phobos_extension
       -- "" matches everything, don't waste time processing all of this
       if include_def.filename_pattern ~= "" and included then
-        included = ("/"..relative_entry_path:str()):find(include_def.filename_pattern)
+        included = ("/"..source_rooted_entry_path:str()):find(include_def.filename_pattern)
       end
       if included then
         include_file(relative_entry_path)
@@ -235,9 +269,22 @@ local function process_exclude(path_def, collection)
   local function exclude_file(entry_path)
     local index = collection.files_lut[entry_path:str()]
     if index then
-      collection.files_lut[entry_path:str()] = nil
-      collection.files[index] = nil -- leaves hole
-      collection.count = collection.count - 1
+      if collection.is_compilation_collection then
+        collection.files_lut[entry_path:str()] = nil
+        collection.files[index] = nil -- leaves hole
+        collection.count = collection.count - 1
+      else
+        local files = collection.files[index]
+        local length = #files
+        if length > 1 and path_def.pop then
+          files[length] = nil
+          collection.count = collection.count - 1
+        else
+          collection.files_lut[entry_path:str()] = nil
+          collection.files[index] = nil -- leaves hole
+          collection.count = collection.count - length
+        end
+      end
     end
   end
 
@@ -267,7 +314,7 @@ local function process_exclude(path_def, collection)
   exclude_entry(Path.new(path_def.source_path):to_fully_qualified(collection.root_dir):normalize())
 end
 
-local function should_compile(file, incremental)
+local function should_update(file, incremental)
   if not incremental then
     return true
   end
@@ -278,6 +325,18 @@ local function should_compile(file, incremental)
   else
     -- output doesn't exist, so compile it
     return true
+  end
+end
+
+local function process_include_exclude_definitions(defs, file_collection)
+  for _, include_or_exclude_def in ipairs(defs) do
+    if include_or_exclude_def.type == "include" then
+      process_include(include_or_exclude_def, file_collection)
+    elseif include_or_exclude_def.type == "exclude" then
+      process_exclude(include_or_exclude_def, file_collection)
+    else
+      error("Impossible path definition type '"..(include_or_exclude_def.type or "<nil>").."'.")
+    end
   end
 end
 
@@ -293,16 +352,10 @@ local function run_profile(profile, print)
 
   local output_root = Path.new(profile.output_dir):to_fully_qualified(profile.root_dir):normalize()
   local compilation_file_collection = new_file_collection(output_root, profile.root_dir, true)
+  local copy_file_collection = new_file_collection(output_root, profile.root_dir)
 
-  for _, include_or_exclude_def in ipairs(profile.include_exclude_definitions) do
-    if include_or_exclude_def.type == "include" then
-      process_include(include_or_exclude_def, compilation_file_collection)
-    elseif include_or_exclude_def.type == "exclude" then
-      process_exclude(include_or_exclude_def, compilation_file_collection)
-    else
-      error("Impossible path definition type '"..(include_or_exclude_def.type or "<nil>").."'.")
-    end
-  end
+  process_include_exclude_definitions(profile.include_exclude_definitions, compilation_file_collection)
+  process_include_exclude_definitions(profile.include_exclude_copy_definitions, copy_file_collection)
 
   print("compiling "..compilation_file_collection.count.." files")
 
@@ -310,7 +363,8 @@ local function run_profile(profile, print)
   local context = compile_util.new_context()
   local c = 0
   for i = 1, compilation_file_collection.next_index - 1 do
-    if compilation_file_collection.files[i] then
+    local file = compilation_file_collection.files[i]
+    if file then
       if profile.measure_memory then
         local prev_gc_count = collectgarbage("count")
         if prev_gc_count > 4 * 1000 * 1000 then
@@ -320,8 +374,7 @@ local function run_profile(profile, print)
       end
 
       c = c + 1
-      local file = compilation_file_collection.files[i]
-      if should_compile(file, profile.incremental) then
+      if should_update(file, profile.incremental) then
         print("["..c.."/"..compilation_file_collection.count.."] "..file.source_filename)
         local result = compile_util.compile({
           source_name = file.source_name,
@@ -334,6 +387,27 @@ local function run_profile(profile, print)
         }, context)
         if result then
           io_util.write_file(file.output_filename, result)
+        end
+      end
+    end
+  end
+
+  print("copying "..copy_file_collection.count.." files")
+  c = 0
+  for i = 1, copy_file_collection.next_index - 1 do
+    local files = copy_file_collection.files[i]
+    if files then
+      for _, file in ipairs(files) do
+        c = c + 1
+        if should_update(file, profile.incremental) then
+          print("["..c.."/"..copy_file_collection.count.."] "..file.source_filename)
+          io_util.copy(file.source_filename, file.output_filename)
+          -- TODO: uhh, executable flags? It's really just that I want support for them,
+          -- because I need it for phobos, and don't want to put it in the build profile itself
+          -- as a post build function calling os.execute or something
+          -- then again, optimize for the most common case, make uncommon cases possible to handle...
+          -- I know, I know, I should probably just deal with it in the build profile for phobos specifically
+          -- bit I'm not sure yet
         end
       end
     end

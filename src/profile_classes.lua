@@ -92,6 +92,10 @@
 
 
 
+-- You may notice that for the "include and exclude specific" bold texts the `:` is not bold.
+-- That is because the sumneko.lua markdown renderer, which might also just be vscode's renderer,
+-- just doesn't want to actually render it bold, but renders literal `**` instead.
+
 ---@class IncludeAndExcludeBase
 ---**mandatory**\
 ---The profile to add this definition to.
@@ -99,7 +103,7 @@
 ---**mandatory**\
 ---Can be a path to a file or directory.
 ---
----**`include()` specific:**\
+---**`include()` specific**:\
 ---If this is a file its extension must be the same as `lua_extension`.\
 ---
 ---If this is a relative path it will be relative to the
@@ -119,10 +123,10 @@
 ---- use `/` as separators
 ---- include the file extension.
 ---
----**`include()` specific:**\
+---**`include()` specific**:\
 ---Filtering for `phobos_extension` happens before this pattern gets applied.
 ---
----**`exclude()` and `exclude_copy()` specific:**\
+---**`exclude()` and `exclude_copy()` specific**:\
 ---Note that excluding a file that isn't included is not a problem, it simply does nothing.
 ---
 ---If you're used to "file globs" here are respective equivalents:
@@ -133,6 +137,8 @@
 ---For more details refer to the
 ---[Lua manual for string patterns](http://www.lua.org/manual/5.2/manual.html#6.4.1).
 ---@field filename_pattern string
+
+
 
 ---@class IncludeParams : IncludeAndExcludeBase
 ---**mandatory**\
@@ -192,3 +198,7 @@
 ---@field output_path string
 
 ---@class ExcludeCopyParams : IncludeAndExcludeBase
+---**default:** `false`\
+---Should this only exclude the latest included file when a given file was
+---included multiple times with different output paths
+---@field pop boolean

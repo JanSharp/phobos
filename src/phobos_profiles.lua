@@ -33,6 +33,14 @@ function phobos_profiles.exclude(params)
   profile_util.exclude(params)
 end
 
+function phobos_profiles.include_copy(params)
+  profile_util.include_copy(params)
+end
+
+function phobos_profiles.exclude_copy(params)
+  profile_util.exclude_copy(params)
+end
+
 function phobos_profiles.get_current_root_dir()
   return phobos_profiles.internal.current_root_dir
 end
