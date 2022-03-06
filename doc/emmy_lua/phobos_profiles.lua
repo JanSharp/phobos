@@ -3,7 +3,7 @@
 local phobos_profiles = {}
 
 ---@param params NewProfileParams
----@return Profile
+---@return PhobosProfile
 function phobos_profiles.add_profile(params) end
 
 ---@param params IncludeParams

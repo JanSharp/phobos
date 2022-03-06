@@ -10,9 +10,19 @@ local compile_util = require("compile_util")
 -- TODO: validate input
 -- TODO: ensure build scripts don't attempt to output to the same path twice
 
+---@class NewProfileInternalParams : NewProfileParams
+---**default:** `true`\
+---Should only files with a newer modification time get compiled or copied?
+---@field incremental boolean
+
+---@class PhobosProfileInternal : PhobosProfile
+---**default:** `true`\
+---Should only files with a newer modification time get compiled or copied?
+---@field incremental boolean
+
 ---`root_dir` does not have an explicit default when using this function.\
 ---Technically it will be using the current working directory if it's `nil` because of `Path.to_fully_qualified`.
----@param params NewProfileParams
+---@param params NewProfileInternalParams
 local function new_profile(params)
   local profile = {
     name = params.name,
@@ -340,6 +350,8 @@ local function process_include_exclude_definitions(defs, file_collection)
   end
 end
 
+---@param profile PhobosProfileInternal
+---@param print? fun(message: string)
 local function run_profile(profile, print)
   print = print or function() end
   print("running profile '"..profile.name.."'")

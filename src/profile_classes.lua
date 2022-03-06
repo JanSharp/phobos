@@ -19,7 +19,7 @@
 ---@field profile 'nil' @ no longer in the table
 ---@field type '"exclude"'
 
----@class Profile : NewProfileParams
+---@class PhobosProfile : NewProfileParams
 ---@field include_exclude_definitions IncludeOrExcludeInCompilationDef[]
 ---@field include_exclude_copy_definitions IncludeOrExcludeCopyDef[]
 
@@ -60,9 +60,6 @@
 ---Should `load()` be used in the generated output to load the bytecode
 ---instead of outputting raw bytecode files?
 ---@field use_load boolean
----**default:** `true`\
----Should only files with a newer modification time get compiled?
----@field incremental boolean
 ---**default:** `{}`\
 ---Filenames of files to run which modify the AST of every compiled file.
 ---The extension of these files is ignored; They will load as bytecode if they are bytecode files,
@@ -99,7 +96,7 @@
 ---@class IncludeAndExcludeBase
 ---**mandatory**\
 ---The profile to add this definition to.
----@field profile Profile
+---@field profile PhobosProfile
 ---**mandatory**\
 ---Can be a path to a file or directory.
 ---

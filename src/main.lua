@@ -36,6 +36,15 @@ local args_config = {
       description = "List all registered profile names.",
       flag = true,
     },
+    -- the clean/incremental option is not part of the profiles themselves because
+    -- 99% of the time you want to uses incremental builds, and if you ever need to use
+    -- a clean build you very most likely just want to run it once and then use incremental again
+    {
+      field = "clean",
+      long = "clean",
+      description = "Perform clean builds instead of incremental.",
+      flag = true,
+    },
   },
 }
 
@@ -89,6 +98,7 @@ for _, name in ipairs(args.profile_names) do
     print("No such profile '"..name.."'. "..get_list_of_all_profiles())
     os.exit(false)
   end
+  profile.incremental = not args.clean
   profile_util.run_profile(profile, print)
 end
 
