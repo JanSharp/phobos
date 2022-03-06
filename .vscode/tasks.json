@@ -8,7 +8,7 @@
       "label": "Build Debug",
       "group": "build",
       // if launching it like this doesn't work on all platforms, let me know
-      "command": "launch-scritps/phobos_dev",
+      "command": "launch_scripts/phobos_dev",
       "linux": {
         "args": [
           "linux", "src", "scripts/build_src.lua",
@@ -37,7 +37,7 @@
       "label": "Build Factorio Mod Debug",
       "group": "build",
       // if launching it like this doesn't work on all platforms, let me know
-      "command": "launch-scritps/phobos_dev",
+      "command": "launch_scripts/phobos_dev",
       "linux": {
         "args": [
           "linux", "src", "scripts/build_src.lua",

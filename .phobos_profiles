@@ -43,7 +43,7 @@ local function standalone_profile(name, clean, optimizations)
   -- HACK: a quick test for now
   for _, to_copy in ipairs{
     {"bin/linux", "bin"},
-    {"launch-scritps/phobos", "phobos"},
+    {"launch_scripts/phobos", "phobos"},
   }
   do
     profiles.include_copy{
