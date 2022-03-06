@@ -49,7 +49,8 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
     end)(),
   },
 })
-if not args then return end
+if not args then os.exit(false) end
+if args.help then return end
 
 local function escape_arg(arg)
   return '"'..arg:gsub("[$`\"\\]", "\\%0")..'"'

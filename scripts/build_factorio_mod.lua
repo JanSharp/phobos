@@ -26,7 +26,8 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
     },
   },
 })
-if not args then return end
+if not args then os.exit(false) end
+if args.help then return end
 
 local output_dir = Path.combine("factorio", args.profile, "phobos")
 

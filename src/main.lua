@@ -48,16 +48,18 @@ local args_config = {
   },
 }
 
-local args = arg_parser.parse_and_print_on_error_or_help({...}, args_config)
-if not args then -- invalid args
-  os.exit(false)
-end
+local help_config = {usage = "phobos [options]"}
+
+local arg_strings = {...}
+local args = arg_parser.parse_and_print_on_error_or_help(arg_strings, args_config, help_config)
+if not args then os.exit(false) end
+if args.help then return end
 
 if args.profile_files == default_profile_files then
   if not default_profile_files[1]:exists() then
     print("No such (default) '.phobos_profiles' file, stop.")
     print() -- empty line, just like the arg parser itself for invalid arg error messages
-    print(arg_parser.get_help_string(args_config))
+    print(arg_parser.get_help_string(args_config, help_config))
     -- since the message above reads like an error message, this should exit as a failure
     os.exit(false)
   end
