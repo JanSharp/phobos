@@ -48,10 +48,13 @@ local args_config = {
   },
 }
 
-local help_config = {usage = "phobos [options]"}
+local help_config = {usage = "phobos [options] [-- {extra args passed to the profile files}]"}
+
+phobos_profiles.internal.main_args_config = args_config
+phobos_profiles.internal.main_help_config = help_config
 
 local arg_strings = {...}
-local args = arg_parser.parse_and_print_on_error_or_help(arg_strings, args_config, help_config)
+local args, last_arg_index = arg_parser.parse_and_print_on_error_or_help(arg_strings, args_config, help_config)
 if not args then os.exit(false) end
 if args.help then return end
 
@@ -72,9 +75,10 @@ for _, profiles_path in ipairs(args.profile_files) do
     filename = profiles_path:str(),
     accept_bytecode = true,
   }, profiles_context), nil, "b"))
+  phobos_profiles.internal.current_profile_file = profiles_path:str()
   phobos_profiles.internal.current_root_dir = profiles_path:sub(1, -2):to_fully_qualified():str()
   -- not sandboxed at all
-  main_chunk()
+  main_chunk(table.unpack(arg_strings, last_arg_index + 1))
 end
 
 ---always returns a full sentence

@@ -1,5 +1,28 @@
 
 local profiles = require("phobos_profiles")
+local util = require("util")
+
+local args = profiles.parse_extra_args({...}, {
+  options = {
+    {
+      field = "platform",
+      long = "platform",
+      short = "p",
+      description = "When omitted no standalone profiles will be added.\n\z
+                     Possible values: 'linux', 'osx' or 'windows'.",
+      type = "string",
+      single_param = true,
+      optional = true,
+    },
+  },
+})
+
+local platform = args.platform
+if platform then
+  util.release_assert(util.invert{"linux", "osx", "windows"}[platform],
+    "Expected 'linux', 'osx' or 'windows', got '"..platform.."' for --platform."
+  )
+end
 
 local factorio_specific_paths = {
   "control",
@@ -15,6 +38,7 @@ local standalone_specific_paths = {
 local phobos_extension = ".lua"
 
 local function standalone_profile(name, optimizations)
+  util.debug_assert(platform)
   local profile = profiles.add_profile{
     name = name,
     output_dir = "out/"..name,
@@ -40,9 +64,10 @@ local function standalone_profile(name, optimizations)
   end
 
   -- HACK: a quick test for now
+  local launch_script_file = "phobos"..(platform == "windows" and ".bat" or "")
   for _, to_copy in ipairs{
-    {"bin/linux", "bin"},
-    {"launch_scripts/phobos", "phobos"},
+    {"bin/"..platform, "bin"},
+    {"launch_scripts/"..launch_script_file, launch_script_file},
   }
   do
     profiles.include_copy{
@@ -78,7 +103,11 @@ local function factorio_profile(name, optimizations)
   end
 end
 
-standalone_profile("debug", nil)
-standalone_profile("release", profiles.get_all_optimizations())
+if platform then
+  standalone_profile("debug", nil)
+  standalone_profile("release", profiles.get_all_optimizations())
+else
+  print("Info: Standalone profiles only get added if the extra arg '--platform' was provided.")
+end
 factorio_profile("debug", nil)
 factorio_profile("release", profiles.get_all_optimizations())
