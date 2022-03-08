@@ -1,0 +1,22 @@
+#!/bin/sh
+
+# https://www.baeldung.com/linux/bash-get-location-within-script
+SCRIPT_PATH="${BASH_SOURCE}"
+while [ -L "${SCRIPT_PATH}" ]; do
+  SCRIPT_DIR="$(cd -P "$(dirname "${SCRIPT_PATH}")" >/dev/null 2>&1 && pwd)"
+  SCRIPT_PATH="$(readlink "${SCRIPT_PATH}")"
+  [[ ${SCRIPT_PATH} != /* ]] && SCRIPT_PATH="${SCRIPT_DIR}/${SCRIPT_PATH}"
+done
+SCRIPT_PATH="$(readlink -f "${SCRIPT_PATH}")"
+SCRIPT_DIR="$(cd -P "$(dirname -- "${SCRIPT_PATH}")" >/dev/null 2>&1 && pwd)"
+
+# install
+
+# if the link already exists, do nothing
+if test -e /usr/local/bin/phobos; then
+  echo "/usr/local/bin/phobos already exists. Run uninstall_phobos first if you wish to overwrite the link."
+else
+  # create link
+  echo "creating symbolic link from /usr/local/bin/phobos to $SCRIPT_DIR/phobos"
+  ln -s "$SCRIPT_DIR/phobos" /usr/local/bin/phobos
+fi

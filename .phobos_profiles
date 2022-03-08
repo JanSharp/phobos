@@ -63,18 +63,22 @@ local function standalone_profile(name, optimizations)
     }
   end
 
-  -- HACK: a quick test for now
-  local launch_script_file = "phobos"..(platform == "windows" and ".bat" or "")
-  for _, to_copy in ipairs{
-    {"bin/"..platform, "bin"},
-    {"launch_scripts/"..launch_script_file, launch_script_file},
-  }
-  do
+  local function copy(source, output)
     profiles.include_copy{
       profile = profile,
-      source_path = to_copy[1],
-      output_path = to_copy[2],
+      source_path = source,
+      output_path = output,
     }
+  end
+
+  copy("bin/"..platform, "bin")
+  local launch_script_file = "phobos"..(platform == "windows" and ".bat" or "")
+  copy("launch_scripts/"..launch_script_file, launch_script_file)
+  if platform == "windows" then
+    -- don't have install and uninstall scripts for windows (yet?)
+  else
+    copy("launch_scripts/install_phobos", "install_phobos")
+    copy("launch_scripts/uninstall_phobos", "uninstall_phobos")
   end
 end
 
