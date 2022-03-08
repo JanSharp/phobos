@@ -2,6 +2,8 @@
 ---@type LFS
 local lfs = require("lfs")
 local Path = require("lib.LuaPath.path")
+local shell_util = require("shell_util")
+local util = require("util")
 
 local function mkdir_recursive(path)
   path = Path.new(path)
@@ -74,14 +76,71 @@ local function write_file(path, contents)
   assert(file:close())
 end
 
+if not os.execute() then
+  util.abort("Phobos requires a shell to be available (by/from the operating system) \z
+    in order to copy files."
+  )
+end
+
+local function execute_copy(command, from_arg, to_arg)
+  local success, exit_code, code = os.execute(command)
+  if not success then
+    util.abort("Failed to copy file from "..from_arg.." to "..to_arg..". There might be an \z
+      error message printed above (to stderr or stdout on non windows, just stderr on windows, \z
+      because stdout is redirected to NUL). Aside from that, here is the exit code: '"
+      ..exit_code.."' and code: '"..code.."' returned by 'os.execute' when executing the command: "
+      ..command
+    )
+  end
+end
+
 local function copy(from, to)
   from = Path.new(from)
   to = Path.new(to)
 
+  -- i'm not even sure if this is needed now that we're using os specific commands,
+  -- but I don't feel like testing it right now.
   mkdir_recursive(to:sub(1, -2))
 
-  local contents = read_file(from)
-  write_file(to, contents)
+  -- have to use \ as the separator on windows because / is only supported by the windows api,
+  -- not by cmd.exe or batch commands
+  local from_arg = shell_util.escape_arg(from:str("\\"))
+  local to_arg = shell_util.escape_arg(to:str("\\"))
+  if Path.is_windows() then
+    ---CSpell:ignore Xcopy
+    -- https://docs.microsoft.com/en-us/windows-server/administration/windows-commands/xcopy
+    -- /q make it quiet, /k copy read only state, /r copy read only files, /h copy hidden files
+    -- /y to overwrite without confirmation
+    -- using /x or /o (see link above for what they do) apparently requires admin rights,
+    -- according to one stack overflow thread I found. But luckily we don't need those to copy
+    -- UNIX file permissions, which is all I was going for.
+    -- >NUL to make it silent, because /q apparently doesn't actually make it quiet
+    execute_copy("Xcopy "..from_arg.." "..to_arg.." /q /k /r /h /y >NUL", from_arg, to_arg)
+    -- xcopy is prompting if the destination is a file or directory, and there is no way to
+    -- tell it beforehand that it's a file from what I can tell/found online. I mean there has
+    -- to be a way, otherwise that makes no sense at all, but like I said, couldn't figure out how.
+
+    -- here's a functional version using 'copy' instead of 'xcopy', but 'copy' does not
+    -- appear to copy UNIX file permissions, which means I can't use it, even though 'copy' is
+    -- made specifically to copy files while 'xcopy' is for files and directories. So be it, i guess.
+    -- https://docs.microsoft.com/en-us/windows-server/administration/windows-commands/copy
+    -- /y to overwrite without confirmation, /b because I want a binary copy... what the heck even
+    -- is an ASCII copy? I don't even want to know.
+    -- >NUL to redirect standard output to make it silent.
+    -- execute_copy("copy /y "..from_arg.." "..to_arg.." /b >NUL", from_arg, to_arg)
+  else
+    ---cSpell:ignore xattr
+    -- -p  same as --preserve=mode,ownership,timestamps
+    --
+    -- --preserve[=ATTR_LIST]
+    --     preserve the specified attributes (default: mode,ownership,timestamps),
+    --     if possible additional attributes: context, links, xattr, all
+    --
+    -- '\' prefix to prevent 'cp' from being resolved as an alias,
+    -- because apparently cp='cp -i' is a common alias,
+    -- but we don't want interactive mode, we want to silently overwrite.
+    execute_copy("\\cp -p "..from_arg.." "..to_arg, from_arg, to_arg)
+  end
 end
 
 local function move(from, to)

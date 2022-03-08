@@ -2,7 +2,7 @@
 ---@type LFS
 local lfs = require("lfs")
 local Path = require("lib.LuaPath.path")
-Path.use_forward_slash_as_main_separator_on_windows()
+Path.set_main_separator("/")
 local util = require("util")
 local io_util = require("io_util")
 local compile_util = require("compile_util")
@@ -414,12 +414,6 @@ local function run_profile(profile, print)
         if should_update(file, profile.incremental) then
           print("["..c.."/"..copy_file_collection.count.."] "..file.source_filename)
           io_util.copy(file.source_filename, file.output_filename)
-          -- TODO: uhh, executable flags? It's really just that I want support for them,
-          -- because I need it for phobos, and don't want to put it in the build profile itself
-          -- as a post build function calling os.execute or something
-          -- then again, optimize for the most common case, make uncommon cases possible to handle...
-          -- I know, I know, I should probably just deal with it in the build profile for phobos specifically
-          -- bit I'm not sure yet
         end
       end
     end

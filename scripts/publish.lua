@@ -2,10 +2,12 @@
 ---@type LFS
 local lfs = require("lfs")
 local Path = require("lib.LuaPath.path")
-Path.use_forward_slash_as_main_separator_on_windows()
+Path.set_main_separator("/")
 local arg_parser = require("lib.LuaArgParser.arg_parser")
 local io_util = require("io_util")
 local changelog_util = require("scripts.changelog_util")
+local shell_util = require("shell_util")
+local escape_arg = shell_util.escape_arg
 
 local skip_able = {
   "skip_ensure_command_availability",
@@ -51,10 +53,6 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
 })
 if not args then os.exit(false) end
 if args.help then return end
-
-local function escape_arg(arg)
-  return '"'..arg:gsub("[$`\"\\]", "\\%0")..'"'
-end
 
 local function run(...)
   local command = table.concat({...}, " ")

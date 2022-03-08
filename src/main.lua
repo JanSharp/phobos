@@ -1,6 +1,6 @@
 
 local Path = require("lib.LuaPath.path")
-Path.use_forward_slash_as_main_separator_on_windows()
+Path.set_main_separator("/")
 local arg_parser = require("lib.LuaArgParser.arg_parser")
 arg_parser.register_type(Path.arg_parser_path_type_def)
 local compile_util = require("compile_util")
