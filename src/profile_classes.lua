@@ -87,6 +87,12 @@
 ---Using `require()` or some other method to run other files does not change this default directory.\
 ---You can get the default directory using `get_current_root_dir()`.
 ---@field root_dir string
+---**Default:** `nil`\
+---A function that is ran before this profile is ran. It runs before absolutely anything happens.
+---@field on_pre_profile_ran function
+---**Default:** `nil`\
+---A function that is ran after this profile is ran. It runs after absolutely everything happened.
+---@field on_post_profile_ran function
 
 
 

@@ -38,6 +38,8 @@ local function new_profile(params)
     error_message_count = params.error_message_count or 8,
     measure_memory = params.measure_memory or false,
     root_dir = params.root_dir,
+    on_pre_profile_ran = params.on_pre_profile_ran,
+    on_post_profile_ran = params.on_post_profile_ran,
     include_exclude_definitions = {},
     include_exclude_copy_definitions = {},
   }
@@ -357,6 +359,11 @@ local function run_profile(profile, print)
   print = print or function() end
   print("running profile '"..profile.name.."'")
 
+  if profile.on_pre_profile_ran then
+    print("running on_pre_profile_ran")
+    profile.on_pre_profile_ran()
+  end
+
   local total_memory_allocated = 0
   if profile.measure_memory then
     collectgarbage("stop")
@@ -426,6 +433,12 @@ local function run_profile(profile, print)
     print("total memory allocated "..(total_memory_allocated / (1000 * 1000)).." giga bytes")
     collectgarbage("restart")
   end
+
+  if profile.on_post_profile_ran then
+    print("running on_post_profile_ran")
+    profile.on_post_profile_ran()
+  end
+
   print("finished profile '"..profile.name.."'")
 end
 
