@@ -4,19 +4,24 @@
 ---@class PhobosProfiles
 local phobos_profiles = {}
 
+---Mandatory fields: `name`, `output_dir`, `temp_dir`.
 ---@param params NewProfileParams
 ---@return PhobosProfile
 function phobos_profiles.add_profile(params) end
 
+---Mandatory fields: `profile`, `source_path`, `source_name`, `output_path`.
 ---@param params IncludeParams
 function phobos_profiles.include(params) end
 
+---Mandatory fields: `profile`, `source_path`.
 ---@param params ExcludeParams
 function phobos_profiles.exclude(params) end
 
+---Mandatory fields: `profile`, `source_path`, `output_path`.
 ---@param params IncludeCopyParams
 function phobos_profiles.include_copy(params) end
 
+---Mandatory fields: `profile`, `source_path`.
 ---@param params ExcludeCopyParams
 function phobos_profiles.exclude_copy(params) end
 
@@ -32,9 +37,9 @@ function phobos_profiles.get_current_root_dir() end
 function phobos_profiles.get_all_optimizations() end
 
 ---Parse the extra args according to a defined config and get the resulting table if the args are valid.
----@param extra_args string[] @ The phobos profiles file gets the extra args passed in as vararg (`...`)
----@param config ArgsConfig @ Uses [LuaArgParser](https://github.com/JanSharp/LuaArgParser). Definitions are currently not validated and will cause crashes
----@return table @ never `nil` and never has the `help` flag set, because the program aborts in those cases
+---@param extra_args string[] @ The phobos profiles file gets the extra args passed in as vararg (`...`), so you would probably want to pass in `{...}`.
+---@param config ArgsConfig @ Uses [LuaArgParser](https://github.com/JanSharp/LuaArgParser). Definitions are currently not validated so invalid ones will cause crashes.
+---@return table @ Never `nil` and never has the `help` flag set, because the program aborts in those cases.
 function phobos_profiles.parse_extra_args(extra_args, config) end
 
 ---Parse the extra args using a custom function.

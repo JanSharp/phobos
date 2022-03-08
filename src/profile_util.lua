@@ -9,6 +9,7 @@ local compile_util = require("compile_util")
 
 -- TODO: validate input
 -- TODO: ensure build scripts don't attempt to output to the same path twice
+-- TODO: incremental build state in temp dir: profile name, source to output file name mapping
 
 ---@class NewProfileInternalParams : NewProfileParams
 ---**default:** `true`\
