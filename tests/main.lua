@@ -39,6 +39,7 @@ assert.set_print_full_data_on_error_default(args.full_output)
 require("test_tokenizer")
 require("test_parser")
 require("test_jump_linker")
+require("test_serialize")
 
 -- TODO: next ones to test:
 -- ast_util
