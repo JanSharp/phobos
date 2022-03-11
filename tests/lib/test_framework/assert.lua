@@ -21,25 +21,15 @@ local function assert(value, msg)
 end
 
 local function equals(expected, got, msg)
-  if got ~= expected then
+  -- also test for nan
+  if got ~= expected and (got == got or expected == expected) then
     error(add_msg("expected "..pretty_print(expected)..", got "..pretty_print(got), msg))
   end
 end
 
 local function not_equals(expected, got, msg)
-  if got == expected then
-    error(add_msg("expected not "..pretty_print(got), msg))
-  end
-end
-
-local function nan(got, msg)
-  if got == got then
-    error(add_msg("expected "..pretty_print(0/0), msg))
-  end
-end
-
-local function not_nan(got, msg)
-  if got ~= got then
+  -- also tests for nan
+  if got == expected or (got ~= got and expected ~= expected) then
     error(add_msg("expected not "..pretty_print(got), msg))
   end
 end
