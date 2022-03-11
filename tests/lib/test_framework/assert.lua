@@ -1,6 +1,6 @@
 
 local deep_compare = require("deep_compare")
-local pretty_print = require("pretty_print")
+local pretty_print = require("pretty_print").pretty_print
 
 local print_full_data_on_error_default = false
 local function set_print_full_data_on_error_default(value)
@@ -18,6 +18,7 @@ local function assert(value, msg)
   if not value then
     error(add_msg("assertion failed", msg))
   end
+  return value
 end
 
 local function equals(expected, got, msg)
@@ -97,12 +98,12 @@ local function contents_equals(expected, got, msg, options)
   end
 end
 
-local function errors(expected_pattern, got_func, msg)
+local function errors(expected_pattern, got_func, msg, plain)
   local success, err = pcall(got_func)
   if success then
     error(add_msg("expected error pattern "..pretty_print(expected_pattern), msg))
   end
-  if not err:find(expected_pattern) then
+  if not err:find(expected_pattern, 1, plain) then
     error(add_msg("expected error pattern "..pretty_print(expected_pattern)..", got error "..pretty_print(err), msg))
   end
 end
@@ -113,8 +114,6 @@ return {
   assert = assert,
   equals = equals,
   not_equals = not_equals,
-  nan = nan,
-  not_nan = not_nan,
   contents_equals = contents_equals,
   do_not_compare_flag = deep_compare.do_not_compare_flag,
   custom_comparator = deep_compare.register_custom_comparator,

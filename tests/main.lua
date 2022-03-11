@@ -40,6 +40,7 @@ require("test_tokenizer")
 require("test_parser")
 require("test_jump_linker")
 require("test_serialize")
+require("test_binary_serializer")
 
 -- TODO: next ones to test:
 -- ast_util

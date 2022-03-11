@@ -50,6 +50,10 @@ local function invert(t)
   return tt
 end
 
+local function debug_abort(message)
+  return error(message)
+end
+
 local function abort(message)
   if os then -- factorio doesn't have `os`
     if message then
@@ -62,10 +66,13 @@ local function abort(message)
 end
 
 local function debug_assert(value, message)
-  return assert(value, message)
+  if not value then
+    debug_abort(message or "Assertion failed!")
+  end
+  return value
 end
 
-local function release_assert(value, message)
+local function assert(value, message)
   if not value then
     abort(message or "Assertion failed!")
   end
@@ -77,7 +84,8 @@ return {
   floating_byte_to_number = floating_byte_to_number,
   invert = invert,
   clear_table = clear_table,
+  debug_abort = debug_abort,
   abort = abort,
   debug_assert = debug_assert,
-  release_assert = release_assert,
+  assert = assert,
 }

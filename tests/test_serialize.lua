@@ -1,8 +1,8 @@
 
-local serialize = require("serialize")
-
 local framework = require("test_framework")
 local assert = require("assert")
+
+local serialize = require("serialize")
 
 do
   local main_scope = framework.scope:new_scope("serialize")

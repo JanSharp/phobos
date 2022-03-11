@@ -41,9 +41,21 @@ local serpent_opts_for_ast = {
   },
 }
 
+local function binary_pretty_printer(value)
+  local out = {'"'}
+  for i = 1, #value, 128 do
+    for j, byte in ipairs{string.byte(value, i, i + 128 - 1)} do
+      out[i + j] = string.format("\\x%02x", byte)
+    end
+  end
+  out[#out+1] = '"'
+  return table.concat(out)
+end
+
 return {
   test_source = test_source,
   append_stat = append_stat,
   wrap_nodes_constructors = wrap_nodes_constructors,
   serpent_opts_for_ast = serpent_opts_for_ast,
+  binary_pretty_printer = binary_pretty_printer,
 }
