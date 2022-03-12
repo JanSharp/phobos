@@ -4,7 +4,6 @@
 -- since those are using Lua bytecode to save and load
 
 local util = require("util")
-local nodes = require("nodes")
 
 local serializer = {}
 serializer.__index = serializer
@@ -41,6 +40,28 @@ function serializer:write_uint16(value)
   ), 2)
 end
 
+local function write_small(self, value, write_big)
+  if value >= 0xff then
+    self:write_raw("\xff", 1)
+    write_big(self, value)
+  else
+    self:write_uint8(value)
+  end
+end
+
+local function write_medium(self, value, write_big)
+  if value >= 0xffff then
+    self:write_raw("\xff\xff", 2)
+    write_big(self, value)
+  else
+    self:write_uint16(value)
+  end
+end
+
+function serializer:write_small_uint16(value)
+  write_small(self, value, self.write_uint16)
+end
+
 function serializer:write_uint32(value)
   check_bounds(value, 0, 2 ^ 32, "uint32")
   self:write_raw(string.char(
@@ -49,6 +70,14 @@ function serializer:write_uint32(value)
     bit32.band(bit32.rshift(value, 8 * 2), 0xff),
     bit32.band(bit32.rshift(value, 8 * 3), 0xff)
   ), 4)
+end
+
+function serializer:write_small_uint32(value)
+  write_small(self, value, self.write_uint32)
+end
+
+function serializer:write_medium_uint32(value)
+  write_medium(self, value, self.write_uint32)
 end
 
 ---More like uint53, but takes the space of an uint64.\
@@ -60,7 +89,7 @@ function serializer:write_uint64(value)
   -- without missing any value in between, but it would be weird to break the rule for this
   -- already weird case. We're literally just loosing 1 possible value
   check_bounds(value, 0, 2 ^ 53, "uint64 (actually uint53)")
-  -- for explanations behind this logic see write_uint_optimized
+  -- for explanations behind this logic see write_uint_space_optimized
   -- the reason it is needed is because bit32 does accept values greater than uint32
   self:write_raw(string.char(
     value % 0x100,
@@ -74,6 +103,14 @@ function serializer:write_uint64(value)
   ), 8)
 end
 
+function serializer:write_small_uint64(value)
+  write_small(self, value, self.write_uint64)
+end
+
+function serializer:write_medium_uint64(value)
+  write_medium(self, value, self.write_uint64)
+end
+
 -- If we're compiling a program with strings longer than 9_007_199_254_740_989 (2 ^ 53 - 2) bytes,
 -- so 9 petabytes, something has gone horribly wrong anyway.
 -- (note: -2 because 2 ^ 53 itself is excluded for consistency,
@@ -82,8 +119,8 @@ end
 ---It's just an alias, but might be useful to know all uses cases of size_t in the future
 serializer.write_size_t = serializer.write_uint64
 
-function serializer:write_uint_optimized(value)
-  check_bounds(value, 0, 2 ^ 53, "optimized uint (up to 53 bits)")
+function serializer:write_uint_space_optimized(value)
+  check_bounds(value, 0, 2 ^ 53, "space optimized uint (up to 53 bits)")
   repeat
     -- `value % 0x80` is effectively cutting off all bits from 8 and higher
     -- leaving the last 7 bits. just like `bit32.band(value, 0x7f))`, except that
@@ -121,8 +158,17 @@ do
   end
 end
 
----all strings can be nil, except in the constant table
 function serializer:write_string(value)
+  if not value then
+    self:write_medium_uint64(0)
+  else
+    self:write_medium_uint64(#value + 1)
+    self:write_raw(value)
+  end
+end
+
+---All strings can be nil, except in the constant table.
+function serializer:write_lua_string(value)
   -- typedef string:
   -- size_t length (including trailing \0, 0 for nil)
   -- char[] value (not present for nil)
@@ -141,7 +187,7 @@ end
 
 do
   -- byte type = {nil = 0, boolean = 1, number = 3, string = 4}
-  local const_lut = {
+  local const_lut = setmetatable({
     ["nil"] = function(self)
       self:write_raw("\0", 1)
     end,
@@ -155,10 +201,16 @@ do
     end,
     ["string"] = function(self, value)
       self:write_raw("\4", 1)
-      self:write_string(value)
+      self:write_lua_string(value)
     end,
-  }
-  function serializer:write_constant(constant_node)
+  }, {
+    __index = function(_, node_type)
+      util.debug_abort("Invalid Lua constant node type '"..node_type
+        .."', expected 'nil', 'boolean', 'number' or 'string'."
+      )
+    end
+  })
+  function serializer:write_lua_constant(constant_node)
     const_lut[constant_node.node_type](self, constant_node.value)
   end
 end
@@ -204,12 +256,34 @@ function deserializer:read_uint16()
   return one + bit32.lshift(two, 8)
 end
 
+local function read_small(self, read_big)
+  local value = self:read_uint8()
+  return value == 0xff and read_big(self) or value
+end
+
+local function read_medium(self, read_big)
+  local value = self:read_uint16()
+  return value == 0xffff and read_big(self) or value
+end
+
+function deserializer:read_small_uint16()
+  return read_small(self, self.read_uint16)
+end
+
 function deserializer:read_uint32()
   local one, two, three, four = self:read_bytes(4)
   return one
     + bit32.lshift(two, 8 * 1)
     + bit32.lshift(three, 8 * 2)
     + bit32.lshift(four, 8 * 3)
+end
+
+function deserializer:read_small_uint32()
+  return read_small(self, self.read_uint32)
+end
+
+function deserializer:read_medium_uint32()
+  return read_medium(self, self.read_uint32)
 end
 
 function deserializer:read_uint64()
@@ -228,16 +302,24 @@ function deserializer:read_uint64()
     -- + eight * 2 ^ (8 * 7) -- always 0
 end
 
+function deserializer:read_small_uint64()
+  return read_small(self, self.read_uint64)
+end
+
+function deserializer:read_medium_uint64()
+  return read_medium(self, self.read_uint64)
+end
+
 ---It's just an alias, but might be useful to know all uses cases of size_t in the future
 deserializer.read_size_t = deserializer.read_uint64
 
-function deserializer:read_uint_optimized()
+function deserializer:read_uint_space_optimized()
   local shift = 0
   local result = 0
   repeat
     local byte = self:read_bytes(1)
     if shift == 7 * 7 --[[49]] and byte > 0x0f then
-      error("Unsupported to read optimized uint greater or equal to 2 ^ 53.")
+      error("Unsupported to read space optimized uint greater or equal to 2 ^ 53.")
     end
     -- again using multiplication instead of lshift
     result = result + bit32.band(byte, 0x7f) * 2 ^ shift
@@ -275,6 +357,15 @@ do
 end
 
 function deserializer:read_string()
+  local size = self:read_medium_uint64()
+  if size == 0 then
+    return nil
+  else
+    return self:read_raw(size - 1)
+  end
+end
+
+function deserializer:read_lua_string()
   local size = self:read_size_t()
   if size == 0 then -- 0 means nil
     return nil
@@ -304,7 +395,7 @@ do
       return {node_type = "number", value = self:read_double()}
     end,
     [4] = function(self)
-      local value = self:read_string()
+      local value = self:read_lua_string()
       if not value then
         error("Lua constant strings must not be 'nil'.")
       end
@@ -313,10 +404,10 @@ do
   }
   setmetatable(const_lut, {
     __index = function(_, k)
-      error("Invalid Lua constant type '"..k.."'.")
+      error("Invalid Lua constant type '"..k.."', expected 0 (nil), 1 (boolean), 3 (number) or 4 (string).")
     end,
   })
-  function deserializer:read_constant()
+  function deserializer:read_lua_constant()
     return const_lut[self:read_bytes(1)](self)
   end
 end

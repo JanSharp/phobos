@@ -26,9 +26,9 @@ do
     local function add_test(label, func)
       serializer_scope:add_test(label, function()
         local serializer = binary.new_serializer()
-        local expected, expected_length = func(serializer)
+        local expected = func(serializer)
         assert.equals(expected, serializer:tostring())
-        assert.equals(expected_length, serializer:get_length(), "for get_length()")
+        assert.equals(#expected, serializer:get_length(), "for get_length()")
       end)
     end
 
@@ -103,46 +103,58 @@ do
     -- Tested the out of bounds function, at this point it's just a matter of
     -- "is every function calling the out of bounds function with the right args".
 
-    add_test("uint16", function(serializer)
-      serializer:write_uint16(0xf1f2)
-      return "\xf2\xf1", 2
-    end)
+    local function add_uint_16_32_64_tests(name, value, str, oob_max, oob_name)
+      local byte_count = #str
 
-    add_out_of_bounds_test("uint16 out of bounds",
-      "uint16", 0, -1, 2 ^ 16,
-      function(serializer)
-        serializer:write_uint16(-1)
+      add_test(name, function(serializer)
+        serializer["write_"..name](serializer, value)
+        return str
+      end)
+
+      -- highest value in small form
+      add_test("small small_"..name, function(serializer)
+        serializer["write_small_"..name](serializer, 2 ^ 8 - 2)
+        return "\xfe"
+      end)
+
+      -- lowest value in big form
+      add_test("big small_"..name, function(serializer)
+        serializer["write_small_"..name](serializer, 2 ^ 8 - 1)
+        return "\xff\xff"..string.rep("\0", byte_count - 1)
+      end)
+
+      if name ~= "uint16" then
+        -- highest value in medium form
+        add_test("medium medium_"..name, function(serializer)
+          serializer["write_medium_"..name](serializer, 2 ^ 16 - 2)
+          return "\xfe\xff"
+        end)
+
+        -- lowest value in big form
+        add_test("big medium_"..name, function(serializer)
+          serializer["write_medium_"..name](serializer, 2 ^ 16 - 1)
+          return "\xff\xff\xff\xff"..string.rep("\0", byte_count - 2)
+        end)
       end
-    )
 
-    add_test("uint32", function(serializer)
-      serializer:write_uint32(0xf1f2f3f4)
-      return "\xf4\xf3\xf2\xf1", 4
-    end)
+      add_out_of_bounds_test(name.." out of bounds",
+        oob_name or name, 0, -1, oob_max,
+        function(serializer)
+          serializer["write_"..name](serializer, -1)
+        end
+      )
+    end
 
-    add_out_of_bounds_test("uint32 out of bounds",
-      "uint32", 0, -1, 2 ^ 32,
-      function(serializer)
-        serializer:write_uint32(-1)
-      end
-    )
+    add_uint_16_32_64_tests("uint16", 0xf1f2, "\xf2\xf1", 2 ^ 16)
 
-    add_test("uint64 with small number", function(serializer)
-      serializer:write_uint64(0x00000000f1f2f3f4)
-      return "\xf4\xf3\xf2\xf1\x00\x00\x00\x00", 8
-    end)
+    add_uint_16_32_64_tests("uint32", 0xf1f2f3f4, "\xf4\xf3\xf2\xf1", 2 ^ 32)
+
+    add_uint_16_32_64_tests("uint64", 0x00000000f1f2f3f4, "\xf4\xf3\xf2\xf1\x00\x00\x00\x00", 2 ^ 53, "uint64 (actually uint53)")
 
     add_test("biggest uint64", function(serializer)
       serializer:write_uint64(2 ^ 53 - 1)
       return "\xff\xff\xff\xff\xff\xff\x1f\x00", 8
     end)
-
-    add_out_of_bounds_test("uint64 out of bounds",
-      "uint64 (actually uint53)", 0, -1, 2 ^ 53,
-      function(serializer)
-        serializer:write_uint64(-1)
-      end
-    )
 
     add_test("size_t", function(serializer)
       serializer:write_size_t(0x001ff1f2f3f4f5f6)
@@ -157,8 +169,8 @@ do
     )
 
     local function add_optimized_uint_test(label, value, result)
-      add_test("optimized uint "..label, function(serializer)
-        serializer:write_uint_optimized(value)
+      add_test("space optimized uint "..label, function(serializer)
+        serializer:write_uint_space_optimized(value)
         return result, #result
       end)
     end
@@ -170,10 +182,10 @@ do
     add_optimized_uint_test("max 21 bit value", 0x1fffff, "\xff\xff\x7f")
     add_optimized_uint_test("max 53 bit value", 2 ^ 53 - 1, "\xff\xff\xff\xff\xff\xff\xff\x0f")
 
-    add_out_of_bounds_test("optimized uint out of bounds",
-      "optimized uint (up to 53 bits)", 0, -1, 2 ^ 53,
+    add_out_of_bounds_test("space optimized uint out of bounds",
+      "space optimized uint (up to 53 bits)", 0, -1, 2 ^ 53,
       function(serializer)
-        serializer:write_uint_optimized(-1)
+        serializer:write_uint_space_optimized(-1)
       end
     )
 
@@ -204,16 +216,31 @@ do
 
     add_test("nil string", function(serializer)
       serializer:write_string(nil)
-      return "\0\0\0\0\0\0\0\0", 8
+      return "\0\0", 1
     end)
 
     add_test("empty string", function(serializer)
       serializer:write_string("")
-      return "\1\0\0\0\0\0\0\0\0", 8 + 1
+      return "\1\0", 1
     end)
 
     add_test("foo string", function(serializer)
       serializer:write_string("foo")
+      return "\4\0foo", 4
+    end)
+
+    add_test("nil lua string", function(serializer)
+      serializer:write_lua_string(nil)
+      return "\0\0\0\0\0\0\0\0", 8
+    end)
+
+    add_test("empty lua string", function(serializer)
+      serializer:write_lua_string("")
+      return "\1\0\0\0\0\0\0\0\0", 8 + 1
+    end)
+
+    add_test("foo lua string", function(serializer)
+      serializer:write_lua_string("foo")
       return "\4\0\0\0\0\0\0\0foo\0", 8 + 4
     end)
 
@@ -228,23 +255,33 @@ do
     end)
 
     add_test("nil constant", function(serializer)
-      serializer:write_constant(nodes.new_nil{})
+      serializer:write_lua_constant(nodes.new_nil{})
       return "\0", 1
     end)
 
     add_test("boolean constant", function(serializer)
-      serializer:write_constant(nodes.new_boolean{value = true})
+      serializer:write_lua_constant(nodes.new_boolean{value = true})
       return "\1\1", 2
     end)
 
     add_test("number constant", function(serializer)
-      serializer:write_constant(nodes.new_number{value = 0})
+      serializer:write_lua_constant(nodes.new_number{value = 0})
       return "\3\0\0\0\0\0\0\0\0", 1 + 8
     end)
 
     add_test("string constant", function(serializer)
-      serializer:write_constant(nodes.new_string{value = "hi"})
+      serializer:write_lua_constant(nodes.new_string{value = "hi"})
       return "\4\3\0\0\0\0\0\0\0hi\0", 1 + 8 + 3
+    end)
+
+    add_test("invalid constant", function(serializer)
+      assert.errors(
+        "Invalid Lua constant node type 'constructor', expected.*",
+        function()
+          serializer:write_lua_constant(nodes.new_constructor{})
+        end
+      )
+      return ""
     end)
   end
 
@@ -313,17 +350,41 @@ do
       return {0xf1, deserializer:read_uint8()}
     end)
 
-    add_test("uint16", "\xf2\xf1", function(deserializer)
-      return {0xf1f2, deserializer:read_uint16()}
-    end)
+    local function add_uint_16_32_64_tests(name, str, value)
+      local byte_count = #str
 
-    add_test("uint32", "\xf4\xf3\xf2\xf1", function(deserializer)
-      return {0xf1f2f3f4, deserializer:read_uint32()}
-    end)
+      add_test(name, str, function(deserializer)
+        return {value, deserializer["read_"..name](deserializer)}
+      end)
 
-    add_test("uint64", "\xf6\xf5\xf4\xf3\xf2\xf1\x1f\x00", function(deserializer)
-      return {0x001ff1f2f3f4f5f6, deserializer:read_uint64()}
-    end)
+      -- highest value in small form
+      add_test("small small_"..name, "\xfe", function(deserializer)
+        return {2 ^ 8 - 2, deserializer["read_small_"..name](deserializer)}
+      end)
+
+      -- lowest value in big form
+      add_test("big small_"..name, "\xff\xff"..string.rep("\0", byte_count - 1), function(deserializer)
+        return {2 ^ 8 - 1, deserializer["read_small_"..name](deserializer)}
+      end)
+
+      if name ~= "uint16" then
+        -- highest value in medium form
+        add_test("medium medium_"..name, "\xfe\xff", function(deserializer)
+          return {2 ^ 16 - 2, deserializer["read_medium_"..name](deserializer)}
+        end)
+
+        -- lowest value in big form
+        add_test("big medium_"..name, "\xff\xff\xff\xff"..string.rep("\0", byte_count - 2), function(deserializer)
+          return {2 ^ 16 - 1, deserializer["read_medium_"..name](deserializer)}
+        end)
+      end
+    end
+
+    add_uint_16_32_64_tests("uint16", "\xf2\xf1", 0xf1f2)
+
+    add_uint_16_32_64_tests("uint32", "\xf4\xf3\xf2\xf1", 0xf1f2f3f4)
+
+    add_uint_16_32_64_tests("uint64", "\xf6\xf5\xf4\xf3\xf2\xf1\x1f\x00", 0x001ff1f2f3f4f5f6)
 
     add_test("uint64 7th byte out of bounds", "\x00\x00\x00\x00\x00\x00\x20\x00", function(deserializer)
       assert.errors("Unsupported.*uint64 %(actually uint53%).*2%s*^%s*53.", function()
@@ -342,8 +403,8 @@ do
     end)
 
     local function add_optimized_uint_test(label, str, result)
-      add_test("optimized uint "..label, str, function(deserializer)
-        return {result, deserializer:read_uint_optimized()}
+      add_test("space optimized uint "..label, str, function(deserializer)
+        return {result, deserializer:read_uint_space_optimized()}
       end)
     end
 
@@ -382,16 +443,28 @@ do
     -- same here, but with sign bit
     add_double_test("negative inf", "\x00\x00\x00\x00\x00\x00\xf0\xff", -1/0)
 
-    add_test("nil string", "\0\0\0\0\0\0\0\0", function(deserializer)
+    add_test("nil string", "\0\0", function(deserializer)
       assert.equals(nil, deserializer:read_string())
     end)
 
-    add_test("empty string", "\1\0\0\0\0\0\0\0\0", function(deserializer)
+    add_test("empty string", "\1\0", function(deserializer)
       return {"", deserializer:read_string()}
     end)
 
-    add_test("foo string", "\4\0\0\0\0\0\0\0foo\0", function(deserializer)
+    add_test("foo string", "\4\0foo", function(deserializer)
       return {"foo", deserializer:read_string()}
+    end)
+
+    add_test("nil lua string", "\0\0\0\0\0\0\0\0", function(deserializer)
+      assert.equals(nil, deserializer:read_lua_string())
+    end)
+
+    add_test("empty lua string", "\1\0\0\0\0\0\0\0\0", function(deserializer)
+      return {"", deserializer:read_lua_string()}
+    end)
+
+    add_test("foo lua string", "\4\0\0\0\0\0\0\0foo\0", function(deserializer)
+      return {"foo", deserializer:read_lua_string()}
     end)
 
     add_test("true boolean", "\1", function(deserializer)
@@ -403,30 +476,30 @@ do
     end)
 
     add_test("nil constant", "\0", function(deserializer)
-      assert.contents_equals({node_type = "nil"}, deserializer:read_constant())
+      assert.contents_equals({node_type = "nil"}, deserializer:read_lua_constant())
     end)
 
     add_test("boolean constant", "\1\1", function(deserializer)
-      assert.contents_equals({node_type = "boolean", value = true}, deserializer:read_constant())
+      assert.contents_equals({node_type = "boolean", value = true}, deserializer:read_lua_constant())
     end)
 
     add_test("number constant", "\3\0\0\0\0\0\0\0\0", function(deserializer)
-      assert.contents_equals({node_type = "number", value = 0}, deserializer:read_constant())
+      assert.contents_equals({node_type = "number", value = 0}, deserializer:read_lua_constant())
     end)
 
     add_test("string constant", "\4\3\0\0\0\0\0\0\0hi\0", function(deserializer)
-      assert.contents_equals({node_type = "string", value = "hi"}, deserializer:read_constant())
+      assert.contents_equals({node_type = "string", value = "hi"}, deserializer:read_lua_constant())
     end)
 
     add_test("invalid nil string constant", "\4\0\0\0\0\0\0\0\0", function(deserializer)
       assert.errors("Lua constant strings must not be 'nil'%.", function()
-        deserializer:read_constant()
+        deserializer:read_lua_constant()
       end)
     end)
 
     add_test("invalid constant type", "\5", function(deserializer)
-      assert.errors("Invalid Lua constant type '5'.", function()
-        deserializer:read_constant()
+      assert.errors("Invalid Lua constant type '5', expected.*", function()
+        deserializer:read_lua_constant()
       end)
     end)
   end
