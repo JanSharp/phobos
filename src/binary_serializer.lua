@@ -236,13 +236,24 @@ end
 local deserializer = {}
 deserializer.__index = deserializer
 
+local function can_read(self, byte_count)
+  if self.allow_reading_past_end then return end
+  if self.index + byte_count - 1 > self.length then
+    error(string.format("Attempt to read %d bytes starting at index %d where binary_string length is %d.",
+      byte_count, self.index, self.length
+    ))
+  end
+end
+
 function deserializer:read_raw(byte_count)
+  can_read(self, byte_count)
   local result = self.binary_string:sub(self.index, self.index + byte_count - 1)
   self.index = self.index + byte_count
   return result
 end
 
 function deserializer:read_bytes(byte_count)
+  can_read(self, byte_count)
   self.index = self.index + byte_count -- do this first because :byte() returns var results
   return self.binary_string:byte(self.index - byte_count, self.index - 1)
 end
@@ -416,14 +427,39 @@ function deserializer:get_string()
   return self.binary_string
 end
 
+function deserializer:get_length()
+  return self.length
+end
+
+---Gets the index of the next byte to be read.
 function deserializer:get_index()
   return self.index
+end
+
+function deserializer:is_done()
+  return self.index > self.length
+end
+
+---Settings this to true doesn't exactly mean reading past the end doesn't cause issues.\
+---In fact you can expect every function except read_raw and read_bytes to error in some way.\
+---This option purely exists to allow for weird edge cases, just in case.
+function deserializer:set_allow_reading_past_end(allow_reading_past_end)
+  util.debug_assert(type(allow_reading_past_end) == "boolean",
+    "Expected boolean for allow_reading_past_end, got '"..tostring(allow_reading_past_end).."'."
+  )
+  self.allow_reading_past_end = allow_reading_past_end
+end
+
+function deserializer:get_allow_reading_past_end()
+  return self.allow_reading_past_end
 end
 
 local function new_deserializer(binary_string, start_index)
   return setmetatable({
     binary_string = binary_string,
+    length = #binary_string,
     index = start_index or 1,
+    allow_reading_past_end = false,
   }, deserializer)
 end
 

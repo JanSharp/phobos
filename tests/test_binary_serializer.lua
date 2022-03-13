@@ -66,6 +66,19 @@ do
       return "foobar", 6
     end)
 
+    serializer_scope:add_test("initial binary_string", function()
+      local serializer = binary.new_serializer("foo")
+      assert.equals(3, serializer:get_length(), "for get_length()")
+      assert.equals("foo", serializer:tostring())
+    end)
+
+    serializer_scope:add_test("initial binary_string and write raw", function()
+      local serializer = binary.new_serializer("foo")
+      serializer:write_raw("bar")
+      assert.equals(6, serializer:get_length(), "for get_length()")
+      assert.equals("foobar", serializer:tostring())
+    end)
+
     add_test("uint8", function(serializer)
       serializer:write_uint8(100)
       return "\100", 1
@@ -316,6 +329,11 @@ do
 
     add_test("nothing", "", function() end)
 
+    deserializer_scope:add_test("get_length", function()
+      local deserializer = binary.new_deserializer("foo bar baz")
+      assert.equals(11, deserializer:get_length(), "for get_length()")
+    end)
+
     add_test("read raw", "foo", function(deserializer)
       return {"foo", deserializer:read_raw(3)}
     end)
@@ -345,6 +363,65 @@ do
         2, two,
       }
     end)
+
+    deserializer_scope:add_test("is_done", function()
+      local deserializer = binary.new_deserializer("a")
+      assert.equals(false, deserializer:is_done(), "before reading")
+      deserializer:read_raw(1)
+      assert.equals(true, deserializer:is_done(), "after reading")
+    end)
+
+    deserializer_scope:add_test("start index", function()
+      local deserializer = binary.new_deserializer("foo", 4)
+      assert.equals("foo", deserializer:get_string(), "for get_string()")
+      assert.equals(4, deserializer:get_index(), "for get_index()")
+    end)
+
+    deserializer_scope:add_test("start index and read", function()
+      local deserializer = binary.new_deserializer("foobar", 4)
+      assert.equals("foobar", deserializer:get_string(), "for get_string()")
+      assert.equals("bar", deserializer:read_raw(3), "for read after setting start index")
+      assert.equals(7, deserializer:get_index(), "for get_index()")
+    end)
+
+    add_test("set and get allow_reading_past_end", "", function(deserializer)
+      assert.equals(false, deserializer:get_allow_reading_past_end(), "as default value")
+      deserializer:set_allow_reading_past_end(false)
+      assert.equals(false, deserializer:get_allow_reading_past_end(), "after setting to false")
+      deserializer:set_allow_reading_past_end(true)
+      assert.equals(true, deserializer:get_allow_reading_past_end(), "after setting to true")
+      assert.errors("Expected boolean for allow_reading_past_end, got.*", function()
+        deserializer:set_allow_reading_past_end()
+      end)
+    end)
+
+    deserializer_scope:add_test("read_raw past end while allow_reading_past_end is true", function()
+      local deserializer = binary.new_deserializer("foo")
+      deserializer:set_allow_reading_past_end(true)
+      assert.equals("foo", deserializer:read_raw(10), "for reading")
+      assert.equals(11, deserializer:get_index(), "for get_index()")
+    end)
+
+    deserializer_scope:add_test("read_bytes past end while allow_reading_past_end is true", function()
+      local deserializer = binary.new_deserializer("\100\200")
+      deserializer:set_allow_reading_past_end(true)
+      local one, two, three = deserializer:read_bytes(8)
+      assert.equals(100, one, "for the first byte")
+      assert.equals(200, two, "for the second byte")
+      assert.equals(nil, three, "for the third byte")
+      assert.equals(9, deserializer:get_index(), "for get_index()")
+    end)
+
+    local function add_read_past_end_test(name)
+      deserializer_scope:add_test(name.." past end while allow_reading_past_end is false", function()
+        local deserializer = binary.new_deserializer("foo")
+        assert.errors("Attempt to read 10 bytes starting at index 1 where binary_string length is 3.", function()
+          deserializer[name](deserializer, 10)
+        end)
+      end)
+    end
+    add_read_past_end_test("read_raw")
+    add_read_past_end_test("read_bytes")
 
     add_test("uint8", "\xf1", function(deserializer)
       return {0xf1, deserializer:read_uint8()}
