@@ -12,6 +12,16 @@ arg_parser.register_type(build_profile_arg_provider.arg_parser_build_profile_typ
 local io_util = require("io_util")
 local constants = require("constants")
 local error_code_util = require("error_code_util")
+local phobos_version = require("phobos_version")
+
+local function print_version()
+  print(string.format("%d.%d.%d", phobos_version.major, phobos_version.minor, phobos_version.patch))
+end
+
+if ... == "--version" then
+  print_version()
+  return
+end
 
 local args = arg_parser.parse_and_print_on_error_or_help({...}, {
   options = {
@@ -170,9 +180,20 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
                      a bit.)",
       flag = true,
     },
+    {
+      field = "version",
+      long = "version",
+      description = "Prints the current version of Phobos to std out.",
+      flag = true,
+    },
   },
 }, {label_length = 80 - 4 - 2 - 50})
 if not args then return end
+
+if args.version then
+  print_version()
+  return
+end
 
 if args.monitor_memory_allocation then
   collectgarbage("stop")
