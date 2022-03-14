@@ -11,6 +11,10 @@ local function save(profile, file_list)
   local profile_ser = binary.new_serializer()
   profile_ser:write_raw(constants.phobos_signature)
   profile_ser:write_uint16(0) -- metadata version
+  local version = profile.phobos_version
+  profile_ser:write_uint16(version.major)
+  profile_ser:write_uint16(version.minor)
+  profile_ser:write_uint16(version.patch)
   profile_ser:write_string(profile.name)
   profile_ser:write_string(profile.output_dir)
   profile_ser:write_string(profile.cache_dir)
@@ -63,6 +67,11 @@ local function load(cache_dir)
 
   local success = pcall(function()
     profile = {}
+    profile.phobos_version = {
+      major = profile_des:read_uint16(),
+      minor = profile_des:read_uint16(),
+      patch = profile_des:read_uint16(),
+    }
     profile.name = profile_des:read_string()
     profile.output_dir = profile_des:read_string()
     profile.cache_dir = profile_des:read_string()

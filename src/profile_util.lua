@@ -7,6 +7,7 @@ local util = require("util")
 local io_util = require("io_util")
 local compile_util = require("compile_util")
 local cache = require("cache")
+local phobos_version = require("phobos_version")
 
 local action_enum = {
   compile = 0,
@@ -18,7 +19,6 @@ local action_name_lut = {
 }
 
 -- TODO: validate input
--- TODO: cache the phobos version of used for the previous build and compare that when determining incremental
 
 ---@class NewProfileInternalParams : NewProfileParams
 ---**default:** `true`\
@@ -29,6 +29,8 @@ local action_name_lut = {
 ---**default:** `true`\
 ---Should only files with a newer modification time get compiled or copied?
 ---@field incremental boolean
+---profile_util handles this field and uses it to determine if the current compilation can be incremental
+---@field phobos_version table
 
 ---`root_dir` does not have an explicit default when using this function.\
 ---Technically it will be using the current working directory if it's `nil` because of `Path.to_fully_qualified`.
@@ -345,20 +347,27 @@ local function determine_incremental(current_profile, cached_profile)
     or not cached_profile
     or get_output_root(current_profile) ~= get_output_root(cached_profile)
   then
+    -- cannot compile nor copy incrementally
     return false, false
   end
   if current_profile.use_load ~= cached_profile.use_load
     or current_profile.phobos_extension ~= cached_profile.phobos_extension
     or current_profile.lua_extension ~= cached_profile.lua_extension
+    or current_profile.phobos_version.major ~= cached_profile.phobos_version.major
+    or current_profile.phobos_version.minor ~= cached_profile.phobos_version.minor
+    or current_profile.phobos_version.patch ~= cached_profile.phobos_version.patch
   then
+    -- cannot compile incrementally, but can copy incrementally
     return false, true
   end
   for name in pairs(get_all_optimizations()) do
     if not current_profile.optimizations[name] ~= not cached_profile.optimizations[name] then
+      -- cannot compile incrementally, but can copy incrementally
       return false, true
     end
   end
   -- TODO: compare modification dates of profile files and injection script files and the files they all require
+  -- can compile and copy incrementally
   return true, true
 end
 
@@ -437,6 +446,8 @@ local function run_profile(profile, print)
     print("running on_pre_profile_ran")
     profile.on_pre_profile_ran()
   end
+
+  profile.phobos_version = phobos_version
 
   local total_memory_allocated = 0
   if profile.measure_memory then
