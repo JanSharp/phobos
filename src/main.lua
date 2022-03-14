@@ -72,6 +72,14 @@ if args.version then
   return
 end
 
+if args.profile_files == default_profile_files
+  and not args.profile_names
+  and not args.list
+then
+  print("No args provided, use '--help' for help message.")
+  return
+end
+
 if args.profile_files == default_profile_files then
   if not default_profile_files[1]:exists() then
     print("No such (default) '.phobos_profiles' file, stop.")
@@ -107,7 +115,7 @@ local function get_list_of_all_profiles()
   return "All profile names: "..table.concat(names, ", ").."."
 end
 
-if args.list or not args.profile_names then
+if args.list then
   print(get_list_of_all_profiles())
   return
 end
