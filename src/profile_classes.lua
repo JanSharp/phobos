@@ -50,7 +50,7 @@
 ---
 ---If this is a relative path it will be relative to the
 ---**directory the build profile script entrypoint is in**.
----@field temp_dir string
+---@field cache_dir string
 ---**Default:** `".pho"`\
 ---The file extension of Phobos files. Source files must have this extension.
 ---@field phobos_extension string

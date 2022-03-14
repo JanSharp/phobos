@@ -19,7 +19,7 @@ local args = profiles.parse_extra_args({...}, {
 
 local platform = args.platform
 if platform then
-  util.release_assert(util.invert{"linux", "osx", "windows"}[platform],
+  util.assert(util.invert{"linux", "osx", "windows"}[platform],
     "Expected 'linux', 'osx' or 'windows', got '"..platform.."' for --platform."
   )
 end
@@ -42,7 +42,7 @@ local function standalone_profile(name, optimizations)
   local profile = profiles.add_profile{
     name = name,
     output_dir = "out/"..name,
-    temp_dir = "temp/"..name,
+    cache_dir = "temp/cache/"..name,
     phobos_extension = phobos_extension,
     optimizations = optimizations,
     -- HACK: until https://github.com/tomblind/local-lua-debugger-vscode/issues/56 is implemented
@@ -86,7 +86,7 @@ local function factorio_profile(name, optimizations)
   local profile = profiles.add_profile{
     name = "factorio_"..name,
     output_dir = "out/factorio_"..name.."/phobos",
-    temp_dir = "temp/factorio_"..name,
+    cache_dir = "temp/cache/factorio_"..name,
     phobos_extension = phobos_extension,
     optimizations = optimizations,
     use_load = true,

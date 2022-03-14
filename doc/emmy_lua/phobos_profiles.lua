@@ -4,7 +4,7 @@
 ---@class PhobosProfiles
 local phobos_profiles = {}
 
----Mandatory fields: `name`, `output_dir`, `temp_dir`.
+---Mandatory fields: `name`, `output_dir`, `cache_dir`.
 ---@param params NewProfileParams
 ---@return PhobosProfile
 function phobos_profiles.add_profile(params) end

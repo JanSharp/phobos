@@ -6,10 +6,9 @@ Path.set_main_separator("/")
 local util = require("util")
 local io_util = require("io_util")
 local compile_util = require("compile_util")
+local cache = require("cache")
 
 -- TODO: validate input
--- TODO: ensure build scripts don't attempt to output to the same path twice
--- TODO: incremental build state in temp dir: profile name, source to output file name mapping
 
 ---@class NewProfileInternalParams : NewProfileParams
 ---**default:** `true`\
@@ -28,7 +27,7 @@ local function new_profile(params)
   local profile = {
     name = params.name,
     output_dir = params.output_dir,
-    temp_dir = params.temp_dir,
+    cache_dir = params.cache_dir,
     phobos_extension = params.phobos_extension or ".pho",
     lua_extension = params.lua_extension or ".lua",
     use_load = params.use_load or false,
@@ -256,7 +255,7 @@ local function process_include(include_def, collection)
 
   function include_entry(relative_entry_path, depth)
     local source_rooted_entry_path = source_root / relative_entry_path
-    local mode = util.release_assert(source_rooted_entry_path:attr("mode"))
+    local mode = util.assert(source_rooted_entry_path:attr("mode"))
     if mode == "directory" then
       include_dir(relative_entry_path, depth + 1)
     elseif mode == "file" then
@@ -311,7 +310,7 @@ local function process_exclude(path_def, collection)
   end
 
   function exclude_entry(entry_path, depth)
-    local mode = util.release_assert(entry_path:attr("mode"))
+    local mode = util.assert(entry_path:attr("mode"))
     if mode == "directory" then
       exclude_dir(entry_path, depth + 1)
     elseif mode == "file" then
@@ -327,18 +326,41 @@ local function process_exclude(path_def, collection)
   exclude_entry(Path.new(path_def.source_path):to_fully_qualified(collection.root_dir):normalize())
 end
 
-local function should_update(file, incremental)
-  if not incremental then
+---current and cached are profile metadata
+local function determine_incremental(current, cached)
+  local function get_output_root(profile_meta)
+    return Path.new(profile_meta.output_dir):to_fully_qualified(profile_meta.root_dir):normalize()
+  end
+  if not current.incremental or get_output_root(current) ~= get_output_root(cached) then
+    return false, false
+  end
+  if current.use_load ~= cached.use_load
+    or current.phobos_extension ~= cached.phobos_extension
+    or current.lua_extension ~= cached.lua_extension
+  then
+    return false, true
+  end
+  for name in pairs(get_all_optimizations()) do
+    if not current.optimizations[name] ~= not cached.optimizations[name] then
+      return false, true
+    end
+  end
+  -- TODO: compare modification dates of profile files and injection script files and the files they all require
+  return true, true
+end
+
+local function should_update(file, action, cached_file_mapping, incremental)
+  local cached_file = cached_file_mapping[file.output_filename]
+  if not incremental
+    or (cached_file and cached_file.source_filename) ~= file.source_filename
+    or (cached_file and cached_file.action) ~= action
+    or not Path.new(file.output_filename):exists()
+  then
     return true
   end
-  if Path.new(file.output_filename):exists() then
-    local source_modification = lfs.attributes(file.source_filename, "modification")
-    local output_modification = lfs.attributes(file.output_filename, "modification")
-    return os.difftime(source_modification, output_modification) > 0
-  else
-    -- output doesn't exist, so compile it
-    return true
-  end
+  local source_modification = lfs.attributes(file.source_filename, "modification")
+  local output_modification = lfs.attributes(file.output_filename, "modification")
+  return os.difftime(source_modification, output_modification) > 0
 end
 
 local function process_include_exclude_definitions(defs, file_collection)
@@ -370,6 +392,11 @@ local function run_profile(profile, print)
     total_memory_allocated = -collectgarbage("count")
   end
 
+  -- can be nil
+  local cached_profile_meta, cached_file_list = cache.load(profile.cache_dir)
+  -- defaults to {} if nil
+  local cached_file_mapping = cache.make_file_mapping_from_file_list(cached_file_list or {})
+
   local output_root = Path.new(profile.output_dir):to_fully_qualified(profile.root_dir):normalize()
   local compilation_file_collection = new_file_collection(output_root, profile.root_dir, true)
   local copy_file_collection = new_file_collection(output_root, profile.root_dir)
@@ -377,8 +404,12 @@ local function run_profile(profile, print)
   process_include_exclude_definitions(profile.include_exclude_definitions, compilation_file_collection)
   process_include_exclude_definitions(profile.include_exclude_copy_definitions, copy_file_collection)
 
-  print("compiling "..compilation_file_collection.count.." files")
+  local profile_meta = cache.make_profile_meta(profile)
+  local _, file_list = cache.make_file_mapping(compilation_file_collection, copy_file_collection)
 
+  local incremental_compile, incremental_copy = determine_incremental(profile_meta, cached_profile_meta)
+
+  print("compiling "..compilation_file_collection.count.." files")
   local inject_script_cache = new_inject_script_cache()
   local context = compile_util.new_context()
   local c = 0
@@ -392,9 +423,8 @@ local function run_profile(profile, print)
           total_memory_allocated = total_memory_allocated + (prev_gc_count - collectgarbage("count"))
         end
       end
-
       c = c + 1
-      if should_update(file, profile.incremental) then
+      if should_update(file, cache.action_enum.compile, cached_file_mapping, incremental_compile) then
         print("["..c.."/"..compilation_file_collection.count.."] "..file.source_filename)
         local result = compile_util.compile({
           source_name = file.source_name,
@@ -419,7 +449,7 @@ local function run_profile(profile, print)
     if files then
       for _, file in ipairs(files) do
         c = c + 1
-        if should_update(file, profile.incremental) then
+        if should_update(file, cache.action_enum.copy, cached_file_mapping, incremental_copy) then
           print("["..c.."/"..copy_file_collection.count.."] "..file.source_filename)
           io_util.copy(file.source_filename, file.output_filename)
         end
@@ -427,10 +457,11 @@ local function run_profile(profile, print)
     end
   end
 
+  cache.save(profile_meta, file_list)
+
   if profile.measure_memory then
     total_memory_allocated = total_memory_allocated + collectgarbage("count")
-    ---cSpell:ignore giga
-    print("total memory allocated "..(total_memory_allocated / (1000 * 1000)).." giga bytes")
+    print("total memory allocated "..(total_memory_allocated / (1000 * 1000)).." gigabytes")
     collectgarbage("restart")
   end
 
