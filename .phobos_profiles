@@ -24,18 +24,18 @@ if platform then
   )
 end
 
+local phobos_extension = ".lua"
+
 local factorio_specific_paths = {
-  "control",
+  "control"..phobos_extension,
 }
 local standalone_specific_paths = {
-  "main",
-  "io_util",
+  "main"..phobos_extension,
+  "io_util"..phobos_extension,
   "lib/LFSClasses",
   "lib/LuaArgParser",
   "lib/LuaPath",
 }
-
-local phobos_extension = ".lua"
 
 local function standalone_profile(name, optimizations)
   util.debug_assert(platform)
@@ -59,7 +59,7 @@ local function standalone_profile(name, optimizations)
   for _, path in ipairs(factorio_specific_paths) do
     profiles.exclude{
       profile = profile,
-      source_path = "src/"..path..phobos_extension,
+      source_path = "src/"..path,
     }
   end
 
@@ -102,7 +102,7 @@ local function factorio_profile(name, optimizations)
   for _, path in ipairs(standalone_specific_paths) do
     profiles.exclude{
       profile = profile,
-      source_path = "src/"..path..phobos_extension,
+      source_path = "src/"..path,
     }
   end
 end

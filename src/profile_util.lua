@@ -258,7 +258,7 @@ local function process_include(include_def, collection)
     if depth > include_def.recursion_depth then return end
     for entry in lfs.dir((source_root / relative_entry_path):str()) do
       if entry ~= "." and entry ~= ".." then
-        include_entry(relative_entry_path / entry, depth)
+        include_entry(relative_entry_path / entry, depth + 1)
       end
     end
   end
@@ -267,7 +267,7 @@ local function process_include(include_def, collection)
     local source_rooted_entry_path = source_root / relative_entry_path
     local mode = util.assert(source_rooted_entry_path:attr("mode"))
     if mode == "directory" then
-      include_dir(relative_entry_path, depth + 1)
+      include_dir(relative_entry_path, depth)
     elseif mode == "file" then
       -- phobos_extension is only used for compilation includes
       local included = not is_compilation_collection
@@ -313,8 +313,8 @@ local function process_exclude(path_def, collection)
   local function exclude_dir(entry_path, depth)
     if depth > path_def.recursion_depth then return end
     for entry in lfs.dir(entry_path:str()) do
-      if entry ~= "." or entry ~= ".." then
-        exclude_entry(entry_path / entry)
+      if entry ~= "." and entry ~= ".." then
+        exclude_entry(entry_path / entry, depth + 1)
       end
     end
   end
@@ -322,7 +322,7 @@ local function process_exclude(path_def, collection)
   function exclude_entry(entry_path, depth)
     local mode = util.assert(entry_path:attr("mode"))
     if mode == "directory" then
-      exclude_dir(entry_path, depth + 1)
+      exclude_dir(entry_path, depth)
     elseif mode == "file" then
       -- filename_pattern "" matches everything => should exclude
       if path_def.filename_pattern == ""
@@ -333,7 +333,7 @@ local function process_exclude(path_def, collection)
     end
   end
 
-  exclude_entry(Path.new(path_def.source_path):to_fully_qualified(collection.root_dir):normalize())
+  exclude_entry(Path.new(path_def.source_path):to_fully_qualified(collection.root_dir):normalize(), 1)
 end
 
 ---current and cached are profile metadata
