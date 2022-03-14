@@ -652,6 +652,9 @@
           ".phobos_profiles",
           "-n",
           "debug",
+          "--",
+          "-p",
+          "linux",
         ],
         "program": {
           "file": "src/entry_point.lua",
@@ -673,6 +676,9 @@
           ".phobos_profiles",
           "-n",
           "debug",
+          "--",
+          "-p",
+          "linux",
         ],
         "program": {
           "file": "src/entry_point.lua",
@@ -694,6 +700,9 @@
           ".phobos_profiles",
           "-n",
           "debug",
+          "--",
+          "-p",
+          "linux",
         ],
         "program": {
           "file": "src/entry_point.lua",
@@ -721,6 +730,9 @@
           ".phobos_profiles",
           "-n",
           "debug",
+          "--",
+          "-p",
+          "linux",
         ],
         "program": {
           "file": "out/src/debug/entry_point.lua",
@@ -742,6 +754,9 @@
           ".phobos_profiles",
           "-n",
           "debug",
+          "--",
+          "-p",
+          "linux",
         ],
         "program": {
           "file": "out/src/debug/entry_point.lua",
@@ -763,6 +778,9 @@
           ".phobos_profiles",
           "-n",
           "debug",
+          "--",
+          "-p",
+          "linux",
         ],
         "program": {
           "file": "out/src/debug/entry_point.lua",
