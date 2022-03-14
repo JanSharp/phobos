@@ -8,7 +8,17 @@ local io_util = require("io_util")
 local compile_util = require("compile_util")
 local cache = require("cache")
 
+local action_enum = {
+  compile = 0,
+  copy = 1,
+}
+local action_name_lut = {
+  [0] = "compile",
+  [1] = "copy",
+}
+
 -- TODO: validate input
+-- TODO: cache the phobos version of used for the previous build and compare that when determining incremental
 
 ---@class NewProfileInternalParams : NewProfileParams
 ---**default:** `true`\
@@ -120,30 +130,30 @@ end
 
 ---get the compiled inject scripts while making sure not to compile the same file twice (ignoring symlinks)\
 ---also runs the main chunk of inject scripts to get the actual inject function
-local function get_inject_scripts(inject_scripts, cache)
-  if cache.compiled_inject_scripts_lut[inject_scripts] then
-    return cache.compiled_inject_scripts_lut[inject_scripts]
+local function get_inject_scripts(inject_scripts, script_cache)
+  if script_cache.compiled_inject_scripts_lut[inject_scripts] then
+    return script_cache.compiled_inject_scripts_lut[inject_scripts]
   end
   local result = {}
   for i, filename in ipairs(inject_scripts) do
-    local full_filename = Path.new(filename):to_fully_qualified(cache.root_dir):normalize():str()
-    local compiled = cache.compiled_inject_script_files[full_filename]
+    local full_filename = Path.new(filename):to_fully_qualified(script_cache.root_dir):normalize():str()
+    local compiled = script_cache.compiled_inject_script_files[full_filename]
     if not compiled then
       -- print("compiling inject script "..full_filename)
       local main_chunk = assert(load(compile_util.compile({
         filename = full_filename,
         source_name = "@?",
         accept_bytecode = true,
-      }, cache.inject_script_context), nil, "b"))
+      }, script_cache.inject_script_context), nil, "b"))
       compiled = main_chunk()
       assert(type(compiled) == "function",
         "AST inject scripts must return a function. (script file: "..full_filename..")"
       )
-      cache.compiled_inject_script_files[full_filename] = compiled
+      script_cache.compiled_inject_script_files[full_filename] = compiled
     end
     result[i] = compiled
   end
-  cache.compiled_inject_scripts_lut[inject_scripts] = result
+  script_cache.compiled_inject_scripts_lut[inject_scripts] = result
   return result
 end
 
@@ -327,21 +337,24 @@ local function process_exclude(path_def, collection)
 end
 
 ---current and cached are profile metadata
-local function determine_incremental(current, cached)
-  local function get_output_root(profile_meta)
-    return Path.new(profile_meta.output_dir):to_fully_qualified(profile_meta.root_dir):normalize()
+local function determine_incremental(current_profile, cached_profile)
+  local function get_output_root(profile)
+    return Path.new(profile.output_dir):to_fully_qualified(profile.root_dir):normalize()
   end
-  if not current.incremental or get_output_root(current) ~= get_output_root(cached) then
+  if not current_profile.incremental
+    or not cached_profile
+    or get_output_root(current_profile) ~= get_output_root(cached_profile)
+  then
     return false, false
   end
-  if current.use_load ~= cached.use_load
-    or current.phobos_extension ~= cached.phobos_extension
-    or current.lua_extension ~= cached.lua_extension
+  if current_profile.use_load ~= cached_profile.use_load
+    or current_profile.phobos_extension ~= cached_profile.phobos_extension
+    or current_profile.lua_extension ~= cached_profile.lua_extension
   then
     return false, true
   end
   for name in pairs(get_all_optimizations()) do
-    if not current.optimizations[name] ~= not cached.optimizations[name] then
+    if not current_profile.optimizations[name] ~= not cached_profile.optimizations[name] then
       return false, true
     end
   end
@@ -350,7 +363,7 @@ local function determine_incremental(current, cached)
 end
 
 local function should_update(file, action, cached_file_mapping, incremental)
-  local cached_file = cached_file_mapping[file.output_filename]
+  local cached_file = cached_file_mapping and cached_file_mapping[file.output_filename]
   if not incremental
     or (cached_file and cached_file.source_filename) ~= file.source_filename
     or (cached_file and cached_file.action) ~= action
@@ -375,6 +388,45 @@ local function process_include_exclude_definitions(defs, file_collection)
   end
 end
 
+local function unify_file_collections(compile_collection, copy_collection)
+  local file_mapping = {}
+  local file_list = {}
+  local function add_file(file, action)
+    if file then
+      local existing = file_mapping[file.output_filename]
+      if existing then
+        util.abort("Attempt to output to the same file location twice: '"..file.output_filename.."'. \z
+          Sources: '"..existing.source_filename.."' (" ..action_name_lut[existing.action].."), '"
+          ..file.source_filename.."' ("..action..")."
+        )
+      end
+      file.action = action
+      file_mapping[file.output_filename] = file
+      file_list[#file_list+1] = file
+    end
+  end
+  for i = 1, compile_collection.next_index - 1 do
+    add_file(compile_collection.files[i], action_enum.compile)
+  end
+  for i = 1, copy_collection.next_index - 1 do
+    local files = copy_collection.files[i]
+    if files then
+      for _, file in ipairs(files) do
+        add_file(file, action_enum.copy)
+      end
+    end
+  end
+  return file_list, file_mapping
+end
+
+local function make_file_mapping_from_file_list(file_list)
+  local file_mapping = {}
+  for _, file in ipairs(file_list) do
+    file_mapping[file.output_filename] = file
+  end
+  return file_mapping
+end
+
 ---@param profile PhobosProfileInternal
 ---@param print? fun(message: string)
 local function run_profile(profile, print)
@@ -392,72 +444,69 @@ local function run_profile(profile, print)
     total_memory_allocated = -collectgarbage("count")
   end
 
-  -- can be nil
-  local cached_profile_meta, cached_file_list = cache.load(profile.cache_dir)
-  -- defaults to {} if nil
-  local cached_file_mapping = cache.make_file_mapping_from_file_list(cached_file_list or {})
+  ---can be nil
+  local cached_profile, cached_file_mapping
+  do
+    local file_list
+    cached_profile, file_list = cache.load(profile.cache_dir)
+    cached_file_mapping = file_list and make_file_mapping_from_file_list(file_list)
+  end
 
-  local output_root = Path.new(profile.output_dir):to_fully_qualified(profile.root_dir):normalize()
-  local compilation_file_collection = new_file_collection(output_root, profile.root_dir, true)
-  local copy_file_collection = new_file_collection(output_root, profile.root_dir)
+  local file_list, compile_count, copy_count
+  do
+    local output_root = Path.new(profile.output_dir):to_fully_qualified(profile.root_dir):normalize()
+    local compilation_file_collection = new_file_collection(output_root, profile.root_dir, true)
+    local copy_file_collection = new_file_collection(output_root, profile.root_dir)
 
-  process_include_exclude_definitions(profile.include_exclude_definitions, compilation_file_collection)
-  process_include_exclude_definitions(profile.include_exclude_copy_definitions, copy_file_collection)
+    process_include_exclude_definitions(profile.include_exclude_definitions, compilation_file_collection)
+    process_include_exclude_definitions(profile.include_exclude_copy_definitions, copy_file_collection)
 
-  local profile_meta = cache.make_profile_meta(profile)
-  local _, file_list = cache.make_file_mapping(compilation_file_collection, copy_file_collection)
+    compile_count = compilation_file_collection.count
+    copy_count = copy_file_collection.count
+    file_list = unify_file_collections(compilation_file_collection, copy_file_collection)
+  end
 
-  local incremental_compile, incremental_copy = determine_incremental(profile_meta, cached_profile_meta)
+  local incremental_compile, incremental_copy = determine_incremental(profile, cached_profile)
 
-  print("compiling "..compilation_file_collection.count.." files")
+  print("compiling "..compile_count.." files")
   local inject_script_cache = new_inject_script_cache()
   local context = compile_util.new_context()
-  local c = 0
-  for i = 1, compilation_file_collection.next_index - 1 do
-    local file = compilation_file_collection.files[i]
-    if file then
-      if profile.measure_memory then
-        local prev_gc_count = collectgarbage("count")
-        if prev_gc_count > 4 * 1000 * 1000 then
-          collectgarbage("collect")
-          total_memory_allocated = total_memory_allocated + (prev_gc_count - collectgarbage("count"))
-        end
+  for i = 1, compile_count do
+    if profile.measure_memory then
+      local prev_gc_count = collectgarbage("count")
+      if prev_gc_count > 4 * 1000 * 1000 then
+        collectgarbage("collect")
+        total_memory_allocated = total_memory_allocated + (prev_gc_count - collectgarbage("count"))
       end
-      c = c + 1
-      if should_update(file, cache.action_enum.compile, cached_file_mapping, incremental_compile) then
-        print("["..c.."/"..compilation_file_collection.count.."] "..file.source_filename)
-        local result = compile_util.compile({
-          source_name = file.source_name,
-          filename = file.source_filename,
-          filename_for_source = file.relative_source_filename,
-          use_load = file.use_load,
-          inject_scripts = get_inject_scripts(file.inject_scripts, inject_script_cache),
-          optimizations = profile.optimizations,
-          error_message_count = file.error_message_count,
-        }, context)
-        if result then
-          io_util.write_file(file.output_filename, result)
-        end
+    end
+    local file = file_list[i]
+    if should_update(file, action_enum.compile, cached_file_mapping, incremental_compile) then
+      print("["..i.."/"..compile_count.."] "..file.source_filename)
+      local result = compile_util.compile({
+        source_name = file.source_name,
+        filename = file.source_filename,
+        filename_for_source = file.relative_source_filename,
+        use_load = file.use_load,
+        inject_scripts = get_inject_scripts(file.inject_scripts, inject_script_cache),
+        optimizations = profile.optimizations,
+        error_message_count = file.error_message_count,
+      }, context)
+      if result then
+        io_util.write_file(file.output_filename, result)
       end
     end
   end
 
-  print("copying "..copy_file_collection.count.." files")
-  c = 0
-  for i = 1, copy_file_collection.next_index - 1 do
-    local files = copy_file_collection.files[i]
-    if files then
-      for _, file in ipairs(files) do
-        c = c + 1
-        if should_update(file, cache.action_enum.copy, cached_file_mapping, incremental_copy) then
-          print("["..c.."/"..copy_file_collection.count.."] "..file.source_filename)
-          io_util.copy(file.source_filename, file.output_filename)
-        end
-      end
+  print("copying "..copy_count.." files")
+  for i = compile_count + 1, compile_count + copy_count do
+    local file = file_list[i]
+    if should_update(file, action_enum.copy, cached_file_mapping, incremental_copy) then
+      print("["..(i - compile_count).."/"..copy_count.."] "..file.source_filename)
+      io_util.copy(file.source_filename, file.output_filename)
     end
   end
 
-  cache.save(profile_meta, file_list)
+  cache.save(profile, file_list)
 
   if profile.measure_memory then
     total_memory_allocated = total_memory_allocated + collectgarbage("count")
@@ -474,6 +523,8 @@ local function run_profile(profile, print)
 end
 
 return {
+  action_enum = action_enum,
+  action_name_lut = action_name_lut,
   new_profile = new_profile,
   include = include,
   exclude = exclude,
