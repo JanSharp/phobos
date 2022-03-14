@@ -98,7 +98,7 @@ end
 ---@param params ExcludeCopyParams
 local function exclude_copy(params)
   params.profile.include_exclude_copy_definitions[#params.profile.include_exclude_copy_definitions+1] = {
-    type = "include",
+    type = "exclude",
     source_path = params.source_path,
     recursion_depth = params.recursion_depth or (1/0),
     filename_pattern = params.filename_pattern or "",
