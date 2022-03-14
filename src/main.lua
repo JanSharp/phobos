@@ -6,6 +6,7 @@ arg_parser.register_type(Path.arg_parser_path_type_def)
 local compile_util = require("compile_util")
 local phobos_profiles = require("phobos_profiles")
 local profile_util = require("profile_util")
+local phobos_version = require("phobos_version")
 
 local default_profile_files = {Path.new(".phobos_profiles")}
 
@@ -45,6 +46,12 @@ local args_config = {
       description = "Perform clean builds instead of incremental.",
       flag = true,
     },
+    {
+      field = "version",
+      long = "version",
+      description = "Prints the current version of Phobos to std out.",
+      flag = true,
+    },
   },
 }
 
@@ -57,6 +64,11 @@ local arg_strings = {...}
 local args, last_arg_index = arg_parser.parse_and_print_on_error_or_help(arg_strings, args_config, help_config)
 if not args then os.exit(false) end
 if args.help then return end
+
+if args.version then
+  print(string.format("%d.%d.%d", phobos_version.major, phobos_version.minor, phobos_version.patch))
+  return
+end
 
 if args.profile_files == default_profile_files then
   if not default_profile_files[1]:exists() then
