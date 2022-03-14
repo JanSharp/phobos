@@ -1276,7 +1276,7 @@ local function expr_stat(scope, stat_elem)
     )
   else
     -- stat -> func
-    if first_exp.node_type == "call" then
+    if first_exp.node_type == "call" and not first_exp.force_single_result then
       return first_exp
     elseif first_exp.node_type == "invalid" then
       -- wherever this invalid node came from is responsible for consuming the
