@@ -7,6 +7,7 @@ local compile_util = require("compile_util")
 local phobos_profiles = require("phobos_profiles")
 local profile_util = require("profile_util")
 local phobos_version = require("phobos_version")
+local api_util = require("api_util")
 
 local default_profile_files = {Path.new(".phobos_profiles")}
 
@@ -100,6 +101,17 @@ for _, profiles_path in ipairs(args.profile_files) do
   -- not sandboxed at all
   main_chunk(table.unpack(arg_strings, last_arg_index + 1))
 end
+
+-- validating all profiles
+-- using a function just to have its name in the stack trace for when profiles are invalid
+local function validate_profiles()
+  for _, profile in ipairs(phobos_profiles.internal.all_profiles) do
+    api_util.api_call(function()
+      profile_util.validate_profile(profile)
+    end, "Profile '"..tostring(profile.name).."': ") -- it's not validated yet, 'name' could be anything
+  end
+end
+validate_profiles()
 
 ---always returns a full sentence
 local function get_list_of_all_profiles()

@@ -40,14 +40,14 @@ end
 
 ---**Do not tailcall this function.** This function has to be on the stack to identify where the
 ---actual stacktrace that we want to show the programmer started.
-local function api_call(func)
+local function api_call(func, pre_msg, post_msg)
   is_in_api_call = true
   local success, result = xpcall(func, function(msg)
     local api_error_msg = pop_last_api_error()
     if not api_error_msg then -- Wasn't an api error, but an internal error.
       return debug.traceback(msg, 2) -- Start at 2, no need to see traceback and this msg handler.
     end
-    msg = "Api Error: "..api_error_msg
+    msg = "Api Error: "..(pre_msg or "")..api_error_msg..(post_msg or "")
     -- 0 = getinfo/traceback, 1 = this msg handler, 2 = error, 3 = function causing the error
     local level = 3 -- start searching at 3
     local info

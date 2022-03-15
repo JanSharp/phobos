@@ -8,6 +8,7 @@ local io_util = require("io_util")
 local compile_util = require("compile_util")
 local cache = require("cache")
 local phobos_version = require("phobos_version")
+local api_util = require("api_util")
 
 local action_enum = {
   compile = 0,
@@ -19,8 +20,6 @@ local action_name_lut = {
   [1] = "copy",
   [2] = "delete",
 }
-
--- TODO: validate input
 
 ---@class NewProfileInternalParams : NewProfileParams
 ---**default:** `true`\
@@ -34,10 +33,154 @@ local action_name_lut = {
 ---profile_util handles this field and uses it to determine if the current compilation can be incremental
 ---@field phobos_version table
 
+local function validate_field_raw(name, value, expected_type, mandatory, expected_type_description)
+  if mandatory then
+    if value == nil then
+      api_util.abort("'"..name.."' (mandatory): Expected type "
+        ..(expected_type_description or expected_type)..", got nil."
+      )
+    end
+  elseif value == nil then
+    return
+  end
+  if type(value) ~= expected_type then
+    api_util.abort("'"..name.."'"
+      ..(mandatory == nil and "" or mandatory and " (mandatory)" or " (optional)")
+      ..": Expected type "
+      ..(expected_type_description or expected_type)..", got "..type(value).."."
+    )
+  end
+end
+
+local function validate_field(t, name, field, expected_type, mandatory, expected_value_description)
+  validate_field_raw(name.."."..field, t[field], expected_type, mandatory, expected_value_description)
+end
+
+local function assert_params(params)
+  api_util.assert(type(params) == "table", "Expected params table, got "..type(params)..".")
+end
+
+local function assert_params_and_profile(params, field, type_name)
+  assert_params(params)
+  validate_field(params, "params", "profile", "table", true, "must be a Profile")
+  validate_field(params.profile, "params.profile", field, "table", true, "must be an "..type_name.."[]")
+end
+
+local function validate_include_def(def, name)
+  name = name or "IncludeInCompilationDef"
+  validate_field(def, name, "source_path", "string", true)
+  validate_field(def, name, "output_path", "string", true)
+  validate_field(def, name, "recursion_depth", "number", true)
+  validate_field(def, name, "filename_pattern", "string", true)
+  validate_field(def, name, "source_name", "string", true)
+  validate_field(def, name, "phobos_extension", "string", true)
+  validate_field(def, name, "lua_extension", "string", true)
+  validate_field(def, name, "use_load", "boolean", true)
+  validate_field(def, name, "error_message_count", "number", true)
+  validate_field(def, name, "inject_scripts", "table", true, "must be an string[]")
+  for i, inject_script in ipairs(def.inject_scripts) do
+    validate_field_raw(name..".inject_script["..i.."]", inject_script, "string", true)
+  end
+end
+
+local function validate_exclude_def(def, name)
+  name = name or "ExcludeInCompilationDef"
+  validate_field(def, name, "source_path", "string", true)
+  validate_field(def, name, "recursion_depth", "number", true)
+  validate_field(def, name, "filename_pattern", "string", true)
+end
+
+local function validate_include_copy_def(def, name)
+  name = name or "IncludeInCopyDef"
+  validate_field(def, name, "source_path", "string", true)
+  validate_field(def, name, "output_path", "string", true)
+  validate_field(def, name, "recursion_depth", "number", true)
+  validate_field(def, name, "filename_pattern", "string", true)
+end
+
+local function validate_exclude_copy_def(def, name)
+  name = name or "ExcludeInCopyDef"
+  validate_field(def, name, "source_path", "string", true)
+  validate_field(def, name, "recursion_depth", "number", true)
+  validate_field(def, name, "filename_pattern", "string", true)
+  validate_field(def, name, "pop", "boolean", true)
+end
+
+local function validate_include_delete_def(def, name)
+  name = name or "IncludeInDeleteDef"
+  validate_field(def, name, "output_path", "string", true)
+  validate_field(def, name, "recursion_depth", "number", true)
+  validate_field(def, name, "filename_pattern", "string", true)
+end
+
+local function validate_exclude_delete_def(def, name)
+  name = name or "ExcludeInDeleteDef"
+  validate_field(def, name, "output_path", "string", true)
+  validate_field(def, name, "recursion_depth", "number", true)
+  validate_field(def, name, "filename_pattern", "string", true)
+end
+
+local function validate_profile(profile)
+  validate_field(profile, "profile", "name", "string", true)
+  validate_field(profile, "profile", "output_dir", "string", true)
+  validate_field(profile, "profile", "cache_dir", "string", true)
+  validate_field(profile, "profile", "phobos_extension", "string", true)
+  validate_field(profile, "profile", "lua_extension", "string", true)
+  validate_field(profile, "profile", "use_load", "boolean", true)
+  validate_field(profile, "profile", "incremental", "boolean", true)
+  validate_field(profile, "profile", "inject_scripts", "table", true, "must be an string[]")
+  for i, inject_script in ipairs(profile.inject_scripts) do
+    validate_field_raw("profile.inject_script["..i.."]", inject_script, "string", true)
+  end
+  validate_field(profile, "profile", "optimizations", "table", true)
+  validate_field(profile.optimizations, "profile.optimizations", "fold_const", "boolean", false)
+  validate_field(profile.optimizations, "profile.optimizations", "fold_control_statements", "boolean", false)
+  validate_field(profile.optimizations, "profile.optimizations", "tail_calls", "boolean", false)
+  validate_field(profile, "profile", "error_message_count", "number", true)
+  validate_field(profile, "profile", "measure_memory", "boolean", true)
+  validate_field(profile, "profile", "root_dir", "string", true)
+  validate_field(profile, "profile", "on_pre_profile_ran", "function", false)
+  validate_field(profile, "profile", "on_post_profile_ran", "function", false)
+  local function validate_include_exclude(field, type_name, validate_include_func, validate_exclude_func)
+    validate_field(profile, "profile", field, "table", true, "must be an "..type_name.."[]")
+    for i, def in ipairs(profile[field]) do
+      validate_field_raw("profile."..field.."["..i.."]", def, "table", nil, "must be an "..type_name)
+      if def.type == "include" then
+        validate_include_func(def, "profile."..field.."["..i.."]")
+      elseif def.type == "exclude" then
+        validate_exclude_func(def, "profile."..field.."["..i.."]")
+      else
+        api_util.abort("profile.include_exclude_definitions["..i
+          .."].type: Expected 'include' or 'exclude', got "..tostring(def.type).."."
+        )
+      end
+    end
+  end
+  validate_include_exclude(
+    "include_exclude_definitions",
+    "IncludeOrExcludeInCompilationDef",
+    validate_include_def,
+    validate_exclude_def
+  )
+  validate_include_exclude(
+    "include_exclude_copy_definitions",
+    "IncludeOrExcludeCopyDef",
+    validate_include_copy_def,
+    validate_exclude_copy_def
+  )
+  validate_include_exclude(
+    "include_exclude_delete_definitions",
+    "IncludeOrExcludeDeleteDef",
+    validate_include_delete_def,
+    validate_exclude_delete_def
+  )
+end
+
 ---`root_dir` does not have an explicit default when using this function.\
 ---Technically it will be using the current working directory if it's `nil` because of `Path.to_fully_qualified`.
 ---@param params NewProfileInternalParams
 local function new_profile(params)
+  assert_params(params)
   local profile = {
     name = params.name,
     output_dir = params.output_dir,
@@ -57,12 +200,14 @@ local function new_profile(params)
     include_exclude_copy_definitions = {},
     include_exclude_delete_definitions = {},
   }
+  validate_profile(profile)
   return profile
 end
 
 ---@param params IncludeParams
 local function include(params)
-  params.profile.include_exclude_definitions[#params.profile.include_exclude_definitions+1] = {
+  assert_params_and_profile(params, "include_exclude_definitions", "IncludeOrExcludeInCompilationDef")
+  local def = {
     type = "include",
     source_path = params.source_path,
     output_path = params.output_path,
@@ -75,58 +220,75 @@ local function include(params)
     error_message_count = params.error_message_count or params.profile.error_message_count,
     inject_scripts = params.inject_scripts or params.profile.inject_scripts,
   }
+  validate_include_def(def)
+  params.profile.include_exclude_definitions[#params.profile.include_exclude_definitions+1] = def
 end
 
 ---@param params ExcludeParams
 local function exclude(params)
-  params.profile.include_exclude_definitions[#params.profile.include_exclude_definitions+1] = {
+  assert_params_and_profile(params, "include_exclude_definitions", "IncludeOrExcludeInCompilationDef")
+  local def = {
     type = "exclude",
     source_path = params.source_path,
     recursion_depth = params.recursion_depth or (1/0),
     filename_pattern = params.filename_pattern or "",
   }
+  validate_exclude_def(def)
+  params.profile.include_exclude_definitions[#params.profile.include_exclude_definitions+1] = def
 end
 
 ---@param params IncludeCopyParams
 local function include_copy(params)
-  params.profile.include_exclude_copy_definitions[#params.profile.include_exclude_copy_definitions+1] = {
+  assert_params_and_profile(params, "include_exclude_copy_definitions", "IncludeOrExcludeCopyDef")
+  local def = {
     type = "include",
     source_path = params.source_path,
     output_path = params.output_path,
     recursion_depth = params.recursion_depth or (1/0),
     filename_pattern = params.filename_pattern or "",
   }
+  validate_include_copy_def(def)
+  params.profile.include_exclude_copy_definitions[#params.profile.include_exclude_copy_definitions+1] = def
 end
 
 ---@param params ExcludeCopyParams
 local function exclude_copy(params)
-  params.profile.include_exclude_copy_definitions[#params.profile.include_exclude_copy_definitions+1] = {
+  assert_params_and_profile(params, "include_exclude_copy_definitions", "IncludeOrExcludeCopyDef")
+  local def = {
     type = "exclude",
     source_path = params.source_path,
     recursion_depth = params.recursion_depth or (1/0),
     filename_pattern = params.filename_pattern or "",
-    pop = params.pop,
+    pop = params.pop or false,
   }
+  validate_exclude_copy_def(def)
+  params.profile.include_exclude_copy_definitions[#params.profile.include_exclude_copy_definitions+1] = def
 end
 
 ---@param params IncludeDeleteParams
 local function include_delete(params)
-  params.profile.include_exclude_delete_definitions[#params.profile.include_exclude_delete_definitions+1] = {
+  assert_params_and_profile(params, "include_exclude_delete_definitions", "IncludeOrExcludeDeleteDef")
+  local def = {
     type = "include",
     output_path = params.output_path,
     recursion_depth = params.recursion_depth or (1/0),
     filename_pattern = params.filename_pattern or "",
   }
+  validate_include_delete_def(def)
+  params.profile.include_exclude_delete_definitions[#params.profile.include_exclude_delete_definitions+1] = def
 end
 
 ---@param params ExcludeDeleteParams
 local function exclude_delete(params)
-  params.profile.include_exclude_delete_definitions[#params.profile.include_exclude_delete_definitions+1] = {
+  assert_params_and_profile(params, "include_exclude_delete_definitions", "IncludeOrExcludeDeleteDef")
+  local def = {
     type = "exclude",
     output_path = params.output_path,
     recursion_depth = params.recursion_depth or (1/0),
     filename_pattern = params.filename_pattern or "",
   }
+  validate_exclude_delete_def(def)
+  params.profile.include_exclude_delete_definitions[#params.profile.include_exclude_delete_definitions+1] = def
 end
 
 ---get a new table with all optimizations set to `true`
@@ -608,5 +770,6 @@ return {
   include_delete = include_delete,
   exclude_delete = exclude_delete,
   get_all_optimizations = get_all_optimizations,
+  validate_profile = validate_profile,
   run_profile = run_profile,
 }
