@@ -149,7 +149,7 @@
 ---Can be a path to a file or directory.
 ---
 ---**`include()` specific**:\
----If this is a file its extension must be the same as `lua_extension`.\
+---If this is a file its extension must be the same as `lua_extension`.
 ---
 ---If this is a relative path it will be relative to the
 ---**directory the build profile script entrypoint is in**.

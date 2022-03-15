@@ -1,6 +1,7 @@
 
 local profile_util = require("profile_util")
 local arg_parser = require("lib.LuaArgParser.arg_parser")
+local api_util = require("api_util")
 
 ---@class PhobosProfilesInternal : PhobosProfiles
 local phobos_profiles = {
@@ -20,39 +21,56 @@ local all_profiles = phobos_profiles.internal.all_profiles
 local profiles_by_name = phobos_profiles.internal.profiles_by_name
 
 function phobos_profiles.add_profile(params)
-  local root_dir = params.root_dir
-  params.root_dir = params.root_dir or phobos_profiles.internal.current_root_dir
-  local profile = profile_util.new_profile(params)
-  params.root_dir = root_dir
-  -- add the profile
-  assert(not profiles_by_name[profile.name], "Attempt to add 2 profiles with the name '"..profile.name.."'.")
-  profiles_by_name[profile.name] = profile
-  all_profiles[#all_profiles+1] = profile
+  local profile = api_util.api_call(function()
+    local root_dir = params.root_dir
+    params.root_dir = params.root_dir or phobos_profiles.internal.current_root_dir
+    local profile = profile_util.new_profile(params)
+    params.root_dir = root_dir
+    -- add the profile
+    api_util.assert(not profiles_by_name[profile.name],
+      "Attempt to add 2 profiles with the name '"..profile.name.."'."
+    )
+    profiles_by_name[profile.name] = profile
+    all_profiles[#all_profiles+1] = profile
+    return profile
+  end)
   return profile
 end
 
 function phobos_profiles.include(params)
-  profile_util.include(params)
+  api_util.api_call(function()
+    profile_util.include(params)
+  end)
 end
 
 function phobos_profiles.exclude(params)
-  profile_util.exclude(params)
+  api_util.api_call(function()
+    profile_util.exclude(params)
+  end)
 end
 
 function phobos_profiles.include_copy(params)
-  profile_util.include_copy(params)
+  api_util.api_call(function()
+    profile_util.include_copy(params)
+  end)
 end
 
 function phobos_profiles.exclude_copy(params)
-  profile_util.exclude_copy(params)
+  api_util.api_call(function()
+    profile_util.exclude_copy(params)
+  end)
 end
 
 function phobos_profiles.include_delete(params)
-  profile_util.include_delete(params)
+  api_util.api_call(function()
+    profile_util.include_delete(params)
+  end)
 end
 
 function phobos_profiles.exclude_delete(params)
-  profile_util.exclude_delete(params)
+  api_util.api_call(function()
+    profile_util.exclude_delete(params)
+  end)
 end
 
 function phobos_profiles.get_current_root_dir()
