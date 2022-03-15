@@ -159,6 +159,10 @@
 ---**Mandatory**\
 ---Can be a path to a file or directory.
 ---
+---Attempting to delete a file that is going to be
+---outputted to through compilation or copying has no effect.
+---It is going to be overwritten anyway.
+---
 ---Must be a relative path, will be relative to the **profile's `output_dir`**
 ---@field output_path string
 
