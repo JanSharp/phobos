@@ -5,6 +5,7 @@ Path.set_main_separator("/")
 local build_profile_arg_provider = require("build_profile_arg_provider")
 arg_parser.register_type(Path.arg_parser_path_type_def)
 arg_parser.register_type(build_profile_arg_provider.arg_parser_build_profile_type_def)
+local util = require("util")
 
 local args = arg_parser.parse_and_print_on_error_or_help({...}, {
   options = {
@@ -24,7 +25,7 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
     },
   },
 })
-if not args then os.exit(false) end
+if not args then util.abort() end
 if args.help then return end
 
 loadfile(assert(package.searchpath("main", package.path)))(table.unpack{

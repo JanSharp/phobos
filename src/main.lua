@@ -8,6 +8,7 @@ local phobos_profiles = require("phobos_profiles")
 local profile_util = require("profile_util")
 local phobos_version = require("phobos_version")
 local api_util = require("api_util")
+local util = require("util")
 
 local default_profile_files = {Path.new(".phobos_profiles")}
 
@@ -63,7 +64,7 @@ phobos_profiles.internal.main_help_config = help_config
 
 local arg_strings = {...}
 local args, last_arg_index = arg_parser.parse_and_print_on_error_or_help(arg_strings, args_config, help_config)
-if not args then os.exit(false) end
+if not args then util.abort() end
 if args.help then return end
 
 if args.version then
@@ -85,7 +86,7 @@ if args.profile_files == default_profile_files then
     print() -- empty line, just like the arg parser itself for invalid arg error messages
     print(arg_parser.get_help_string(args_config, help_config))
     -- since the message above reads like an error message, this should exit as a failure
-    os.exit(false)
+    util.abort()
   end
 end
 
@@ -134,7 +135,7 @@ for _, name in ipairs(args.profile_names) do
   local profile = phobos_profiles.internal.profiles_by_name[name]
   if not profile then
     print("No such profile '"..name.."'. "..get_list_of_all_profiles())
-    os.exit(false)
+    util.abort()
   end
   profile.incremental = not args.rebuild
   profile_util.run_profile(profile, print)

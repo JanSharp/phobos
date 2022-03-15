@@ -61,7 +61,7 @@ local function api_call(func, pre_msg, post_msg)
   end)
   if not success then
     print(result)
-    os.exit(false)
+    util.abort()
   end
   is_in_api_call = false
   return result

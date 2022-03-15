@@ -2,6 +2,7 @@
 package.path = package.path..";./tests/lib/test_framework/?.lua;./tests/?.lua"
 
 local arg_parser = require("lib.LuaArgParser.arg_parser")
+local util = require("util")
 
 local args = arg_parser.parse_and_print_on_error_or_help({...}, {
   options = {
@@ -29,7 +30,7 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
     },
   },
 }, {label_length = 80 - 4 - 2 - 50})
-if not args then os.exit(false) end
+if not args then util.abort() end
 if args.help then return end
 
 local framework = require("test_framework")

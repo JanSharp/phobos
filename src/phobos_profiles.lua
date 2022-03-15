@@ -2,6 +2,7 @@
 local profile_util = require("profile_util")
 local arg_parser = require("lib.LuaArgParser.arg_parser")
 local api_util = require("api_util")
+local util = require("util")
 
 ---@class PhobosProfilesInternal : PhobosProfiles
 local phobos_profiles = {
@@ -115,7 +116,11 @@ function phobos_profiles.custom_parse_extra_args(extra_args, custom_parse_functi
     if help then
       print("\nExtra args for profiles file '"..phobos_profiles.internal.current_profile_file.."':\n"..help)
     end
-    os.exit(not err)
+    if err then
+      util.abort()
+    else
+      os.exit(true)
+    end
   end
   return args
 end

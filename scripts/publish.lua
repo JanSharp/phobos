@@ -8,6 +8,7 @@ local io_util = require("io_util")
 local changelog_util = require("scripts.changelog_util")
 local shell_util = require("shell_util")
 local escape_arg = shell_util.escape_arg
+local util = require("util")
 
 local skip_able = {
   "skip_ensure_command_availability",
@@ -52,7 +53,7 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
     end)(),
   },
 })
-if not args then os.exit(false) end
+if not args then util.abort() end
 if args.help then return end
 
 local function run(...)
