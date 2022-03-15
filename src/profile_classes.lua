@@ -19,9 +19,20 @@
 ---@field profile 'nil' @ no longer in the table
 ---@field type '"exclude"'
 
+---@alias IncludeOrExcludeDeleteDef IncludeInDeleteDef|ExcludeInDeleteDef
+
+---@class IncludeInDeleteDef : IncludeDeleteParams
+---@field profile 'nil' @ no longer in the table
+---@field type '"include"'
+
+---@class ExcludeInDeleteDef : ExcludeDeleteParams
+---@field profile 'nil' @ no longer in the table
+---@field type '"exclude"'
+
 ---@class PhobosProfile : NewProfileParams
 ---@field include_exclude_definitions IncludeOrExcludeInCompilationDef[]
 ---@field include_exclude_copy_definitions IncludeOrExcludeCopyDef[]
+---@field include_exclude_delete_definitions IncludeOrExcludeDeleteDef[]
 
 ---@class Optimizations
 ---@field fold_const boolean
@@ -104,15 +115,6 @@
 ---**Mandatory**\
 ---The profile to add this definition to.
 ---@field profile PhobosProfile
----**Mandatory**\
----Can be a path to a file or directory.
----
----**`include()` specific**:\
----If this is a file its extension must be the same as `lua_extension`.\
----
----If this is a relative path it will be relative to the
----**directory the build profile script entrypoint is in**.
----@field source_path string
 ---**Default:** `1/0` (infinite)\
 ---Does nothing if `source_path` is a file.\
 ---How many directories and sub directories deep it should enumerate.\
@@ -134,7 +136,7 @@
 ---Note that excluding a file that isn't included is not a problem, it simply does nothing.
 ---
 ---If you're used to "file globs" here are respective equivalents:
----- `*` => `[^/]*` - Match a part of filename or directory of undetermined length.
+---- `*` => `[^/]*` - Match a part of a filename or directory of undetermined length.
 ---- `/**/` => `/.*/` - Match any amount of directories.
 ---- `?` => `[^/]` - Match any single character within a filename or directory.
 ---
@@ -142,9 +144,27 @@
 ---[Lua manual for string patterns](http://www.lua.org/manual/5.2/manual.html#6.4.1).
 ---@field filename_pattern string
 
+---@class NonDeleteIncludeAndExcludeBase : IncludeAndExcludeBase
+---**Mandatory**\
+---Can be a path to a file or directory.
+---
+---**`include()` specific**:\
+---If this is a file its extension must be the same as `lua_extension`.\
+---
+---If this is a relative path it will be relative to the
+---**directory the build profile script entrypoint is in**.
+---@field source_path string
+
+---@class DeleteIncludeAndExcludeBase : IncludeAndExcludeBase
+---**Mandatory**\
+---Can be a path to a file or directory.
+---
+---Must be a relative path, will be relative to the **profile's `output_dir`**
+---@field output_path string
 
 
----@class IncludeParams : IncludeAndExcludeBase
+
+---@class IncludeParams : NonDeleteIncludeAndExcludeBase
 ---**Mandatory**\
 ---Must be a path to a file or directory, whichever `source_path` is using.\
 ---If this is a file its extension must be the same as `phobos_extension`.
@@ -190,19 +210,25 @@
 ---if there are relative paths they will be **relative to the root_dir**
 ---@field inject_scripts string[]
 
----@class ExcludeParams : IncludeAndExcludeBase
+---@class ExcludeParams : NonDeleteIncludeAndExcludeBase
 
 
 
----@class IncludeCopyParams : IncludeAndExcludeBase
+---@class IncludeCopyParams : NonDeleteIncludeAndExcludeBase
 ---**Mandatory**\
 ---Must be a path to a file or directory, whichever `source_path` is using.
 ---
 ---Must be a relative path, will be relative to the **profile's `output_dir`**
 ---@field output_path string
 
----@class ExcludeCopyParams : IncludeAndExcludeBase
+---@class ExcludeCopyParams : NonDeleteIncludeAndExcludeBase
 ---**Default:** `false`\
 ---Should this only exclude the latest included file when a given file was
----included multiple times with different output paths
+---included multiple times with different output paths?
 ---@field pop boolean
+
+
+
+---@class IncludeDeleteParams : DeleteIncludeAndExcludeBase
+
+---@class ExcludeDeleteParams : DeleteIncludeAndExcludeBase

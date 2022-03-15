@@ -25,6 +25,14 @@ function phobos_profiles.include_copy(params) end
 ---@param params ExcludeCopyParams
 function phobos_profiles.exclude_copy(params) end
 
+---Mandatory fields: `profile`, `output_path`.
+---@param params IncludeDeleteParams
+function phobos_profiles.include_delete(params) end
+
+---Mandatory fields: `profile`, `output_path`.
+---@param params ExcludeDeleteParams
+function phobos_profiles.exclude_delete(params) end
+
 ---Get the directory which is the current default for `profile.root_dir`.\
 ---It is the the directory the build profile script (entrypoint) is in.\
 ---Using `require()` or some other method to run other files does not change this directory.\

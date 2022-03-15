@@ -49,6 +49,12 @@ local function standalone_profile(name, optimizations)
     use_load = true,
   }
 
+  -- delete every single file that is not currently being outputted
+  profiles.include_delete{
+    profile = profile,
+    output_path = ".",
+  }
+
   profiles.include{
     profile = profile,
     source_path = "src",
@@ -90,6 +96,12 @@ local function factorio_profile(name, optimizations)
     phobos_extension = phobos_extension,
     optimizations = optimizations,
     use_load = true,
+  }
+
+  -- delete every single file that is not currently being outputted
+  profiles.include_delete{
+    profile = profile,
+    output_path = ".",
   }
 
   profiles.include{

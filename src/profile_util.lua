@@ -12,10 +12,12 @@ local phobos_version = require("phobos_version")
 local action_enum = {
   compile = 0,
   copy = 1,
+  delete = 2,
 }
 local action_name_lut = {
   [0] = "compile",
   [1] = "copy",
+  [2] = "delete",
 }
 
 -- TODO: validate input
@@ -53,6 +55,7 @@ local function new_profile(params)
     on_post_profile_ran = params.on_post_profile_ran,
     include_exclude_definitions = {},
     include_exclude_copy_definitions = {},
+    include_exclude_delete_definitions = {},
   }
   return profile
 end
@@ -103,6 +106,26 @@ local function exclude_copy(params)
     recursion_depth = params.recursion_depth or (1/0),
     filename_pattern = params.filename_pattern or "",
     pop = params.pop,
+  }
+end
+
+---@param params IncludeDeleteParams
+local function include_delete(params)
+  params.profile.include_exclude_delete_definitions[#params.profile.include_exclude_delete_definitions+1] = {
+    type = "include",
+    output_path = params.output_path,
+    recursion_depth = params.recursion_depth or (1/0),
+    filename_pattern = params.filename_pattern or "",
+  }
+end
+
+---@param params ExcludeDeleteParams
+local function exclude_delete(params)
+  params.profile.include_exclude_delete_definitions[#params.profile.include_exclude_delete_definitions+1] = {
+    type = "exclude",
+    output_path = params.output_path,
+    recursion_depth = params.recursion_depth or (1/0),
+    filename_pattern = params.filename_pattern or "",
   }
 end
 
@@ -159,7 +182,7 @@ local function get_inject_scripts(inject_scripts, script_cache)
   return result
 end
 
-local function new_file_collection(output_root, root_dir, is_compilation_collection)
+local function new_file_collection(output_root, root_dir, action)
   return {
     ---fully qualified and normalized
     output_root = output_root,
@@ -173,8 +196,21 @@ local function new_file_collection(output_root, root_dir, is_compilation_collect
     ---@type table<string, integer>
     files_lut = {},
     root_dir = root_dir,
-    is_compilation_collection = is_compilation_collection,
+    action = action,
   }
+end
+
+local function normalize_output_path(output_path)
+  local normalized_output_path = Path.new(output_path):normalize()
+  if normalized_output_path:is_absolute() then
+    util.abort("'output_path' has to be a relative path (output_path: '"..output_path.."')")
+  end
+  if normalized_output_path.entries[1] == ".." then
+    util.abort("Attempt to output files outside of the output directory. \z
+      (output_path: '"..output_path.."', normalized: '"..normalized_output_path:str().."')"
+    )
+  end
+  return normalized_output_path
 end
 
 local function replace_extension(path, extension)
@@ -182,43 +218,39 @@ local function replace_extension(path, extension)
 end
 
 local function process_include(include_def, collection)
-  local is_compilation_collection = collection.is_compilation_collection
-  local root = Path.new(include_def.source_path):to_fully_qualified(collection.root_dir):normalize()
-  local relative_output_path = Path.new(include_def.output_path):normalize()
-  if relative_output_path:is_absolute() then
-    util.abort("'output_path' has to be a relative path (output_path: '"..include_def.output_path.."')")
-  end
-  if relative_output_path.entries[1] == ".." then
-    util.abort("Attempt to output files outside of the output directory. \z
-      (output_path: '"..include_def.output_path.."', normalized: '"..relative_output_path:str().."')"
-    )
-  end
-  local source_root = root
+  local relative_output_path = normalize_output_path(include_def.output_path)
   local output_root = collection.output_root / relative_output_path
+  -- deleting is rooted at the output, and doesn't use source_path at all
+  local source_root = collection.action == action_enum.delete
+    and output_root
+    or Path.new(include_def.source_path):to_fully_qualified(collection.root_dir):normalize()
+  -- that also means that everything that is called something with "source" in this function
+  -- actually refers to the output for delete collections
 
   local include_entry
 
   local function include_file(relative_entry_path)
-    local source_filename = (root / relative_entry_path):str()
+    local source_filename = (source_root / relative_entry_path):str()
     local index = collection.files_lut[source_filename]
-    if not is_compilation_collection or not index then
+    if collection.action == action_enum.copy or not index then
       -- Only increment count if this is not overwriting an already included file.
-      -- It is overwriting if it is a compilation collection and the source file was already added
-      -- the other case is handled near the end of the function
+      -- It is overwriting if it is a compilation collection and the source file was already added.
+      -- Copy file collections can include the same file twice, so they always increment
+      -- The other case is handled near the end of the function.
       collection.count = collection.count + 1
     end
     if not index then -- doesn't exist yet, so it's not overwriting but defining a new file
       index = collection.next_index
       collection.next_index = collection.next_index + 1
       collection.files_lut[source_filename] = index
-      if not is_compilation_collection then
+      if collection.action == action_enum.copy then
         collection.files[index] = {} -- new array
       end
     end
-    local relative_output_entry_path = is_compilation_collection
+    local relative_output_entry_path = collection.action == action_enum.compile
       and replace_extension(relative_entry_path, include_def.lua_extension)
       or relative_entry_path
-    if is_compilation_collection
+    if collection.action == action_enum.compile
       and not relative_output_entry_path.entries[1]
       and include_def.source_name:find("?", 1, true)
     then
@@ -227,9 +259,10 @@ local function process_include(include_def, collection)
         (source_path: '"..include_def.source_path.."', source_name: '"..include_def.source_name.."')"
       )
     end
-    if is_compilation_collection then
+    if collection.action == action_enum.compile then
       -- not an array of files because compilation collections disallow compiling the same file twice anyway
       collection.files[index] = {
+        action = action_enum.compile,
         source_filename = source_filename,
         relative_source_filename = relative_entry_path:str(),
         output_filename = (output_root / relative_output_entry_path):str(),
@@ -238,17 +271,25 @@ local function process_include(include_def, collection)
         error_message_count = include_def.error_message_count,
         inject_scripts = include_def.inject_scripts,
       }
+    elseif collection.action == action_enum.delete then
+      -- Again not an array. I mean how would you delete the same file twice. You don't.
+      collection.files[index] = {
+        action = action_enum.delete,
+        output_filename = source_filename,
+      }
     else
       local files = collection.files[index]
       local output_filename = (output_root / relative_output_entry_path):str()
       -- if the source an output filename combination already then exists just ignore this one
       for _, file in ipairs(files) do
         if file.source_filename == source_filename and file.output_filename == output_filename then
+          -- This is the other case that was mentioned at the beginning of the function.
           collection.count = collection.count - 1
           goto ignore
         end
       end
       files[#files+1] = {
+        action = action_enum.copy,
         source_filename = source_filename,
         output_filename = output_filename,
       }
@@ -272,7 +313,7 @@ local function process_include(include_def, collection)
       include_dir(relative_entry_path, depth)
     elseif mode == "file" then
       -- phobos_extension is only used for compilation includes
-      local included = not is_compilation_collection
+      local included = collection.action ~= action_enum.compile
         or source_rooted_entry_path:extension() == include_def.phobos_extension
       -- "" matches everything, don't waste time processing all of this
       if include_def.filename_pattern ~= "" and included then
@@ -287,20 +328,20 @@ local function process_include(include_def, collection)
   include_entry(Path.new(), 1)
 end
 
-local function process_exclude(path_def, collection)
+local function process_exclude(exclude_def, collection)
   local exclude_entry
 
   local function exclude_file(entry_path)
     local index = collection.files_lut[entry_path:str()]
     if index then
-      if collection.is_compilation_collection then
+      if collection.action ~= action_enum.copy then
         collection.files_lut[entry_path:str()] = nil
         collection.files[index] = nil -- leaves hole
         collection.count = collection.count - 1
       else
         local files = collection.files[index]
         local length = #files
-        if length > 1 and path_def.pop then
+        if length > 1 and exclude_def.pop then
           files[length] = nil
           collection.count = collection.count - 1
         else
@@ -313,7 +354,7 @@ local function process_exclude(path_def, collection)
   end
 
   local function exclude_dir(entry_path, depth)
-    if depth > path_def.recursion_depth then return end
+    if depth > exclude_def.recursion_depth then return end
     for entry in lfs.dir(entry_path:str()) do
       if entry ~= "." and entry ~= ".." then
         exclude_entry(entry_path / entry, depth + 1)
@@ -327,15 +368,20 @@ local function process_exclude(path_def, collection)
       exclude_dir(entry_path, depth)
     elseif mode == "file" then
       -- filename_pattern "" matches everything => should exclude
-      if path_def.filename_pattern == ""
-        or ("/"..entry_path:str()):find(path_def.filename_pattern)
+      if exclude_def.filename_pattern == ""
+        or ("/"..entry_path:str()):find(exclude_def.filename_pattern)
       then
         exclude_file(entry_path)
       end
     end
   end
 
-  exclude_entry(Path.new(path_def.source_path):to_fully_qualified(collection.root_dir):normalize(), 1)
+  if collection.action == action_enum.delete then
+    local relative_output_path = normalize_output_path(exclude_def.output_path)
+    exclude_entry(collection.output_root / relative_output_path, 1)
+  else
+    exclude_entry(Path.new(exclude_def.source_path):to_fully_qualified(collection.root_dir):normalize(), 1)
+  end
 end
 
 ---current and cached are profile metadata
@@ -397,33 +443,39 @@ local function process_include_exclude_definitions(defs, file_collection)
   end
 end
 
-local function unify_file_collections(compile_collection, copy_collection)
+local function unify_file_collections(compile_collection, copy_collection, delete_collection)
   local file_mapping = {}
   local file_list = {}
-  local function add_file(file, action)
+  local function add_file(file)
     if file then
       local existing = file_mapping[file.output_filename]
       if existing then
+        if file.action == action_enum.delete then
+          return -- just return because we won't delete files that are just getting outputted
+        end
+        -- for compile and copy it's an error though
         util.abort("Attempt to output to the same file location twice: '"..file.output_filename.."'. \z
           Sources: '"..existing.source_filename.."' (" ..action_name_lut[existing.action].."), '"
-          ..file.source_filename.."' ("..action..")."
+          ..file.source_filename.."' ("..action_name_lut[file.action]..")."
         )
       end
-      file.action = action
       file_mapping[file.output_filename] = file
       file_list[#file_list+1] = file
     end
   end
   for i = 1, compile_collection.next_index - 1 do
-    add_file(compile_collection.files[i], action_enum.compile)
+    add_file(compile_collection.files[i])
   end
   for i = 1, copy_collection.next_index - 1 do
     local files = copy_collection.files[i]
     if files then
       for _, file in ipairs(files) do
-        add_file(file, action_enum.copy)
+        add_file(file)
       end
     end
+  end
+  for i = 1, delete_collection.next_index - 1 do
+    add_file(delete_collection.files[i])
   end
   return file_list, file_mapping
 end
@@ -463,18 +515,23 @@ local function run_profile(profile, print)
     cached_file_mapping = file_list and make_file_mapping_from_file_list(file_list)
   end
 
-  local file_list, compile_count, copy_count
+  local file_list, compile_count, copy_count, delete_count
   do
     local output_root = Path.new(profile.output_dir):to_fully_qualified(profile.root_dir):normalize()
-    local compilation_file_collection = new_file_collection(output_root, profile.root_dir, true)
-    local copy_file_collection = new_file_collection(output_root, profile.root_dir)
+    local compilation_file_collection = new_file_collection(output_root, profile.root_dir, action_enum.compile)
+    local copy_file_collection = new_file_collection(output_root, profile.root_dir, action_enum.copy)
+    local delete_file_collection = new_file_collection(output_root, profile.root_dir, action_enum.delete)
 
     process_include_exclude_definitions(profile.include_exclude_definitions, compilation_file_collection)
     process_include_exclude_definitions(profile.include_exclude_copy_definitions, copy_file_collection)
+    process_include_exclude_definitions(profile.include_exclude_delete_definitions, delete_file_collection)
 
     compile_count = compilation_file_collection.count
     copy_count = copy_file_collection.count
-    file_list = unify_file_collections(compilation_file_collection, copy_file_collection)
+    file_list = unify_file_collections(compilation_file_collection, copy_file_collection, delete_file_collection)
+    -- can't use the count from the file collection because during unifying
+    -- delete actions will be removed if they would delete a file that is being compiled/copied to
+    delete_count = #file_list - compile_count - copy_count
   end
 
   local incremental_compile, incremental_copy = determine_incremental(profile, cached_profile)
@@ -517,6 +574,13 @@ local function run_profile(profile, print)
     end
   end
 
+  print("deleting "..delete_count.." files")
+  for i = compile_count + copy_count + 1, compile_count + copy_count + delete_count do
+    local file = file_list[i]
+    print("["..(i - compile_count - copy_count).."/"..delete_count.."] "..file.output_filename)
+    os.remove(file.output_filename)
+  end
+
   cache.save(profile, file_list)
 
   if profile.measure_memory then
@@ -541,6 +605,8 @@ return {
   exclude = exclude,
   include_copy = include_copy,
   exclude_copy = exclude_copy,
+  include_delete = include_delete,
+  exclude_delete = exclude_delete,
   get_all_optimizations = get_all_optimizations,
   run_profile = run_profile,
 }
