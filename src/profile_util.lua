@@ -470,6 +470,12 @@ local function process_include(include_def, collection)
 
   function include_entry(relative_entry_path, depth)
     local source_rooted_entry_path = source_root / relative_entry_path
+    if depth == 1
+      and collection.action == action_enum.delete
+      and not source_rooted_entry_path:exists()
+    then
+      return
+    end
     local mode = util.assert(source_rooted_entry_path:attr("mode"))
     if mode == "directory" then
       include_dir(relative_entry_path, depth)
@@ -526,6 +532,12 @@ local function process_exclude(exclude_def, collection)
 
   function exclude_entry(entry_path, depth)
     local mode = util.assert(entry_path:attr("mode"))
+    if depth == 1
+      and collection.action == action_enum.delete
+      and not entry_path:exists()
+    then
+      return
+    end
     if mode == "directory" then
       exclude_dir(entry_path, depth)
     elseif mode == "file" then
