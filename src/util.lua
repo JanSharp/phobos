@@ -39,6 +39,41 @@ local function clear_table(t)
   end
 end
 
+local function shallow_copy(t)
+  local result = {}
+  for k, v in pairs(t) do
+    result[k] = v
+  end
+  local meta = getmetatable(t)
+  if meta then
+    setmetatable(result, meta)
+  end
+  return result
+end
+
+local function copy(t, copy_metatables)
+  local visited = {}
+  local function copy_recursive(value)
+    if type(value) ~= "table" then
+      return value
+    end
+    if visited[value] then
+      return visited[value]
+    end
+    local result = {}
+    visited[value] = result
+    for k, v in pairs(value) do
+      result[copy_recursive(k)] = copy_recursive(v)
+    end
+    local meta = getmetatable(value)
+    if meta then
+      setmetatable(result, copy_metatables and copy_recursive(meta) or meta)
+    end
+    return result
+  end
+  return copy_recursive(t)
+end
+
 --- Invert an array of keys to be a set of key=true
 ---@param t table<number,any>
 ---@return table<any,boolean>
@@ -59,7 +94,9 @@ local function abort(message)
     if message then
       print(message)
     end
-    os.exit(false)
+    error() -- error without a message apparently doesn't end up printing anything to the console
+    -- the benefit is that this can still be caught by pcall
+    -- otherwise we use os.exit(false)
   else
     error(message)
   end
@@ -84,6 +121,8 @@ return {
   floating_byte_to_number = floating_byte_to_number,
   invert = invert,
   clear_table = clear_table,
+  shallow_copy = shallow_copy,
+  copy = copy,
   debug_abort = debug_abort,
   abort = abort,
   debug_assert = debug_assert,
