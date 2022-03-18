@@ -9,17 +9,11 @@ local compile_util = require("compile_util")
 local cache = require("cache")
 local phobos_version = require("phobos_version")
 local api_util = require("api_util")
+local sandbox_util = require("sandbox_util")
+local constants = require("constants")
 
-local action_enum = {
-  compile = 0,
-  copy = 1,
-  delete = 2,
-}
-local action_name_lut = {
-  [0] = "compile",
-  [1] = "copy",
-  [2] = "delete",
-}
+local action_enum = constants.action_enum
+local action_name_lut = constants.action_name_lut
 
 ---@class NewProfileInternalParams : NewProfileParams
 ---**default:** `true`\
@@ -301,46 +295,101 @@ local function get_all_optimizations()
   }
 end
 
+local function get_modification(filename)
+  return util.debug_assert(lfs.attributes(filename, "modification"))
+end
+
 local function new_inject_script_cache(root_dir)
   return {
-    compile_util_context = compile_util.new_context(),
-    ---indexed by fully qualified paths of inject scripts
-    ---@type table<string, fun(ast:AstFunctionDef)>
-    compiled_inject_script_files = {},
-    ---indexed by `inject_scripts` tables
-    ---@type table<table, fun(ast:AstFunctionDef)[]>
-    compiled_inject_scripts_lut = {},
+    ---has `required_files` and `func`
+    file_specific_data_lut = {},
+    raw_to_full_filenames = {},
+
+    next_id = 0,
+    result_lut = {},
+    results = {}, -- the list version of result_lut
     ---the root dir of the current profile
     root_dir = root_dir,
   }
 end
 
----get the compiled inject scripts while making sure not to compile the same file twice (ignoring symlinks)\
----also runs the main chunk of inject scripts to get the actual inject function
-local function get_inject_scripts(inject_scripts, script_cache)
-  if script_cache.compiled_inject_scripts_lut[inject_scripts] then
-    return script_cache.compiled_inject_scripts_lut[inject_scripts]
+local function get_inject_script_file_specific_data(filename, script_cache)
+  local result = script_cache.file_specific_data_lut[filename]
+  if result then
+    return result
   end
-  local result = {}
-  for i, filename in ipairs(inject_scripts) do
-    local full_filename = Path.new(filename):to_fully_qualified(script_cache.root_dir):normalize():str()
-    local compiled = script_cache.compiled_inject_script_files[full_filename]
-    if not compiled then
-      -- print("compiling inject script "..full_filename)
-      local main_chunk = assert(load(compile_util.compile({
-        filename = full_filename,
-        source_name = "@?",
-        accept_bytecode = true,
-      }, script_cache.inject_script_context), nil, "b"))
-      compiled = main_chunk()
-      assert(type(compiled) == "function",
-        "AST inject scripts must return a function. (script file: "..full_filename..")"
-      )
-      script_cache.compiled_inject_script_files[full_filename] = compiled
+  -- util.debug_print("compiling inject script "..filename)
+  local main_chunk = assert(load(compile_util.compile({
+    filename = filename,
+    source_name = "@?",
+    accept_bytecode = true,
+  }, script_cache.inject_script_context), nil, "b"))
+  sandbox_util.hook()
+  local func = main_chunk()
+  util.assert(type(func) == "function",
+    "AST inject scripts must return a function. (script file: "..filename..")"
+  )
+  local required_files = sandbox_util.unhook()
+  for i = #required_files, 1, -1 do
+    local file = required_files[i]
+    file = Path.new(file):to_fully_qualified():normalize():str()
+    required_files[i + 1] = {
+      filename = file,
+      modification = get_modification(file),
+    }
+  end
+  required_files[1] = {
+    filename = filename,
+    modification = get_modification(filename),
+  }
+  result = {
+    required_files = required_files,
+    func = func,
+  }
+  script_cache.file_specific_data_lut[filename] = result
+  return result
+end
+
+local function load_inject_scripts(inject_scripts, script_cache)
+  for i, filename in ipairs(inject_scripts.filenames) do
+    local data = get_inject_script_file_specific_data(filename, script_cache)
+    inject_scripts.funcs[i] = data.func
+    for _, file in ipairs(data.required_files) do
+      if not inject_scripts.modification_lut[file.filename] then
+        inject_scripts.modification_lut[file.filename] = file.modification
+        inject_scripts.required_files[#inject_scripts.required_files+1] = file
+      end
     end
-    result[i] = compiled
   end
-  script_cache.compiled_inject_scripts_lut[inject_scripts] = result
+end
+
+local function get_inject_script_data(raw_inject_scripts, script_cache)
+  local result = script_cache.result_lut[raw_inject_scripts]
+  if result then
+    return result
+  end
+
+  local filenames = script_cache.raw_to_full_filenames[raw_inject_scripts]
+  if not filenames then
+    filenames = {}
+    script_cache.raw_to_full_filenames[raw_inject_scripts] = filenames
+    for i, raw_filename in ipairs(raw_inject_scripts) do
+      filenames[i] = Path.new(raw_filename):to_fully_qualified(script_cache.root_dir):normalize():str()
+    end
+  end
+
+  result = {
+    id = script_cache.next_id,
+    usage_count = 0,
+    filenames = filenames,
+    -- these 3 get populated by load_inject_scripts
+    modification_lut = {},
+    required_files = {},
+    funcs = {},
+  }
+  script_cache.next_id = script_cache.next_id + 1
+  script_cache.result_lut[raw_inject_scripts] = result
+  script_cache.results[#script_cache.results+1] = result
   return result
 end
 
@@ -359,6 +408,8 @@ local function new_file_collection(output_root, root_dir, action)
     files_lut = {},
     root_dir = root_dir,
     action = action,
+    ---only for compilation file collections, set outside this function
+    inject_script_cache = nil,
   }
 end
 
@@ -422,6 +473,8 @@ local function process_include(include_def, collection)
       )
     end
     if collection.action == action_enum.compile then
+      local inject_scripts = get_inject_script_data(include_def.inject_scripts, collection.inject_script_cache)
+      inject_scripts.usage_count = inject_scripts.usage_count + 1
       -- not an array of files because compilation collections disallow compiling the same file twice anyway
       collection.files[index] = {
         action = action_enum.compile,
@@ -431,7 +484,7 @@ local function process_include(include_def, collection)
         source_name = include_def.source_name,
         use_load = include_def.use_load,
         error_message_count = include_def.error_message_count,
-        inject_scripts = include_def.inject_scripts,
+        inject_scripts = inject_scripts,
       }
     elseif collection.action == action_enum.delete then
       -- Again not an array. I mean how would you delete the same file twice. You don't.
@@ -503,6 +556,10 @@ local function process_exclude(exclude_def, collection)
     local index = collection.files_lut[entry_path:str()]
     if index then
       if collection.action ~= action_enum.copy then
+        if collection.action == action_enum.compile then
+          local inject_scripts = collection.files[index].inject_scripts
+          inject_scripts.usage_count = inject_scripts.usage_count - 1
+        end
         collection.files_lut[entry_path:str()] = nil
         collection.files[index] = nil -- leaves hole
         collection.count = collection.count - 1
@@ -586,22 +643,38 @@ local function determine_incremental(current_profile, cached_profile)
       return false, true
     end
   end
-  -- TODO: compare modification dates of profile files and injection script files and the files they all require
-  -- can compile and copy incrementally
   return true, true
 end
 
 local function should_update(file, action, cached_file_mapping, incremental)
   local cached_file = cached_file_mapping and cached_file_mapping[file.output_filename]
   if not incremental
-    or (cached_file and cached_file.source_filename) ~= file.source_filename
-    or (cached_file and cached_file.action) ~= action
+    or not cached_file
+    or cached_file.source_filename ~= file.source_filename -- every type of action has output_filename
+    or cached_file.action ~= action
     or not Path.new(file.output_filename):exists()
   then
     return true
   end
-  local source_modification = lfs.attributes(file.source_filename, "modification")
-  local output_modification = lfs.attributes(file.output_filename, "modification")
+  if file.action == action_enum.compile then -- inject_scripts
+    local inject_scripts = file.inject_scripts
+    local cached_inject_scripts = cached_file.inject_scripts
+    for i = 1, #inject_scripts.filenames + 1 do -- +1 to also make sure they both have the same length
+      if inject_scripts.filenames[i] ~= cached_inject_scripts.filenames[i] then
+        return true
+      end
+    end
+    -- if all their modification dates match then there is no way one required more or less files than the other
+    -- so the only way this could fail to identify changes is if the inject scripts read files manually
+    local modification_lut = inject_scripts.modification_lut
+    for _, required_file in ipairs(cached_inject_scripts.required_files) do
+      if modification_lut[required_file.filename] ~= required_file.modification then
+        return true
+      end
+    end
+  end
+  local source_modification = get_modification(file.source_filename)
+  local output_modification = get_modification(file.output_filename)
   return os.difftime(source_modification, output_modification) > 0
 end
 
@@ -689,10 +762,12 @@ local function run_profile(profile, print)
     cached_file_mapping = file_list and make_file_mapping_from_file_list(file_list)
   end
 
+  local inject_script_cache = new_inject_script_cache()
   local file_list, compile_count, copy_count, delete_count
   do
     local output_root = Path.new(profile.output_dir):to_fully_qualified(profile.root_dir):normalize()
     local compilation_file_collection = new_file_collection(output_root, profile.root_dir, action_enum.compile)
+    compilation_file_collection.inject_script_cache = inject_script_cache
     local copy_file_collection = new_file_collection(output_root, profile.root_dir, action_enum.copy)
     local delete_file_collection = new_file_collection(output_root, profile.root_dir, action_enum.delete)
 
@@ -708,10 +783,34 @@ local function run_profile(profile, print)
     delete_count = #file_list - compile_count - copy_count
   end
 
+  local all_inject_scripts = inject_script_cache.results
+  do
+    local i = 1
+    local j = 1
+    local c = 1
+    while i <= c do
+      local inject_scripts = all_inject_scripts[i]
+      all_inject_scripts[i] = nil
+      if inject_scripts.usage_count > 0 then
+        all_inject_scripts[j] = inject_scripts
+        load_inject_scripts(inject_scripts, inject_script_cache)
+        -- local foo = {}
+        -- for k, file in ipairs(inject_scripts.required_files) do
+        --   foo[k] = "\n"..file.filename.." || "..os.date("%F %T", file.modification)
+        -- end
+        -- util.debug_print("inject scripts: "..table.concat(inject_scripts.filenames, ", ")..": \n\z
+        --   used "..inject_scripts.usage_count.." times, requiring "..#foo.." files:"..table.concat(foo))
+        j = j + 1
+      end
+      i = i + 1
+    end
+  end
+  -- the previous code modified the results table of the cache and the cache should no longer be used
+  inject_script_cache = nil
+
   local incremental_compile, incremental_copy = determine_incremental(profile, cached_profile)
 
   print("compiling "..compile_count.." files")
-  local inject_script_cache = new_inject_script_cache()
   local context = compile_util.new_context()
   for i = 1, compile_count do
     if profile.measure_memory then
@@ -729,7 +828,7 @@ local function run_profile(profile, print)
         filename = file.source_filename,
         filename_for_source = file.relative_source_filename,
         use_load = file.use_load,
-        inject_scripts = get_inject_scripts(file.inject_scripts, inject_script_cache),
+        inject_scripts = file.inject_scripts.funcs,
         optimizations = profile.optimizations,
         error_message_count = file.error_message_count,
       }, context)
@@ -755,7 +854,7 @@ local function run_profile(profile, print)
     os.remove(file.output_filename)
   end
 
-  cache.save(profile, file_list)
+  cache.save(profile, all_inject_scripts, file_list)
 
   if profile.measure_memory then
     total_memory_allocated = total_memory_allocated + collectgarbage("count")

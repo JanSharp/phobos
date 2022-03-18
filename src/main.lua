@@ -9,6 +9,7 @@ local profile_util = require("profile_util")
 local phobos_version = require("phobos_version")
 local api_util = require("api_util")
 local util = require("util")
+local sandbox_util = require("sandbox_util")
 
 local default_profile_files = {Path.new(".phobos_profiles")}
 
@@ -54,6 +55,13 @@ local args_config = {
       description = "Prints the current version of Phobos to std out.",
       flag = true,
     },
+    {
+      field = "foo",
+      long = "foo",
+      type = "path",
+      single_param = true,
+      optional = true,
+    },
   },
 }
 
@@ -75,8 +83,23 @@ end
 if args.profile_files == default_profile_files
   and not args.profile_names
   and not args.list
+  and not args.foo
 then
   print("No args provided, use '--help' for help message.")
+  return
+end
+
+if args.foo then
+  util.assert(args.foo:exists(), "No such file "..args.foo:str())
+  sandbox_util.enable_phobos_require()
+  local context = compile_util.new_context()
+  local main_chunk = assert(load(compile_util.compile({
+    filename = args.foo:str(),
+    source_name = "@?",
+    accept_bytecode = true,
+    error_message_count = 8,
+  }, context)))
+  main_chunk()
   return
 end
 

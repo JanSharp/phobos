@@ -12,10 +12,10 @@ local constants = require("constants")
 
 local io_util = require("io_util")
 
-local function get_source_name(file_data)
-  return file_data.text
-    and file_data.text_source
-    or file_data.source_name:gsub("%?", file_data.filename_for_source or file_data.filename)
+local function get_source_name(options)
+  return options.text
+    and options.text_source
+    or options.source_name:gsub("%?", options.filename_for_source or options.filename)
 end
 
 ---@return CompileUtilContext

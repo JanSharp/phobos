@@ -4,10 +4,8 @@ local io_util = require("io_util")
 local Path = require("lib.LuaPath.path")
 local binary = require("binary_serializer")
 local constants = require("constants")
--- ---@type LFS
--- local lfs = require("lfs")
 
-local function save(profile, file_list)
+local function save(profile, all_inject_scripts, file_list)
   local profile_ser = binary.new_serializer()
   profile_ser:write_raw(constants.phobos_signature)
   profile_ser:write_uint16(0) -- metadata version
@@ -21,11 +19,6 @@ local function save(profile, file_list)
   profile_ser:write_string(profile.phobos_extension)
   profile_ser:write_string(profile.lua_extension)
   profile_ser:write_boolean(profile.use_load)
-  -- meta_ser:write_small_uint32(#profile_meta.inject_scripts)
-  -- for i, inject_script in ipairs(profile_meta.inject_scripts) do
-  --   meta_ser:write_string(inject_script)
-  --   meta_ser:write_uint64(profile_meta.inject_script_modifications[i])
-  -- end
   profile_ser:write_boolean(profile.optimizations.fold_const)
   profile_ser:write_boolean(profile.optimizations.fold_control_statements)
   profile_ser:write_boolean(profile.optimizations.tail_calls)
@@ -34,11 +27,41 @@ local function save(profile, file_list)
   io_util.write_file(Path.new(profile.cache_dir) / "phobos_metadata.dat", profile_ser:tostring())
 
   local files_ser = binary.new_serializer()
+  files_ser:write_medium_uint64(#all_inject_scripts)
+  for _, inject_scripts in ipairs(all_inject_scripts) do
+    files_ser:write_small_uint64(inject_scripts.id)
+    files_ser:write_medium_uint64(inject_scripts.usage_count)
+    files_ser:write_medium_uint64(#inject_scripts.filenames)
+    for _, filename in ipairs(inject_scripts.filenames) do
+      files_ser:write_string(filename)
+    end
+    -- modification_lut can be restored using required_files
+    files_ser:write_medium_uint64(#inject_scripts.required_files)
+    for _, file in ipairs(inject_scripts.required_files) do
+      files_ser:write_string(file.filename)
+      files_ser:write_uint64(file.modification)
+    end
+    -- funcs do not get cached
+  end
   files_ser:write_medium_uint64(#file_list)
   for _, file in ipairs(file_list) do
-    files_ser:write_string(file.source_filename)
-    files_ser:write_string(file.output_filename)
     files_ser:write_uint8(file.action)
+    if file.action == constants.action_enum.compile then
+      files_ser:write_string(file.source_filename)
+      files_ser:write_string(file.relative_source_filename)
+      files_ser:write_string(file.output_filename)
+      files_ser:write_string(file.source_name)
+      files_ser:write_boolean(file.use_load)
+      files_ser:write_small_uint32(file.error_message_count)
+      files_ser:write_small_uint64(file.inject_scripts.id)
+    elseif file.action == constants.action_enum.copy then
+      files_ser:write_string(file.source_filename)
+      files_ser:write_string(file.output_filename)
+    elseif file.action == constants.action_enum.delete then
+      files_ser:write_string(file.output_filename)
+    else
+      util.debug_abort("Invalid file action '"..file.action.."'.")
+    end
   end
   io_util.write_file(Path.new(profile.cache_dir) / "files.dat", files_ser:tostring())
 end
@@ -78,13 +101,6 @@ local function load(cache_dir)
     profile.phobos_extension = profile_des:read_string()
     profile.lua_extension = profile_des:read_string()
     profile.use_load = profile_des:read_boolean()
-    -- profile.inject_scripts = {}
-    -- profile.inject_script_modifications = {}
-    -- local inject_script_count = meta_des:read_small_uint32()
-    -- for i = 1, inject_script_count do
-    --   profile_meta.inject_scripts[i] = meta_des:read_string()
-    --   profile_meta.inject_script_modifications[i] = meta_des:read_uint64()
-    -- end
     local optimizations = {}
     optimizations.fold_const = profile_des:read_boolean()
     optimizations.fold_control_statements = profile_des:read_boolean()
@@ -97,13 +113,52 @@ local function load(cache_dir)
     )
 
     local files_des = binary.new_deserializer(io_util.read_file(Path.new(cache_dir) / "files.dat"))
+    local inject_scripts_lut = {}
+    for _ = 1, files_des:read_medium_uint64() do
+      local inject_scripts = {}
+      inject_scripts.id = files_des:read_small_uint64()
+      inject_scripts.usage_count = files_des:read_medium_uint64()
+      local filenames = {}
+      inject_scripts.filenames = filenames
+      for i = 1, files_des:read_medium_uint64() do
+        filenames[i] = files_des:read_string()
+      end
+      local modification_lut = {}
+      local required_files = {}
+      inject_scripts.modification_lut = modification_lut
+      inject_scripts.required_files = required_files
+      for i = 1, files_des:read_medium_uint64() do
+        local filename = files_des:read_string()
+        local modification = files_des:read_uint64()
+        modification_lut[filename] = modification
+        required_files[i] = {
+          filename = filename,
+          modification = modification,
+        }
+      end
+      inject_scripts_lut[inject_scripts.id] = inject_scripts
+    end
     file_list = {}
     for i = 1, files_des:read_medium_uint64() do
-      file_list[i] = {
-        source_filename = files_des:read_string(),
-        output_filename = files_des:read_string(),
-        action = files_des:read_uint8(),
-      }
+      local file = {}
+      file.action = files_des:read_uint8()
+      if file.action == constants.action_enum.compile then
+        file.source_filename = files_des:read_string()
+        file.relative_source_filename = files_des:read_string()
+        file.output_filename = files_des:read_string()
+        file.source_name = files_des:read_string()
+        file.use_load = files_des:read_boolean()
+        file.error_message_count = files_des:read_small_uint32()
+        file.inject_scripts = util.debug_assert(inject_scripts_lut[files_des:read_small_uint64()])
+      elseif file.action == constants.action_enum.copy then
+        file.source_filename = files_des:read_string()
+        file.output_filename = files_des:read_string()
+      elseif file.action == constants.action_enum.delete then
+        file.output_filename = files_des:read_string()
+      else
+        util.debug_abort("Invalid file action '"..file.action.."'.")
+      end
+      file_list[i] = file
     end
   end)
 

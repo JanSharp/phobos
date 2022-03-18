@@ -116,6 +116,12 @@ local function assert(value, message)
   return value
 end
 
+local reset = "\x1b[0m"
+local magenta = "\x1b[35m"
+local function debug_print(msg)
+  print(msg and (magenta..msg..reset))
+end
+
 return {
   number_to_floating_byte = number_to_floating_byte,
   floating_byte_to_number = floating_byte_to_number,
@@ -127,4 +133,5 @@ return {
   abort = abort,
   debug_assert = debug_assert,
   assert = assert,
+  debug_print = debug_print,
 }

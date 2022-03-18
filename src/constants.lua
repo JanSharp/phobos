@@ -31,4 +31,15 @@ return {
   lua_header_str = "\x1bLua\x52\0\1\4\8\4\8\0\x19\x93\r\n\x1a\n",
 
   unnamed_register_name = "(unnamed)",
+
+  action_enum = {
+    compile = 0,
+    copy = 1,
+    delete = 2,
+  },
+  action_name_lut = {
+    [0] = "compile",
+    [1] = "copy",
+    [2] = "delete",
+  },
 }
