@@ -11,7 +11,7 @@ local api_util = require("api_util")
 local util = require("util")
 local sandbox_util = require("sandbox_util")
 
-local default_profile_files = {Path.new(".phobos_profiles")}
+local default_profile_files = {Path.new("phobos_profiles")}
 
 local args_config = {
   options = {
@@ -105,7 +105,7 @@ end
 
 if args.profile_files == default_profile_files then
   if not default_profile_files[1]:exists() then
-    print("No such (default) '.phobos_profiles' file, stop.")
+    print("No such (default) 'phobos_profiles' file, stop.")
     print() -- empty line, just like the arg parser itself for invalid arg error messages
     print(arg_parser.get_help_string(args_config, help_config))
     -- since the message above reads like an error message, this should exit as a failure

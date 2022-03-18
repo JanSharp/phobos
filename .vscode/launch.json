@@ -648,8 +648,6 @@
           // main_filename
           "src/main.lua",
           // arguments passed along to the main file
-          "-p",
-          ".phobos_profiles",
           "-n",
           "debug",
           "--",
@@ -672,13 +670,11 @@
           // main_filename
           "src/main.lua",
           // arguments passed along to the main file
-          "-p",
-          ".phobos_profiles",
           "-n",
           "debug",
           "--",
           "-p",
-          "linux",
+          "osx",
         ],
         "program": {
           "file": "src/entry_point.lua",
@@ -696,13 +692,11 @@
           // main_filename
           "src/main.lua",
           // arguments passed along to the main file
-          "-p",
-          ".phobos_profiles",
           "-n",
           "debug",
           "--",
           "-p",
-          "linux",
+          "windows",
         ],
         "program": {
           "file": "src/entry_point.lua",
@@ -726,8 +720,6 @@
           // main_filename
           "out/src/debug/main.lua",
           // arguments passed along to the main file
-          "-p",
-          ".phobos_profiles",
           "-n",
           "debug",
           "--",
@@ -750,13 +742,11 @@
           // main_filename
           "out/src/debug/main.lua",
           // arguments passed along to the main file
-          "-p",
-          ".phobos_profiles",
           "-n",
           "debug",
           "--",
           "-p",
-          "linux",
+          "osx",
         ],
         "program": {
           "file": "out/src/debug/entry_point.lua",
@@ -774,13 +764,11 @@
           // main_filename
           "out/src/debug/main.lua",
           // arguments passed along to the main file
-          "-p",
-          ".phobos_profiles",
           "-n",
           "debug",
           "--",
           "-p",
-          "linux",
+          "windows",
         ],
         "program": {
           "file": "out/src/debug/entry_point.lua",

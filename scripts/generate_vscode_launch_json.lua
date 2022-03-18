@@ -96,8 +96,11 @@ local function add_phobos_profiles(params)
         "main_filename",
         "arguments passed along to the main file",
       })
-      for _, arg in ipairs(params.args or {}) do
-        args[#args+1] = arg
+      if params.args then
+        local param_args = type(params.args) == "table" and params.args or params.args(platform)
+        for _, arg in ipairs(param_args) do
+          args[#args+1] = arg
+        end
       end
       return {
         program = {
@@ -154,7 +157,7 @@ add_phobos_profiles{
 add_phobos_profiles{
   name = "src/main (debug profile)",
   main_filename_in_phobos_root = "main.lua",
-  args = {"-p", ".phobos_profiles", "-n", "debug", "--", "-p", "linux"},
+  args = function(platform) return {"-n", "debug", "--", "-p", platform} end,
 }
 
 local file = assert(io.open(".vscode/launch.json", "w"))
