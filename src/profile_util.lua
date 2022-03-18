@@ -588,13 +588,13 @@ local function process_exclude(exclude_def, collection)
   end
 
   function exclude_entry(entry_path, depth)
-    local mode = util.assert(entry_path:attr("mode"))
     if depth == 1
       and collection.action == action_enum.delete
       and not entry_path:exists()
     then
       return
     end
+    local mode = util.assert(entry_path:attr("mode"))
     if mode == "directory" then
       exclude_dir(entry_path, depth)
     elseif mode == "file" then
