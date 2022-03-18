@@ -627,8 +627,7 @@ local function determine_incremental(current_profile, cached_profile)
     -- cannot compile nor copy incrementally
     return false, false
   end
-  if current_profile.use_load ~= cached_profile.use_load
-    or current_profile.phobos_extension ~= cached_profile.phobos_extension
+  if current_profile.phobos_extension ~= cached_profile.phobos_extension
     or current_profile.lua_extension ~= cached_profile.lua_extension
     or current_profile.phobos_version.major ~= cached_profile.phobos_version.major
     or current_profile.phobos_version.minor ~= cached_profile.phobos_version.minor
@@ -647,16 +646,31 @@ local function determine_incremental(current_profile, cached_profile)
 end
 
 local function should_update(file, action, cached_file_mapping, incremental)
+  util.debug_assert(file.action ~= action_enum.delete, "Attempt to use the function should_update \z
+    for a file with the action type '"..action_name_lut[action_enum.delete].."'."
+  )
   local cached_file = cached_file_mapping and cached_file_mapping[file.output_filename]
   if not incremental
     or not cached_file
-    or cached_file.source_filename ~= file.source_filename -- every type of action has output_filename
+    or cached_file.source_filename ~= file.source_filename -- both compile and copy actions have this
     or cached_file.action ~= action
     or not Path.new(file.output_filename):exists()
   then
     return true
   end
-  if file.action == action_enum.compile then -- inject_scripts
+  if file.action == action_enum.compile then -- compile specific
+    local function get_source_name(file_data)
+      return compile_util.get_source_name{
+        filename = file_data.relative_source_filename,
+        source_name = file_data.source_name,
+      }
+    end
+    if file.use_load ~= cached_file.use_load
+      or get_source_name(file) ~= get_source_name(cached_file)
+    then
+      return true
+    end
+    -- inject_scripts
     local inject_scripts = file.inject_scripts
     local cached_inject_scripts = cached_file.inject_scripts
     for i = 1, #inject_scripts.filenames + 1 do -- +1 to also make sure they both have the same length

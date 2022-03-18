@@ -1,6 +1,4 @@
 
----@type LFS
-local lfs = require("lfs")
 local error_code_util = require("error_code_util")
 local parser = require("parser")
 local jump_linker = require("jump_linker")
@@ -95,5 +93,6 @@ end
 
 return {
   new_context = new_context,
+  get_source_name = get_source_name,
   compile = compile,
 }
