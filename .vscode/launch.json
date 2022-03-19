@@ -33,7 +33,7 @@
         "1280x720",
       ],
       "factorioPath": "${env:PHOBOS_FACTORIO_PATH}",
-      "modsPath": "${workspaceFolder}/out/factorio_debug",
+      "modsPath": "${workspaceFolder}/out/debug_factorio",
     },
     {
       "name": "Factorio Mod (minimal no base)",
@@ -54,7 +54,7 @@
         "1280x720",
       ],
       "factorioPath": "${env:PHOBOS_FACTORIO_PATH}",
-      "modsPath": "${workspaceFolder}/out/factorio_debug",
+      "modsPath": "${workspaceFolder}/out/debug_factorio",
     },
     {
       "name": "Lua debugging/main",
@@ -652,7 +652,7 @@
       },
     },
     {
-      "name": "Lua src/main (factorio_debug profile)",
+      "name": "Lua src/main (debug_factorio profile)",
       "type": "lua-local",
       "request": "launch",
       "linux": {
@@ -667,7 +667,7 @@
           "src/main.lua",
           // arguments passed along to the main file
           "--profile-names",
-          "factorio_debug",
+          "debug_factorio",
         ],
         "program": {
           "file": "src/entry_point.lua",
@@ -686,7 +686,7 @@
           "src/main.lua",
           // arguments passed along to the main file
           "--profile-names",
-          "factorio_debug",
+          "debug_factorio",
         ],
         "program": {
           "file": "src/entry_point.lua",
@@ -705,7 +705,7 @@
           "src/main.lua",
           // arguments passed along to the main file
           "--profile-names",
-          "factorio_debug",
+          "debug_factorio",
         ],
         "program": {
           "file": "src/entry_point.lua",
@@ -714,7 +714,7 @@
       },
     },
     {
-      "name": "Phobos src/main (factorio_debug profile)",
+      "name": "Phobos src/main (debug_factorio profile)",
       "type": "lua-local",
       "request": "launch",
       "preLaunchTask": "Build Debug",
@@ -730,7 +730,7 @@
           "out/src/debug/main.lua",
           // arguments passed along to the main file
           "--profile-names",
-          "factorio_debug",
+          "debug_factorio",
         ],
         "program": {
           "file": "out/src/debug/entry_point.lua",
@@ -749,7 +749,7 @@
           "out/src/debug/main.lua",
           // arguments passed along to the main file
           "--profile-names",
-          "factorio_debug",
+          "debug_factorio",
         ],
         "program": {
           "file": "out/src/debug/entry_point.lua",
@@ -768,7 +768,7 @@
           "out/src/debug/main.lua",
           // arguments passed along to the main file
           "--profile-names",
-          "factorio_debug",
+          "debug_factorio",
         ],
         "program": {
           "file": "out/src/debug/entry_point.lua",

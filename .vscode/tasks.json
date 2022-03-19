@@ -40,7 +40,7 @@
       "command": "launch_scripts/phobos_dev",
       "args": [
         "linux", "src", "src/main.lua",
-        "--profile-names", "factorio_debug",
+        "--profile-names", "debug_factorio",
       ],
       "presentation": {
         "reveal": "silent",

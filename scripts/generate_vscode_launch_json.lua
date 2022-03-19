@@ -46,7 +46,7 @@ local function new_factorio_profile(params)
     request = "launch",
     preLaunchTask = "Build Factorio Mod Debug",
     factorioPath = "${env:PHOBOS_FACTORIO_PATH}",
-    modsPath = "${workspaceFolder}/out/factorio_debug",
+    modsPath = "${workspaceFolder}/out/debug_factorio",
     allowDisableBaseMod = true,
     adjustMods = {
       phobos = true,
@@ -155,9 +155,9 @@ add_phobos_profiles{
   args = function(platform) return {"--profile-names", "debug", "--", "--platform", platform} end,
 }
 add_phobos_profiles{
-  name = "src/main (factorio_debug profile)",
+  name = "src/main (debug_factorio profile)",
   main_filename_in_phobos_root = "main.lua",
-  args = {"--profile-names", "factorio_debug"},
+  args = {"--profile-names", "debug_factorio"},
 }
 
 local file = assert(io.open(".vscode/launch.json", "w"))
