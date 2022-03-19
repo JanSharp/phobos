@@ -24,6 +24,7 @@ if #template_separator > 1 then
   )
 end
 
+---TODO: this is still a bit of a prototype, I'd like to refine it before calling it done
 local function enable_phobos_require()
   local pho_path_cache = {}
   local function get_pho_path()

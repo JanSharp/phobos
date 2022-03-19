@@ -9,6 +9,7 @@ local profile_util = require("profile_util")
 local phobos_version = require("phobos_version")
 local api_util = require("api_util")
 local util = require("util")
+local sandbox_util = require("sandbox_util")
 
 local default_profile_files = {Path.new("phobos_profiles")}
 
@@ -90,6 +91,7 @@ if args.profile_files == default_profile_files then
   end
 end
 
+sandbox_util.enable_phobos_require()
 local profiles_context = compile_util.new_context()
 for _, profiles_path in ipairs(args.profile_files) do
   local main_chunk = assert(load(compile_util.compile({
@@ -99,6 +101,8 @@ for _, profiles_path in ipairs(args.profile_files) do
   }, profiles_context), nil, "b"))
   phobos_profiles.internal.current_profile_file = profiles_path:str()
   phobos_profiles.internal.current_root_dir = profiles_path:sub(1, -2):to_fully_qualified():str()
+  -- TODO: add the current root directory to package.path, [...]
+  -- which requires determining what convention I'd like to follow.
   -- not sandboxed at all
   main_chunk(table.unpack(arg_strings, last_arg_index + 1))
 end
