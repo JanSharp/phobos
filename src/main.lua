@@ -76,7 +76,7 @@ if not args then util.abort() end
 if args.help then return end
 
 if args.version then
-  print(string.format("%d.%d.%d", phobos_version.major, phobos_version.minor, phobos_version.patch))
+  print(util.format_version(phobos_version))
   return
 end
 

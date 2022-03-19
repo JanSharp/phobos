@@ -1,6 +1,8 @@
 
 local profiles = require("phobos_profiles")
 local util = require("util")
+---@type LFS
+local lfs = require("lfs")
 
 local args = profiles.parse_extra_args({...}, {
   options = {
@@ -17,42 +19,95 @@ local args = profiles.parse_extra_args({...}, {
   },
 })
 
-local platform = args.platform
-if platform then
-  util.assert(util.invert{"linux", "osx", "windows"}[platform],
-    "Expected 'linux', 'osx' or 'windows', got '"..platform.."' for --platform."
+local platform_arg = args.platform
+if platform_arg then
+  util.assert(util.invert{"linux", "osx", "windows"}[platform_arg],
+    "Expected 'linux', 'osx' or 'windows', got '"..platform_arg.."' for --platform."
   )
 end
 
 local phobos_extension = ".lua"
 
-local factorio_specific_paths = {
-  "control"..phobos_extension,
-}
-local standalone_specific_paths = {
-  "main"..phobos_extension,
-  "io_util"..phobos_extension,
-  "lib/LFSClasses",
-  "lib/LuaArgParser",
-  "lib/LuaPath",
-}
+local function exclude(profile, path)
+  profiles.exclude{
+    profile = profile,
+    source_path = "src/"..path,
+  }
+end
 
-local function standalone_profile(name, optimizations)
-  util.debug_assert(platform)
+local function include_copy(profile, path, output_path)
+  profiles.include_copy{
+    profile = profile,
+    source_path = path,
+    output_path = output_path or path,
+  }
+end
+
+local function apply_general_changes(profile)
+  -- delete every single file that is not currently being outputted
+  profiles.include_delete{
+    profile = profile,
+    output_path = ".",
+  }
+
+  exclude(profile, "classes"..phobos_extension)
+  exclude(profile, "profile_classes"..phobos_extension)
+
+  include_copy(profile, "README.md")
+  include_copy(profile, "phobos_debug_symbols.md")
+  include_copy(profile, "changelog.txt")
+  include_copy(profile, "LICENSE.txt")
+  include_copy(profile, "LICENSE_THIRD_PARTY.txt")
+  include_copy(profile, "thumbnail_1080_1080.png")
+end
+
+local function apply_standalone_specific_changes(profile, platform)
+  exclude(profile, "control"..phobos_extension)
+
+  if platform then
+    include_copy(profile, "bin/"..platform, "bin")
+    local launch_script_file = "phobos"..(platform == "windows" and ".bat" or "")
+    include_copy(profile, "launch_scripts/"..launch_script_file, launch_script_file)
+    if platform == "windows" then
+      -- don't have install and uninstall scripts for windows (yet?)
+    else
+      include_copy(profile, "launch_scripts/install_phobos", "install_phobos")
+      include_copy(profile, "launch_scripts/uninstall_phobos", "uninstall_phobos")
+    end
+  end
+end
+
+local function apply_factorio_specific_changes(profile)
+  exclude(profile, "lib/LFSClasses")
+  exclude(profile, "lib/LuaArgParser")
+  exclude(profile, "lib/LuaPath")
+  exclude(profile, "cache"..phobos_extension)
+  exclude(profile, "entry_point"..phobos_extension)
+  exclude(profile, "io_util"..phobos_extension)
+  exclude(profile, "main"..phobos_extension)
+  exclude(profile, "phobos_profiles"..phobos_extension)
+  exclude(profile, "profile_classes"..phobos_extension)
+  exclude(profile, "profile_util"..phobos_extension)
+  exclude(profile, "sandbox_util"..phobos_extension)
+  exclude(profile, "shell_util"..phobos_extension)
+
+  include_copy(profile, "info.json")
+  include_copy(profile, "thumbnail_144_144_padded.png", "thumbnail.png")
+end
+
+local function standalone_profile(params)
   local profile = profiles.add_profile{
-    name = name,
-    output_dir = "out/"..name,
-    cache_dir = "temp/cache/"..name,
+    name = params.name,
+    output_dir = params.publish
+      and "temp/publish/"..params.name
+      or "out/"..params.name,
+    cache_dir = params.publish
+      and "temp/publish/cache/"..params.name
+      or "temp/cache/"..params.name,
     phobos_extension = phobos_extension,
-    optimizations = optimizations,
+    optimizations = params.optimizations,
     -- HACK: until https://github.com/tomblind/local-lua-debugger-vscode/issues/56 is implemented
-    use_load = true,
-  }
-
-  -- delete every single file that is not currently being outputted
-  profiles.include_delete{
-    profile = profile,
-    output_path = ".",
+    use_load = not params.publish,
   }
 
   profiles.include{
@@ -62,68 +117,86 @@ local function standalone_profile(name, optimizations)
     output_path = ".",
   }
 
-  for _, path in ipairs(factorio_specific_paths) do
-    profiles.exclude{
-      profile = profile,
-      source_path = "src/"..path,
-    }
-  end
-
-  local function copy(source, output)
-    profiles.include_copy{
-      profile = profile,
-      source_path = source,
-      output_path = output,
-    }
-  end
-
-  copy("bin/"..platform, "bin")
-  local launch_script_file = "phobos"..(platform == "windows" and ".bat" or "")
-  copy("launch_scripts/"..launch_script_file, launch_script_file)
-  if platform == "windows" then
-    -- don't have install and uninstall scripts for windows (yet?)
-  else
-    copy("launch_scripts/install_phobos", "install_phobos")
-    copy("launch_scripts/uninstall_phobos", "uninstall_phobos")
-  end
+  apply_general_changes(profile)
+  apply_standalone_specific_changes(profile, params.platform)
 end
 
-local function factorio_profile(name, optimizations)
+local function factorio_profile(params)
+  local output_dir = params.publish
+    and "temp/publish/"..params.name.."_factorio/phobos"
+    or "out/"..params.name.."_factorio/phobos"
   local profile = profiles.add_profile{
-    name = "factorio_"..name,
-    output_dir = "out/factorio_"..name.."/phobos",
-    cache_dir = "temp/cache/factorio_"..name,
+    name = params.name.."_factorio",
+    output_dir = output_dir,
+    cache_dir = params.publish
+      and "temp/publish/cache/"..params.name.."_factorio"
+      or "temp/cache/"..params.name.."_factorio",
     phobos_extension = phobos_extension,
-    optimizations = optimizations,
+    optimizations = params.optimizations,
     use_load = true,
-  }
-
-  -- delete every single file that is not currently being outputted
-  profiles.include_delete{
-    profile = profile,
-    output_path = ".",
+    inject_scripts = {"scripts/build_factorio_mod_ast_inject.pho"},
   }
 
   profiles.include{
     profile = profile,
     source_path = "src",
-    source_name = "@src/?",
+    source_name = "@__phobos__/src/?",
     output_path = ".",
   }
 
-  for _, path in ipairs(standalone_specific_paths) do
-    profiles.exclude{
-      profile = profile,
-      source_path = "src/"..path,
-    }
+  apply_general_changes(profile)
+  apply_factorio_specific_changes(profile)
+
+  if not params.publish then
+    function profile.on_post_profile_ran()
+      -- create symlinks for the 2 other mods needed to use the minimal-no-base-mod debug launch profiles
+      -- these links are in the parent directory of the output directory, so no need to exclude_delete them
+      lfs.link("../../debugging/minimal-no-base-mod", output_dir.."/../minimal-no-base-mod", true)
+      lfs.link("../../debugging/JanSharpDevEnv", output_dir.."/../JanSharpDevEnv", true)
+      -- and it will just silently fail if the links already exist. that's ok
+    end
   end
 end
 
-if platform then
-  standalone_profile("debug", nil)
-  standalone_profile("release", profiles.get_all_optimizations())
+if platform_arg then
+  standalone_profile{
+    name = "debug",
+    platform = platform_arg,
+  }
+  standalone_profile{
+    name = "release",
+    platform = platform_arg,
+    optimizations = profiles.get_all_optimizations(),
+  }
 else
-  print("Info: Standalone profiles only get added if the extra arg '--platform' was provided.")
+  print("Info: Standalone profiles 'debug' and 'release' only get added if the \z
+    '--platform' extra arg was provided."
+  )
 end
-factorio_profile("debug", nil)
-factorio_profile("release", profiles.get_all_optimizations())
+
+factorio_profile{
+  name = "debug",
+}
+factorio_profile{
+  name = "release",
+  optimizations = profiles.get_all_optimizations(),
+}
+
+factorio_profile{
+  name = "publish",
+  publish = true,
+  optimizations = profiles.get_all_optimizations(),
+}
+
+local function standalone_publish_profile(platform)
+  standalone_profile{
+    name = "publish_"..platform,
+    publish = true,
+    platform = platform ~= "raw" and platform or nil,
+    optimizations = profiles.get_all_optimizations(),
+  }
+end
+standalone_publish_profile("linux")
+standalone_publish_profile("osx")
+standalone_publish_profile("windows")
+standalone_publish_profile("raw")

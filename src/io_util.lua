@@ -14,9 +14,27 @@ local function mkdir_recursive(path)
       -- this might fail, for example for drive letters,
       -- but that doesn't matter, as long as the output file
       -- can get created (=> asserted)
-      lfs.mkdir(path:sub(1, i):str())
+      util.debug_assert(lfs.mkdir(path:sub(1, i):str()))
     end
   end
+end
+
+---There has to be a better way to delete directories that are not empty, right?
+local function rmdir_recursive(path)
+  path = Path.new(path)
+  for entry in lfs.dir(path:str()) do
+    if entry ~= "." and entry ~= ".." then
+      -- since symlinkattributes is the same as attributes on windows this will actually delete
+      -- all files in symlinked directories, while on Unix this will only delete the link
+      -- that is if os.remove can actually delete symlinks, who knows
+      if (path / entry):sym_attr("mode") == "directory" then
+        rmdir_recursive(path / entry)
+      else
+        util.debug_assert(os.remove((path / entry):str()))
+      end
+    end
+  end
+  util.debug_assert(lfs.rmdir(path:str()))
 end
 
 ---cSpell:ignore fopen
@@ -154,6 +172,7 @@ end
 
 return {
   mkdir_recursive = mkdir_recursive,
+  rmdir_recursive = rmdir_recursive,
   read_file = read_file,
   write_file = write_file,
   copy = copy,

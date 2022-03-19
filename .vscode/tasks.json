@@ -11,20 +11,20 @@
       "command": "launch_scripts/phobos_dev",
       "linux": {
         "args": [
-          "linux", "src", "scripts/build_src.lua",
-          "--profile", "debug",
+          "linux", "src", "src/main.lua",
+          "--profile-names", "debug", "--", "--platform", "linux",
         ],
       },
       "osx": {
         "args": [
-          "osx", "src", "scripts/build_src.lua",
-          "--profile", "debug",
+          "linux", "src", "src/main.lua",
+          "--profile-names", "debug", "--", "--platform", "osx",
         ],
       },
       "windows": {
         "args": [
-          "windows", "src", "scripts/build_src.lua",
-          "--profile", "debug",
+          "linux", "src", "src/main.lua",
+          "--profile-names", "debug", "--", "--platform", "windows",
         ],
       },
       "presentation": {
@@ -38,24 +38,10 @@
       "group": "build",
       // if launching it like this doesn't work on all platforms, let me know
       "command": "launch_scripts/phobos_dev",
-      "linux": {
-        "args": [
-          "linux", "src", "scripts/build_src.lua",
-          "--profile", "release",
-        ],
-      },
-      "osx": {
-        "args": [
-          "osx", "src", "scripts/build_src.lua",
-          "--profile", "release",
-        ],
-      },
-      "windows": {
-        "args": [
-          "windows", "src", "scripts/build_src.lua",
-          "--profile", "release",
-        ],
-      },
+      "args": [
+        "linux", "src", "src/main.lua",
+        "--profile-names", "factorio_debug",
+      ],
       "presentation": {
         "reveal": "silent",
         "clear": true,

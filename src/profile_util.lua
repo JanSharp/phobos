@@ -792,7 +792,7 @@ local function run_profile(profile, print)
     compile_count = compilation_file_collection.count
     copy_count = copy_file_collection.count
     file_list = unify_file_collections(compilation_file_collection, copy_file_collection, delete_file_collection)
-    -- can't use the count from the file collection because during unifying
+    -- can't use the count from the file collection because during unification
     -- delete actions will be removed if they would delete a file that is being compiled/copied to
     delete_count = #file_list - compile_count - copy_count
   end

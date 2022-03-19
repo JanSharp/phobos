@@ -122,6 +122,28 @@ local function debug_print(msg)
   print(msg and (magenta..msg..reset))
 end
 
+local function parse_version(text, i)
+  local major_str, minor_str, patch_str, end_pos = text:match("^(%d+)%.(%d+)%.(%d+)()", i)
+  if not major_str then
+    return nil, nil
+  end
+  local major = tonumber(major_str)
+  local minor = tonumber(minor_str)
+  local patch = tonumber(patch_str)
+  if major == 0 and minor == 0 and patch == 0 then
+    error("Version 0.0.0 is invalid")
+  end
+  return {
+    major = major,
+    minor = minor,
+    patch = patch,
+  }, end_pos
+end
+
+local function format_version(version)
+  return string.format("%d.%d.%d", version.major, version.minor, version.patch)
+end
+
 return {
   number_to_floating_byte = number_to_floating_byte,
   floating_byte_to_number = floating_byte_to_number,
@@ -134,4 +156,6 @@ return {
   debug_assert = debug_assert,
   assert = assert,
   debug_print = debug_print,
+  parse_version = parse_version,
+  format_version = format_version,
 }
