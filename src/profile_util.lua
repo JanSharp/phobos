@@ -67,6 +67,9 @@ local function validate_include_def(def, name)
   validate_field(def, name, "recursion_depth", "number", true)
   validate_field(def, name, "filename_pattern", "string", true)
   validate_field(def, name, "source_name", "string", true)
+  api_util.assert(def.source_name:find("^@"), "'"..name..".source_name' (mandatory): \z
+    Must start with the symbol '@' to indicate the source is a file."
+  )
   validate_field(def, name, "phobos_extension", "string", true)
   validate_field(def, name, "lua_extension", "string", true)
   validate_field(def, name, "use_load", "boolean", true)
