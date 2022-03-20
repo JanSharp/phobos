@@ -22,17 +22,34 @@ end
 ---There has to be a better way to delete directories that are not empty, right?
 local function rmdir_recursive(path)
   path = Path.new(path)
+  ---cSpell:ignore readdir, _findfirst, _findnext
+  -- I figured out that lfs is using readdir on Unix systems and _findfirst and _findnext on windows:
+  -- https://www.ibm.com/docs/en/zos/2.3.0?topic=functions-readdir-read-entry-from-directory
+  -- https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/findfirst-functions?view=msvc-170
+  -- readdir suggests that it might work just fine when the directory got modified while iterating,
+  -- but it's not clear.
+  -- the remarks for _findfirst and _findnext say nothing about how it behaves when the directory
+  -- got modified during iteration, which means I'm just going to assume that it is undefined behavior.
+  -- So that is why I'm putting stuff in tables and then deleting afterwards
+  local dirs = {}
+  local files = {}
   for entry in lfs.dir(path:str()) do
     if entry ~= "." and entry ~= ".." then
       -- since symlinkattributes is the same as attributes on windows this will actually delete
       -- all files in symlinked directories, while on Unix this will only delete the link
       -- that is if os.remove can actually delete symlinks, who knows
       if (path / entry):sym_attr("mode") == "directory" then
-        rmdir_recursive(path / entry)
+        dirs[#dirs+1] = path / entry
       else
-        util.debug_assert(os.remove((path / entry):str()))
+        files[#files+1] = path / entry
       end
     end
+  end
+  for _, dir_path in ipairs(dirs) do
+    rmdir_recursive(dir_path)
+  end
+  for _, file_path in ipairs(files) do
+    util.debug_assert(os.remove(file_path:str()))
   end
   util.debug_assert(lfs.rmdir(path:str()))
 end
