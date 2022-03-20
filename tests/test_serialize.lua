@@ -15,7 +15,7 @@ do
       local serialized = serialize(value)
       assert.contents_equals(
         value,
-        assert.assert(load(serialized), "Serialized: "..serialized)(),
+        assert(load(serialized), "Serialized: "..serialized)(),
         "Serialized: "..serialized,
         {
           -- have to set this for tables with tables as keys,

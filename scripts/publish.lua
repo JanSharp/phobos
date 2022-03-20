@@ -129,9 +129,16 @@ end
 -- run all tests (currently testing is very crude, so just `tests/compile_test.lua`)
 if not args.skip_tests then
   print("Running tests")
-  local success, err = pcall(loadfile("tests/compile_test.lua"), table.unpack{
+  local success, err = pcall(loadfile("tests/main.lua"), table.unpack{
+    "--print-failed",
+    "--print-stacktrace",
+  })
+  if not success then
+    util.abort("Tests failed")
+  end
+  success, err = pcall(loadfile("tests/compile_test.lua"), table.unpack{
     "--test-disassembler",
-    -- "--ensure-clean", -- see compile_test.lua about performance problems
+    "--ensure-clean",
     "--test-formatter",
   })
   if not success then

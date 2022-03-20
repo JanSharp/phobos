@@ -61,7 +61,10 @@ require("test_binary_serializer")
 -- so for now, all of those steps we have have to hope that they "just work", which
 -- is obviously not the case. I'm certain there are bugs in there
 
-framework.scope:run_tests{
+local result = framework.scope:run_tests{
   only_print_failed = args.print_failed,
   print_stacktrace = args.print_stacktrace,
 }
+if result.failed_count > 0 then
+  util.abort()
+end

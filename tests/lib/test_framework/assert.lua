@@ -108,7 +108,7 @@ local function errors(expected_pattern, got_func, msg, plain)
   end
 end
 
-return {
+return setmetatable({
   set_print_full_data_on_error_default = set_print_full_data_on_error_default,
   get_print_full_data_on_error_default = get_print_full_data_on_error_default,
   assert = assert,
@@ -118,4 +118,8 @@ return {
   do_not_compare_flag = deep_compare.do_not_compare_flag,
   custom_comparator = deep_compare.register_custom_comparator,
   errors = errors,
-}
+}, {
+  __call = function(_, ...)
+    return assert(...)
+  end,
+})
