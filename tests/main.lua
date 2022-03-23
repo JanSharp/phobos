@@ -28,6 +28,15 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
       description = "Print the stack trace for failed tests.",
       flag = true,
     },
+    {
+      field = "test_ids",
+      long = "test-ids",
+      short = "i",
+      description = "Only run the test with the given ids.",
+      type = "number",
+      optional = true,
+      min_params = 0,
+    },
   },
 }, {label_length = 80 - 4 - 2 - 50})
 if not args then util.abort() end
@@ -64,6 +73,7 @@ require("test_binary_serializer")
 local result = framework.scope:run_tests{
   only_print_failed = args.print_failed,
   print_stacktrace = args.print_stacktrace,
+  test_ids_to_run = args.test_ids and util.invert(args.test_ids),
 }
 if result.failed_count > 0 then
   util.abort()

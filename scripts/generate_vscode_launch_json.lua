@@ -22,9 +22,12 @@ json.set_comments(result, {
 })
 local configurations = {}
 result.configurations = configurations
+local inputs = {}
+result.inputs = inputs
 json.set_order(result, {
   "version",
   "configurations",
+  "inputs",
 })
 
 local function add_profile(profile)
@@ -35,6 +38,14 @@ local function add_profile(profile)
     "preLaunchTask",
   })
   configurations[#configurations+1] = profile
+end
+
+local function add_input(input)
+  json.set_order(input, {
+    "id",
+    "type",
+  })
+  inputs[#inputs+1] = input
 end
 
 ---cSpell:ignore factoriomod, freeplay
@@ -148,6 +159,18 @@ add_phobos_profiles{
 add_phobos_profiles{
   name = "tests/main",
   main_filename = "tests/main.lua",
+}
+add_input{
+  id = "testId",
+  type = "promptString",
+  description = "The test id of the test to run.",
+  default = nil,
+  password = false,
+}
+add_phobos_profiles{
+  name = "tests/main test id",
+  main_filename = "tests/main.lua",
+  args = {"--test-ids", "${input:testId}"}
 }
 add_phobos_profiles{
   name = "src/main (debug profile)",

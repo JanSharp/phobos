@@ -509,6 +509,131 @@
       },
     },
     {
+      "name": "Lua tests/main test id",
+      "type": "lua-local",
+      "request": "launch",
+      "linux": {
+        "args": [
+          // root
+          "src",
+          // c_lib_root
+          "bin/linux",
+          // c_lib_extension
+          ".so",
+          // main_filename
+          "tests/main.lua",
+          // arguments passed along to the main file
+          "--test-ids",
+          "${input:testId}",
+        ],
+        "program": {
+          "file": "src/entry_point.lua",
+          "lua": "bin/linux/lua",
+        },
+      },
+      "osx": {
+        "args": [
+          // root
+          "src",
+          // c_lib_root
+          "bin/osx",
+          // c_lib_extension
+          ".so",
+          // main_filename
+          "tests/main.lua",
+          // arguments passed along to the main file
+          "--test-ids",
+          "${input:testId}",
+        ],
+        "program": {
+          "file": "src/entry_point.lua",
+          "lua": "bin/osx/lua",
+        },
+      },
+      "windows": {
+        "args": [
+          // root
+          "src",
+          // c_lib_root
+          "bin/windows",
+          // c_lib_extension
+          ".dll",
+          // main_filename
+          "tests/main.lua",
+          // arguments passed along to the main file
+          "--test-ids",
+          "${input:testId}",
+        ],
+        "program": {
+          "file": "src/entry_point.lua",
+          "lua": "bin/windows/lua",
+        },
+      },
+    },
+    {
+      "name": "Phobos tests/main test id",
+      "type": "lua-local",
+      "request": "launch",
+      "preLaunchTask": "Build Debug",
+      "linux": {
+        "args": [
+          // root
+          "out/src/debug",
+          // c_lib_root
+          "bin/linux",
+          // c_lib_extension
+          ".so",
+          // main_filename
+          "tests/main.lua",
+          // arguments passed along to the main file
+          "--test-ids",
+          "${input:testId}",
+        ],
+        "program": {
+          "file": "out/src/debug/entry_point.lua",
+          "lua": "bin/linux/lua",
+        },
+      },
+      "osx": {
+        "args": [
+          // root
+          "out/src/debug",
+          // c_lib_root
+          "bin/osx",
+          // c_lib_extension
+          ".so",
+          // main_filename
+          "tests/main.lua",
+          // arguments passed along to the main file
+          "--test-ids",
+          "${input:testId}",
+        ],
+        "program": {
+          "file": "out/src/debug/entry_point.lua",
+          "lua": "bin/osx/lua",
+        },
+      },
+      "windows": {
+        "args": [
+          // root
+          "out/src/debug",
+          // c_lib_root
+          "bin/windows",
+          // c_lib_extension
+          ".dll",
+          // main_filename
+          "tests/main.lua",
+          // arguments passed along to the main file
+          "--test-ids",
+          "${input:testId}",
+        ],
+        "program": {
+          "file": "out/src/debug/entry_point.lua",
+          "lua": "bin/windows/lua",
+        },
+      },
+    },
+    {
       "name": "Lua src/main (debug profile)",
       "type": "lua-local",
       "request": "launch",
@@ -775,6 +900,14 @@
           "lua": "bin/windows/lua",
         },
       },
+    },
+  ],
+  "inputs": [
+    {
+      "id": "testId",
+      "type": "promptString",
+      "description": "The test id of the test to run.",
+      "password": false,
     },
   ],
 }

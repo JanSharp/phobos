@@ -131,7 +131,7 @@ local function parse_version(text, i)
   local minor = tonumber(minor_str)
   local patch = tonumber(patch_str)
   if major == 0 and minor == 0 and patch == 0 then
-    error("Version 0.0.0 is invalid")
+    debug_abort("Version 0.0.0 is invalid")
   end
   return {
     major = major,
