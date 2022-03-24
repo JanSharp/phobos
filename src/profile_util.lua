@@ -716,8 +716,7 @@ local function process_include_exclude_definitions(defs, file_collection)
 end
 
 local function unify_file_collections(compile_collection, copy_collection, delete_collection)
-  -- TODO: properly handle input and output paths colliding [...]
-  -- ref: output and input dir are the exact same
+  local source_file_mapping = {}
   local file_mapping = {}
   local file_list = {}
   local function add_file(file)
@@ -732,6 +731,19 @@ local function unify_file_collections(compile_collection, copy_collection, delet
           Sources: '"..existing.source_filename.."' (" ..action_name_lut[existing.action].."), '"
           ..file.source_filename.."' ("..action_name_lut[file.action]..")."
         )
+      end
+      existing = source_file_mapping[file.output_filename]
+      if existing then
+        if file.action == action_enum.delete then
+          util.abort("Attempt to delete a source file: '"..file.output_filename.."'.")
+        end
+        util.abort("Attempt to output to a source file: '"..file.output_filename.."'.")
+      end
+      if file.action ~= action_enum.delete then
+        if file.source_filename == file.output_filename then
+          util.abort("Attempt to output to the source file itself: '"..file.source_filename.."'.")
+        end
+        source_file_mapping[file.source_filename] = file
       end
       file_mapping[file.output_filename] = file
       file_list[#file_list+1] = file
