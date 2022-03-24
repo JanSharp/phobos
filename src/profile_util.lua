@@ -60,6 +60,8 @@ local function assert_params_and_profile(params, field, type_name)
   validate_field(params.profile, "params.profile", field, "table", true, "must be an "..type_name.."[]")
 end
 
+-- TODO: remove lua_extension and phobos_extension
+
 local function validate_include_def(def, name)
   name = name or "IncludeInCompilationDef"
   validate_field(def, name, "source_path", "string", true)
@@ -708,6 +710,8 @@ local function process_include_exclude_definitions(defs, file_collection)
 end
 
 local function unify_file_collections(compile_collection, copy_collection, delete_collection)
+  -- TODO: properly handle input and output paths colliding [...]
+  -- ref: output and input dir are the exact same
   local file_mapping = {}
   local file_list = {}
   local function add_file(file)

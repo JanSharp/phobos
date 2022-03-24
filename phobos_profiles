@@ -61,8 +61,19 @@ local function apply_general_changes(profile)
   include_copy(profile, "thumbnail_1080_1080.png")
 end
 
+local function copy_emmy_lua_docs(profile)
+  include_copy(profile, "doc/emmy_lua", "doc/emmy_lua")
+  profiles.exclude_copy{
+    profile = profile,
+    source_path = "doc/emmy_lua/profiles/profile_classes.lua",
+  }
+  include_copy(profile, "src/profile_classes.lua", "doc/emmy_lua/profiles/profile_classes.lua")
+  include_copy(profile, "src/lib/LuaArgParser/classes.lua", "doc/emmy_lua/profiles/arg_parser_classes.lua")
+end
+
 local function apply_standalone_specific_changes(profile, platform)
   exclude(profile, "control"..phobos_extension)
+  copy_emmy_lua_docs(profile)
 
   if platform then
     include_copy(profile, "bin/"..platform, "bin")
