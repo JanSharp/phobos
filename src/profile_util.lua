@@ -60,8 +60,6 @@ local function assert_params_and_profile(params, field, type_name)
   validate_field(params.profile, "params.profile", field, "table", true, "must be an "..type_name.."[]")
 end
 
--- TODO: remove lua_extension and phobos_extension
-
 local function validate_include_def(def, name)
   name = name or "IncludeInCompilationDef"
   validate_field(def, name, "source_path", "string", true)
@@ -72,8 +70,6 @@ local function validate_include_def(def, name)
   api_util.assert(def.source_name:find("^@"), "'"..name..".source_name' (mandatory): \z
     Must start with the symbol '@' to indicate the source is a file."
   )
-  validate_field(def, name, "phobos_extension", "string", true)
-  validate_field(def, name, "lua_extension", "string", true)
   validate_field(def, name, "use_load", "boolean", true)
   validate_field(def, name, "error_message_count", "number", true)
   validate_field(def, name, "inject_scripts", "table", true, "must be an string[]")
@@ -123,8 +119,6 @@ local function validate_profile(profile)
   validate_field(profile, "profile", "name", "string", true)
   validate_field(profile, "profile", "output_dir", "string", true)
   validate_field(profile, "profile", "cache_dir", "string", true)
-  validate_field(profile, "profile", "phobos_extension", "string", true)
-  validate_field(profile, "profile", "lua_extension", "string", true)
   validate_field(profile, "profile", "use_load", "boolean", true)
   validate_field(profile, "profile", "incremental", "boolean", true)
   validate_field(profile, "profile", "inject_scripts", "table", true, "must be an string[]")
@@ -184,8 +178,6 @@ local function new_profile(params)
     name = params.name,
     output_dir = params.output_dir,
     cache_dir = params.cache_dir,
-    phobos_extension = params.phobos_extension or ".pho",
-    lua_extension = params.lua_extension or ".lua",
     use_load = params.use_load or false,
     incremental = params.incremental == nil and true or params.incremental,
     inject_scripts = params.inject_scripts or {},
@@ -213,8 +205,6 @@ local function include(params)
     recursion_depth = params.recursion_depth or (1/0),
     filename_pattern = params.filename_pattern or "",
     source_name = params.source_name,
-    phobos_extension = params.phobos_extension or params.profile.phobos_extension,
-    lua_extension = params.lua_extension or params.profile.lua_extension,
     use_load = params.use_load or params.profile.use_load,
     error_message_count = params.error_message_count or params.profile.error_message_count,
     inject_scripts = params.inject_scripts or params.profile.inject_scripts,
@@ -447,7 +437,7 @@ local function process_include(include_def, collection)
 
   local include_entry
 
-  local function include_file(relative_entry_path)
+  local function include_file(relative_entry_path, source_path_is_file)
     local source_filename = (source_root / relative_entry_path):str()
     local index = collection.files_lut[source_filename]
     if collection.action == action_enum.copy or not index then
@@ -465,17 +455,27 @@ local function process_include(include_def, collection)
         collection.files[index] = {} -- new array
       end
     end
-    local relative_output_entry_path = collection.action == action_enum.compile
-      and replace_extension(relative_entry_path, include_def.lua_extension)
-      or relative_entry_path
-    if collection.action == action_enum.compile
-      and not relative_output_entry_path.entries[1]
-      and include_def.source_name:find("?", 1, true)
-    then
-      util.abort("When including a single file for compilation the 'source_name' must not contain '?'. \z
-        It must instead define the entire source_name - it is not a pattern. \z
-        (source_path: '"..include_def.source_path.."', source_name: '"..include_def.source_name.."')"
-      )
+    local output_filename
+    if collection.action ~= action_enum.delete then
+      if source_path_is_file then
+        if collection.action == action_enum.compile then
+          util.assert(output_root:extension() ~= constants.lua_extension,
+            "When including a single file for compilation the output file extension must be \z
+            '"..constants.lua_extension.."'. (output_path: '"..include_def.output_path.."')"
+          )
+          util.assert(source_path_is_file and include_def.source_name:find("?", 1, true),
+            "When including a single file for compilation the 'source_name' must not contain '?'. \z
+            It must instead define the entire source_name - it is not a pattern. \z
+            (source_path: '"..include_def.source_path.."', source_name: '"..include_def.source_name.."')"
+          )
+        end
+        output_filename = output_root:str()
+      else
+        local relative_output_entry_path = collection.action == action_enum.compile
+          and replace_extension(relative_entry_path, constants.lua_extension)
+          or relative_entry_path
+        output_filename = (output_root / relative_output_entry_path):str()
+      end
     end
     if collection.action == action_enum.compile then
       local inject_scripts = get_inject_script_data(include_def.inject_scripts, collection.inject_script_cache)
@@ -485,7 +485,7 @@ local function process_include(include_def, collection)
         action = action_enum.compile,
         source_filename = source_filename,
         relative_source_filename = relative_entry_path:str(),
-        output_filename = (output_root / relative_output_entry_path):str(),
+        output_filename = output_filename,
         source_name = include_def.source_name,
         use_load = include_def.use_load,
         error_message_count = include_def.error_message_count,
@@ -495,11 +495,11 @@ local function process_include(include_def, collection)
       -- Again not an array. I mean how would you delete the same file twice. You don't.
       collection.files[index] = {
         action = action_enum.delete,
+        -- again, for delete "source" is the "output", since we only operate in the output dir
         output_filename = source_filename,
       }
     else
       local files = collection.files[index]
-      local output_filename = (output_root / relative_output_entry_path):str()
       -- if the source an output filename combination already then exists just ignore this one
       for _, file in ipairs(files) do
         if file.source_filename == source_filename and file.output_filename == output_filename then
@@ -538,15 +538,23 @@ local function process_include(include_def, collection)
     if mode == "directory" then
       include_dir(relative_entry_path, depth)
     elseif mode == "file" then
-      -- phobos_extension is only used for compilation includes
+      local source_path_is_file = depth == 1
+      -- file extension filtering is only used for compilation includes
       local included = collection.action ~= action_enum.compile
-        or source_rooted_entry_path:extension() == include_def.phobos_extension
+        or source_rooted_entry_path:extension() == constants.phobos_extension
+        or source_rooted_entry_path:extension() == constants.lua_extension
+      if not included and source_path_is_file then
+        util.abort("When including a single file for compilation the source file extension \z
+          must either be '"..constants.phobos_extension.."' or '"..constants.lua_extension.."'. \z
+          (source_path: '"..include_def.source_path.."')"
+        )
+      end
       -- "" matches everything, don't waste time processing all of this
       if include_def.filename_pattern ~= "" and included then
         included = ("/"..source_rooted_entry_path:str()):find(include_def.filename_pattern)
       end
       if included then
-        include_file(relative_entry_path)
+        include_file(relative_entry_path, source_path_is_file)
       end
     end
   end
@@ -632,9 +640,7 @@ local function determine_incremental(current_profile, cached_profile)
     -- cannot compile nor copy incrementally
     return false, false
   end
-  if current_profile.phobos_extension ~= cached_profile.phobos_extension
-    or current_profile.lua_extension ~= cached_profile.lua_extension
-    or current_profile.phobos_version.major ~= cached_profile.phobos_version.major
+  if current_profile.phobos_version.major ~= cached_profile.phobos_version.major
     or current_profile.phobos_version.minor ~= cached_profile.phobos_version.minor
     or current_profile.phobos_version.patch ~= cached_profile.phobos_version.patch
   then

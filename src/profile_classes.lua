@@ -42,7 +42,7 @@
 
 
 -- IMPORTANT: make sure to copy defaults and descriptions to IncludeInCompilationDef for the fields:
--- phobos_extension, lua_extension, use_load, inject_scripts, error_message_count
+-- use_load, inject_scripts, error_message_count
 
 -- IMPORTANT: make sure to update doc/emmy_lua/phobos_profiles.lua when adding or removing mandatory fields.
 
@@ -62,12 +62,6 @@
 ---If this is a relative path it will be relative to the
 ---**directory the build profile script entrypoint is in**.
 ---@field cache_dir string
----**Default:** `".pho"`\
----The file extension of Phobos files. Source files must have this extension.
----@field phobos_extension string
----**Default:** `".lua"`\
----The file extension of Lua files. Output files will have this extension.
----@field lua_extension string
 ---**Default:** `false`\
 ---Should `load()` be used in the generated output to load the bytecode
 ---instead of outputting raw bytecode files?
@@ -130,7 +124,7 @@
 ---- include the file extension.
 ---
 ---**`include()` specific**:\
----Filtering for `phobos_extension` happens before this pattern gets applied.
+---Filtering for `.pho` and `.lua` extensions happens before this pattern gets applied.
 ---
 ---**`exclude()` and `exclude_copy()` specific**:\
 ---Note that excluding a file that isn't included is not a problem, it simply does nothing.
@@ -149,7 +143,8 @@
 ---Can be a path to a file or directory.
 ---
 ---**`include()` specific**:\
----If this is a file its extension must be the same as `lua_extension`.
+---If this is a file its extension must either be `.pho` or `.lua`.\
+---If this is a directory, only files with said extensions get included.
 ---
 ---If this is a relative path it will be relative to the
 ---**directory the build profile script entrypoint is in**.
@@ -170,8 +165,8 @@
 
 ---@class IncludeParams : NonDeleteIncludeAndExcludeBase
 ---**Mandatory**\
----Must be a path to a file or directory, whichever `source_path` is using.\
----If this is a file its extension must be the same as `phobos_extension`.
+---Must be a path to a file or directory, whichever of the 2 `source_path` is using.\
+---If this is a file its extension must be `.lua`.
 ---
 ---Must be a relative path, will be relative to the **profile's `output_dir`**
 ---@field output_path string
@@ -188,12 +183,6 @@
 ---
 ---If `source_path` is a file this must the filename, not containing any `?`, which will be used as-is.
 ---@field source_name string
----**Default:** `profile.phobos_extension` (its default is `".pho"`)\
----The file extension of Phobos files. Source files must have this extension.
----@field phobos_extension string
----**Default:** `profile.lua_extension` (its default is `".lua"`)\
----The file extension of Lua files. Output files will have this extension.
----@field lua_extension string
 ---**Default:** `profile.use_load` (its default is `false`)\
 ---Should `load()` be used in the generated output to load the bytecode
 ---instead of outputting raw bytecode files?

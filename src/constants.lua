@@ -42,4 +42,7 @@ return {
     [1] = "copy",
     [2] = "delete",
   },
+
+  phobos_extension = ".pho",
+  lua_extension = ".lua",
 }
