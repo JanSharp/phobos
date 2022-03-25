@@ -113,8 +113,8 @@
 ---@field upvals AstUpvalDef[]
 ---@field is_vararg boolean
 ---@field vararg_token AstTokenNode|nil @ used when `is_vararg == true`
----@field params AstLocalReference[]
 ---all parameters are `whole_block = true` locals, except vararg
+---@field params AstLocalReference[]
 ---@field param_comma_tokens AstTokenNode[] @ max length is `#params - 1`, min `0`
 ---@field open_paren_token AstTokenNode
 ---@field close_paren_token AstTokenNode
