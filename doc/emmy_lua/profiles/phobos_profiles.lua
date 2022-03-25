@@ -66,6 +66,4 @@ function phobos_profiles.parse_extra_args(extra_args, config) end
 ---If the intention is to indicate a crash then it's fine.
 function phobos_profiles.custom_parse_extra_args(extra_args, custom_parse_function) end
 
--- TODO: copy ArgsConfigOption, ArgsConfigPositional and ArgsConfig to the docs output programmatically
-
 return phobos_profiles
