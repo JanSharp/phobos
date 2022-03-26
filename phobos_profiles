@@ -73,6 +73,9 @@ end
 
 local function apply_standalone_specific_changes(profile, platform)
   exclude(profile, "control"..phobos_extension)
+  -- NOTE: this might actually be using .lua no matter what
+  exclude(profile, "lib/LuaArgParser/classes"..phobos_extension)
+
   copy_emmy_lua_docs(profile)
 
   if platform then
