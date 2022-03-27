@@ -209,6 +209,8 @@ do
       end)
     end
 
+    -- site used for learning, even if it's just 32 bit floats:
+    -- https://www.h-schmidt.net/FloatConverter/IEEE754.html
     -- the comments use big endian, the actual strings are written in little endian
     -- 0 is all 0s. Thank you IEEE754 <3
     add_double_test("zero", 0, "\x00\x00\x00\x00\x00\x00\x00\x00")
