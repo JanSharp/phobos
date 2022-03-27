@@ -84,7 +84,7 @@ local function parse_sequence(sequence)
     local start_i = i
     local current_type = {}
 
-    local char = parse_pattern("[\"']")
+    local char = parse_pattern("([\"'])")
     if char then -- literal
       local value = parse_pattern("([^"..char.."]*)"..char)
       if not value then i = start_i return end
@@ -108,7 +108,8 @@ local function parse_sequence(sequence)
           parse_blank()
           if not parse_pattern(">") then i = start_i return end
         else
-          current_type.type_type = "table"
+          current_type.type_type = "reference"
+          current_type.type_name = "table"
         end
       elseif ident == "fun" then -- function
         current_type.type_type = "function"
@@ -144,7 +145,7 @@ local function parse_sequence(sequence)
         end
         i = reset_i_to_here
       else -- any other type
-        current_type.type_type = "class"
+        current_type.type_type = "reference"
         current_type.type_name = ident
       end
     end
@@ -157,11 +158,11 @@ local function parse_sequence(sequence)
     end
 
     if union then
-      union.types[#union.types+1] = current_type
+      union.union_types[#union.union_types+1] = current_type
     end
 
     if parse_pattern("|") then
-      union = union or {type_type = "union", types = {current_type}}
+      union = union or {type_type = "union", union_types = {current_type}}
       if not parse_type(union) then i = start_i return end
       return union
     else
@@ -215,20 +216,27 @@ local function parse_sequence(sequence)
     end
     assert_parse_blank()
     local result = {tag = "class"}
+    result.sequence_type = "class"
     result.node = sequence.associated_node
     result.description = description
     result.type_name = assert_parse_identifier()
     parse_blank()
-    result.inheriting = {}
+    result.base_classes = {}
     if not is_line_end() then
       assert_parse_pattern(":")
       parse_blank()
-      result.inheriting[1] = {type_type = "class", type_name = assert_parse_identifier()}
+      result.base_classes[1] = {
+        type_type = "reference",
+        type_name = assert_parse_identifier(),
+      }
       parse_blank()
       while not is_line_end() do
         assert_parse_pattern(",")
         parse_blank()
-        result.inheriting[#result.inheriting+1] = {type_type = "class", type_name = assert_parse_identifier()}
+        result.base_classes[#result.base_classes+1] = {
+          type_type = "reference",
+          type_name = assert_parse_identifier(),
+        }
         parse_blank()
       end
     end
@@ -242,7 +250,7 @@ local function parse_sequence(sequence)
       field.description = description
       field.name = assert_parse_identifier()
       assert_parse_blank()
-      field.type = assert_parse_type()
+      field.field_type = assert_parse_type()
       parse_blank()
       if description[1] then
         assert_is_line_end()
@@ -271,6 +279,7 @@ local function parse_sequence(sequence)
     end
     assert_parse_blank()
     local result = {tag = "alias"}
+    result.sequence_type = "alias"
     result.description = description
     result.type_name = assert_parse_identifier()
     assert_parse_blank()
@@ -292,7 +301,7 @@ local function parse_sequence(sequence)
         util.debug_abort("Unexpected tag @"..(parse_identifier() or "").." at "..get_position()..".")
       end
     end
-    return {tag = "none", description = description, node = sequence.associated_node}
+    return {sequence_type = "none", description = description, node = sequence.associated_node}
   end
 
   local function try_read_param()
@@ -346,6 +355,8 @@ local function parse_sequence(sequence)
 
   local function read_func_description()
     local result = {}
+    result.sequence_type = "func_description"
+    result.type_type = "function"
     result.node = sequence.associated_node
     result.description = read_block()
     result.params = {}
@@ -387,8 +398,8 @@ local function parse_sequence(sequence)
   end
 end
 
----@param main AstMain
-local function parse(main)
+---@param ast AstMain
+local function parse(ast)
   -- local out = {}
 
   local add_stat
@@ -869,7 +880,7 @@ local function parse(main)
     end
   end
 
-  add_functiondef(main)
+  add_functiondef(ast)
 
   -- -- dirty way of ensuring formatted code doesn't combine identifiers (or keywords or numbers)
   -- -- one line comments without a blank token afterwards with a newline in its value can still

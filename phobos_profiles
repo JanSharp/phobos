@@ -3,6 +3,8 @@ local profiles = require("phobos_profiles")
 local util = require("util")
 ---@type LFS
 local lfs = require("lfs")
+local io_util = require("io_util")
+local gen_util = require("scripts.generate_docs_util")
 
 local args = profiles.parse_extra_args({...}, {
   options = {
@@ -110,11 +112,12 @@ local function apply_factorio_specific_changes(profile)
 end
 
 local function standalone_profile(params)
+  local output_dir = params.publish
+    and "temp/publish/"..params.name
+    or "out/"..params.name
   local profile = profiles.add_profile{
     name = params.name,
-    output_dir = params.publish
-      and "temp/publish/"..params.name
-      or "out/"..params.name,
+    output_dir = output_dir,
     cache_dir = params.publish
       and "temp/publish/cache/"..params.name
       or "temp/cache/"..params.name,
@@ -133,6 +136,19 @@ local function standalone_profile(params)
 
   apply_general_changes(profile)
   apply_standalone_specific_changes(profile, params.platform)
+
+  function profile.on_post_profile_ran()
+    local parsed_files = {}
+    local function parse(filename)
+      filename = output_dir.."/doc/emmy_lua/profiles/"..filename
+      parsed_files[#parsed_files+1] = gen_util.parse(io_util.read_file(filename), "@"..filename)
+    end
+    parse("arg_parser_classes.lua")
+    parse("phobos_profiles.lua")
+    parse("profile_classes.lua")
+    local emmy_lua_data = gen_util.resolve_references(parsed_files)
+    local b
+  end
 end
 
 local function factorio_profile(params)
