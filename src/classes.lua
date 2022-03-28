@@ -739,3 +739,88 @@
 ---@field level integer? @ only available during generation process
 ---@field scope_levels? table<AstScope, integer> @ only available during generation process
 ---@field current_scope? AstScope @ only available during generation process
+
+--------------------------------------------------
+-- emmy lua stuff:
+
+---@alias EmmyLuaTypeType
+---| '"literal"'
+---| '"dictionary"'
+---| '"reference"'
+---| '"function"'
+---| '"array"'
+---| '"union"'
+
+---@class EmmyLuaType
+---@field type_type EmmyLuaTypeType
+
+---@class EmmyLuaLiteralType : EmmyLuaType
+---@field type_type '"literal"'
+---@field value string
+
+---@class EmmyLuaDictionaryType : EmmyLuaType
+---@field type_type '"dictionary"'
+---@field key_type EmmyLuaType
+---@field value_type EmmyLuaType
+
+---@class EmmyLuaReferenceType : EmmyLuaType
+---@field type_type '"reference"'
+---@field type_name string
+---@field reference_type EmmyLuaClassSequence|EmmyLuaAliasSequence|nil @ never `nil` once the linker ran
+
+---@class EmmyLuaFunctionType : EmmyLuaType
+---@field type_type '"function"'
+---@field description string[]
+---@field params EmmyLuaParam[]
+---@field returns EmmyLuaReturn[]
+
+---@class EmmyLuaParam
+---@field description string[]
+---@field name string
+---@field optional boolean
+---@field param_type EmmyLuaType
+
+---@class EmmyLuaReturn
+---@field description string[]
+---@field name string
+---@field optional boolean
+---@field return_type EmmyLuaType
+
+---@alias EmmyLuaSequenceType
+---| '"class"'
+---| '"alias"'
+---| '"function"'
+---| '"none"'
+
+---@class EmmyLuaSequence
+---@field sequence_type EmmyLuaSequenceType
+---@field node AstNode|nil @ whichever node this sequence was preceding
+
+---@class EmmyLuaClassSequence : EmmyLuaSequence
+---@field sequence_type '"class"'
+---@field node AstLocalReference|nil
+---@field description string[]
+---@field type_name string
+---@field base_classes EmmyLuaType[] @ Only `"reference"`s to other classes are valid
+---@field fields EmmyLuaField[]
+
+---@class EmmyLuaField
+---@field description string[]
+---@field name string
+---@field field_type EmmyLuaType
+
+---@class EmmyLuaAliasSequence : EmmyLuaSequence
+---@field sequence_type '"alias"'
+---@field node AstLocalReference|nil
+---@field description string[]
+---@field type_name string
+---@field aliased_type EmmyLuaType
+
+---@class EmmyLuaFunctionSequence : EmmyLuaSequence, EmmyLuaFunctionType
+---@field sequence_type '"function"'
+---@field node AstFuncStat|AstLocalFunc|nil
+
+---@class EmmyLuaNoneSequence : EmmyLuaSequence
+---@field sequence_type '"none"'
+---@field node AstLocalReference|nil
+---@field description string[]

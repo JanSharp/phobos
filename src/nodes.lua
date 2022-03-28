@@ -598,7 +598,7 @@ local unop_ops = util.invert{"not", "-", "#"}
 ---@param params AstUnOpParams
 function nodes.new_unop(params)
   local node = expr_base(new_node("unop"), params)
-  assert(unop_ops[params.op], "invalid unop op '"..params.op.."'")
+  assert(unop_ops[params.op], "invalid unop op '"..tostring(params.op).."'")
   node.op = params.op
   node.ex = assert_params_field(params, "ex")
   node.op_token = params.op_token
@@ -615,7 +615,7 @@ local binop_ops = util.invert{"^", "*", "/", "%", "+", "-", "==", "<", "<=", "~=
 ---@param params AstBinOpParams
 function nodes.new_binop(params)
   local node = expr_base(new_node("binop"), params)
-  assert(binop_ops[params.op], "invalid binop op '"..params.op.."'")
+  assert(binop_ops[params.op], "invalid binop op '"..tostring(params.op).."'")
   node.op = params.op
   node.left = assert_params_field(params, "left")
   node.right = assert_params_field(params, "right")

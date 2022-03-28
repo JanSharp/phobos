@@ -84,7 +84,7 @@ local function parse_sequence(sequence)
     local start_i = i
     local current_type = {}
 
-    local char = parse_pattern("([\"'])")
+    local char = parse_pattern("([\"'`])")
     if char then -- literal
       local value = parse_pattern("([^"..char.."]*)"..char)
       if not value then i = start_i return end
@@ -113,22 +113,25 @@ local function parse_sequence(sequence)
         end
       elseif ident == "fun" then -- function
         current_type.type_type = "function"
+        current_type.description = {}
         assert_parse_pattern("%(")
         parse_blank()
         current_type.params = {}
         if not parse_pattern("%)") then
           repeat -- params
+            local param = {}
             parse_blank()
-            local name = assert_parse_identifier()
+            param.name = assert_parse_identifier()
             parse_blank()
+            if parse_pattern("%?") then
+              param.optional = true
+              parse_blank()
+            end
             assert_parse_pattern(":")
             parse_blank()
-            local type = assert_parse_type()
+            param.param_type = assert_parse_type()
             parse_blank()
-            current_type.params[#current_type.params+1] = {
-              name = name,
-              param_type = type,
-            }
+            current_type.params[#current_type.params+1] = param
           until not parse_pattern(",")
           assert_parse_pattern("%)")
         end
@@ -138,9 +141,17 @@ local function parse_sequence(sequence)
         if parse_pattern(":") then
           repeat -- returns
             parse_blank()
-            current_type.returns[#current_type.returns+1] = {return_type = assert_parse_type()}
+            local ret = {}
+            ret.description = {}
+            ret.return_type = assert_parse_type()
             reset_i_to_here = i
             parse_blank()
+            if parse_pattern("%?") then
+              ret.optional = true
+              reset_i_to_here = i
+              parse_blank()
+            end
+            current_type.returns[#current_type.returns+1] = ret
           until not parse_pattern(",")
         end
         i = reset_i_to_here
@@ -215,7 +226,7 @@ local function parse_sequence(sequence)
       end
     end
     assert_parse_blank()
-    local result = {tag = "class"}
+    local result = {}
     result.sequence_type = "class"
     result.node = sequence.associated_node
     result.description = description
@@ -246,7 +257,7 @@ local function parse_sequence(sequence)
       description = read_block()
       assert_parse_special("field")
       assert_parse_blank()
-      local field = {tag = "field"}
+      local field = {}
       field.description = description
       field.name = assert_parse_identifier()
       assert_parse_blank()
@@ -280,6 +291,7 @@ local function parse_sequence(sequence)
     assert_parse_blank()
     local result = {tag = "alias"}
     result.sequence_type = "alias"
+    result.node = sequence.associated_node
     result.description = description
     result.type_name = assert_parse_identifier()
     assert_parse_blank()
@@ -301,13 +313,17 @@ local function parse_sequence(sequence)
         util.debug_abort("Unexpected tag @"..(parse_identifier() or "").." at "..get_position()..".")
       end
     end
-    return {sequence_type = "none", description = description, node = sequence.associated_node}
+    return {
+      sequence_type = "none",
+      description = description,
+      node = sequence.associated_node,
+    }
   end
 
   local function try_read_param()
     if not parse_special("param") then return end
     assert_parse_blank()
-    local result = {tag = "param"}
+    local result = {}
     result.name = assert_parse_identifier()
     -- the '' can follow directly after the name in sumneko.lua
     -- so we don't have to assert, but I do it anyway
@@ -331,7 +347,7 @@ local function parse_sequence(sequence)
   local function try_read_return()
     if not parse_special("return") then return end
     assert_parse_blank()
-    local result = {tag = "return"}
+    local result = {}
     result.return_type = assert_parse_type()
     local name_would_be_valid = parse_blank()
     if parse_pattern("%?") then
@@ -353,9 +369,9 @@ local function parse_sequence(sequence)
     return result
   end
 
-  local function read_func_description()
+  local function read_function_sequence()
     local result = {}
-    result.sequence_type = "func_description"
+    result.sequence_type = "function"
     result.type_type = "function"
     result.node = sequence.associated_node
     result.description = read_block()
@@ -386,11 +402,11 @@ local function parse_sequence(sequence)
       -- allow classes or none
       return read_class_or_alias_or_none(false)
     elseif node.node_type == "localfunc" then
-      -- allow func_description
-      return read_func_description()
+      -- allow function sequences
+      return read_function_sequence()
     elseif node.node_type == "funcstat" then
-      -- allow func_description
-      return read_func_description()
+      -- allow function sequences
+      return read_function_sequence()
     end
   else
     -- allow classes or aliases or none

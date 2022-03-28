@@ -101,7 +101,7 @@ local function link(parsed_sequences)
       add_class(emmy_lua, sequence)
     elseif sequence.sequence_type == "alias" then
       add_alias(emmy_lua, sequence)
-    elseif sequence.sequence_type == "func_description" then
+    elseif sequence.sequence_type == "function" then
       funcs[#funcs+1] = sequence
     else
       -- nothing to do for "none", throw away
@@ -135,7 +135,7 @@ local function link(parsed_sequences)
     resolve_references(emmy_lua, func)
   end
 
-  -- add func_description sequences as fields to classes if we can find the class
+  -- add function sequences as fields to classes if we can find the class
   -- they are supposed to be apart of
 
   for _, func in ipairs(funcs) do
