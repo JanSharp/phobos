@@ -154,3 +154,5 @@ type annotations, somehow? steal a bunch from TypeScript?
 
 `--- @param field=1 number` would be a great way to show default optional values - Nexela
 `--- @todo` look pretty and doesn't show up in hovers, the separation just irks me - Nexela
+`---@usage` adds blank line above, indents following lines until empty comment line - Nexela
+`---@deprecated` more support for table fields (strikethrough when using) - Nexela

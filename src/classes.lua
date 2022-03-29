@@ -782,7 +782,7 @@
 
 ---@class EmmyLuaReturn
 ---@field description string[]
----@field name string
+---@field name string|nil @ `nil` if this is not a function sequence, but a `fun()` type
 ---@field optional boolean
 ---@field return_type EmmyLuaType
 

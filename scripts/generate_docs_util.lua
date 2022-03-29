@@ -29,7 +29,67 @@ local function resolve_references(array_of_parsed_sequences)
   return emmy_lua_linker.link(combined)
 end
 
+local function generate_docs(emmy_lua_data)
+  local phobos_profiles = util.debug_assert(
+    emmy_lua_data.all_types_lut["PhobosProfiles"],
+    "Missing class 'PhobosProfiles' to generate docs."
+  )
+  local out = {}
+  local c = 0
+  local function add(part)
+    c = c + 1
+    out[c] = part
+  end
+
+  local function span(class, str)
+    return "<span class=\""..class.."\">"..str.."</span>"
+  end
+
+  local function param_span(str)
+    return span("parameter", str)
+  end
+
+  local function func_span(str)
+    return span("function", str)
+  end
+
+  for _, field in ipairs(phobos_profiles.fields) do
+    local type = field.field_type
+    if type.type_type == "function" then
+      add("### ")
+      add(func_span(field.name))
+      add("(")
+      local param_names = {}
+      for i, param in ipairs(type.params) do
+        param_names[i] = param_span(param.name)
+      end
+      add(table.concat(param_names, ", "))
+      add(")")
+      add(" => ")
+      add("{results}") -- TODO
+      add("\n\n")
+      add(table.concat(field.description, "\n"))
+      add("\n\n")
+      -- TODO: improve condition to check for the actual type of the single parameter to be a class reference
+      if type.params[1] and type.params[1].name == "params" and not type.params[2] then
+      else
+        for _, param in ipairs(type.params) do
+          add("- ")
+          add(param.name)
+          add(": ")
+          add(table.concat(param.description, "\n"))
+          add("\n")
+        end
+      end
+      add("\n")
+    end
+  end
+
+  return table.concat(out):gsub("_", "&#"..string.byte("_")..";")
+end
+
 return {
   parse = parse,
   resolve_references = resolve_references,
+  generate_docs = generate_docs,
 }

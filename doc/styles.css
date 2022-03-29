@@ -1,0 +1,22 @@
+
+body {
+  background-color: #181a1f;
+  color: #dcdcdc;
+}
+/* 
+h3 {
+  color: #dcdcdc;
+}
+
+p {
+  color: #dcdcdc;
+}
+ */
+
+.function {
+  color: #f0ec00;
+}
+
+.parameter {
+  color: #56bd26;
+}
