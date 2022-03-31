@@ -298,6 +298,7 @@ local function parse_sequence(sequence)
     result.aliased_type = assert_parse_type()
     parse_blank()
     assert_is_line_end()
+    next_line()
     return result
   end
 
@@ -340,6 +341,7 @@ local function parse_sequence(sequence)
       result.description = read_block_starting_at_i()
     else
       result.description = {}
+      next_line()
     end
     return result
   end
@@ -365,6 +367,7 @@ local function parse_sequence(sequence)
       result.description = read_block_starting_at_i()
     else
       result.description = {}
+      next_line()
     end
     return result
   end
@@ -397,21 +400,26 @@ local function parse_sequence(sequence)
 
   next_line()
   local node = sequence.associated_node
+  local result
   if node then
     if node.node_type == "localstat" then
       -- allow classes or none
-      return read_class_or_alias_or_none(false)
+      result = read_class_or_alias_or_none(false)
     elseif node.node_type == "localfunc" then
       -- allow function sequences
-      return read_function_sequence()
+      result = read_function_sequence()
     elseif node.node_type == "funcstat" then
       -- allow function sequences
-      return read_function_sequence()
+      result = read_function_sequence()
+    else
+      util.abort("Unhandled associated_node '"..node.node_type.."'.")
     end
   else
     -- allow classes or aliases or none
-    return read_class_or_alias_or_none(true)
+    result = read_class_or_alias_or_none(true)
   end
+  util.debug_assert(not line, "Did not finish parsing comment at "..get_position()..".")
+  return result
 end
 
 ---@param ast AstMain

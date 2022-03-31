@@ -137,7 +137,7 @@ There are lots of ideas for language extensions which are not listed here in the
 
 Phobos itself is licensed under the MIT License, see [LICENSE.txt](LICENSE.txt).
 
-<!-- cSpell:ignore Kulchenko, Mischak, Wellmann -->
+<!-- cSpell:ignore Kulchenko, Mischak, Wellmann, Niklas, Frykholm -->
 
 - [Lua](https://www.lua.org/home.html) MIT License, Copyright (c) 1994–2021 Lua.org, PUC-Rio.
 - [LuaFileSystem](https://keplerproject.github.io/luafilesystem/) MIT License, Copyright (c) 2003 - 2020 Kepler Project.
@@ -148,6 +148,7 @@ Phobos itself is licensed under the MIT License, see [LICENSE.txt](LICENSE.txt).
 - [FactorioSumnekoLuaPlugin](https://github.com/JanSharp/FactorioSumnekoLuaPlugin) MIT License, Copyright (c) 2021-2022 Jan Mischak, justarandomgeek
 - [minimal-no-base-mod](https://github.com/Bilka2/minimal-no-base-mod), Copyright (c) 2020 Erik Wellmann
 - [JanSharpDevEnv](https://github.com/JanSharp/JanSharpDevEnv), Copyright (c) 2020 Jan Mischak
+- [markdown.lua](https://github.com/speedata/luamarkdown), Copyright (c) 2008 Niklas Frykholm
 
 For license details see the [LICENSE_THIRD_PARTY.txt](LICENSE_THIRD_PARTY.txt) file and or the linked repositories above.
 

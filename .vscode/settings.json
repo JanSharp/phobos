@@ -35,6 +35,7 @@
     "**/serpent.lua",
     "LICENSE.txt",
     "LICENSE_THIRD_PARTY.txt",
+    "scripts/markdown.lua",
   ],
   "cSpell.words": [
     "binop",

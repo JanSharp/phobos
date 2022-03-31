@@ -47,7 +47,7 @@ function phobos_profiles.get_all_optimizations() end
 ---Parse the extra args according to a defined config and get the resulting table if the args are valid.
 ---@param extra_args string[] @ The phobos profiles file gets the extra args passed in as vararg (`...`), so you would probably want to pass in `{...}`.
 ---@param config ArgsConfig @ Uses [LuaArgParser](https://github.com/JanSharp/LuaArgParser). Definitions are currently not validated so invalid ones will cause crashes.
----@return table @ Never `nil` and never has the `help` flag set, because the program aborts in those cases.
+---@return table args @ Never `nil` and never has the `help` flag set, because the program aborts in those cases.
 function phobos_profiles.parse_extra_args(extra_args, config) end
 
 ---Parse the extra args using a custom function.
@@ -64,6 +64,7 @@ function phobos_profiles.parse_extra_args(extra_args, config) end
 ---Use `pcall` to wrap functions that could call `error` or `assert` if you do do not have control over
 ---those functions (for example when using some library).\
 ---If the intention is to indicate a crash then it's fine.
+---@return table args @ The first result from `custom_parse_function`, but never `nil` because the program aborts in those cases.
 function phobos_profiles.custom_parse_extra_args(extra_args, custom_parse_function) end
 
 return phobos_profiles

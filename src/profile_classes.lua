@@ -53,7 +53,7 @@
 ---**Mandatory**\
 ---Root path all other output paths have to be relative to.
 ---
----If this is a relative path it will be **relative to the root_dir**.
+---If this is a relative path it will be **relative to the `root_dir`**.
 ---@field output_dir string
 ---**Mandatory**\
 ---Directory all temporary files specific for this profile will be stored in.\
@@ -76,7 +76,7 @@
 ---These files will be run before any optimizations.\
 ---These files may `require` any Phobos file, such as the 'ast_walker' or 'nodes' for example.\
 ---**NOTE:** This feature is far from complete.\
----if there are relative paths they will be **relative to the root_dir**
+---if there are relative paths they will be **relative to the `root_dir`**.
 ---@field inject_scripts string[]
 ---**Default:** `{}` (so all optimizations set to "false")
 ---@field optimizations Optimizations
@@ -94,10 +94,10 @@
 ---@field root_dir string
 ---**Default:** `nil`\
 ---A function that is ran before this profile is ran. It runs before absolutely anything happens.
----@field on_pre_profile_ran function
+---@field on_pre_profile_ran fun()
 ---**Default:** `nil`\
 ---A function that is ran after this profile is ran. It runs after absolutely everything happened.
----@field on_post_profile_ran function
+---@field on_post_profile_ran fun()
 
 
 
@@ -130,6 +130,7 @@
 ---Note that excluding a file that isn't included is not a problem, it simply does nothing.
 ---
 ---If you're used to "file globs" here are respective equivalents:
+---
 ---- `*` => `[^/]*` - Match a part of a filename or directory of undetermined length.
 ---- `/**/` => `/.*/` - Match any amount of directories.
 ---- `?` => `[^/]` - Match any single character within a filename or directory.
@@ -200,7 +201,7 @@
 ---These files will be run before any optimizations.\
 ---These files may `require` any Phobos file, such as the 'ast_walker' or 'nodes' for example.\
 ---**NOTE:** This feature is far from complete.\
----if there are relative paths they will be **relative to the root_dir**
+---if there are relative paths they will be **relative to the `root_dir`**.
 ---@field inject_scripts string[]
 
 ---@class ExcludeParams : NonDeleteIncludeAndExcludeBase
