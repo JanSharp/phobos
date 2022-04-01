@@ -18,9 +18,9 @@ local function add_class(emmy_lua, class)
 end
 
 local function seed_classes(emmy_lua)
-  local function add(name)
+  local function add(name, custom_description)
     add_class(emmy_lua, {
-      description = name.." primitive",
+      description = {custom_description or ("Lua built-in "..name..".")},
       type_name = name,
       fields = {},
       base_classes = {},
@@ -28,12 +28,12 @@ local function seed_classes(emmy_lua)
   end
   add("string")
   add("number")
-  add("integer")
+  add("integer", "Actually also a Lua built-in number, but it should be integral.")
   add("boolean")
   add("table")
   add("function")
   add("nil")
-  add("any")
+  add("any", "Simply any value.")
 end
 
 local function new_emmy_lua_data()
