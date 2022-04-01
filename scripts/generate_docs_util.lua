@@ -92,7 +92,7 @@ local function format_type(type)
         end
       end,
       ["reference"] = function()
-        span[#span+1] = type.type_name -- TODO: link
+        span[#span+1] = xml.elem("a", {xml.attr("href", "concepts.html#"..type.type_name)}, {type.type_name})
       end,
       ["array"] = function()
         add_type(type.value_type)
@@ -142,23 +142,48 @@ local function get_phobos_profiles_class(emmy_lua_data)
   )
 end
 
+local function field_or_param_row(name, type, optional, description)
+  local left = {param_span(name)}
+  if optional then
+    left[#left+1] = "?"
+  end
+  left[#left+1] = " :: "
+  left[#left+1] = format_type(type)
+  local right = {}
+  if description[1] then
+    right[#right+1] = format_markdown(table.concat(description, "\n"))
+  end
+  return xml.elem("tr", nil, {xml.elem("td", nil, left), xml.elem("td", nil, right)})
+end
+
+local function foreach_field_and_inherited_fields(sequence, callback)
+  ---@diagnostic disable-next-line:redefined-local
+  local function add(sequence)
+    if sequence.sequence_type == "alias" then
+      add(sequence.aliased_type.reference_type)
+    elseif sequence.sequence_type == "class" then
+      for _, base_class in ipairs(sequence.base_classes) do
+        add(base_class.reference_type)
+      end
+      for _, class_field in ipairs(sequence.fields) do
+        callback(class_field)
+      end
+    end
+  end
+  add(sequence)
+end
+
+local function is_field_with_function_with_params_param(field)
+  local field_type = field.field_type
+  return field_type.type_type == "function"
+    and field_type.params[1]
+    and field_type.params[1].name == "params"
+    and not field_type.params[2]
+end
+
 local function generate_phobos_profiles_page(emmy_lua_data)
   local phobos_profiles = get_phobos_profiles_class(emmy_lua_data)
   local body = {}
-
-  local function field_or_param_row(name, type, optional, description)
-    local left = {param_span(name)}
-    if optional then
-      left[#left+1] = "?"
-    end
-    left[#left+1] = " :: "
-    left[#left+1] = format_type(type)
-    local right = {}
-    if description[1] then
-      right[#right+1] = format_markdown(table.concat(description, "\n"))
-    end
-    return xml.elem("tr", nil, {xml.elem("td", nil, left), xml.elem("td", nil, right)})
-  end
 
   for j, field in ipairs(phobos_profiles.fields) do
 
@@ -200,30 +225,20 @@ local function generate_phobos_profiles_page(emmy_lua_data)
 
     -- parameters table
 
-    if field_type.params[1] and field_type.params[1].name == "params" and not field_type.params[2] then
+    if is_field_with_function_with_params_param(field) then
       -- single parameter which is a table with specific fields
       div[#div+1] = xml.elem("h4", nil, {"Parameters"})
       div[#div+1] = "Table with the following fields:"
       local t = {}
       div[#div+1] = xml.elem("table", nil, t)
-      local function add(sequence)
-        if sequence.sequence_type == "alias" then
-          add(sequence.aliased_type.reference_type)
-        elseif sequence.sequence_type == "class" then
-          for _, base_class in ipairs(sequence.base_classes) do
-            add(base_class.reference_type)
-          end
-          for _, class_field in ipairs(sequence.fields) do
-            t[#t+1] = field_or_param_row(
-              class_field.name,
-              class_field.field_type,
-              false,
-              class_field.description
-            )
-          end
-        end
-      end
-      add(field_type.params[1].param_type.reference_type)
+      foreach_field_and_inherited_fields(field_type.params[1].param_type.reference_type, function(class_field)
+        t[#t+1] = field_or_param_row(
+          class_field.name,
+          class_field.field_type,
+          false,
+          class_field.description
+        )
+      end)
 
     elseif field_type.params[1] then
       -- multiple parameters, just list those
@@ -249,8 +264,123 @@ local function generate_phobos_profiles_page(emmy_lua_data)
   return make_page("Profiles API Docs | Phobos", body)
 end
 
+local function generate_concepts_page(emmy_lua_data)
+  local phobos_profiles = get_phobos_profiles_class(emmy_lua_data)
+
+  -- find all types that are exposed directly by the PhobosProfiles class
+  -- base classes of those types do not count as being exposed
+
+  local exposed_sequences = {}
+  local exposed_sequences_lut = {}
+  local excluded_sequences_lut = {}
+
+  local add_type
+  local function add_sequence(sequence)
+    if sequence.sequence_type == "class" then
+      for _, field in ipairs(sequence.fields) do
+        if is_field_with_function_with_params_param(field) then
+          excluded_sequences_lut[field.field_type.params[1].param_type.reference_type] = true
+        end
+        add_type(field.field_type)
+      end
+    elseif sequence.sequence_type == "alias" then
+      add_type(sequence.aliased_type)
+    end
+  end
+
+  function add_type(type)
+    (({
+      ["literal"] = function()
+        -- don't care
+      end,
+      ["dictionary"] = function()
+        add_type(type.key_type)
+        add_type(type.value_type)
+      end,
+      ["function"] = function()
+        for _, param in ipairs(type.params) do
+          add_type(param.param_type)
+        end
+        if type.returns[1] then
+          for _, ret in ipairs(type.returns) do
+            add_type(ret.return_type)
+          end
+        end
+      end,
+      ["reference"] = function()
+        if not exposed_sequences_lut[type.reference_type] then
+          exposed_sequences_lut[type.reference_type] = true
+          if not excluded_sequences_lut[type.reference_type] then
+            exposed_sequences[#exposed_sequences+1] = type.reference_type
+          end
+          add_sequence(type.reference_type)
+        end
+      end,
+      ["array"] = function()
+        add_type(type.value_type)
+      end,
+      ["union"] = function()
+        for _, union_type in ipairs(type.union_types) do
+          add_type(union_type)
+        end
+      end,
+    })[type.type_type] or function()
+      util.debug_abort("Unknown emmy lua type type_type '"..tostring(type.type_type).."'.")
+    end)()
+  end
+
+  add_sequence(phobos_profiles)
+
+  -- sort exposed types alphabetically because I like that
+
+  table.sort(exposed_sequences, function(left, right)
+    return left.type_name:lower() < right.type_name:lower()
+  end)
+
+  -- list stuff
+
+  local body = {}
+
+  for i, sequence in ipairs(exposed_sequences) do
+    -- header
+    local header = {}
+    body[#body+1] = xml.elem("h3", {xml.attr("id", sequence.type_name)}, header)
+    header[#header+1] = xml.elem("a", {xml.attr("href", "#"..sequence.type_name)}, {sequence.type_name})
+
+    -- type description
+    local div = {}
+    body[#body+1] = xml.elem("div", {xml.attr("class", "indent")}, div)
+    if sequence.description[1] then
+      div[#div+1] = format_markdown(table.concat(sequence.description, "\n"))
+    end
+
+    if sequence.sequence_type == "alias" then
+      div[#div+1] = xml.elem("p", nil, {"Alias for the type ", format_type(sequence.aliased_type)})
+    elseif sequence.sequence_type == "class" then
+      local t = {}
+      div[#div+1] = xml.elem("table", nil, t)
+      foreach_field_and_inherited_fields(sequence, function(class_field)
+        t[#t+1] = field_or_param_row(
+          class_field.name,
+          class_field.field_type,
+          false,
+          class_field.description
+        )
+      end)
+    end
+
+    -- separator line between types
+    if i ~= #exposed_sequences then
+      body[#body+1] = xml.elem("hr")
+    end
+  end
+
+  return make_page("Concepts | Phobos", body)
+end
+
 return {
   parse = parse,
   resolve_references = resolve_references,
   generate_phobos_profiles_page = generate_phobos_profiles_page,
+  generate_concepts_page = generate_concepts_page,
 }

@@ -106,7 +106,7 @@
 ---@field node_type '"functiondef"'
 ---the element in the statement list of the scope of the statement this functiondef is somehow apart of
 ---@field stat_elem ILLNode<nil,AstStatement>
----@field is_main 'nil' @ overridden by AstMain to be `true`
+---@field is_main nil @ overridden by AstMain to be `true`
 ---@field source string
 ---@field is_method boolean @ is it `function foo:bar() end`?
 ---@field func_protos AstFunctionDef[]
@@ -120,7 +120,7 @@
 ---@field close_paren_token AstTokenNode
 ---@field function_token AstTokenNode @ position for any `closure` instructions
 ---@field end_token AstTokenNode
----@field eof_token 'nil' @ overridden by AstMain to be an AstTokenNode
+---@field eof_token nil @ overridden by AstMain to be an AstTokenNode
 
 ---@class AstFuncBase : AstNode
 ---@field func_def AstFunctionDef

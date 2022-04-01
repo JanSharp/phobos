@@ -141,6 +141,10 @@ local function standalone_profile(params)
     profile = profile,
     output_path = "doc/phobos_profiles.html",
   }
+  profiles.exclude_delete{
+    profile = profile,
+    output_path = "doc/concepts.html",
+  }
   include_copy(profile, "doc/styles.css")
   include_copy(profile, "doc/images/favicon.png")
 
@@ -157,6 +161,8 @@ local function standalone_profile(params)
     local emmy_lua_data = gen_util.resolve_references(parsed_files)
     local phobos_profiles_docs = gen_util.generate_phobos_profiles_page(emmy_lua_data)
     io_util.write_file(output_root.."/doc/phobos_profiles.html", phobos_profiles_docs)
+    local concepts_docs = gen_util.generate_concepts_page(emmy_lua_data)
+    io_util.write_file(output_root.."/doc/concepts.html", concepts_docs)
   end
 end
 
