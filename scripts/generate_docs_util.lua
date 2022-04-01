@@ -114,28 +114,37 @@ local function format_type(type)
   return xml.elem("span", {xml.attr("class", "type")}, span)
 end
 
-local function generate_docs(emmy_lua_data)
-  local phobos_profiles = util.debug_assert(
+local function make_page(title, body_contents)
+  ---cSpell:ignore stylesheet
+  return xml.serialize_xhtml{
+    xml.elem("html", {xml.attr("xmlns", "http://www.w3.org/1999/xhtml")}, {
+      xml.elem("head", nil, {
+        xml.elem("title", nil, {title}),
+        xml.elem("link", {
+          xml.attr("rel", "stylesheet"),
+          xml.attr("href", "styles.css"),
+        }),
+        xml.elem("link", {
+          xml.attr("rel", "icon"),
+          xml.attr("type", "image/x-icon"),
+          xml.attr("href", "images/favicon.png"),
+        }),
+      }),
+      xml.elem("body", nil, body_contents),
+    }),
+  }
+end
+
+local function get_phobos_profiles_class(emmy_lua_data)
+  return util.debug_assert(
     emmy_lua_data.all_types_lut["PhobosProfiles"],
     "Missing class 'PhobosProfiles' to generate docs."
   )
+end
 
-  ---cSpell:ignore stylesheet
-  local html = {}
-  html[#html+1] = xml.elem("head", nil, {
-    xml.elem("title", nil, {"Profiles API Docs | Phobos"}),
-    xml.elem("link", {
-      xml.attr("rel", "stylesheet"),
-      xml.attr("href", "styles.css"),
-    }),
-    xml.elem("link", {
-      xml.attr("rel", "icon"),
-      xml.attr("type", "image/x-icon"),
-      xml.attr("href", "images/favicon.png"),
-    }),
-  })
+local function generate_phobos_profiles_page(emmy_lua_data)
+  local phobos_profiles = get_phobos_profiles_class(emmy_lua_data)
   local body = {}
-  html[#html+1] = xml.elem("body", nil, body)
 
   local function field_or_param_row(name, type, optional, description)
     local left = {param_span(name)}
@@ -152,6 +161,8 @@ local function generate_docs(emmy_lua_data)
   end
 
   for j, field in ipairs(phobos_profiles.fields) do
+
+    -- function signature header
     local field_type = field.field_type
     do
       local header = {}
@@ -179,12 +190,18 @@ local function generate_docs(emmy_lua_data)
         end
       end
     end
+
+    -- function description
     local div = {}
     body[#body+1] = xml.elem("div", {xml.attr("class", "indent")}, div)
     if field_type.description[1] then
       div[#div+1] = format_markdown(table.concat(field_type.description, "\n"))
     end
+
+    -- parameters table
+
     if field_type.params[1] and field_type.params[1].name == "params" and not field_type.params[2] then
+      -- single parameter which is a table with specific fields
       div[#div+1] = xml.elem("h4", nil, {"Parameters"})
       div[#div+1] = "Table with the following fields:"
       local t = {}
@@ -207,7 +224,9 @@ local function generate_docs(emmy_lua_data)
         end
       end
       add(field_type.params[1].param_type.reference_type)
+
     elseif field_type.params[1] then
+      -- multiple parameters, just list those
       div[#div+1] = xml.elem("h4", nil, {"Parameters"})
       local t = {}
       div[#div+1] = xml.elem("table", nil, t)
@@ -220,16 +239,18 @@ local function generate_docs(emmy_lua_data)
         )
       end
     end
+
+    -- separator line between functions
     if j ~= #phobos_profiles.fields then
       body[#body+1] = xml.elem("hr")
     end
   end
 
-  return xml.serialize_xhtml{xml.elem("html", {xml.attr("xmlns", "http://www.w3.org/1999/xhtml")}, html)}
+  return make_page("Profiles API Docs | Phobos", body)
 end
 
 return {
   parse = parse,
   resolve_references = resolve_references,
-  generate_docs = generate_docs,
+  generate_phobos_profiles_page = generate_phobos_profiles_page,
 }

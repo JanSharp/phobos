@@ -155,8 +155,8 @@ local function standalone_profile(params)
     parse("phobos_profiles.lua")
     parse("profile_classes.lua")
     local emmy_lua_data = gen_util.resolve_references(parsed_files)
-    local docs = gen_util.generate_docs(emmy_lua_data)
-    io_util.write_file(output_root.."/doc/phobos_profiles.html", docs)
+    local phobos_profiles_docs = gen_util.generate_phobos_profiles_page(emmy_lua_data)
+    io_util.write_file(output_root.."/doc/phobos_profiles.html", phobos_profiles_docs)
   end
 end
 

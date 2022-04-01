@@ -36,6 +36,8 @@
     "LICENSE.txt",
     "LICENSE_THIRD_PARTY.txt",
     "scripts/markdown.lua",
+    "debugging/minimal-no-base-mod",
+    "debugging/JanSharpDevEnv",
   ],
   "cSpell.words": [
     "binop",
