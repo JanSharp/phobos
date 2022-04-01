@@ -78,7 +78,7 @@
 ---**NOTE:** This feature is far from complete.\
 ---if there are relative paths they will be **relative to the `root_dir`**.
 ---@field inject_scripts string[]
----**Default:** `{}` (so all optimizations set to "false")
+---**Default:** `{}` (so all optimizations are `nil`/falsy)
 ---@field optimizations Optimizations
 ---**Default:** `8`\
 ---The amount of info/warn/error messages to print per file

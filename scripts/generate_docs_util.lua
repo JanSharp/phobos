@@ -157,16 +157,20 @@ local function field_or_param_row(name, type, optional, description)
 end
 
 local function foreach_field_and_inherited_fields(sequence, callback)
+  local already_added_field_name_lut = {}
   ---@diagnostic disable-next-line:redefined-local
   local function add(sequence)
     if sequence.sequence_type == "alias" then
       add(sequence.aliased_type.reference_type)
     elseif sequence.sequence_type == "class" then
+      for _, field in ipairs(sequence.fields) do
+        if not already_added_field_name_lut[field.name] then
+          already_added_field_name_lut[field.name] = true
+          callback(field)
+        end
+      end
       for _, base_class in ipairs(sequence.base_classes) do
         add(base_class.reference_type)
-      end
-      for _, class_field in ipairs(sequence.fields) do
-        callback(class_field)
       end
     end
   end
