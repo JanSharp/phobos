@@ -346,9 +346,23 @@ local function generate_concepts_page(emmy_lua_data)
     return left.type_name:lower() < right.type_name:lower()
   end)
 
-  -- list stuff
+  -- table of contents
 
   local body = {}
+
+  local ul = {}
+  body[#body+1] = xml.elem("ul", nil, ul)
+
+  for _, sequence in ipairs(exposed_sequences) do
+    ul[#ul+1] = xml.elem("li", nil, {
+      xml.elem("a", {xml.attr("href", "#"..sequence.type_name)}, {sequence.type_name})
+    })
+  end
+
+  -- separator line
+  body[#body+1] = xml.elem("hr")
+
+  -- detailed list
 
   for i, sequence in ipairs(exposed_sequences) do
     -- header
