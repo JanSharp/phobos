@@ -19,11 +19,18 @@ local function serialize(contents, is_xhtml)
     out[c] = part
   end
 
-  local escaped_set = "[^%w \t\n\r_0-9%-/%.]"
+  -- https://stackoverflow.com/questions/1091945/what-characters-do-i-need-to-escape-in-xml-documents
+  -- https://stackoverflow.com/questions/7381974/which-characters-need-to-be-escaped-in-html
+  local escaped_set = "[\"'<>&]"
   local function escape(str)
-    return str:gsub(escaped_set, function(char)
-      return string.format("&#%d;", string.byte(char))
-    end)
+    ---cSpell:ignore apos
+    return str:gsub(escaped_set, { -- characters could also be escaped as `&#decimal_value;`
+      ['"'] = "&quot;",
+      ["'"] = "&apos;",
+      ["<"] = "&lt;",
+      [">"] = "&gt;",
+      ["&"] = "&amp;",
+    })
   end
 
   local add_contents
