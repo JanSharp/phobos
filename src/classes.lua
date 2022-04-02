@@ -809,6 +809,7 @@
 ---@field fields EmmyLuaField[]
 
 ---@class EmmyLuaField
+---If the `field_type` is a function then its `description` and this one must refer to the same table
 ---@field description string[]
 ---@field name string
 ---@field optional boolean

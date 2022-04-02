@@ -268,6 +268,9 @@ local function parse_sequence(sequence)
         assert_parse_blank() -- error
       end
       field.field_type = assert_parse_type()
+      if field.field_type.type_type == "function" then
+        field.field_type.description = description
+      end
       parse_blank()
       if description[1] then
         assert_is_line_end()
@@ -428,6 +431,12 @@ local function parse_sequence(sequence)
   return result
 end
 
+---This parse function is literally just copy paste of the formatter with very few modifications.
+---The only changes are that there is no string output and there is sequence tracking of comments
+---with 3 starting dashes: `---`. This does mean that there are several redundant function calls
+---and associated logic that could be removed, but I'm keeping this as low effort as possible
+---because I'm fairly certain the way ast can be walked through is going to change which should
+---make this easier. And if it doesn't, this can be cleaned up at that point.
 ---@param ast AstMain
 local function parse(ast)
   -- local out = {}

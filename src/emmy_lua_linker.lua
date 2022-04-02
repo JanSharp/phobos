@@ -156,7 +156,7 @@ local function link(parsed_sequences)
           if class then
             class.fields[#class.fields+1] = {
               tag = "field",
-              description = {}, -- TODO: should this be the func.description?
+              description = func.description,
               name = suffix.value,
               field_type = func,
             }
