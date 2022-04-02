@@ -7,6 +7,7 @@ local util = require("util")
 local error_code_util = require("error_code_util")
 local xml = require("scripts.xml_util")
 local md = require("scripts.markdown")
+local io_util = require("io_util")
 
 local function parse(text, source_name)
   local function check_errors(errors)
@@ -443,9 +444,26 @@ local function generate_concepts_page(emmy_lua_data)
   return make_page("Concepts | Phobos", body)
 end
 
+local function generate_docs(output_root)
+  local parsed_files = {}
+  local function parse_file(filename)
+    filename = output_root.."/doc/emmy_lua/profiles/"..filename
+    parsed_files[#parsed_files+1] = parse(io_util.read_file(filename), "@"..filename)
+  end
+  parse_file("arg_parser_classes.lua")
+  parse_file("phobos_profiles.lua")
+  parse_file("profile_classes.lua")
+  local emmy_lua_data = resolve_references(parsed_files)
+  local phobos_profiles_docs = generate_phobos_profiles_page(emmy_lua_data)
+  io_util.write_file(output_root.."/doc/phobos_profiles.html", phobos_profiles_docs)
+  local concepts_docs = generate_concepts_page(emmy_lua_data)
+  io_util.write_file(output_root.."/doc/concepts.html", concepts_docs)
+end
+
 return {
   parse = parse,
   resolve_references = resolve_references,
   generate_phobos_profiles_page = generate_phobos_profiles_page,
   generate_concepts_page = generate_concepts_page,
+  generate_docs = generate_docs,
 }

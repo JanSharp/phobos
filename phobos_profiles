@@ -18,6 +18,13 @@ local args = profiles.parse_extra_args({...}, {
       single_param = true,
       optional = true,
     },
+    {
+      field = "generate_docs",
+      long = "generate-docs",
+      short = "d",
+      description = "Generate documentation in the docs folder.",
+      flag = true,
+    },
   },
 })
 
@@ -34,6 +41,13 @@ local function exclude(profile, path)
   profiles.exclude{
     profile = profile,
     source_path = "src/"..path,
+  }
+end
+
+local function exclude_delete(profile, path)
+  profiles.exclude_delete{
+    profile = profile,
+    output_path = path,
   }
 end
 
@@ -61,6 +75,13 @@ local function apply_general_changes(profile)
   include_copy(profile, "LICENSE.txt")
   include_copy(profile, "LICENSE_THIRD_PARTY.txt")
   include_copy(profile, "thumbnail_1080_1080.png")
+
+  -- docs specific
+  -- these get added regardless of the generate_docs flag because it's incremental anyway
+  exclude_delete(profile, "doc/phobos_profiles.html")
+  exclude_delete(profile, "doc/concepts.html")
+  include_copy(profile, "doc/styles.css")
+  include_copy(profile, "doc/images/favicon.png")
 end
 
 local function copy_emmy_lua_docs(profile)
@@ -111,6 +132,11 @@ local function apply_factorio_specific_changes(profile)
   include_copy(profile, "thumbnail_144_144_padded.png", "thumbnail.png")
 end
 
+local function generate_docs(output_root)
+  print("generating docs")
+  gen_util.generate_docs(output_root)
+end
+
 local function standalone_profile(params)
   local output_dir = params.publish
     and "temp/publish/"..params.name
@@ -137,32 +163,11 @@ local function standalone_profile(params)
   apply_general_changes(profile)
   apply_standalone_specific_changes(profile, params.platform)
 
-  profiles.exclude_delete{
-    profile = profile,
-    output_path = "doc/phobos_profiles.html",
-  }
-  profiles.exclude_delete{
-    profile = profile,
-    output_path = "doc/concepts.html",
-  }
-  include_copy(profile, "doc/styles.css")
-  include_copy(profile, "doc/images/favicon.png")
-
   function profile.on_post_profile_ran()
-    local output_root = profiles.get_current_root_dir().."/"..output_dir
-    local parsed_files = {}
-    local function parse(filename)
-      filename = output_root.."/doc/emmy_lua/profiles/"..filename
-      parsed_files[#parsed_files+1] = gen_util.parse(io_util.read_file(filename), "@"..filename)
+    if params.publish or args.generate_docs then
+      local output_root = profiles.get_current_root_dir().."/"..output_dir
+      generate_docs(output_root)
     end
-    parse("arg_parser_classes.lua")
-    parse("phobos_profiles.lua")
-    parse("profile_classes.lua")
-    local emmy_lua_data = gen_util.resolve_references(parsed_files)
-    local phobos_profiles_docs = gen_util.generate_phobos_profiles_page(emmy_lua_data)
-    io_util.write_file(output_root.."/doc/phobos_profiles.html", phobos_profiles_docs)
-    local concepts_docs = gen_util.generate_concepts_page(emmy_lua_data)
-    io_util.write_file(output_root.."/doc/concepts.html", concepts_docs)
   end
 end
 
@@ -192,12 +197,16 @@ local function factorio_profile(params)
   apply_general_changes(profile)
   apply_factorio_specific_changes(profile)
 
-  if not params.publish then
-    function profile.on_post_profile_ran()
+  function profile.on_post_profile_ran()
+    local output_root = profiles.get_current_root_dir().."/"..output_dir
+    if params.publish or args.generate_docs then
+      generate_docs(output_root)
+    end
+    if not params.publish then
       -- create symlinks for the 2 other mods needed to use the minimal-no-base-mod debug launch profiles
       -- these links are in the parent directory of the output directory, so no need to exclude_delete them
-      lfs.link("../../debugging/minimal-no-base-mod", output_dir.."/../minimal-no-base-mod", true)
-      lfs.link("../../debugging/JanSharpDevEnv", output_dir.."/../JanSharpDevEnv", true)
+      lfs.link("../../debugging/minimal-no-base-mod", output_root.."/../minimal-no-base-mod", true)
+      lfs.link("../../debugging/JanSharpDevEnv", output_root.."/../JanSharpDevEnv", true)
       -- and it will just silently fail if the links already exist. that's ok
     end
   end
