@@ -811,6 +811,7 @@
 ---@class EmmyLuaField
 ---@field description string[]
 ---@field name string
+---@field optional boolean
 ---@field field_type EmmyLuaType
 
 ---@class EmmyLuaAliasSequence : EmmyLuaSequence

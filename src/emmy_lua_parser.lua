@@ -260,7 +260,13 @@ local function parse_sequence(sequence)
       local field = {}
       field.description = description
       field.name = assert_parse_identifier()
-      assert_parse_blank()
+      local did_parse_blank = parse_blank()
+      if parse_pattern("%?") then
+        field.optional = true
+        parse_blank()
+      elseif not did_parse_blank then
+        assert_parse_blank() -- error
+      end
       field.field_type = assert_parse_type()
       parse_blank()
       if description[1] then

@@ -52,7 +52,7 @@ local function func_span(str)
   return span_elem("function", str)
 end
 
-local function format_type(type)
+local function format_type(type, optional)
   local span = {}
   ---@diagnostic disable-next-line:redefined-local
   local function add_type(type)
@@ -111,6 +111,9 @@ local function format_type(type)
     end)()
   end
   add_type(type)
+  if optional then
+    span[#span+1] = "?"
+  end
   return xml.elem("span", {xml.attr("class", "type")}, span)
 end
 
@@ -144,11 +147,8 @@ end
 
 local function field_or_param_row(name, type, optional, description, is_parameter)
   local left = {is_parameter and param_span(name) or name}
-  if optional then
-    left[#left+1] = "?"
-  end
   left[#left+1] = " :: "
-  left[#left+1] = format_type(type)
+  left[#left+1] = format_type(type, optional)
   local right = {}
   if description[1] then
     right[#right+1] = format_markdown(table.concat(description, "\n"))
@@ -207,7 +207,7 @@ local function format_signature(field)
         result[#result+1] = local_span(ret.name)
         result[#result+1] = ": "
       end
-      result[#result+1] = format_type(ret.return_type)
+      result[#result+1] = format_type(ret.return_type, ret.optional)
       if i ~= #field_type.returns then
         result[#result+1] = ", "
       end
@@ -260,7 +260,7 @@ local function generate_phobos_profiles_page(emmy_lua_data)
         t[#t+1] = field_or_param_row(
           class_field.name,
           class_field.field_type,
-          false,
+          class_field.optional,
           class_field.description,
           true
         )
@@ -275,7 +275,7 @@ local function generate_phobos_profiles_page(emmy_lua_data)
         t[#t+1] = field_or_param_row(
           param.name,
           param.param_type,
-          false,
+          param.optional,
           param.description,
           true
         )
@@ -404,7 +404,7 @@ local function generate_concepts_page(emmy_lua_data)
         t[#t+1] = field_or_param_row(
           class_field.name,
           class_field.field_type,
-          false,
+          class_field.optional,
           class_field.description
         )
       end)

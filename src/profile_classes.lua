@@ -65,7 +65,7 @@
 ---**Default:** `false`\
 ---Should `load()` be used in the generated output to load the bytecode
 ---instead of outputting raw bytecode files?
----@field use_load boolean
+---@field use_load? boolean
 ---**Default:** `{}`\
 ---Filenames of files to run which modify the AST of every compiled file.
 ---The extension of these files is ignored; They will load as bytecode if they are bytecode files,
@@ -77,27 +77,27 @@
 ---These files may `require` any Phobos file, such as the 'ast_walker' or 'nodes' for example.\
 ---**NOTE:** This feature is far from complete.\
 ---if there are relative paths they will be **relative to the `root_dir`**.
----@field inject_scripts string[]
+---@field inject_scripts? string[]
 ---**Default:** `{}` (so all optimizations are `nil`/falsy)
----@field optimizations Optimizations
+---@field optimizations? Optimizations
 ---**Default:** `8`\
 ---The amount of info/warn/error messages to print per file
----@field error_message_count integer
+---@field error_message_count? integer
 ---**Default:** `false`\
 ---Monitors total memory allocated during the entire compilation process at the cost of ~10% longer
 ---compilation times. (Stops incremental GC. Runs full garbage collection whenever it exceeds
 ---4GB current memory usage. May overshoot by quite a bit.)
----@field measure_memory boolean
+---@field measure_memory? boolean
 ---**Default:** the directory the build profile script (entrypoint) is in.\
 ---Using `require()` or some other method to run other files does not change this default directory.\
 ---You can get the default directory using `get_current_root_dir()`.
----@field root_dir string
+---@field root_dir? string
 ---**Default:** `nil`\
 ---A function that is ran before this profile is ran. It runs before absolutely anything happens.
----@field on_pre_profile_ran fun()
+---@field on_pre_profile_ran? fun()
 ---**Default:** `nil`\
 ---A function that is ran after this profile is ran. It runs after absolutely everything happened.
----@field on_post_profile_ran fun()
+---@field on_post_profile_ran? fun()
 
 
 
@@ -114,7 +114,7 @@
 ---How many directories and sub directories deep it should enumerate.\
 ---`0` means literally none, `1` means just the given directory, `2` means this directory
 ---and all it's sub directories, but not sub directories in sub directories, and so on.
----@field recursion_depth integer
+---@field recursion_depth? integer
 ---**Default:** `""` (matches everything)\
 ---Only files matching this Lua pattern will be excluded.\
 ---The paths matched against this pattern will...
@@ -137,7 +137,7 @@
 ---
 ---For more details refer to the
 ---[Lua manual for string patterns](http://www.lua.org/manual/5.2/manual.html#6.4.1).
----@field filename_pattern string
+---@field filename_pattern? string
 
 ---@class NonDeleteIncludeAndExcludeBase : IncludeAndExcludeBase
 ---**Mandatory**\
@@ -187,10 +187,10 @@
 ---**Default:** `profile.use_load` (its default is `false`)\
 ---Should `load()` be used in the generated output to load the bytecode
 ---instead of outputting raw bytecode files?
----@field use_load boolean
+---@field use_load? boolean
 ---**Default:** `profile.error_message_count` (its default is `8`)\
 ---The amount of info/warn/error messages to print per file
----@field error_message_count integer
+---@field error_message_count? integer
 ---**Default:** `profile.inject_scripts` (its default is `{}`)\
 ---Filenames of files to run which modify the AST of every compiled file.
 ---The extension of these files is ignored; They will load as bytecode if they are bytecode files,
@@ -202,7 +202,7 @@
 ---These files may `require` any Phobos file, such as the 'ast_walker' or 'nodes' for example.\
 ---**NOTE:** This feature is far from complete.\
 ---if there are relative paths they will be **relative to the `root_dir`**.
----@field inject_scripts string[]
+---@field inject_scripts? string[]
 
 ---@class ExcludeParams : NonDeleteIncludeAndExcludeBase
 
@@ -219,7 +219,7 @@
 ---**Default:** `false`\
 ---Should this only exclude the latest included file when a given file was
 ---included multiple times with different output paths?
----@field pop boolean
+---@field pop? boolean
 
 
 
