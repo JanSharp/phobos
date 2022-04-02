@@ -188,39 +188,57 @@ local function is_field_with_function_with_params_param(field)
     and not field_type.params[2]
 end
 
+local function format_signature(field)
+  local result = {}
+  local field_type = field.field_type
+  result[#result+1] = xml.elem("a", {xml.attr("href", "#"..field.name)}, {func_span(field.name)})
+  result[#result+1] = "("
+  for i, param in ipairs(field_type.params) do
+    result[#result+1] = param_span(param.name)
+    if i ~= #field_type.params then
+      result[#result+1] = ", "
+    end
+  end
+  result[#result+1] = ")"
+  if field_type.returns[1] then
+    result[#result+1] = " => "
+    for i, ret in ipairs(field_type.returns) do
+      if ret.name then
+        result[#result+1] = local_span(ret.name)
+        result[#result+1] = ": "
+      end
+      result[#result+1] = format_type(ret.return_type)
+      if i ~= #field_type.returns then
+        result[#result+1] = ", "
+      end
+    end
+  end
+  return result
+end
+
 local function generate_phobos_profiles_page(emmy_lua_data)
   local phobos_profiles = get_phobos_profiles_class(emmy_lua_data)
   local body = {}
+
+  -- table of contents
+
+  local ul = {}
+  body[#body+1] = xml.elem("ul", nil, ul)
+
+  for _, field in ipairs(phobos_profiles.fields) do
+    ul[#ul+1] = xml.elem("li", nil, format_signature(field))
+  end
+
+  -- separator line
+  body[#body+1] = xml.elem("hr")
 
   for j, field in ipairs(phobos_profiles.fields) do
 
     -- function signature header
     local field_type = field.field_type
     do
-      local header = {}
-      body[#body+1] = xml.elem("h3", {xml.attr("id", field.name)}, header)
-      header[#header+1] = xml.elem("a", {xml.attr("href", "#"..field.name)}, {func_span(field.name)})
-      header[#header+1] = "("
-      for i, param in ipairs(field_type.params) do
-        header[#header+1] = param_span(param.name)
-        if i ~= #field_type.params then
-          header[#header+1] = ", "
-        end
-      end
-      header[#header+1] = ")"
-      if field_type.returns[1] then
-        header[#header+1] = " => "
-        for i, ret in ipairs(field_type.returns) do
-          if ret.name then
-            header[#header+1] = local_span(ret.name)
-            header[#header+1] = ": "
-          end
-          header[#header+1] = format_type(ret.return_type)
-          if i ~= #field_type.returns then
-            header[#header+1] = ", "
-          end
-        end
-      end
+      -- local header = {}
+      body[#body+1] = xml.elem("h3", {xml.attr("id", field.name)}, format_signature(field))
     end
 
     -- function description
