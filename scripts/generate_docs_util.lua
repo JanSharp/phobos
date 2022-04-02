@@ -40,16 +40,19 @@ local function span_elem(class, str)
   return xml.elem("span", {xml.attr("class", class)}, {str})
 end
 
+local param_css_class = "parameter"
 local function param_span(str)
-  return span_elem("parameter", str)
+  return span_elem(param_css_class, str)
 end
 
+local local_css_class = "local"
 local function local_span(str)
-  return span_elem("local", str)
+  return span_elem(local_css_class, str)
 end
 
+local function_css_class = "function"
 local function func_span(str)
-  return span_elem("function", str)
+  return span_elem(function_css_class, str)
 end
 
 local function format_type(type, optional)
@@ -145,9 +148,9 @@ local function get_phobos_profiles_class(emmy_lua_data)
   )
 end
 
-local function field_or_param_row(name, type, optional, description, is_parameter)
-  local left = {is_parameter and param_span(name) or name}
-  left[#left+1] = " :: "
+local function field_or_param_or_return_row(name, type, optional, description, css_class)
+  local left = {name and (css_class and span_elem(css_class, name) or name)}
+  left[#left+1] = name and " :: " or ":: "
   left[#left+1] = format_type(type, optional)
   local right = {}
   if description[1] then
@@ -243,7 +246,6 @@ local function generate_phobos_profiles_page(emmy_lua_data)
 
     -- function description
     local div = {}
-    body[#body+1] = xml.elem("div", {xml.attr("class", "indent")}, div)
     if field_type.description[1] then
       div[#div+1] = format_markdown(table.concat(field_type.description, "\n"))
     end
@@ -257,12 +259,12 @@ local function generate_phobos_profiles_page(emmy_lua_data)
       local t = {}
       div[#div+1] = xml.elem("table", nil, t)
       foreach_field_and_inherited_fields(field_type.params[1].param_type.reference_type, function(class_field)
-        t[#t+1] = field_or_param_row(
+        t[#t+1] = field_or_param_or_return_row(
           class_field.name,
           class_field.field_type,
           class_field.optional,
           class_field.description,
-          true
+          param_css_class
         )
       end)
 
@@ -272,14 +274,36 @@ local function generate_phobos_profiles_page(emmy_lua_data)
       local t = {}
       div[#div+1] = xml.elem("table", nil, t)
       for _, param in ipairs(field_type.params) do
-        t[#t+1] = field_or_param_row(
+        t[#t+1] = field_or_param_or_return_row(
           param.name,
           param.param_type,
           param.optional,
           param.description,
-          true
+          param_css_class
         )
       end
+    end
+
+    -- returns table
+    if field_type.returns[1] then
+      div[#div+1] = xml.elem("h4", nil, {"Return Values"})
+      local t = {}
+      div[#div+1] = xml.elem("table", nil, t)
+      for _, ret in ipairs(field_type.returns) do
+        t[#t+1] = field_or_param_or_return_row(
+          ret.name,
+          ret.return_type,
+          ret.optional,
+          ret.description,
+          local_css_class
+        )
+      end
+    end
+
+    -- don't add the div if nothing is in it
+    -- because if the html is parsed as html, not xhtml, the self closing div would "never be closed"
+    if div[1] then
+      body[#body+1] = xml.elem("div", {xml.attr("class", "indent")}, div)
     end
 
     -- separator line between functions
@@ -396,12 +420,12 @@ local function generate_concepts_page(emmy_lua_data)
     end
 
     if sequence.sequence_type == "alias" then
-      div[#div+1] = xml.elem("p", nil, {"Alias for the type ", format_type(sequence.aliased_type)})
+      div[#div+1] = xml.elem("p", nil, {"Alias for ", format_type(sequence.aliased_type)})
     elseif sequence.sequence_type == "class" then
       local t = {}
       div[#div+1] = xml.elem("table", nil, t)
       foreach_field_and_inherited_fields(sequence, function(class_field)
-        t[#t+1] = field_or_param_row(
+        t[#t+1] = field_or_param_or_return_row(
           class_field.name,
           class_field.field_type,
           class_field.optional,
