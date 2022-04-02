@@ -142,8 +142,8 @@ local function get_phobos_profiles_class(emmy_lua_data)
   )
 end
 
-local function field_or_param_row(name, type, optional, description)
-  local left = {param_span(name)}
+local function field_or_param_row(name, type, optional, description, is_parameter)
+  local left = {is_parameter and param_span(name) or name}
   if optional then
     left[#left+1] = "?"
   end
@@ -153,7 +153,10 @@ local function field_or_param_row(name, type, optional, description)
   if description[1] then
     right[#right+1] = format_markdown(table.concat(description, "\n"))
   end
-  return xml.elem("tr", nil, {xml.elem("td", nil, left), xml.elem("td", nil, right)})
+  return xml.elem("tr", nil, {
+    xml.elem("td", {xml.attr("class", "name")}, left),
+    xml.elem("td", {xml.attr("class", "description")}, right),
+  })
 end
 
 local function foreach_field_and_inherited_fields(sequence, callback)
@@ -240,7 +243,8 @@ local function generate_phobos_profiles_page(emmy_lua_data)
           class_field.name,
           class_field.field_type,
           false,
-          class_field.description
+          class_field.description,
+          true
         )
       end)
 
@@ -254,7 +258,8 @@ local function generate_phobos_profiles_page(emmy_lua_data)
           param.name,
           param.param_type,
           false,
-          param.description
+          param.description,
+          true
         )
       end
     end

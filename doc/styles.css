@@ -21,12 +21,24 @@ td {
   padding: 6px;
 }
 
+table {
+  width: 100%;
+}
+
+td.name {
+  width: auto;
+}
+
+td.description {
+  width: 75%;
+}
+
 .indent {
   margin-left: 16px!important;
 }
 
 .type {
-  color: #90f1e1;
+  color: #dcdcdc;
 }
 
 .literal {
@@ -41,19 +53,11 @@ a {
   color: #90f1e1;
 }
 
-a:link {
+a:link, a:visited {
   text-decoration: none;
 }
 
-a:visited {
-  text-decoration: none;
-}
-
-a:hover {
-  text-decoration: underline;
-}
-
-a:active {
+a:hover, a:active {
   text-decoration: underline;
 }
 
