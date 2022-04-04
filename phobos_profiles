@@ -78,20 +78,20 @@ local function apply_general_changes(profile)
 
   -- docs specific
   -- these get added regardless of the generate_docs flag because it's incremental anyway
-  exclude_delete(profile, "doc/phobos_profiles.html")
-  exclude_delete(profile, "doc/concepts.html")
-  include_copy(profile, "doc/styles.css")
-  include_copy(profile, "doc/images/favicon.png")
+  exclude_delete(profile, "docs/phobos_profiles.html")
+  exclude_delete(profile, "docs/concepts.html")
+  include_copy(profile, "docs/styles.css")
+  include_copy(profile, "docs/images/favicon.png")
 end
 
 local function copy_emmy_lua_docs(profile)
-  include_copy(profile, "doc/emmy_lua", "doc/emmy_lua")
+  include_copy(profile, "docs/emmy_lua", "docs/emmy_lua")
   profiles.exclude_copy{
     profile = profile,
-    source_path = "doc/emmy_lua/profiles/profile_classes.lua",
+    source_path = "docs/emmy_lua/profiles/profile_classes.lua",
   }
-  include_copy(profile, "src/profile_classes.lua", "doc/emmy_lua/profiles/profile_classes.lua")
-  include_copy(profile, "src/lib/LuaArgParser/classes.lua", "doc/emmy_lua/profiles/arg_parser_classes.lua")
+  include_copy(profile, "src/profile_classes.lua", "docs/emmy_lua/profiles/profile_classes.lua")
+  include_copy(profile, "src/lib/LuaArgParser/classes.lua", "docs/emmy_lua/profiles/arg_parser_classes.lua")
 end
 
 local function apply_standalone_specific_changes(profile, platform)

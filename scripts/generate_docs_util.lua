@@ -456,7 +456,7 @@ end
 local function generate_docs(output_root)
   local parsed_files = {}
   local function parse_file(filename)
-    filename = output_root.."/doc/emmy_lua/profiles/"..filename
+    filename = output_root.."/docs/emmy_lua/profiles/"..filename
     parsed_files[#parsed_files+1] = parse(io_util.read_file(filename), "@"..filename)
   end
   parse_file("arg_parser_classes.lua")
@@ -464,9 +464,9 @@ local function generate_docs(output_root)
   parse_file("profile_classes.lua")
   local emmy_lua_data = resolve_references(parsed_files)
   local phobos_profiles_docs = generate_phobos_profiles_page(emmy_lua_data)
-  io_util.write_file(output_root.."/doc/phobos_profiles.html", phobos_profiles_docs)
+  io_util.write_file(output_root.."/docs/phobos_profiles.html", phobos_profiles_docs)
   local concepts_docs = generate_concepts_page(emmy_lua_data)
-  io_util.write_file(output_root.."/doc/concepts.html", concepts_docs)
+  io_util.write_file(output_root.."/docs/concepts.html", concepts_docs)
 end
 
 return {

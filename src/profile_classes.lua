@@ -44,7 +44,7 @@
 -- IMPORTANT: make sure to copy defaults and descriptions to IncludeInCompilationDef for the fields:
 -- use_load, inject_scripts, error_message_count
 
--- IMPORTANT: make sure to update doc/emmy_lua/phobos_profiles.lua when adding or removing mandatory fields.
+-- IMPORTANT: make sure to update docs/emmy_lua/phobos_profiles.lua when adding or removing mandatory fields.
 
 ---@class NewProfileParams
 ---**Mandatory**\
