@@ -1026,8 +1026,46 @@ do
     assert.contents_equals({expected_type(new_pos(1, 27))}, got)
   end)
 
-  -- TODO: test array types
+  -- array types
+
+  scope:add_test("array type", function()
+    local got = parse_type("any[]")
+    assert.contents_equals(new_type{
+      type_type = "array",
+      value_type = new_type{
+        type_type = "reference",
+        type_name = "any",
+        start_position = new_pos(1, 21),
+        stop_position = new_pos(1, 23),
+      },
+    }, got)
+  end)
+
+  scope:add_test("array type of arrays", function()
+    local got = parse_type("any[][][]")
+    assert.contents_equals(new_type{
+      type_type = "array",
+      value_type = new_type{
+        type_type = "array",
+        value_type = new_type{
+          type_type = "array",
+          value_type = new_type{
+            type_type = "reference",
+            type_name = "any",
+            start_position = new_pos(1, 21),
+            stop_position = new_pos(1, 23),
+          },
+          start_position = new_pos(1, 21),
+          stop_position = new_pos(1, 25),
+        },
+        start_position = new_pos(1, 21),
+        stop_position = new_pos(1, 27),
+      },
+    }, got)
+  end)
+
   -- TODO: test union types
+  -- TODO: combination of all the things chained in parse_type
   -- TODO: test error messages and their positions
   -- TODO: test ident parsing
   -- TODO: associated node for classes and aliases
