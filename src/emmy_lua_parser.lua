@@ -349,7 +349,7 @@ local function parse_sequence(sequence, source, positions)
       end
     end
     assert_parse_blank()
-    local result = {tag = "alias"}
+    local result = {}
     result.sequence_type = "alias"
     result.node = sequence.associated_node
     result.description = description

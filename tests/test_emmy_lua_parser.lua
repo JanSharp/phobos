@@ -7,6 +7,7 @@ local parser = require("parser")
 local jump_linker = require("jump_linker")
 local emmy_lua_parser = require("emmy_lua_parser")
 local error_code_util = require("error_code_util")
+local util = require("util")
 
 local tutil = require("testing_util")
 local test_source = tutil.test_source
@@ -17,10 +18,17 @@ local function parse(text)
   return emmy_lua_parser(ast)
 end
 
+local function new_pos(line, column)
+  return {
+    line = line,
+    column = column,
+  }
+end
+
 local function new_none(description, node, start_position, stop_position)
   return {
     sequence_type = "none",
-    description = description,
+    description = assert(description),
     node = node,
     source = test_source,
     start_position = start_position or do_not_compare,
@@ -39,6 +47,58 @@ local function new_func_seq(params)
     source = test_source,
     start_position = params.start_position or do_not_compare,
     stop_position = params.stop_position or do_not_compare,
+  }
+end
+
+---cSpell:ignore dteci
+
+local new_class
+local new_alias
+
+do
+  local function new_type_defining_sequence(sequence_type, params)
+    assert(params.type_name)
+    local tn_start_position = params.type_name_position
+    local tn_stop_position
+    if tn_start_position then
+      tn_stop_position = util.shallow_copy(tn_start_position)
+      tn_stop_position.column = tn_stop_position.column + #params.type_name - 1
+    end
+    return {
+      sequence_type = sequence_type,
+      type_name_start_position = tn_start_position or do_not_compare,
+      type_name = params.type_name,
+      type_name_stop_position = tn_stop_position or do_not_compare,
+      node = params.node,
+      source = test_source,
+      start_position = params.start_position or do_not_compare,
+      stop_position = params.stop_position or do_not_compare,
+      duplicate_type_error_code_inst = params.dteci,
+    }
+  end
+
+  function new_class(params)
+    local class = new_type_defining_sequence("class", params)
+    class.description = params.description or {}
+    class.base_classes = params.base_classes or {}
+    class.fields = params.fields or {}
+    return class
+  end
+
+  function new_alias(params)
+    local alias = new_type_defining_sequence("alias", params)
+    alias.description = params.description or {}
+    alias.aliased_type = assert(params.aliased_type)
+    return alias
+  end
+end
+
+local function new_any()
+  return {
+    type_type = "reference",
+    type_name = "any",
+    start_position = do_not_compare,
+    stop_position = do_not_compare,
   }
 end
 
@@ -146,4 +206,85 @@ do
       assert.equals(nil, got[1].node, "node")
     end)
   end -- end sequence_detection
+
+  scope:add_test("none sequence positions", function()
+    local got = parse("---hello\n---foo")
+    assert.contents_equals({new_none({"hello", "foo"}, nil, new_pos(1, 1), new_pos(2, 6))}, got)
+  end)
+
+  scope:add_test("class sequence positions", function()
+    local got = parse(" ---foo\n---@class bar")
+    assert.contents_equals({
+      new_class{
+        description = {"foo"},
+        type_name = "bar",
+        type_name_position = new_pos(2, 11),
+        start_position = new_pos(1, 2),
+        stop_position = new_pos(2, 13),
+      },
+    }, got)
+  end)
+
+  scope:add_test("class sequence positions", function()
+    local got = parse(" ---foo\n---@class bar")
+    assert.contents_equals({
+      new_class{
+        description = {"foo"},
+        type_name = "bar",
+        type_name_position = new_pos(2, 11),
+        start_position = new_pos(1, 2),
+        stop_position = new_pos(2, 13),
+      },
+    }, got)
+  end)
+
+  scope:add_test("alias sequence positions", function()
+    local got = parse(" ---foo\n---@alias bar any")
+    assert.contents_equals({
+      new_alias{
+        description = {"foo"},
+        type_name = "bar",
+        aliased_type = new_any(),
+        type_name_position = new_pos(2, 11),
+        start_position = new_pos(1, 2),
+        stop_position = new_pos(2, 17),
+      },
+    }, got)
+  end)
+
+  scope:add_test("function sequence positions (localfunc)", function()
+    local got = parse(" ---foo\n---hello\nlocal function bar() end")
+    assert.contents_equals({
+      new_func_seq{
+        description = {"foo", "hello"},
+        node = do_not_compare,
+        start_position = new_pos(1, 2),
+        stop_position = new_pos(2, 8),
+      },
+    }, got)
+  end)
+
+  scope:add_test("function sequence positions (funcstat)", function()
+    local got = parse(" ---foo\n---hello\nfunction bar() end")
+    assert.contents_equals({
+      new_func_seq{
+        description = {"foo", "hello"},
+        node = do_not_compare,
+        start_position = new_pos(1, 2),
+        stop_position = new_pos(2, 8),
+      },
+    }, got)
+  end)
+
+  -- TODO: test error messages and their positions
+  -- TODO: test none sequence
+  -- TODO: test class sequence
+  -- TODO: test alias sequence
+  -- TODO: test function sequence
+  -- TODO: test literal types
+  -- TODO: test dictionary types
+  -- TODO: test reference types
+  -- TODO: test function types
+  -- TODO: test array types
+  -- TODO: test union types
 end
