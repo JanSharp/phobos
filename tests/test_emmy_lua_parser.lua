@@ -107,6 +107,19 @@ end
 local new_class
 local new_alias
 
+local function new_type(type)
+  type.start_position = type.start_position or do_not_compare
+  type.stop_position = type.stop_position or do_not_compare
+  return type
+end
+
+local function new_any()
+  return new_type{
+    type_type = "reference",
+    type_name = "any",
+  }
+end
+
 do
   local function new_type_defining_sequence(sequence_type, params)
     assert(params.type_name)
@@ -140,22 +153,9 @@ do
   function new_alias(params)
     local alias = new_type_defining_sequence("alias", params)
     alias.description = params.description or {}
-    alias.aliased_type = assert(params.aliased_type)
+    alias.aliased_type = params.aliased_type or new_any()
     return alias
   end
-end
-
-local function new_type(type)
-  type.start_position = type.start_position or do_not_compare
-  type.stop_position = type.stop_position or do_not_compare
-  return type
-end
-
-local function new_any()
-  return new_type{
-    type_type = "reference",
-    type_name = "any",
-  }
 end
 
 local function new_field(field)
@@ -307,7 +307,6 @@ do
       new_alias{
         description = {"foo"},
         type_name = "bar",
-        aliased_type = new_any(),
         type_name_position = new_pos(2, 11),
         start_position = new_pos(1, 2),
         stop_position = new_pos(2, 17),
@@ -564,7 +563,43 @@ do
     assert.contents_equals({expected_pattern("@", new_pos(2, 19))}, got)
   end)
 
-  -- TODO: test alias sequence
+  -- alias sequence
+
+  scope:add_test("alias seq", function()
+    local got = parse("---@alias foo any")
+    assert.contents_equals({new_alias{type_name = "foo"}}, got)
+  end)
+
+  scope:add_test("alias seq with description", function()
+    local got = parse("---hey\n---you\n---@alias foo any")
+    assert.contents_equals({new_alias{description = {"hey", "you"}, type_name = "foo"}}, got)
+  end)
+
+  scope:add_test("alias seq with trailing space", function()
+    local got = parse("---@alias foo any ")
+    assert.contents_equals({new_alias{type_name = "foo"}}, got)
+  end)
+
+  scope:add_test("alias seq without space after special tag", function()
+    local got = parse_invalid("---@alias")
+    assert.contents_equals({expected_blank(new_pos(1, 10))}, got)
+  end)
+
+  scope:add_test("alias seq without type_name", function()
+    local got = parse_invalid("---@alias ")
+    assert.contents_equals({expected_ident(new_pos(1, 11))}, got)
+  end)
+
+  scope:add_test("alias seq without space after type_name", function()
+    local got = parse_invalid("---@alias foo")
+    assert.contents_equals({expected_blank(new_pos(1, 14))}, got)
+  end)
+
+  scope:add_test("alias seq without aliased_type", function()
+    local got = parse_invalid("---@alias foo ")
+    assert.contents_equals({expected_type(new_pos(1, 15))}, got)
+  end)
+
   -- TODO: test function sequence
   -- TODO: test literal types
   -- TODO: test dictionary types
@@ -573,4 +608,6 @@ do
   -- TODO: test array types
   -- TODO: test union types
   -- TODO: test error messages and their positions
+  -- TODO: test ident parsing
+  -- TODO: associated node for classes and aliases
 end
