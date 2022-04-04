@@ -322,6 +322,9 @@ local function parse_sequence(sequence)
         parse_special("")
         util.debug_abort("Unexpected tag @"..(parse_identifier() or "").." at "..get_position()..".")
       end
+      util.debug_abort("Impossible because read_block only leaves on special tags and the last \z
+        elseif above checks for special tags, making this unreachable."
+      )
     end
     return {
       sequence_type = "none",
@@ -501,7 +504,8 @@ local function parse(ast)
   local finished_sequences = {}
 
   local current_sequence = {}
-  local prev_was_blank = false
+  local had_newline_since_prev_comment = false
+  local prev_blank_end_column = 0
 
   local function finish()
     if not current_sequence[1] then return end
@@ -518,6 +522,16 @@ local function parse(ast)
     end
   end
 
+  ---if there was anything that wasn't a blank token since the prev blank token, finish.
+  ---(don't need to check for a newline because there is always a newline after a non block comment)
+  ---@return boolean did_finish
+  local function finish_if_there_was_some_token_since_prev_blank(current_token)
+    if prev_blank_end_column ~= current_token.column - 1 then
+      finish()
+      return true
+    end
+  end
+
   function add_token(token_node)
     if not token_node then
       return
@@ -527,18 +541,26 @@ local function parse(ast)
     end
     if token_node.token_type == "blank" then
       -- add(token_node.value)
-      if prev_was_blank then
+      if had_newline_since_prev_comment then
         if token_node.value:sub(-1) == "\n" then
           finish()
+        else
+          if not finish_if_there_was_some_token_since_prev_blank(token_node) then
+            prev_blank_end_column = token_node.column + #token_node.value - 1
+          end
         end
+      else
+        -- don't actually need to check for a newline because every non block
+        -- comment will be followed by a blank token that is just a newline
+        -- (unless it is right before eof).
+        prev_blank_end_column = 0
+        had_newline_since_prev_comment = true
       end
-      prev_was_blank = true
     elseif token_node.token_type == "comment" then
+      finish_if_there_was_some_token_since_prev_blank(token_node)
       if not token_node.src_is_block_str and token_node.value:sub(1, 1) == "-" then
         current_sequence[#current_sequence+1] = token_node.value:sub(2)
-        prev_was_blank = false
-      else
-        finish()
+        had_newline_since_prev_comment = false
       end
       -- add("--")
       -- if token_node.src_is_block_str then
@@ -830,7 +852,9 @@ local function parse(ast)
     ---@param node AstFuncStat
     funcstat = function(node)
       add_functiondef(node.func_def, function()
-        finish_associated(node)
+        if not finish_if_there_was_some_token_since_prev_blank(node.func_def.function_token) then
+          finish_associated(node)
+        end
         if node.func_def.is_method then
           assert(node.name.node_type == "index")
           ---@diagnostic disable-next-line: undefined-field
@@ -842,7 +866,9 @@ local function parse(ast)
     ---@param node AstLocalFunc
     localfunc = function(node)
       add_token(node.local_token)
-      finish_associated(node)
+      if not finish_if_there_was_some_token_since_prev_blank(node.local_token) then
+        finish_associated(node)
+      end
       add_functiondef(node.func_def, function()
         add_exp(node.name)
       end)
@@ -850,7 +876,9 @@ local function parse(ast)
     ---@param node AstLocalStat
     localstat = function(node)
       add_token(node.local_token)
-      finish_associated(node)
+      if not finish_if_there_was_some_token_since_prev_blank(node.local_token) then
+        finish_associated(node)
+      end
       add_exp_list(node.lhs, node.lhs_comma_tokens)
       if node.rhs then
         add_token(node.eq_token)

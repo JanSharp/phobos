@@ -802,7 +802,7 @@
 
 ---@class EmmyLuaClassSequence : EmmyLuaSequence
 ---@field sequence_type '"class"'
----@field node AstLocalReference|nil
+---@field node AstLocalStat|nil
 ---@field description string[]
 ---@field type_name string
 ---@field base_classes EmmyLuaType[] @ Only `"reference"`s to other classes are valid
@@ -817,7 +817,7 @@
 
 ---@class EmmyLuaAliasSequence : EmmyLuaSequence
 ---@field sequence_type '"alias"'
----@field node AstLocalReference|nil
+---@field node AstLocalStat|nil
 ---@field description string[]
 ---@field type_name string
 ---@field aliased_type EmmyLuaType
@@ -828,5 +828,5 @@
 
 ---@class EmmyLuaNoneSequence : EmmyLuaSequence
 ---@field sequence_type '"none"'
----@field node AstLocalReference|nil
+---@field node AstLocalStat|nil
 ---@field description string[]
