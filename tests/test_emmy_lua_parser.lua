@@ -18,9 +18,9 @@ local function new_error(error_code, message_args, position, stop_position)
     error_code = error_code,
     message_args = message_args,
     source = test_source,
-    start_position = position or do_not_compare,
-    stop_position = stop_position or position or do_not_compare,
-    location_str = position and (" at "..position.line..":"..position.column) or do_not_compare,
+    start_position = util.debug_assert(position),
+    stop_position = util.debug_assert(stop_position or position),
+    location_str = position and (" at "..position.line..":"..position.column),
   }
 end
 
@@ -46,6 +46,10 @@ end
 
 local function expected_eol(position)
   return new_error(codes.el_expected_eol, nil, position)
+end
+
+local function unexpected_special_tag(got_tag, start_position, stop_position)
+  return new_error(codes.el_unexpected_special_tag, {got_tag}, start_position, stop_position)
 end
 
 local function new_pos(line, column)
@@ -122,7 +126,7 @@ end
 local function new_none(description, node, start_position, stop_position)
   return {
     sequence_type = "none",
-    description = assert(description),
+    description = util.debug_assert(description),
     node = node,
     source = test_source,
     start_position = start_position or do_not_compare,
@@ -171,7 +175,7 @@ end
 
 do
   local function new_type_defining_sequence(sequence_type, params)
-    assert(params.type_name)
+    util.debug_assert(params.type_name)
     local tn_start_position = params.type_name_position
     local tn_stop_position
     if tn_start_position then
@@ -410,6 +414,11 @@ do
   scope:add_test("class seq", function()
     local got = parse("---@class foo")
     assert.contents_equals({new_class{type_name = "foo"}}, got)
+  end)
+
+  scope:add_test("class seq associated with localstat", function()
+    local got = parse("---@class foo\nlocal foo")
+    assert_associated_node("localstat", got)
   end)
 
   scope:add_test("class seq with extra space (testing parse_blank)", function()
@@ -660,6 +669,11 @@ do
   scope:add_test("alias seq without aliased_type", function()
     local got = parse_invalid("---@alias foo ")
     assert.contents_equals({expected_type(new_pos(1, 15))}, got)
+  end)
+
+  scope:add_test("alias seq cannot be associated with localstat (nor anything else)", function()
+    local got = parse_invalid("---@alias foo any\nlocal foo")
+    assert.contents_equals({unexpected_special_tag("alias", new_pos(1, 4), new_pos(1, 9))}, got)
   end)
 
   -- function sequence
@@ -1082,8 +1096,47 @@ do
     }, got)
   end)
 
-  -- TODO: combination of all the things chained in parse_type
-  -- TODO: test error messages and their positions
-  -- TODO: test ident parsing
-  -- TODO: associated node for classes and aliases
+  -- the rest
+
+  scope:add_test("union of array of reference and array of reference", function()
+    local got = parse_type("any[]|any[]")
+    assert.contents_equals(new_type{
+      type_type = "union",
+      union_types = {
+        new_type{
+          type_type = "array",
+          value_type = new_any(new_pos(1, 21), new_pos(1, 23)),
+          start_position = new_pos(1, 21),
+          stop_position = new_pos(1, 25),
+        },
+        new_type{
+          type_type = "array",
+          value_type = new_any(new_pos(1, 27), new_pos(1, 29)),
+          start_position = new_pos(1, 27),
+          stop_position = new_pos(1, 31),
+        },
+      },
+    }, got)
+  end)
+
+  scope:add_test("crazy ident", function()
+    local ident = "_0123456789_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    local got = parse_type(ident)
+    assert.contents_equals(new_type{type_type = "reference", type_name = ident}, got)
+  end)
+
+  scope:add_test("ident starting with number is not an ident", function()
+    local got = parse_invalid_type("100")
+    assert_expected_type(got)
+  end)
+
+  scope:add_test("space between dashes and @ for special tag", function()
+    local got = parse("--- @diagnostic foo")
+    assert.contents_equals({new_none{}}, got)
+  end)
+
+  scope:add_test("2 spaces between dashes and @ are no longer a special tag", function()
+    local got = parse("---  @diagnostic foo")
+    assert.contents_equals({new_none{"  @diagnostic foo"}}, got)
+  end)
 end

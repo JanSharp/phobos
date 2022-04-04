@@ -291,17 +291,7 @@ local function parse_sequence(sequence, source, positions)
   end
 
   local function read_class(description)
-    if not description then
-      local start_line_index = line_index
-      local start_i = i
-      description = read_block()
-      if not parse_pattern("class") then
-        line_index = start_line_index - 1
-        next_line()
-        i = start_i
-        return
-      end
-    end
+    util.debug_assert(description, "call read_block before read_class")
     assert_parse_blank()
     local result = {}
     result.sequence_type = "class"
@@ -363,17 +353,7 @@ local function parse_sequence(sequence, source, positions)
   end
 
   local function read_alias(description)
-    if not description then
-      local start_line_index = line_index
-      local start_i = i
-      description = read_block()
-      if not parse_pattern("alias") then
-        line_index = start_line_index - 1
-        next_line()
-        i = start_i
-        return
-      end
-    end
+    util.debug_assert(description, "call read_block before read_alias")
     assert_parse_blank()
     local result = {}
     result.sequence_type = "alias"
@@ -398,6 +378,7 @@ local function parse_sequence(sequence, source, positions)
       elseif allow_alias and parse_special("alias") then
         return read_alias(description)
       elseif is_special() then
+        set_error_start_position()
         parse_special("")
         emmy_lua_abort(error_codes.el_unexpected_special_tag, {parse_identifier()})
       end
