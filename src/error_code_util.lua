@@ -4,6 +4,8 @@ local types = {
   parser = 2,
   jump_linker = 3,
   compiler = 4,
+  emmy_lua_parser = 5,
+  emmy_lua_linker = 6,
 }
 local error_codes = {}
 local error_codes_by_id = {}
@@ -29,6 +31,7 @@ local function add_error_code(type, name, message, location_str_is_inside_messag
     message_param_count = str_count(message, "%%s"),
     location_str_is_inside_message = location_str_is_inside_message or false,
   }
+  assert(not error_codes[name], "Error code '"..name.."' already exists.")
   error_codes[name] = error_code
   error_codes_by_id[next_id] = error_code
   next_id = next_id + 1
@@ -155,6 +158,61 @@ add_error_code(
   true
 )
 
+-- el is short for EmmyLua
+
+add_error_code(
+  types.emmy_lua_parser,
+  "el_expected_pattern",
+  "Expected pattern '%s'"
+)
+add_error_code(
+  types.emmy_lua_parser,
+  "el_expected_eol",
+  "Expected line to end"
+)
+add_error_code(
+  types.emmy_lua_parser,
+  "el_expected_special_tag",
+  "Expected tag @%s"
+)
+add_error_code(
+  types.emmy_lua_parser,
+  "el_expected_blank",
+  "Expected blank"
+)
+add_error_code(
+  types.emmy_lua_parser,
+  "el_expected_ident",
+  "Expected identifier"
+)
+add_error_code(
+  types.emmy_lua_parser,
+  "el_expected_type",
+  "Expected type"
+)
+add_error_code(
+  types.emmy_lua_parser,
+  "el_unexpected_special_tag",
+  "Unexpected tag @%s"
+)
+
+add_error_code(
+  types.emmy_lua_linker,
+  "el_duplicate_type_name",
+  "Duplicate type (class/alias) name %s"
+)
+add_error_code(
+  types.emmy_lua_linker,
+  "el_expected_reference_to_class",
+  -- second arg is for optional extra info like the current reference name
+  "Expected reference specifically to a class, got type_type %s%s"
+)
+add_error_code(
+  types.emmy_lua_linker,
+  "el_unresolved_reference",
+  "Unable to resolve reference to the type %s"
+)
+
 ---@alias ErrorCodeType integer
 
 ---@class ErrorCode
@@ -231,7 +289,8 @@ local function get_message(error_code_inst)
   )..((not error_code_inst.error_code.location_str_is_inside_message) and error_code_inst.location_str or "")
 end
 
----@param errors_label string|'"syntax errors"' @ type annotations are suggested strings
+---@param errors_label string|'"syntax errors"'|'"EmmyLua syntax errors"' @
+---type annotations are suggested strings
 local function get_message_for_list(error_code_insts, errors_label, max_errors_shown)
   if error_code_insts[1] then
     local error_count = #error_code_insts

@@ -9,17 +9,24 @@ local xml = require("scripts.xml_util")
 local md = require("scripts.markdown")
 local io_util = require("io_util")
 
-local function parse(text, source_name)
-  local function check_errors(errors)
-    if errors[1] then
-      util.abort(error_code_util.get_message_for_list(errors, "syntax errors in "..source_name))
-    end
+local function check_errors(errors, source_name, is_emmy_lua)
+  if errors[1] then
+    util.abort(error_code_util.get_message_for_list(
+      errors,
+      (is_emmy_lua and "EmmyLua syntax errors" or "syntax errors")
+        ..(source_name and (" in "..source_name) or "")
+    ))
   end
+end
+
+local function parse(text, source_name)
   local ast, parser_errors = parser(text, source_name)
-  check_errors(parser_errors)
+  check_errors(parser_errors, source_name)
   local jump_linker_errors = jump_linker(ast)
-  check_errors(jump_linker_errors)
-  return emmy_lua_parser(ast)
+  check_errors(jump_linker_errors, source_name)
+  local result, emmy_lua_errors = emmy_lua_parser(ast)
+  check_errors(emmy_lua_errors, source_name, true)
+  return result
 end
 
 local function resolve_references(array_of_parsed_sequences)
@@ -29,7 +36,9 @@ local function resolve_references(array_of_parsed_sequences)
       combined[#combined+1] = elem
     end
   end
-  return emmy_lua_linker.link(combined)
+  local result, errors = emmy_lua_linker.link(combined)
+  check_errors(errors, nil, true)
+  return result
 end
 
 local function format_markdown(str)

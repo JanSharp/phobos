@@ -1,5 +1,7 @@
 
 local util = require("util")
+local error_code_util = require("error_code_util")
+local error_codes = error_code_util.codes
 
 local function parse_sequence(sequence, source, positions)
   local line_index = 0
@@ -13,10 +15,38 @@ local function parse_sequence(sequence, source, positions)
     i = 1
   end
 
+  local error_code_inst
+
   local function get_position()
-    local line_pos = position and position.line or (positions[#positions].line + 1)
-    local column_pos = position and (position.column + i - 1) or 0
-    return line_pos..":"..column_pos.." in "..source
+    -- position is nil if we are past the last line of the sequence
+    return {
+      -- positions will always contain 1 entry because empty sequences do not exist
+      line = position and position.line or (positions[#positions].line + 1),
+      column = position and (position.column + i - 1) or 0,
+    }
+  end
+
+  local function get_location_str()
+    local pos = get_position()
+    return " at "..pos.line..":"..pos.column
+  end
+
+  local function emmy_lua_abort(error_code, message_args)
+    error_code_inst = error_code_util.new_error_code{
+      error_code = error_code,
+      position = get_position(),
+      location_str = get_location_str(),
+      source = source,
+      message_args = message_args,
+    }
+    error() -- return to pcall
+  end
+
+  local function emmy_lua_assert(value, error_code, message_args)
+    if value then
+      return value
+    end
+    emmy_lua_abort(error_code, message_args)
   end
 
   local function parse_pattern(pattern)
@@ -28,7 +58,7 @@ local function parse_sequence(sequence, source, positions)
 
   local function assert_parse_pattern(pattern)
     if not parse_pattern(pattern) then
-      util.abort("Expected pattern '"..pattern.."' at "..get_position()..".")
+      emmy_lua_abort(error_codes.el_expected_pattern, {pattern})
     end
   end
 
@@ -38,7 +68,7 @@ local function parse_sequence(sequence, source, positions)
 
   local function assert_is_line_end()
     if not is_line_end() then
-      util.debug_abort("Expected line to end at "..get_position()..".")
+      emmy_lua_abort(error_codes.el_expected_eol)
     end
   end
 
@@ -52,7 +82,7 @@ local function parse_sequence(sequence, source, positions)
 
   local function assert_parse_special(tag)
     if not parse_special(tag) then
-      util.debug_abort("Expected tag @"..tag.." at "..get_position()..".")
+      emmy_lua_abort(error_codes.el_expected_special_tag, {tag})
     end
   end
 
@@ -62,7 +92,7 @@ local function parse_sequence(sequence, source, positions)
 
   local function assert_parse_blank()
     if not parse_blank() then
-      util.debug_abort("Expected blank at "..get_position()..".")
+      emmy_lua_abort(error_codes.el_expected_blank)
     end
   end
 
@@ -71,7 +101,7 @@ local function parse_sequence(sequence, source, positions)
   end
 
   local function assert_parse_identifier()
-    return util.debug_assert(parse_identifier(), "Expected identifier at "..get_position()..".")
+    return emmy_lua_assert(parse_identifier(), error_codes.el_expected_ident)
   end
 
   local assert_parse_type
@@ -186,7 +216,7 @@ local function parse_sequence(sequence, source, positions)
   end
 
   function assert_parse_type()
-    return util.debug_assert(parse_type(), "Expected type at "..get_position()..".")
+    return emmy_lua_assert(parse_type(), error_codes.el_expected_type)
   end
 
   local function read_block()
@@ -324,7 +354,7 @@ local function parse_sequence(sequence, source, positions)
         return read_alias(description)
       elseif is_special() then
         parse_special("")
-        util.debug_abort("Unexpected tag @"..(parse_identifier() or "").." at "..get_position()..".")
+        emmy_lua_abort(error_codes.el_unexpected_special_tag, {parse_identifier()})
       end
       util.debug_abort("Impossible because read_block only leaves on special tags and the last \z
         elseif above checks for special tags, making this unreachable."
@@ -417,24 +447,35 @@ local function parse_sequence(sequence, source, positions)
   next_line()
   local node = sequence.associated_node
   local result
-  if node then
-    if node.node_type == "localstat" then
-      -- allow classes or none
-      result = read_class_or_alias_or_none(false)
-    elseif node.node_type == "localfunc" then
-      -- allow function sequences
-      result = read_function_sequence()
-    elseif node.node_type == "funcstat" then
-      -- allow function sequences
-      result = read_function_sequence()
+  local err
+  local success = xpcall(function()
+    if node then
+      if node.node_type == "localstat" then
+        -- allow classes or none
+        result = read_class_or_alias_or_none(false)
+      elseif node.node_type == "localfunc" then
+        -- allow function sequences
+        result = read_function_sequence()
+      elseif node.node_type == "funcstat" then
+        -- allow function sequences
+        result = read_function_sequence()
+      else
+        util.abort("Unhandled associated_node '"..node.node_type.."'.")
+      end
     else
-      util.abort("Unhandled associated_node '"..node.node_type.."'.")
+      -- allow classes or aliases or none
+      result = read_class_or_alias_or_none(true)
     end
-  else
-    -- allow classes or aliases or none
-    result = read_class_or_alias_or_none(true)
+    util.debug_assert(not line, "Did not finish parsing comment sequence "..get_location_str()..".")
+  end, function(msg)
+    err = debug.traceback(msg, 2)
+  end)
+  if not success then
+    if error_code_inst then
+      return nil, error_code_inst
+    end
+    util.debug_abort(err)
   end
-  util.debug_assert(not line, "Did not finish parsing comment at "..get_position()..".")
   return result
 end
 
@@ -991,10 +1032,17 @@ local function parse(ast)
   finish()
 
   local result = {}
+  local error_code_insts = {}
   for i, sequence in ipairs(finished_sequences) do
-    result[i] = parse_sequence(sequence, ast.source, finished_positions[i])
+    local error_code_inst
+    sequence, error_code_inst = parse_sequence(sequence, ast.source, finished_positions[i])
+    if sequence then
+      result[#result+1] = sequence
+    else
+      error_code_insts[#error_code_insts+1] = error_code_inst
+    end
   end
-  return result
+  return result, error_code_insts
 end
 
 return parse
