@@ -168,7 +168,7 @@ local function foreach_field_and_inherited_fields(sequence, callback)
   ---@diagnostic disable-next-line:redefined-local
   local function add(sequence)
     if sequence.sequence_type == "alias" then
-      add(sequence.aliased_type.reference_type)
+      add(sequence.aliased_type.reference_sequence)
     elseif sequence.sequence_type == "class" then
       for _, field in ipairs(sequence.fields) do
         if not already_added_field_name_lut[field.name] then
@@ -177,7 +177,7 @@ local function foreach_field_and_inherited_fields(sequence, callback)
         end
       end
       for _, base_class in ipairs(sequence.base_classes) do
-        add(base_class.reference_type)
+        add(base_class.reference_sequence)
       end
     end
   end
@@ -259,7 +259,7 @@ local function generate_phobos_profiles_page(emmy_lua_data)
       div[#div+1] = "Table with the following fields:"
       local t = {}
       div[#div+1] = xml.elem("table", nil, t)
-      foreach_field_and_inherited_fields(field_type.params[1].param_type.reference_type, function(class_field)
+      foreach_field_and_inherited_fields(field_type.params[1].param_type.reference_sequence, function(class_field)
         t[#t+1] = field_or_param_or_return_row(
           class_field.name,
           class_field.field_type,
@@ -331,7 +331,7 @@ local function generate_concepts_page(emmy_lua_data)
     if sequence.sequence_type == "class" then
       for _, field in ipairs(sequence.fields) do
         if is_field_with_function_with_params_param(field) then
-          excluded_sequences_lut[field.field_type.params[1].param_type.reference_type] = true
+          excluded_sequences_lut[field.field_type.params[1].param_type.reference_sequence] = true
         end
         add_type(field.field_type)
       end
@@ -360,12 +360,12 @@ local function generate_concepts_page(emmy_lua_data)
         end
       end,
       ["reference"] = function()
-        if not exposed_sequences_lut[type.reference_type] then
-          exposed_sequences_lut[type.reference_type] = true
-          if not excluded_sequences_lut[type.reference_type] then
-            exposed_sequences[#exposed_sequences+1] = type.reference_type
+        if not exposed_sequences_lut[type.reference_sequence] then
+          exposed_sequences_lut[type.reference_sequence] = true
+          if not excluded_sequences_lut[type.reference_sequence] then
+            exposed_sequences[#exposed_sequences+1] = type.reference_sequence
           end
-          add_sequence(type.reference_type)
+          add_sequence(type.reference_sequence)
         end
       end,
       ["array"] = function()

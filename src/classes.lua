@@ -766,7 +766,7 @@
 ---@class EmmyLuaReferenceType : EmmyLuaType
 ---@field type_type '"reference"'
 ---@field type_name string
----@field reference_type EmmyLuaClassSequence|EmmyLuaAliasSequence|nil @ never `nil` once the linker ran
+---@field reference_sequence EmmyLuaClassSequence|EmmyLuaAliasSequence|nil @ never `nil` once the linker ran
 
 ---@class EmmyLuaArrayType : EmmyLuaType
 ---@field type_type '"array"'

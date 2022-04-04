@@ -67,11 +67,11 @@ local function resolve_references(emmy_lua, type, must_be_class)
       end
     end,
     ["reference"] = function()
-      type.reference_type = emmy_lua.all_types_lut[type.type_name]
-      if not type.reference_type then
+      type.reference_sequence = emmy_lua.all_types_lut[type.type_name]
+      if not type.reference_sequence then
         util.debug_abort("Unable to resolve reference to type "..type.type_name..".")
       end
-      if must_be_class and type.reference_type.sequence_type ~= "class" then
+      if must_be_class and type.reference_sequence.sequence_type ~= "class" then
         util.debug_abort("Expected a reference to a class (not an alias). type_name: "
           ..type.type_name.."."
         )
