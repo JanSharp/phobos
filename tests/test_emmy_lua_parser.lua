@@ -48,6 +48,13 @@ local function expected_eol(position)
   return new_error(codes.el_expected_eol, nil, position)
 end
 
+local function new_pos(line, column)
+  return {
+    line = line,
+    column = column,
+  }
+end
+
 local parse
 local parse_invalid
 local parse_type
@@ -92,6 +99,8 @@ do
   function parse_type(text, do_not_check_for_trailing_space_consumption)
     local result, errors = parse_type_internal(text, do_not_check_for_trailing_space_consumption)
     assert.equals(nil, errors[1], "EmmyLua syntax errors")
+    assert.contents_equals(new_pos(1, 21), result.start_position, "start_position")
+    assert.contents_equals(new_pos(1, 20 + #text), result.stop_position, "stop_position")
     return result
   end
 
@@ -101,13 +110,6 @@ do
     assert.equals(nil, result, "type result")
     return errors
   end
-end
-
-local function new_pos(line, column)
-  return {
-    line = line,
-    column = column,
-  }
 end
 
 ---for type testing when parse_type returns nil specifically.
@@ -128,18 +130,23 @@ local function new_none(description, node, start_position, stop_position)
   }
 end
 
-local function new_func_seq(params)
+local function new_func_type(params)
   return {
-    sequence_type = "function",
     type_type = "function",
     description = params.description or {},
     params = params.params or {},
     returns = params.returns or {},
-    node = do_not_compare,
-    source = test_source,
     start_position = params.start_position or do_not_compare,
     stop_position = params.stop_position or do_not_compare,
   }
+end
+
+local function new_func_seq(params)
+  local seq = new_func_type(params)
+  seq.sequence_type = "function"
+  seq.node = do_not_compare
+  seq.source = test_source
+  return seq
 end
 
 ---cSpell:ignore dteci
@@ -831,8 +838,6 @@ do
       assert.contents_equals(new_type{
         type_type = "literal",
         value = "hello world",
-        start_position = new_pos(1, 21),
-        stop_position = new_pos(1, 33),
       }, got)
     end
 
@@ -862,8 +867,6 @@ do
       type_type = "dictionary",
       key_type = new_any(),
       value_type = new_any(),
-      start_position = new_pos(1, 21),
-      stop_position = new_pos(1, 38),
     }, got)
   end)
 
@@ -873,8 +876,6 @@ do
       type_type = "dictionary",
       key_type = new_any(),
       value_type = new_any(),
-      start_position = new_pos(1, 21),
-      stop_position = new_pos(1, 34),
     }, got)
   end)
 
@@ -900,27 +901,131 @@ do
 
   -- reference types
 
-  scope:add_test("reference type", function()
-    local got = parse_type("any")
-    assert.contents_equals(new_type{
-      type_type = "reference",
-      type_name = "any",
-      start_position = new_pos(1, 21),
-      stop_position = new_pos(1, 23),
-    }, got)
+  do
+    local function test_reference(type_name)
+      local got = parse_type(type_name)
+      assert.contents_equals(new_type{
+        type_type = "reference",
+        type_name = type_name,
+      }, got)
+    end
+
+    scope:add_test("reference type 'any'", function()
+      test_reference("any")
+    end)
+
+    scope:add_test("reference type 'table'", function()
+      test_reference("table")
+    end)
+  end
+
+  -- function types
+
+  scope:add_test("function type with space between parens", function()
+    local got = parse_type("fun( )")
+    assert.contents_equals(new_func_type{}, got)
   end)
 
-  scope:add_test("reference type (table reference)", function()
-    local got = parse_type("table")
-    assert.contents_equals(new_type{
-      type_type = "reference",
-      type_name = "table",
-      start_position = new_pos(1, 21),
-      stop_position = new_pos(1, 25),
-    }, got)
+  scope:add_test("function type without space between parens", function()
+    local got = parse_type("fun()")
+    assert.contents_equals(new_func_type{}, got)
   end)
 
-  -- TODO: test function types
+  scope:add_test("function type with param with spaces everywhere", function()
+    local got = parse_type("fun( foo : any )")
+    assert.contents_equals(new_func_type{params = {new_param{name = "foo"}}}, got)
+  end)
+
+  scope:add_test("function type with param without spaces anywhere", function()
+    local got = parse_type("fun(foo:any)")
+    assert.contents_equals(new_func_type{params = {new_param{name = "foo"}}}, got)
+  end)
+
+  scope:add_test("function type with optional param with spaces everywhere", function()
+    local got = parse_type("fun( foo ? : any )")
+    assert.contents_equals(new_func_type{params = {new_param{name = "foo", optional = true}}}, got)
+  end)
+
+  scope:add_test("function type with optional param without spaces anywhere", function()
+    local got = parse_type("fun(foo?:any)")
+    assert.contents_equals(new_func_type{params = {new_param{name = "foo", optional = true}}}, got)
+  end)
+
+  scope:add_test("function type with 2 param with spaces everywhere", function()
+    local got = parse_type("fun( foo : any , bar : any )")
+    assert.contents_equals(new_func_type{params = {new_param{name = "foo"}, new_param{name = "bar"}}}, got)
+  end)
+
+  scope:add_test("function type with 2 param without spaces anywhere", function()
+    local got = parse_type("fun(foo:any,bar:any)")
+    assert.contents_equals(new_func_type{params = {new_param{name = "foo"}, new_param{name = "bar"}}}, got)
+  end)
+
+  scope:add_test("function type with return with spaces everywhere", function()
+    local got = parse_type("fun() : any")
+    assert.contents_equals(new_func_type{returns = {new_return{}}}, got)
+  end)
+
+  scope:add_test("function type with return without spaces anywhere", function()
+    local got = parse_type("fun():any")
+    assert.contents_equals(new_func_type{returns = {new_return{}}}, got)
+  end)
+
+  scope:add_test("function type with optional return with spaces everywhere", function()
+    local got = parse_type("fun() : any ?")
+    assert.contents_equals(new_func_type{returns = {new_return{optional = true}}}, got)
+  end)
+
+  scope:add_test("function type with optional return without spaces anywhere", function()
+    local got = parse_type("fun():any?")
+    assert.contents_equals(new_func_type{returns = {new_return{optional = true}}}, got)
+  end)
+
+  scope:add_test("function type with 2 returns with spaces everywhere", function()
+    local got = parse_type("fun() : any , any")
+    assert.contents_equals(new_func_type{returns = {new_return{}, new_return{}}}, got)
+  end)
+
+  scope:add_test("function type with 2 returns without spaces anywhere", function()
+    local got = parse_type("fun():any,any")
+    assert.contents_equals(new_func_type{returns = {new_return{}, new_return{}}}, got)
+  end)
+
+  scope:add_test("function type without opening '('", function()
+    local got = parse_invalid_type("fun")
+    assert.contents_equals({expected_pattern("%(", new_pos(1, 24))}, got)
+  end)
+
+  scope:add_test("function type without closing ')'", function()
+    local got = parse_invalid_type("fun(", true)
+    assert.contents_equals({expected_ident(new_pos(1, 25))}, got)
+  end)
+
+  scope:add_test("function type with invalid param name", function()
+    local got = parse_invalid_type("fun(!)")
+    assert.contents_equals({expected_ident(new_pos(1, 25))}, got)
+  end)
+
+  scope:add_test("function type with invalid character after param name", function()
+    local got = parse_invalid_type("fun(foo!)")
+    assert.contents_equals({expected_pattern(":", new_pos(1, 28))}, got)
+  end)
+
+  scope:add_test("function type with without param type", function()
+    local got = parse_invalid_type("fun(foo:)") -- smile
+    assert.contents_equals({expected_type(new_pos(1, 29))}, got)
+  end)
+
+  scope:add_test("function type with param but without closing ')'", function()
+    local got = parse_invalid_type("fun(foo: any", true)
+    assert.contents_equals({expected_pattern("%)", new_pos(1, 33))}, got)
+  end)
+
+  scope:add_test("function type with ':' but without return", function()
+    local got = parse_invalid_type("fun():", true)
+    assert.contents_equals({expected_type(new_pos(1, 27))}, got)
+  end)
+
   -- TODO: test array types
   -- TODO: test union types
   -- TODO: test error messages and their positions

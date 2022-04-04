@@ -178,6 +178,7 @@ local function parse_sequence(sequence, source, positions)
         if not parse_pattern("%)") then
           repeat -- params
             local param = {}
+            param.description = {}
             parse_blank()
             param.name = assert_parse_identifier()
             parse_blank()
