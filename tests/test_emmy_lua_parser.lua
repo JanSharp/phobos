@@ -95,7 +95,7 @@ local function new_func_seq(params)
     description = params.description or {},
     params = params.params or {},
     returns = params.returns or {},
-    node = params.node,
+    node = do_not_compare,
     source = test_source,
     start_position = params.start_position or do_not_compare,
     stop_position = params.stop_position or do_not_compare,
@@ -163,6 +163,20 @@ local function new_field(field)
   field.optional = field.optional or false
   field.field_type = field.field_type or new_any()
   return field
+end
+
+local function new_param(param)
+  param.description = param.description or {}
+  param.optional = param.optional or false
+  param.param_type = param.param_type or new_any()
+  return param
+end
+
+local function new_return(ret)
+  ret.description = ret.description or {}
+  ret.optional = ret.optional or false
+  ret.return_type = ret.return_type or new_any()
+  return ret
 end
 
 local function assert_associated_node(expected_node_type, got)
@@ -249,7 +263,7 @@ do
 
     seq_scope:add_test("function sequence associated with funcstat", function()
       local got = parse("---foo\nfunction bar() end")
-      assert.contents_equals({new_func_seq{description = {"foo"}, node = do_not_compare}}, got)
+      assert.contents_equals({new_func_seq{description = {"foo"}}}, got)
       assert_associated_node("funcstat", got)
     end)
 
@@ -260,7 +274,7 @@ do
 
     seq_scope:add_test("function sequence associated with localfunc", function()
       local got = parse("---foo\nlocal function bar() end")
-      assert.contents_equals({new_func_seq{description = {"foo"}, node = do_not_compare}}, got)
+      assert.contents_equals({new_func_seq{description = {"foo"}}}, got)
       assert_associated_node("localfunc", got)
     end)
 
@@ -320,7 +334,6 @@ do
       assert.contents_equals({
         new_func_seq{
           description = {"foo", "hello"},
-          node = do_not_compare,
           start_position = new_pos(1, 2),
           stop_position = new_pos(2, 8),
         },
@@ -600,7 +613,176 @@ do
     assert.contents_equals({expected_type(new_pos(1, 15))}, got)
   end)
 
-  -- TODO: test function sequence
+  -- function sequence
+
+  scope:add_test("function seq", function()
+    local got = parse("---hi\nfunction func()) end")
+    assert.contents_equals({new_func_seq{description = {"hi"}}}, got)
+  end)
+
+  scope:add_test("function seq with param", function()
+    local got = parse("---@param foo any\nfunction func() end")
+    assert.contents_equals({new_func_seq{params = {new_param{name = "foo"}}}}, got)
+  end)
+
+  scope:add_test("function seq with param with inline description with spaces everywhere", function()
+    local got = parse("---@param foo any @ hello world\nfunction func() end")
+    assert.contents_equals({new_func_seq{params = {
+      new_param{description = {"hello world"}, name = "foo"},
+    }}}, got)
+  end)
+
+  scope:add_test("function seq with param with inline description without spaces anywhere", function()
+    local got = parse("---@param foo any@hello world\nfunction func() end")
+    assert.contents_equals({new_func_seq{params = {
+      new_param{description = {"hello world"}, name = "foo"},
+    }}}, got)
+  end)
+
+  scope:add_test("function seq with param with empty inline description", function()
+    local got = parse("---@param foo any@\nfunction func() end")
+    assert.contents_equals({new_func_seq{params = {
+      new_param{description = {""}, name = "foo"},
+    }}}, got)
+  end)
+
+  scope:add_test("function seq with param with block description", function()
+    local got = parse("---@param foo any @\n---hello\n---world\nfunction func() end")
+    assert.contents_equals({new_func_seq{params = {
+      new_param{description = {"hello", "world"}, name = "foo"},
+    }}}, got)
+  end)
+
+  scope:add_test("function seq with param with block description with trailing space on inline line", function()
+    local got = parse("---@param foo any @ \n---hello\n---world\nfunction func() end")
+    assert.contents_equals({new_func_seq{params = {
+      new_param{description = {"hello", "world"}, name = "foo"},
+    }}}, got)
+  end)
+
+  scope:add_test("function seq with optional param with spaces everywhere", function()
+    local got = parse("---@param foo ? any\nfunction func() end")
+    assert.contents_equals({new_func_seq{params = {new_param{name = "foo", optional = true}}}}, got)
+  end)
+
+  scope:add_test("function seq with optional param without spaces anywhere", function()
+    local got = parse("---@param foo?any\nfunction func() end")
+    assert.contents_equals({new_func_seq{params = {new_param{name = "foo", optional = true}}}}, got)
+  end)
+
+  scope:add_test("function seq with 2 params", function()
+    local got = parse("---@param foo any\n---@param bar any\nfunction func() end")
+    assert.contents_equals({new_func_seq{params = {
+      new_param{name = "foo"},
+      new_param{name = "bar"},
+    }}}, got)
+  end)
+
+  scope:add_test("function seq with param without space after special tag", function()
+    local got = parse_invalid("---@param\nfunction func() end")
+    assert.contents_equals({expected_blank(new_pos(1, 10))}, got)
+  end)
+
+  scope:add_test("function seq with param without name", function()
+    local got = parse_invalid("---@param \nfunction func() end")
+    assert.contents_equals({expected_ident(new_pos(1, 11))}, got)
+  end)
+
+  scope:add_test("function seq with param without space after name", function()
+    local got = parse_invalid("---@param foo\nfunction func() end")
+    assert.contents_equals({expected_blank(new_pos(1, 14))}, got)
+  end)
+
+  scope:add_test("function seq with param without param_type", function()
+    local got = parse_invalid("---@param foo \nfunction func() end")
+    assert.contents_equals({expected_type(new_pos(1, 15))}, got)
+  end)
+
+  scope:add_test("function seq with param with extra text after param_type that isn't '@'", function()
+    local got = parse_invalid("---@param foo any !\nfunction func() end")
+    assert.contents_equals({expected_pattern("@", new_pos(1, 19))}, got)
+  end)
+
+  scope:add_test("function seq with return", function()
+    local got = parse("---@return any\nfunction func() end")
+    assert.contents_equals({new_func_seq{returns = {new_return{}}}}, got)
+  end)
+
+  scope:add_test("function seq with return with name", function()
+    local got = parse("---@return any foo\nfunction func() end")
+    assert.contents_equals({new_func_seq{returns = {new_return{name = "foo"}}}}, got)
+  end)
+
+  scope:add_test("function seq with optional return with spaces everywhere", function()
+    local got = parse("---@return any ?\nfunction func() end")
+    assert.contents_equals({new_func_seq{returns = {new_return{optional = true}}}}, got)
+  end)
+
+  scope:add_test("function seq with optional return without spaces anywhere", function()
+    local got = parse("---@return any?\nfunction func() end")
+    assert.contents_equals({new_func_seq{returns = {new_return{optional = true}}}}, got)
+  end)
+
+  scope:add_test("function seq with optional return with name with spaces everywhere", function()
+    local got = parse("---@return any ? foo\nfunction func() end")
+    assert.contents_equals({new_func_seq{returns = {new_return{name = "foo", optional = true}}}}, got)
+  end)
+
+  scope:add_test("function seq with optional return with name without spaces anywhere", function()
+    local got = parse("---@return any?foo\nfunction func() end")
+    assert.contents_equals({new_func_seq{returns = {new_return{name = "foo", optional = true}}}}, got)
+  end)
+
+  scope:add_test("function seq with return with inline description with spaces everywhere", function()
+    local got = parse("---@return any @ hello world\nfunction func() end")
+    assert.contents_equals({new_func_seq{returns = {new_return{description = {"hello world"}}}}}, got)
+  end)
+
+  scope:add_test("function seq with return with inline description without spaces anywhere", function()
+    local got = parse("---@return any@hello world\nfunction func() end")
+    assert.contents_equals({new_func_seq{returns = {new_return{description = {"hello world"}}}}}, got)
+  end)
+
+  scope:add_test("function seq with return with empty inline description", function()
+    local got = parse("---@return any @\nfunction func() end")
+    assert.contents_equals({new_func_seq{returns = {new_return{description = {""}}}}}, got)
+  end)
+
+  scope:add_test("function seq with return with block description", function()
+    local got = parse("---@return any @\n---hello\n---world\nfunction func() end")
+    assert.contents_equals({new_func_seq{returns = {new_return{description = {"hello", "world"}}}}}, got)
+  end)
+
+  scope:add_test("function seq with return with block description with trailing space on inline line", function()
+    local got = parse("---@return any @ \n---hello\n---world\nfunction func() end")
+    assert.contents_equals({new_func_seq{returns = {new_return{description = {"hello", "world"}}}}}, got)
+  end)
+
+  scope:add_test("function seq with 2 returns", function()
+    local got = parse("---@return any\n---@return any\nfunction func() end")
+    assert.contents_equals({new_func_seq{returns = {new_return{}, new_return{}}}}, got)
+  end)
+
+  scope:add_test("function seq with return without space after special tag", function()
+    local got = parse_invalid("---@return\nfunction func() end")
+    assert.contents_equals({expected_blank(new_pos(1, 11))}, got)
+  end)
+
+  scope:add_test("function seq without return_type", function()
+    local got = parse_invalid("---@return \nfunction func() end")
+    assert.contents_equals({expected_type(new_pos(1, 12))}, got)
+  end)
+
+  scope:add_test("function seq with extra text after return_type that isn't '@' nor an identifier", function()
+    local got = parse_invalid("---@return any !\nfunction func() end")
+    assert.contents_equals({expected_pattern("@", new_pos(1, 16))}, got)
+  end)
+
+  scope:add_test("function seq with extra text after name that isn't '@'", function()
+    local got = parse_invalid("---@return any foo !\nfunction func() end")
+    assert.contents_equals({expected_pattern("@", new_pos(1, 20))}, got)
+  end)
+
   -- TODO: test literal types
   -- TODO: test dictionary types
   -- TODO: test reference types

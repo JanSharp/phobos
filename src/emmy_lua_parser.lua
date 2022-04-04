@@ -115,6 +115,18 @@ local function parse_sequence(sequence, source, positions)
     end
   end
 
+  local function parse_optional_for_field_or_param(result)
+    local did_parse_blank = parse_blank()
+    if parse_pattern("%?") then
+      result.optional = true
+      parse_blank()
+    elseif not did_parse_blank then
+      assert_parse_blank() -- error
+    else
+      result.optional = false
+    end
+  end
+
   local assert_parse_type
 
   local function parse_type(union)
@@ -265,10 +277,14 @@ local function parse_sequence(sequence, source, positions)
   end
 
   local function read_block_starting_at_i()
-    local description = {get_rest_of_line()}
+    local description = {not is_line_end() and get_rest_of_line() or nil}
+    local offset = description[1] and 1 or 0
     next_line()
     for j, block_line in ipairs(read_block()) do
-      description[j + 1] = block_line
+      description[j + offset] = block_line
+    end
+    if not description[1] then
+      description[1] = ""
     end
     return description
   end
@@ -326,15 +342,7 @@ local function parse_sequence(sequence, source, positions)
       local field = {}
       field.description = description
       field.name = assert_parse_identifier()
-      local did_parse_blank = parse_blank()
-      if parse_pattern("%?") then
-        field.optional = true
-        parse_blank()
-      elseif not did_parse_blank then
-        assert_parse_blank() -- error
-      else
-        field.optional = false
-      end
+      parse_optional_for_field_or_param(field)
       field.field_type = assert_parse_type()
       if field.field_type.type_type == "function" then
         field.field_type.description = description
@@ -408,15 +416,9 @@ local function parse_sequence(sequence, source, positions)
     assert_parse_blank()
     local result = {}
     result.name = assert_parse_identifier()
-    -- the '' can follow directly after the name in sumneko.lua
-    -- so we don't have to assert, but I do it anyway
-    assert_parse_blank()
-    if parse_pattern("%?") then
-      result.optional = true
-      parse_blank()
-    else
-      result.optional = false
-    end
+    -- technically the '' for literal types can follow directly after the name in sumneko.lua
+    -- but we don't support that, because it does not look good
+    parse_optional_for_field_or_param(result)
     result.param_type = assert_parse_type()
     parse_blank()
     if not is_line_end() then
