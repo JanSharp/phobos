@@ -49,7 +49,9 @@ local function expected_eol(position)
 end
 
 local parse
+local parse_type
 local parse_invalid
+local parse_invalid_type
 do
   local function parse_internal(text)
     local ast = parser(text, test_source)
@@ -63,10 +65,21 @@ do
     return result
   end
 
+  ---adds 20 characters at the front
+  function parse_type(text)
+    local result = parse("---@alias _________ "..text)
+    return result[1].aliased_type
+  end
+
   function parse_invalid(text)
     local result, errors = parse_internal(text)
     assert.equals(nil, result[1], "main result")
     return errors
+  end
+
+  ---adds 20 characters at the front
+  function parse_invalid_type(text)
+    return parse_invalid("---@alias _________ "..text)
   end
 end
 
@@ -783,7 +796,37 @@ do
     assert.contents_equals({expected_pattern("@", new_pos(1, 20))}, got)
   end)
 
-  -- TODO: test literal types
+  -- literal types
+
+  do
+    local function test_literal(text)
+      local got = parse_type(text)
+      assert.contents_equals(new_type{
+        type_type = "literal",
+        value = "hello world",
+        start_position = new_pos(1, 21),
+        stop_position = new_pos(1, 33),
+      }, got)
+    end
+
+    scope:add_test("literal type using '", function()
+      test_literal("'hello world'")
+    end)
+
+    scope:add_test("literal type using \"", function()
+      test_literal('"hello world"')
+    end)
+
+    scope:add_test("literal type using `", function()
+      test_literal("`hello world`")
+    end)
+  end
+
+  scope:add_test("literal type using mixed parens", function()
+    local got = parse_invalid_type("'foo\"")
+    assert.contents_equals({expected_type(new_pos(1, 21))}, got)
+  end)
+
   -- TODO: test dictionary types
   -- TODO: test reference types
   -- TODO: test function types
