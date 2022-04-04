@@ -1,18 +1,22 @@
 
 local util = require("util")
 
-local function parse_sequence(sequence)
+local function parse_sequence(sequence, source, positions)
   local line_index = 0
   local line
+  local position
   local i
   local function next_line()
     line_index = line_index + 1
     line = sequence[line_index]
+    position = positions[line_index]
     i = 1
   end
 
   local function get_position()
-    return line_index..":"..i.." within some emmy lua sequence"
+    local line_pos = position and position.line or (positions[#positions].line + 1)
+    local column_pos = position and (position.column + i - 1) or 0
+    return line_pos..":"..column_pos.." in "..source
   end
 
   local function parse_pattern(pattern)
@@ -502,8 +506,10 @@ local function parse(ast)
   end
 
   local finished_sequences = {}
+  local finished_positions = {}
 
   local current_sequence = {}
+  local current_positions = {}
   local had_newline_since_prev_comment = false
   local prev_blank_end_column = 0
 
@@ -511,7 +517,9 @@ local function parse(ast)
     if not current_sequence[1] then return end
     local sequence = current_sequence
     finished_sequences[#finished_sequences+1] = sequence
+    finished_positions[#finished_positions+1] = current_positions
     current_sequence = {}
+    current_positions = {}
     return sequence
   end
 
@@ -560,6 +568,8 @@ local function parse(ast)
       finish_if_there_was_some_token_since_prev_blank(token_node)
       if not token_node.src_is_block_str and token_node.value:sub(1, 1) == "-" then
         current_sequence[#current_sequence+1] = token_node.value:sub(2)
+        -- +3 to column because of the `---`
+        current_positions[#current_positions+1] = {line = token_node.line, column = token_node.column + 3}
         had_newline_since_prev_comment = false
       end
       -- add("--")
@@ -982,7 +992,7 @@ local function parse(ast)
 
   local result = {}
   for i, sequence in ipairs(finished_sequences) do
-    result[i] = parse_sequence(sequence)
+    result[i] = parse_sequence(sequence, ast.source, finished_positions[i])
   end
   return result
 end
