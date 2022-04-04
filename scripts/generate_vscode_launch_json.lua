@@ -172,6 +172,23 @@ add_phobos_profiles{
   main_filename = "tests/main.lua",
   args = {"--test-ids", "${input:testId}"}
 }
+add_input{
+  id = "testScope",
+  type = "promptString",
+  description = "The scope to run.",
+  default = nil,
+  password = false,
+}
+add_phobos_profiles{
+  name = "tests/main test scope",
+  main_filename = "tests/main.lua",
+  args = {"--scopes", "${input:testScope}"}
+}
+add_phobos_profiles{
+  name = "tests/main test scope and id",
+  main_filename = "tests/main.lua",
+  args = {"--scopes", "${input:testScope}", "--test-ids", "${input:testId}"}
+}
 add_phobos_profiles{
   name = "src/main (debug profile)",
   main_filename_in_phobos_root = "main.lua",
