@@ -6,6 +6,7 @@ local do_not_compare = assert.do_not_compare_flag
 local parser = require("parser")
 local jump_linker = require("jump_linker")
 local emmy_lua_parser = require("emmy_lua_parser")
+local error_code_util = require("error_code_util")
 
 local tutil = require("testing_util")
 local test_source = tutil.test_source
@@ -13,14 +14,17 @@ local test_source = tutil.test_source
 local function parse(text)
   local ast = parser(text, test_source)
   jump_linker(ast)
-  return emmy_lua_parser(ast), ast
+  return emmy_lua_parser(ast)
 end
 
-local function new_none(description, node)
+local function new_none(description, node, start_position, stop_position)
   return {
     sequence_type = "none",
     description = description,
     node = node,
+    source = test_source,
+    start_position = start_position or do_not_compare,
+    stop_position = stop_position or do_not_compare,
   }
 end
 
@@ -32,6 +36,9 @@ local function new_func_seq(params)
     params = params.params or {},
     returns = params.returns or {},
     node = params.node,
+    source = test_source,
+    start_position = params.start_position or do_not_compare,
+    stop_position = params.stop_position or do_not_compare,
   }
 end
 

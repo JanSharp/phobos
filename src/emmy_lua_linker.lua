@@ -3,35 +3,45 @@ local util = require("util")
 local error_code_util = require("error_code_util")
 local error_codes = error_code_util.codes
 
-local function new_error_code_inst(error_code, message_args)
+local function new_error_code_inst(error_code, message_args, source, start_position, stop_position)
   return error_code_util.new_error_code{
     error_code = error_code,
     message_args = message_args,
-    -- we don't have a position nor a location nor a source
+    source = source,
+    start_position = start_position,
+    stop_position = stop_position,
+    location_str = " at "..start_position.line..":"..start_position.column
+      .." - "..stop_position.line..":"..stop_position.column
   }
 end
 
-local function add_alias(emmy_lua, alias, error_code_insts)
-  if emmy_lua.all_types_lut[alias.type_name] then
-    error_code_insts[#error_code_insts+1] = new_error_code_inst(
+local function add_type(emmy_lua, type_defining_sequence, error_code_insts)
+  if emmy_lua.all_types_lut[type_defining_sequence.type_name] then
+    local error_code_inst = new_error_code_inst(
       error_codes.el_duplicate_type_name,
-      {alias.type_name}
+      {type_defining_sequence.type_name},
+      type_defining_sequence.source,
+      type_defining_sequence.type_name_start_position,
+      type_defining_sequence.type_name_stop_position
     )
+    error_code_insts[#error_code_insts+1] = error_code_inst
+    type_defining_sequence.duplicate_type_error_code_inst = error_code_inst
+  else
+    -- don't overwrite, the first one counts. References will resolve to this
+    emmy_lua.all_types_lut[type_defining_sequence.type_name] = type_defining_sequence
   end
+end
+
+local function add_alias(emmy_lua, alias, error_code_insts)
+  add_type(emmy_lua, alias, error_code_insts)
+  -- add it regardless of if its a duplicate
   emmy_lua.aliases[#emmy_lua.aliases+1] = alias
-  emmy_lua.all_types_lut[alias.type_name] = alias
 end
 
 local function add_class(emmy_lua, class, error_code_insts)
-  if emmy_lua.all_types_lut[class.type_name] then
-    error_code_insts[#error_code_insts+1] = new_error_code_inst(
-      error_codes.el_duplicate_type_name,
-      {class.type_name}
-    )
-    return
-  end
+  add_type(emmy_lua, class, error_code_insts)
+  -- add it regardless of if its a duplicate
   emmy_lua.classes[#emmy_lua.classes+1] = class
-  emmy_lua.all_types_lut[class.type_name] = class
 end
 
 local function seed_classes(emmy_lua)
@@ -63,11 +73,14 @@ local function new_emmy_lua_data()
   return emmy_lua
 end
 
-local function resolve_references(emmy_lua, error_code_insts, type, must_be_class)
+local function resolve_references(emmy_lua, source, error_code_insts, type, must_be_class)
   if must_be_class and type.type_type ~= "reference" then
     error_code_insts[#error_code_insts+1] = new_error_code_inst(
       error_codes.el_expected_reference_to_class,
-      {type.type_type, ""}
+      {type.type_type, ""},
+      source,
+      type.start_position,
+      type.stop_position
     )
   end
   (({
@@ -75,15 +88,15 @@ local function resolve_references(emmy_lua, error_code_insts, type, must_be_clas
       -- doesn't have references
     end,
     ["dictionary"] = function()
-      resolve_references(emmy_lua, error_code_insts, type.key_type)
-      resolve_references(emmy_lua, error_code_insts, type.value_type)
+      resolve_references(emmy_lua, source, error_code_insts, type.key_type)
+      resolve_references(emmy_lua, source, error_code_insts, type.value_type)
     end,
     ["function"] = function()
       for _, param in ipairs(type.params) do
-        resolve_references(emmy_lua, error_code_insts, param.param_type)
+        resolve_references(emmy_lua, source, error_code_insts, param.param_type)
       end
       for _, ret in ipairs(type.returns) do
-        resolve_references(emmy_lua, error_code_insts, ret.return_type)
+        resolve_references(emmy_lua, source, error_code_insts, ret.return_type)
       end
     end,
     ["reference"] = function()
@@ -91,21 +104,27 @@ local function resolve_references(emmy_lua, error_code_insts, type, must_be_clas
       if not type.reference_sequence then
         error_code_insts[#error_code_insts+1] = new_error_code_inst(
           error_codes.el_unresolved_reference,
-          {type.type_name}
+          {type.type_name},
+          source,
+          type.start_position,
+          type.stop_position
         )
       elseif must_be_class and type.reference_sequence.sequence_type ~= "class" then
         error_code_insts[#error_code_insts+1] = new_error_code_inst(
           error_codes.el_expected_reference_to_class,
-          {type.type_type, " with type_name "..type.type_name}
+          {type.type_type, " with type_name "..type.type_name},
+          source,
+          type.start_position,
+          type.stop_position
         )
       end
     end,
     ["array"] = function()
-      resolve_references(emmy_lua, error_code_insts, type.value_type)
+      resolve_references(emmy_lua, source, error_code_insts, type.value_type)
     end,
     ["union"] = function()
       for _, union_type in ipairs(type.union_types) do
-        resolve_references(emmy_lua, error_code_insts, union_type)
+        resolve_references(emmy_lua, source, error_code_insts, union_type)
       end
     end,
   })[type.type_type] or function()
@@ -135,15 +154,15 @@ local function link(parsed_sequences)
   -- resolve all references
 
   for _, alias in ipairs(emmy_lua.aliases) do
-    resolve_references(emmy_lua, error_code_insts, alias.aliased_type)
+    resolve_references(emmy_lua, alias.source, error_code_insts, alias.aliased_type)
   end
 
   for _, class in ipairs(emmy_lua.classes) do
     for _, base_class in ipairs(class.base_classes) do
-      resolve_references(emmy_lua, error_code_insts, base_class, true)
+      resolve_references(emmy_lua, class.source, error_code_insts, base_class, true)
     end
     for _, field in ipairs(class.fields) do
-      resolve_references(emmy_lua, error_code_insts, field.field_type)
+      resolve_references(emmy_lua, class.source, error_code_insts, field.field_type)
     end
     if class.node then
       util.debug_assert(class.node.node_type == "localstat", "the emmy lua parser should \z
@@ -156,7 +175,7 @@ local function link(parsed_sequences)
   end
 
   for _, func in ipairs(funcs) do
-    resolve_references(emmy_lua, error_code_insts, func)
+    resolve_references(emmy_lua, func.source, error_code_insts, func)
   end
 
   -- add function sequences as fields to classes if we can find the class

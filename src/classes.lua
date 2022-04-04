@@ -753,6 +753,8 @@
 
 ---@class EmmyLuaType
 ---@field type_type EmmyLuaTypeType
+---@field start_position SourcePosition @ inclusive
+---@field stop_position SourcePosition @ inclusive
 
 ---@class EmmyLuaLiteralType : EmmyLuaType
 ---@field type_type '"literal"'
@@ -799,12 +801,21 @@
 ---@class EmmyLuaSequence
 ---@field sequence_type EmmyLuaSequenceType
 ---@field node AstNode|nil @ whichever node this sequence was preceding
+---@field source string @ function source
+---@field start_position SourcePosition @ inclusive
+---@field stop_position SourcePosition @ inclusive
 
----@class EmmyLuaClassSequence : EmmyLuaSequence
+---@class EmmyLuaTypeDefiningSequence : EmmyLuaSequence
+---@field type_name string
+---@field type_name_start_position SourcePosition @ inclusive
+---@field type_name_stop_position SourcePosition @ inclusive
+---Set by the linker if this is a duplicate type name
+---@field duplicate_type_error_code_inst ErrorCodeInstance|nil
+
+---@class EmmyLuaClassSequence : EmmyLuaTypeDefiningSequence
 ---@field sequence_type '"class"'
 ---@field node AstLocalStat|nil
 ---@field description string[]
----@field type_name string
 ---@field base_classes EmmyLuaType[] @ Only `"reference"`s to other classes are valid
 ---@field fields EmmyLuaField[]
 
@@ -815,11 +826,10 @@
 ---@field optional boolean
 ---@field field_type EmmyLuaType
 
----@class EmmyLuaAliasSequence : EmmyLuaSequence
+---@class EmmyLuaAliasSequence : EmmyLuaTypeDefiningSequence
 ---@field sequence_type '"alias"'
 ---@field node AstLocalStat|nil
 ---@field description string[]
----@field type_name string
 ---@field aliased_type EmmyLuaType
 
 ---@class EmmyLuaFunctionSequence : EmmyLuaSequence, EmmyLuaFunctionType

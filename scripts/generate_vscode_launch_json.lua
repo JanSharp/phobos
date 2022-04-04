@@ -195,6 +195,13 @@ add_phobos_profiles{
   args = function(platform) return {"--profile-names", "debug", "--", "--platform", platform} end,
 }
 add_phobos_profiles{
+  name = "src/main (debug profile with docs)",
+  main_filename_in_phobos_root = "main.lua",
+  args = function(platform) return {
+    "--profile-names", "debug", "--", "--platform", platform, "--generate-docs",
+  } end,
+}
+add_phobos_profiles{
   name = "src/main (debug_factorio profile)",
   main_filename_in_phobos_root = "main.lua",
   args = {"--profile-names", "debug_factorio"},

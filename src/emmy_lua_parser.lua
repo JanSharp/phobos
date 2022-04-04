@@ -17,12 +17,12 @@ local function parse_sequence(sequence, source, positions)
 
   local error_code_inst
 
-  local function get_position()
+  local function get_position(column_offset)
     -- position is nil if we are past the last line of the sequence
     return {
       -- positions will always contain 1 entry because empty sequences do not exist
       line = position and position.line or (positions[#positions].line + 1),
-      column = position and (position.column + i - 1) or 0,
+      column = position and (position.column + i - 1 + (column_offset or 0)) or 0,
     }
   end
 
@@ -117,6 +117,7 @@ local function parse_sequence(sequence, source, positions)
 
     local start_i = i
     local current_type = {}
+    current_type.start_position = get_position()
 
     local char = parse_pattern("([\"'`])")
     if char then -- literal
@@ -195,10 +196,15 @@ local function parse_sequence(sequence, source, positions)
       end
     end
 
+    -- stops at previous character of current i
+    current_type.stop_position = get_position(-1)
+
     while parse_pattern("%[%]") do
       current_type = {
         type_type = "array",
         value_type = current_type,
+        start_position = util.shallow_copy(current_type.start_position),
+        stop_position = get_position(-1),
       }
     end
 
@@ -207,8 +213,13 @@ local function parse_sequence(sequence, source, positions)
     end
 
     if parse_pattern("|") then
-      union = union or {type_type = "union", union_types = {current_type}}
+      union = union or {
+        type_type = "union",
+        union_types = {current_type},
+        start_position = util.shallow_copy(current_type.start_position),
+      }
       if not parse_type(union) then i = start_i return end
+      union.stop_position = get_position(-1)
       return union
     else
       return current_type
@@ -264,7 +275,9 @@ local function parse_sequence(sequence, source, positions)
     result.sequence_type = "class"
     result.node = sequence.associated_node
     result.description = description
+    result.type_name_start_position = get_position()
     result.type_name = assert_parse_identifier()
+    result.type_name_stop_position = get_position(-1)
     parse_blank()
     result.base_classes = {}
     if not is_line_end() then
@@ -272,7 +285,9 @@ local function parse_sequence(sequence, source, positions)
       parse_blank()
       result.base_classes[1] = {
         type_type = "reference",
+        start_position = get_position(),
         type_name = assert_parse_identifier(),
+        stop_position = get_position(-1),
       }
       parse_blank()
       while not is_line_end() do
@@ -280,7 +295,9 @@ local function parse_sequence(sequence, source, positions)
         parse_blank()
         result.base_classes[#result.base_classes+1] = {
           type_type = "reference",
+          start_position = get_position(),
           type_name = assert_parse_identifier(),
+          stop_position = get_position(-1),
         }
         parse_blank()
       end
@@ -336,7 +353,9 @@ local function parse_sequence(sequence, source, positions)
     result.sequence_type = "alias"
     result.node = sequence.associated_node
     result.description = description
+    result.type_name_start_position = get_position()
     result.type_name = assert_parse_identifier()
+    result.type_name_stop_position = get_position(-1)
     assert_parse_blank()
     result.aliased_type = assert_parse_type()
     parse_blank()
@@ -476,6 +495,14 @@ local function parse_sequence(sequence, source, positions)
     end
     util.debug_abort(err)
   end
+  result.source = source
+  -- have to copy at least one of them because there might just be a single line
+  result.start_position = util.shallow_copy(positions[1])
+  -- include the `---`
+  result.start_position.column = result.start_position.column - 3
+  result.stop_position = positions[#positions]
+  -- include the entire line
+  result.stop_position.column = result.stop_position.column + #sequence[#sequence] - 1
   return result
 end
 
