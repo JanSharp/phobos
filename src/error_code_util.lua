@@ -173,7 +173,7 @@ add_error_code(
 add_error_code(
   types.emmy_lua_parser,
   "el_expected_special_tag",
-  "Expected tag @%s"
+  "Expected tag @%s, got @%s"
 )
 add_error_code(
   types.emmy_lua_parser,

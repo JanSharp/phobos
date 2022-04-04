@@ -15,6 +15,7 @@ local function parse_sequence(sequence, source, positions)
     i = 1
   end
 
+  local error_start_position
   local error_code_inst
 
   local function get_position(column_offset)
@@ -27,14 +28,22 @@ local function parse_sequence(sequence, source, positions)
   end
 
   local function get_location_str()
-    local pos = get_position()
+    local pos = error_start_position or get_position()
     return " at "..pos.line..":"..pos.column
   end
 
+  local function set_error_start_position()
+    error_start_position = get_position()
+  end
+
   local function emmy_lua_abort(error_code, message_args)
+    -- if we have a start position then subtract 1 to make it inclusive inclusive
+    -- because everything "shoots past" what they just parsed by 1
+    local pos = get_position(error_start_position and -1 or 0)
     error_code_inst = error_code_util.new_error_code{
       error_code = error_code,
-      position = get_position(),
+      start_position = error_start_position or pos,
+      stop_position = pos,
       location_str = get_location_str(),
       source = source,
       message_args = message_args,
@@ -80,9 +89,19 @@ local function parse_sequence(sequence, source, positions)
     return parse_pattern(" ?@"..tag)
   end
 
+  local function parse_identifier()
+    return parse_pattern("([_%a][_%w]*)")
+  end
+
+  local function assert_parse_identifier()
+    return emmy_lua_assert(parse_identifier(), error_codes.el_expected_ident)
+  end
+
   local function assert_parse_special(tag)
     if not parse_special(tag) then
-      emmy_lua_abort(error_codes.el_expected_special_tag, {tag})
+      set_error_start_position()
+      parse_special("")
+      emmy_lua_abort(error_codes.el_expected_special_tag, {tag, parse_identifier()})
     end
   end
 
@@ -94,14 +113,6 @@ local function parse_sequence(sequence, source, positions)
     if not parse_blank() then
       emmy_lua_abort(error_codes.el_expected_blank)
     end
-  end
-
-  local function parse_identifier()
-    return parse_pattern("([_%a][_%w]*)")
-  end
-
-  local function assert_parse_identifier()
-    return emmy_lua_assert(parse_identifier(), error_codes.el_expected_ident)
   end
 
   local assert_parse_type
@@ -161,6 +172,8 @@ local function parse_sequence(sequence, source, positions)
             if parse_pattern("%?") then
               param.optional = true
               parse_blank()
+            else
+              param.optional = false
             end
             assert_parse_pattern(":")
             parse_blank()
@@ -185,6 +198,8 @@ local function parse_sequence(sequence, source, positions)
               ret.optional = true
               reset_i_to_here = i
               parse_blank()
+            else
+              ret.optional = false
             end
             current_type.returns[#current_type.returns+1] = ret
           until not parse_pattern(",")
@@ -317,6 +332,8 @@ local function parse_sequence(sequence, source, positions)
         parse_blank()
       elseif not did_parse_blank then
         assert_parse_blank() -- error
+      else
+        field.optional = false
       end
       field.field_type = assert_parse_type()
       if field.field_type.type_type == "function" then
@@ -397,6 +414,8 @@ local function parse_sequence(sequence, source, positions)
     if parse_pattern("%?") then
       result.optional = true
       parse_blank()
+    else
+      result.optional = false
     end
     result.param_type = assert_parse_type()
     parse_blank()
@@ -421,6 +440,8 @@ local function parse_sequence(sequence, source, positions)
       result.optional = true
       parse_blank()
       name_would_be_valid = true
+    else
+      result.optional = false
     end
     if name_would_be_valid then
       result.name = parse_identifier()
