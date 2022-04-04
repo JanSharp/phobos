@@ -898,7 +898,28 @@ do
     assert_expected_type(got)
   end)
 
-  -- TODO: test reference types
+  -- reference types
+
+  scope:add_test("reference type", function()
+    local got = parse_type("any")
+    assert.contents_equals(new_type{
+      type_type = "reference",
+      type_name = "any",
+      start_position = new_pos(1, 21),
+      stop_position = new_pos(1, 23),
+    }, got)
+  end)
+
+  scope:add_test("reference type (table reference)", function()
+    local got = parse_type("table")
+    assert.contents_equals(new_type{
+      type_type = "reference",
+      type_name = "table",
+      start_position = new_pos(1, 21),
+      stop_position = new_pos(1, 25),
+    }, got)
+  end)
+
   -- TODO: test function types
   -- TODO: test array types
   -- TODO: test union types
