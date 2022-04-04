@@ -160,10 +160,12 @@ local function new_type(type)
   return type
 end
 
-local function new_any()
+local function new_any(start_position, stop_position)
   return new_type{
     type_type = "reference",
     type_name = "any",
+    start_position = start_position,
+    stop_position = stop_position,
   }
 end
 
@@ -1032,12 +1034,7 @@ do
     local got = parse_type("any[]")
     assert.contents_equals(new_type{
       type_type = "array",
-      value_type = new_type{
-        type_type = "reference",
-        type_name = "any",
-        start_position = new_pos(1, 21),
-        stop_position = new_pos(1, 23),
-      },
+      value_type = new_any(new_pos(1, 21), new_pos(1, 23)),
     }, got)
   end)
 
@@ -1049,12 +1046,7 @@ do
         type_type = "array",
         value_type = new_type{
           type_type = "array",
-          value_type = new_type{
-            type_type = "reference",
-            type_name = "any",
-            start_position = new_pos(1, 21),
-            stop_position = new_pos(1, 23),
-          },
+          value_type = new_any(new_pos(1, 21), new_pos(1, 23)),
           start_position = new_pos(1, 21),
           stop_position = new_pos(1, 25),
         },
@@ -1064,7 +1056,32 @@ do
     }, got)
   end)
 
-  -- TODO: test union types
+  -- union types
+
+  scope:add_test("union type", function()
+    local got = parse_type("any|any")
+    assert.contents_equals(new_type{
+      type_type = "union",
+      union_types = {
+        new_any(new_pos(1, 21), new_pos(1, 23)),
+        new_any(new_pos(1, 25), new_pos(1, 27)),
+      },
+    }, got)
+  end)
+
+  scope:add_test("union type of 4 types", function()
+    local got = parse_type("any|any|any|any")
+    assert.contents_equals(new_type{
+      type_type = "union",
+      union_types = {
+        new_any(new_pos(1, 21), new_pos(1, 23)),
+        new_any(new_pos(1, 25), new_pos(1, 27)),
+        new_any(new_pos(1, 29), new_pos(1, 31)),
+        new_any(new_pos(1, 33), new_pos(1, 35)),
+      },
+    }, got)
+  end)
+
   -- TODO: combination of all the things chained in parse_type
   -- TODO: test error messages and their positions
   -- TODO: test ident parsing
