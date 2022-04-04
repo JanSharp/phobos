@@ -49,8 +49,8 @@ local function expected_eol(position)
 end
 
 local parse
-local parse_type
 local parse_invalid
+local parse_type
 local parse_invalid_type
 do
   local function parse_internal(text)
@@ -65,21 +65,41 @@ do
     return result
   end
 
-  ---adds 20 characters at the front
-  function parse_type(text)
-    local result = parse("---@alias _________ "..text)
-    return result[1].aliased_type
-  end
-
   function parse_invalid(text)
     local result, errors = parse_internal(text)
     assert.equals(nil, result[1], "main result")
     return errors
   end
 
+  local function parse_type_internal(text, do_not_check_for_trailing_space_consumption)
+    local result, errors
+    if do_not_check_for_trailing_space_consumption then
+      result, errors = parse_internal("---@alias _________ "..text)
+      result = result[1] and result[1].aliased_type or nil
+    else
+      result, errors = parse_internal("---@return          "..text.." foo\nfunction func() end")
+      if errors[1] and errors[1].error_code == codes.el_expected_blank then
+        -- If parse_type ever uses assert_parse_blank in the future then this check
+        -- could be incorrect and a different form of detection must be used.
+        assert(false, "The type consumed trailing spaces")
+      end
+      result = result[1] and result[1].returns[1].return_type or nil
+    end
+    return result, errors
+  end
+
   ---adds 20 characters at the front
-  function parse_invalid_type(text)
-    return parse_invalid("---@alias _________ "..text)
+  function parse_type(text, do_not_check_for_trailing_space_consumption)
+    local result, errors = parse_type_internal(text, do_not_check_for_trailing_space_consumption)
+    assert.equals(nil, errors[1], "EmmyLua syntax errors")
+    return result
+  end
+
+  ---adds 20 characters at the front
+  function parse_invalid_type(text, do_not_check_for_trailing_space_consumption)
+    local result, errors = parse_type_internal(text, do_not_check_for_trailing_space_consumption)
+    assert.equals(nil, result, "type result")
+    return errors
   end
 end
 
@@ -88,6 +108,13 @@ local function new_pos(line, column)
     line = line,
     column = column,
   }
+end
+
+---for type testing when parse_type returns nil specifically.
+---This also tests that parse_type reset i correctly by checking the error column info
+local function assert_expected_type(got)
+  -- 21 because the type parse functions add 20 characters at the front
+  assert.contents_equals({expected_type(new_pos(1, 21))}, got)
 end
 
 local function new_none(description, node, start_position, stop_position)
@@ -827,7 +854,50 @@ do
     assert.contents_equals({expected_type(new_pos(1, 21))}, got)
   end)
 
-  -- TODO: test dictionary types
+  -- dictionary types
+
+  scope:add_test("dictionary type with spaces everywhere", function()
+    local got = parse_type("table< any , any >")
+    assert.contents_equals(new_type{
+      type_type = "dictionary",
+      key_type = new_any(),
+      value_type = new_any(),
+      start_position = new_pos(1, 21),
+      stop_position = new_pos(1, 38),
+    }, got)
+  end)
+
+  scope:add_test("dictionary type without spaces anywhere", function()
+    local got = parse_type("table<any,any>")
+    assert.contents_equals(new_type{
+      type_type = "dictionary",
+      key_type = new_any(),
+      value_type = new_any(),
+      start_position = new_pos(1, 21),
+      stop_position = new_pos(1, 34),
+    }, got)
+  end)
+
+  scope:add_test("dictionary type without key_type", function()
+    local got = parse_invalid_type("table<", true)
+    assert_expected_type(got)
+  end)
+
+  scope:add_test("dictionary type without comma", function()
+    local got = parse_invalid_type("table<any")
+    assert_expected_type(got)
+  end)
+
+  scope:add_test("dictionary type without value_type", function()
+    local got = parse_invalid_type("table<any,", true)
+    assert_expected_type(got)
+  end)
+
+  scope:add_test("dictionary type without '>'", function()
+    local got = parse_invalid_type("table<any,any")
+    assert_expected_type(got)
+  end)
+
   -- TODO: test reference types
   -- TODO: test function types
   -- TODO: test array types
