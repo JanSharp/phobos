@@ -37,6 +37,15 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
       optional = true,
       min_params = 0,
     },
+    {
+      field = "scopes",
+      long = "scopes",
+      short = "c",
+      description = "Scopes to run, like 'root/foo/bar'. (Lua patterns)",
+      type = "string",
+      optional = true,
+      min_params = 0,
+    }
   },
 }, {label_length = 80 - 4 - 2 - 50})
 if not args then util.abort() end
@@ -75,6 +84,7 @@ local result = framework.scope:run_tests{
   only_print_failed = args.print_failed,
   print_stacktrace = args.print_stacktrace,
   test_ids_to_run = args.test_ids and util.invert(args.test_ids),
+  scopes = args.scopes,
 }
 if result.failed_count > 0 then
   util.abort()

@@ -65,7 +65,7 @@ local background_magenta = "\x1b[45m"
 local background_cyan = "\x1b[46m"
 local background_white = "\x1b[47m"
 
-local function run_tests(scope, options, print_parent_scope_header, state, is_root)
+local function run_tests(scope, options, print_parent_scope_header, state, full_scope_name, is_root)
   -- header
   local start_time = os and os.clock()
   local printed_scope_header = false
@@ -76,6 +76,16 @@ local function run_tests(scope, options, print_parent_scope_header, state, is_ro
     print(get_indentation(scope)..bold..scope.name..reset..":")
   end
 
+  local do_run = not options.scopes
+  if not do_run then
+    for _, scope_name in ipairs(options.scopes) do
+      if full_scope_name:find(scope_name) then
+        do_run = true
+        break
+      end
+    end
+  end
+
   -- run tests
   if scope.before_all then
     scope.before_all()
@@ -84,10 +94,10 @@ local function run_tests(scope, options, print_parent_scope_header, state, is_ro
   local failed_count = 0
   for _, test in ipairs(scope.tests) do
     if test.is_scope then
-      local result = run_tests(test, options, print_scope_header, state)
+      local result = run_tests(test, options, print_scope_header, state, full_scope_name.."/"..test.name)
       count = count + result.count
       failed_count = failed_count + result.failed_count
-    elseif test.is_test then
+    elseif test.is_test and do_run then
       local id = state.next_id
       state.next_id = state.next_id + 1
       if not options.test_ids_to_run or options.test_ids_to_run[id] then
@@ -132,7 +142,14 @@ local function run_tests(scope, options, print_parent_scope_header, state, is_ro
 end
 
 function Scope:run_tests(options)
-  return run_tests(self, options, function() end, {next_id = 1}, true)
+  return run_tests(
+    self,
+    options,
+    function() end,
+    {next_id = 1, scopes = options.scopes},
+    self.name,
+    true
+  )
 end
 
 return Scope
