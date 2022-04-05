@@ -9,6 +9,7 @@ local emmy_lua_parser = require("emmy_lua_parser")
 local error_code_util = require("error_code_util")
 local codes = error_code_util.codes
 local util = require("util")
+local new_pos = util.new_pos
 
 local tutil = require("testing_util")
 local test_source = tutil.test_source
@@ -50,13 +51,6 @@ end
 
 local function unexpected_special_tag(got_tag, start_position, stop_position)
   return new_error(codes.el_unexpected_special_tag, {got_tag}, start_position, stop_position)
-end
-
-local function new_pos(line, column)
-  return {
-    line = line,
-    column = column,
-  }
 end
 
 local parse
@@ -191,7 +185,6 @@ do
       source = test_source,
       start_position = params.start_position or do_not_compare,
       stop_position = params.stop_position or do_not_compare,
-      duplicate_type_error_code_inst = params.dteci,
     }
   end
 

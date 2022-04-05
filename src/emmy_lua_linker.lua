@@ -2,6 +2,7 @@
 local util = require("util")
 local error_code_util = require("error_code_util")
 local error_codes = error_code_util.codes
+local el_util = require("emmy_lua_util")
 
 local function new_error_code_inst(error_code, message_args, source, start_position, stop_position)
   return error_code_util.new_error_code{
@@ -46,11 +47,10 @@ end
 
 local function seed_classes(emmy_lua)
   local function add(name, custom_description)
-    add_class(emmy_lua, {
+    add_class(emmy_lua, el_util.new_class{
       description = {custom_description or ("Lua built-in "..name..".")},
       type_name = name,
-      fields = {},
-      base_classes = {},
+      source = "=(builtin)",
     })
   end
   add("string")
@@ -224,6 +224,4 @@ local function link(parsed_sequences)
   return emmy_lua, error_code_insts
 end
 
-return {
-  link = link,
-}
+return link

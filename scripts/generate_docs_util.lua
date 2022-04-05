@@ -36,7 +36,7 @@ local function resolve_references(array_of_parsed_sequences)
       combined[#combined+1] = elem
     end
   end
-  local result, errors = emmy_lua_linker.link(combined)
+  local result, errors = emmy_lua_linker(combined)
   check_errors(errors, nil, true)
   return result
 end

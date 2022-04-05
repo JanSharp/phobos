@@ -770,10 +770,6 @@
 ---@field type_name string
 ---@field reference_sequence EmmyLuaClassSequence|EmmyLuaAliasSequence|nil @ never `nil` once the linker ran
 
----@class EmmyLuaArrayType : EmmyLuaType
----@field type_type '"array"'
----@field value_type EmmyLuaType
-
 ---@class EmmyLuaFunctionType : EmmyLuaType
 ---@field type_type '"function"'
 ---@field description string[]
@@ -791,6 +787,14 @@
 ---@field name string|nil @ `nil` if this is not a function sequence, but a `fun()` type
 ---@field optional boolean
 ---@field return_type EmmyLuaType
+
+---@class EmmyLuaArrayType : EmmyLuaType
+---@field type_type '"array"'
+---@field value_type EmmyLuaType
+
+---@class EmmyLuaUnionType : EmmyLuaType
+---@field type_type '"union"'
+---@field union_types EmmyLuaType[]
 
 ---@alias EmmyLuaSequenceType
 ---| '"class"'
@@ -828,13 +832,13 @@
 
 ---@class EmmyLuaAliasSequence : EmmyLuaTypeDefiningSequence
 ---@field sequence_type '"alias"'
----@field node AstLocalStat|nil
+---@field node nil @ overridden to be nil
 ---@field description string[]
 ---@field aliased_type EmmyLuaType
 
 ---@class EmmyLuaFunctionSequence : EmmyLuaSequence, EmmyLuaFunctionType
 ---@field sequence_type '"function"'
----@field node AstFuncStat|AstLocalFunc|nil
+---@field node AstFuncStat|AstLocalFunc
 
 ---@class EmmyLuaNoneSequence : EmmyLuaSequence
 ---@field sequence_type '"none"'

@@ -144,6 +144,21 @@ local function format_version(version)
   return string.format("%d.%d.%d", version.major, version.minor, version.patch)
 end
 
+local function assert_params_field(params, field_name)
+  local value = params[field_name]
+  if value == nil then
+    debug_abort("Missing params field '"..field_name.."'")
+  end
+  return value
+end
+
+local function new_pos(line, column)
+  return {
+    line = line,
+    column = column,
+  }
+end
+
 return {
   number_to_floating_byte = number_to_floating_byte,
   floating_byte_to_number = floating_byte_to_number,
@@ -158,4 +173,6 @@ return {
   debug_print = debug_print,
   parse_version = parse_version,
   format_version = format_version,
+  assert_params_field = assert_params_field,
+  new_pos = new_pos,
 }

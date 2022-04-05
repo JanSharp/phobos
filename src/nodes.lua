@@ -2,6 +2,8 @@
 local util = require("util")
 local ill = require("indexed_linked_list")
 
+local assert_params_field = util.assert_params_field
+
 local nodes = {}
 
 -- The idea behind all of these `new_*` functions is:
@@ -9,10 +11,6 @@ local nodes = {}
 -- Improve/keep code readability because all constructors are using a `params` table,
 --   which means you can see what values are being assigned to what field just by reading the code
 -- Make it easier to create new nodes thanks to intellisense for all fields a node can have
-
-local function assert_params_field(params, field_name)
-  return assert(params[field_name], "missing param '"..field_name.."'")
-end
 
 function nodes.set_position(node, token)
   node.line = token.line
