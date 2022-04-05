@@ -378,14 +378,9 @@ local function parse_sequence(sequence, source, positions)
         return read_class(description)
       elseif allow_alias and parse_special("alias") then
         return read_alias(description)
-      elseif is_special() then
-        set_error_start_position()
-        parse_special("")
-        emmy_lua_abort(error_codes.el_unexpected_special_tag, {parse_identifier()})
       end
-      util.debug_abort("Impossible because read_block only leaves on special tags and the last \z
-        elseif above checks for special tags, making this unreachable."
-      )
+      -- invalid special tag, just return. It is handled in the calling function
+      return
     end
     return {
       sequence_type = "none",
@@ -466,6 +461,11 @@ local function parse_sequence(sequence, source, positions)
       end
       result.returns[#result.returns+1] = ret
     end
+    if line then
+      set_error_start_position()
+      parse_special("")
+      emmy_lua_abort(error_codes.el_unexpected_special_tag, {parse_identifier()})
+    end
     return result
   end
 
@@ -491,7 +491,12 @@ local function parse_sequence(sequence, source, positions)
       -- allow classes or aliases or none
       result = read_class_or_alias_or_none(true)
     end
-    util.debug_assert(not line, "Did not finish parsing comment sequence "..get_location_str()..".")
+    if line and is_special() then
+      set_error_start_position()
+      parse_special("")
+      emmy_lua_abort(error_codes.el_unexpected_special_tag, {parse_identifier()})
+    end
+    util.debug_assert(not line, "Did not finish parsing comment sequence"..get_location_str()..".")
   end, function(msg)
     err = debug.traceback(msg, 2)
   end)

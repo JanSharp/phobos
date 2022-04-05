@@ -230,6 +230,11 @@ local function assert_associated_node(expected_node_type, got)
   assert.equals(expected_node_type, got[1].node.node_type, "node.node_type")
 end
 
+local function assert_unexpected(got, tag)
+  -- 4 + 1 + #tag - 1 | +1 because of @, -1 because of the usual reason of Lua being inclusive inclusive
+  assert.contents_equals({unexpected_special_tag(tag, new_pos(1, 4), new_pos(1, 4 + 1 + #tag - 1))}, got)
+end
+
 do
   local scope = framework.scope:new_scope("emmy_lua_parser")
 
@@ -662,11 +667,6 @@ do
   scope:add_test("alias seq without aliased_type", function()
     local got = parse_invalid("---@alias foo ")
     assert.contents_equals({expected_type(new_pos(1, 15))}, got)
-  end)
-
-  scope:add_test("alias seq cannot be associated with localstat (nor anything else)", function()
-    local got = parse_invalid("---@alias foo any\nlocal foo")
-    assert.contents_equals({unexpected_special_tag("alias", new_pos(1, 4), new_pos(1, 9))}, got)
   end)
 
   -- function sequence
@@ -1131,5 +1131,72 @@ do
   scope:add_test("2 spaces between dashes and @ are no longer a special tag", function()
     local got = parse("---  @diagnostic foo")
     assert.contents_equals({new_none{"  @diagnostic foo"}}, got)
+  end)
+
+  -- invalid special tags
+
+  scope:add_test("alias seq cannot be associated with localstat", function()
+    local got = parse_invalid("---@alias foo any\nlocal foo")
+    assert_unexpected(got, "alias")
+  end)
+
+  scope:add_test("alias seq cannot be associated with funcstat", function()
+    local got = parse_invalid("---@alias foo any\nfunction func() end")
+    assert_unexpected(got, "alias")
+  end)
+
+  scope:add_test("alias seq cannot be associated with localfunc", function()
+    local got = parse_invalid("---@alias foo any\nlocal function func() end")
+    assert_unexpected(got, "alias")
+  end)
+
+  scope:add_test("class seq cannot be associated with funcstat", function()
+    local got = parse_invalid("---@class foo\nfunction func() end")
+    assert_unexpected(got, "class")
+  end)
+
+  scope:add_test("class seq cannot be associated with localfunc", function()
+    local got = parse_invalid("---@class foo\nlocal function func() end")
+    assert_unexpected(got, "class")
+  end)
+
+  scope:add_test("function seq param cannot be associated with localstat", function()
+    local got = parse_invalid("---@param foo any\nlocal foo")
+    assert_unexpected(got, "param")
+  end)
+
+  scope:add_test("function seq return cannot be associated with localstat", function()
+    local got = parse_invalid("---@return any\nlocal foo")
+    assert_unexpected(got, "return")
+  end)
+
+  scope:add_test("function seq param cannot be unassociated", function()
+    local got = parse_invalid("---@param foo any")
+    assert_unexpected(got, "param")
+  end)
+
+  scope:add_test("function seq return cannot be unassociated", function()
+    local got = parse_invalid("---@return any")
+    assert_unexpected(got, "return")
+  end)
+
+  scope:add_test("unknown special tag cannot be associated with localstat", function()
+    local got = parse_invalid("---@foo\nlocal bar")
+    assert_unexpected(got, "foo")
+  end)
+
+  scope:add_test("unknown special tag cannot be associated with funcstat", function()
+    local got = parse_invalid("---@foo\nfunction func() end")
+    assert_unexpected(got, "foo")
+  end)
+
+  scope:add_test("unknown special tag cannot be associated with localfunc", function()
+    local got = parse_invalid("---@foo\nlocal function func() end")
+    assert_unexpected(got, "foo")
+  end)
+
+  scope:add_test("unknown special tag cannot be unassociated", function()
+    local got = parse_invalid("---@foo")
+    assert_unexpected(got, "foo")
   end)
 end
