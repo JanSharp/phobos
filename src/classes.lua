@@ -822,6 +822,7 @@
 ---@field description string[]
 ---@field base_classes EmmyLuaType[] @ Only `"reference"`s to other classes are valid
 ---@field fields EmmyLuaField[]
+---@field is_builtin boolean
 
 ---@class EmmyLuaField
 ---If the `field_type` is a function then its `description` and this one must refer to the same table

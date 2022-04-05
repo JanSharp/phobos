@@ -212,6 +212,11 @@ add_error_code(
   "el_unresolved_reference",
   "Unable to resolve reference to the type %s"
 )
+add_error_code(
+  types.emmy_lua_linker,
+  "el_builtin_base_class",
+  "Base class %s for the class %s is a builtin class which is not allowed"
+)
 
 ---@alias ErrorCodeType integer
 

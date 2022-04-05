@@ -103,6 +103,7 @@ local function new_class(params)
   sequence.description = params.description or {}
   sequence.base_classes = params.base_classes or {}
   sequence.fields = params.fields or {}
+  sequence.is_builtin = params.is_builtin or false
   return sequence
 end
 

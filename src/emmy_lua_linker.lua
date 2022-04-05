@@ -51,6 +51,7 @@ local function seed_classes(emmy_lua)
       description = {custom_description or ("Lua built-in "..name..".")},
       type_name = name,
       source = "=(builtin)",
+      is_builtin = true,
     })
   end
   add("string")
@@ -73,8 +74,8 @@ local function new_emmy_lua_data()
   return emmy_lua
 end
 
-local function resolve_references(emmy_lua, source, error_code_insts, type, must_be_class)
-  if must_be_class and type.type_type ~= "reference" then
+local function resolve_references(emmy_lua, source, error_code_insts, type, is_base_class_ref)
+  if is_base_class_ref and type.type_type ~= "reference" then
     error_code_insts[#error_code_insts+1] = new_error_code_inst(
       error_codes.el_expected_reference_to_class,
       {type.type_type, ""},
@@ -100,23 +101,26 @@ local function resolve_references(emmy_lua, source, error_code_insts, type, must
       end
     end,
     ["reference"] = function()
-      type.reference_sequence = emmy_lua.all_types_lut[type.type_name]
-      if not type.reference_sequence then
+      local resolved_seq = emmy_lua.all_types_lut[type.type_name]
+      type.reference_sequence = resolved_seq
+      local function add_error(error_code, message_args)
         error_code_insts[#error_code_insts+1] = new_error_code_inst(
-          error_codes.el_unresolved_reference,
-          {type.type_name},
+          error_code,
+          message_args,
           source,
           type.start_position,
           type.stop_position
         )
-      elseif must_be_class and type.reference_sequence.sequence_type ~= "class" then
-        error_code_insts[#error_code_insts+1] = new_error_code_inst(
+      end
+      if not resolved_seq then
+        add_error(error_codes.el_unresolved_reference, {type.type_name})
+      elseif is_base_class_ref and resolved_seq.sequence_type ~= "class" then
+        add_error(
           error_codes.el_expected_reference_to_class,
-          {type.type_type, " with type_name "..type.type_name},
-          source,
-          type.start_position,
-          type.stop_position
+          {type.type_type, " with type_name "..type.type_name}
         )
+      elseif is_base_class_ref and resolved_seq.sequence_type == "class" and resolved_seq.is_builtin then
+        add_error(error_codes.el_builtin_base_class, {resolved_seq.type_name, type.type_name})
       end
     end,
     ["array"] = function()
