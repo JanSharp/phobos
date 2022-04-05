@@ -256,7 +256,66 @@ do
     assert.contents_equals(get_any(got), sequences[1].params[1].param_type.reference_sequence)
   end)
 
-  -- TODO: resolve_references error cases
+  scope:add_test("unresolved reference", function()
+    local sequences = parse("---@alias foo bar")
+    local got, errors = link_invalid(sequences)
+    assert.contents_equals({
+      new_error(
+        codes.el_unresolved_reference,
+        {"bar"},
+        sequences[1].aliased_type.start_position,
+        sequences[1].aliased_type.stop_position
+      ),
+    }, errors)
+  end)
+
+  scope:add_test("base class isn't a reference", function()
+    local sequences = parse("---@class foo")
+    sequences[1].base_classes[1] = el_util.new_literal_type{value = "rip"}
+    local got, errors = link_invalid(sequences)
+    assert.contents_equals({
+      new_error(
+        codes.el_expected_reference_to_class,
+        {"literal", ""},
+        sequences[1].base_classes[1].start_position,
+        sequences[1].base_classes[1].stop_position
+      ),
+    }, errors)
+  end)
+
+  scope:add_test("base class is a reference to an alias", function()
+    local sequences = parse("---@alias foo '1'\n\n---@class bar : foo")
+    local got, errors = link_invalid(sequences)
+    assert.contents_equals({
+      new_error(
+        codes.el_expected_reference_to_class,
+        {"reference", " with type name foo"},
+        sequences[2].base_classes[1].start_position,
+        sequences[2].base_classes[1].stop_position
+      ),
+    }, errors)
+  end)
+
+  scope:add_test("base class is a reference to a builtin class", function()
+    local sequences = parse("---@class foo : any")
+    local got, errors = link_invalid(sequences)
+    assert.contents_equals({
+      new_error(
+        codes.el_builtin_base_class,
+        {"any"},
+        sequences[1].base_classes[1].start_position,
+        sequences[1].base_classes[1].stop_position
+      ),
+    }, errors)
+  end)
+
+  scope:add_test("2 errors", function()
+    local sequences = parse("---@class foo\n\n---@class foo\n\n---@class foo")
+    local got, errors = link_invalid(sequences)
+    assert(errors[1], "missing first error")
+    assert(errors[2], "missing second error")
+  end)
+
   -- TODO: function sequence adding a class field
   -- TODO: cleanup of additional fields in local_defs
 end

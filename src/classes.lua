@@ -768,7 +768,8 @@
 ---@class EmmyLuaReferenceType : EmmyLuaType
 ---@field type_type '"reference"'
 ---@field type_name string
----@field reference_sequence EmmyLuaClassSequence|EmmyLuaAliasSequence|nil @ never `nil` once the linker ran
+---Once the linker ran `nil` means it could not resolve the reference
+---@field reference_sequence EmmyLuaClassSequence|EmmyLuaAliasSequence|nil
 
 ---@class EmmyLuaFunctionType : EmmyLuaType
 ---@field type_type '"function"'

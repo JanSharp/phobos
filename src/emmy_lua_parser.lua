@@ -172,6 +172,7 @@ local function parse_sequence(sequence, source, positions)
       elseif ident == "fun" then -- function
         current_type.type_type = "function"
         current_type.description = {}
+        -- TODO: allow fun as a type name
         assert_parse_pattern("%(")
         parse_blank()
         current_type.params = {}

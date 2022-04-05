@@ -117,10 +117,10 @@ local function resolve_references(emmy_lua, source, error_code_insts, type, is_b
       elseif is_base_class_ref and resolved_seq.sequence_type ~= "class" then
         add_error(
           error_codes.el_expected_reference_to_class,
-          {type.type_type, " with type_name "..type.type_name}
+          {type.type_type, " with type name "..type.type_name}
         )
       elseif is_base_class_ref and resolved_seq.sequence_type == "class" and resolved_seq.is_builtin then
-        add_error(error_codes.el_builtin_base_class, {resolved_seq.type_name, type.type_name})
+        add_error(error_codes.el_builtin_base_class, {type.type_name})
       end
     end,
     ["array"] = function()
