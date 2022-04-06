@@ -464,11 +464,6 @@ local function parse_sequence(sequence, source, positions)
       end
       result.returns[#result.returns+1] = ret
     end
-    if line then
-      set_error_start_position()
-      parse_special("")
-      emmy_lua_abort(error_codes.el_unexpected_special_tag, {parse_identifier()})
-    end
     return result
   end
 
