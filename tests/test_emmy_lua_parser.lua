@@ -193,6 +193,7 @@ do
     class.description = params.description or {}
     class.base_classes = params.base_classes or {}
     class.fields = params.fields or {}
+    class.is_builtin = false
     return class
   end
 

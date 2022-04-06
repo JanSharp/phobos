@@ -2,6 +2,7 @@
 local util = require("util")
 local error_code_util = require("error_code_util")
 local error_codes = error_code_util.codes
+local el_util = require("emmy_lua_util")
 
 local function parse_sequence(sequence, source, positions)
   local line_index = 0
@@ -20,11 +21,11 @@ local function parse_sequence(sequence, source, positions)
 
   local function get_position(column_offset)
     -- position is nil if we are past the last line of the sequence
-    return {
+    return util.new_pos(
       -- positions will always contain 1 entry because empty sequences do not exist
-      line = position and position.line or (positions[#positions].line + 1),
-      column = position and (position.column + i - 1 + (column_offset or 0)) or 0,
-    }
+      position and position.line or (positions[#positions].line + 1),
+      position and (position.column + i - 1 + (column_offset or 0)) or 0
+    )
   end
 
   local function get_location_str()
@@ -115,15 +116,15 @@ local function parse_sequence(sequence, source, positions)
     end
   end
 
-  local function parse_optional_for_field_or_param(result)
+  local function parse_optional_for_field_or_param()
     local did_parse_blank = parse_blank()
     if parse_pattern("%?") then
-      result.optional = true
       parse_blank()
+      return true
     elseif not did_parse_blank then
       assert_parse_blank() -- error
     else
-      result.optional = false
+      return false
     end
   end
 
@@ -139,92 +140,104 @@ local function parse_sequence(sequence, source, positions)
     -- plus optional | followed by another type
 
     local start_i = i
-    local current_type = {}
-    current_type.start_position = get_position()
+    local current_type
+    local start_position = get_position()
 
     local char = parse_pattern("([\"'`])")
     if char then -- literal
       local value = parse_pattern("([^"..char.."]*)"..char)
       if not value then i = start_i return end
-      current_type.type_type = "literal"
-      current_type.value = value
+      current_type = el_util.new_literal_type{
+        start_position = start_position,
+        value = value,
+      }
     else
       local ident = parse_identifier()
       if not ident then return end -- i is not modified yet, just return
       if ident == "table" then -- table!
         -- < %s type %s , %s type %s >
         if parse_pattern("<") then
-          current_type.type_type = "dictionary"
           parse_blank()
-          current_type.key_type = parse_type()
-          if not current_type.key_type then i = start_i return end
+          local key_type = parse_type()
+          if not key_type then i = start_i return end
           parse_blank()
           if not parse_pattern(",") then i = start_i return end
           parse_blank()
-          current_type.value_type = parse_type()
-          if not current_type.value_type then i = start_i return end
+          local value_type = parse_type()
+          if not value_type then i = start_i return end
           parse_blank()
           if not parse_pattern(">") then i = start_i return end
+          current_type = el_util.new_dictionary_type{
+            start_position = start_position,
+            key_type = key_type,
+            value_type = value_type,
+          }
         else
-          current_type.type_type = "reference"
-          current_type.type_name = "table"
+          current_type = el_util.new_reference_type{
+            start_position = start_position,
+            type_name = "table",
+          }
         end
       elseif ident == "fun" then -- function
         if parse_pattern("%(") then
-          current_type.type_type = "function"
-          current_type.description = {}
+          current_type = el_util.new_function_type{
+            start_position = start_position,
+          }
           parse_blank()
-          current_type.params = {}
           if not parse_pattern("%)") then
             repeat -- params
-              local param = {}
-              param.description = {}
               parse_blank()
-              param.name = assert_parse_identifier()
+              local name = assert_parse_identifier()
               parse_blank()
+              local optional
               if parse_pattern("%?") then
-                param.optional = true
+                optional = true
                 parse_blank()
-              else
-                param.optional = false
               end
               assert_parse_pattern(":")
               parse_blank()
-              param.param_type = assert_parse_type()
+              local param_type = assert_parse_type()
               parse_blank()
-              current_type.params[#current_type.params+1] = param
+              current_type.params[#current_type.params+1] = el_util.new_param{
+                name = name,
+                optional = optional,
+                param_type = param_type,
+              }
             until not parse_pattern(",")
             assert_parse_pattern("%)")
           end
           local reset_i_to_here = i
           parse_blank()
-          current_type.returns = {}
           if parse_pattern(":") then
             repeat -- returns
               parse_blank()
-              local ret = {}
-              ret.description = {}
-              ret.return_type = assert_parse_type()
+              local return_type = assert_parse_type()
               reset_i_to_here = i
               parse_blank()
+              local optional
               if parse_pattern("%?") then
-                ret.optional = true
+                optional = true
                 reset_i_to_here = i
                 parse_blank()
-              else
-                ret.optional = false
               end
-              current_type.returns[#current_type.returns+1] = ret
+              current_type.returns[#current_type.returns+1] = el_util.new_return{
+                optional = optional,
+                return_type = return_type,
+              }
             until not parse_pattern(",")
           end
           i = reset_i_to_here
         else
-          current_type.type_type = "reference"
-          current_type.type_name = "fun"
+          current_type = el_util.new_reference_type{
+            start_position = start_position,
+            type_name = "fun",
+          }
         end
       else -- any other type
-        current_type.type_type = "reference"
-        current_type.type_name = ident
+        current_type = el_util.new_reference_type{
+          start_position = start_position,
+          type_name = ident,
+        }
       end
     end
 
@@ -232,8 +245,7 @@ local function parse_sequence(sequence, source, positions)
     current_type.stop_position = get_position(-1)
 
     while parse_pattern("%[%]") do
-      current_type = {
-        type_type = "array",
+      current_type = el_util.new_array_type{
         value_type = current_type,
         start_position = util.shallow_copy(current_type.start_position),
         stop_position = get_position(-1),
@@ -245,8 +257,7 @@ local function parse_sequence(sequence, source, positions)
     end
 
     if parse_pattern("|") then
-      union = union or {
-        type_type = "union",
+      union = union or el_util.new_union_type{
         union_types = {current_type},
         start_position = util.shallow_copy(current_type.start_position),
       }
@@ -297,20 +308,19 @@ local function parse_sequence(sequence, source, positions)
   local function read_class(description)
     util.debug_assert(description, "call read_block before read_class")
     assert_parse_blank()
-    local result = {}
-    result.sequence_type = "class"
-    result.node = sequence.associated_node
-    result.description = description
-    result.type_name_start_position = get_position()
-    result.type_name = assert_parse_identifier()
-    result.type_name_stop_position = get_position(-1)
+    local result = el_util.new_class{
+      source = source,
+      node = sequence.associated_node,
+      description = description,
+      type_name_start_position = get_position(),
+      type_name = assert_parse_identifier(),
+      type_name_stop_position = get_position(-1),
+    }
     parse_blank()
-    result.base_classes = {}
     if not is_line_end() then
       assert_parse_pattern(":")
       parse_blank()
-      result.base_classes[1] = {
-        type_type = "reference",
+      result.base_classes[1] = el_util.new_reference_type{
         start_position = get_position(),
         type_name = assert_parse_identifier(),
         stop_position = get_position(-1),
@@ -319,8 +329,7 @@ local function parse_sequence(sequence, source, positions)
       while not is_line_end() do
         assert_parse_pattern(",")
         parse_blank()
-        result.base_classes[#result.base_classes+1] = {
-          type_type = "reference",
+        result.base_classes[#result.base_classes+1] = el_util.new_reference_type{
           start_position = get_position(),
           type_name = assert_parse_identifier(),
           stop_position = get_position(-1),
@@ -329,16 +338,16 @@ local function parse_sequence(sequence, source, positions)
       end
     end
     next_line()
-    result.fields = {}
     while line do
       description = read_block()
       assert_parse_special("field")
       assert_parse_blank()
-      local field = {}
-      field.description = description
-      field.name = assert_parse_identifier()
-      parse_optional_for_field_or_param(field)
-      field.field_type = assert_parse_type()
+      local field = el_util.new_field{
+        description = description,
+        name = assert_parse_identifier(),
+        optional = parse_optional_for_field_or_param(),
+        field_type = assert_parse_type(),
+      }
       if field.field_type.type_type == "function" then
         field.field_type.description = description
       end
@@ -359,15 +368,18 @@ local function parse_sequence(sequence, source, positions)
   local function read_alias(description)
     util.debug_assert(description, "call read_block before read_alias")
     assert_parse_blank()
-    local result = {}
-    result.sequence_type = "alias"
-    result.node = sequence.associated_node
-    result.description = description
-    result.type_name_start_position = get_position()
-    result.type_name = assert_parse_identifier()
-    result.type_name_stop_position = get_position(-1)
-    assert_parse_blank()
-    result.aliased_type = assert_parse_type()
+    local result = el_util.new_alias{
+      source = source,
+      node = sequence.associated_node,
+      description = description,
+      type_name_start_position = get_position(),
+      type_name = assert_parse_identifier(),
+      type_name_stop_position = get_position(-1),
+      aliased_type = (function()
+        assert_parse_blank()
+        return assert_parse_type()
+      end)(),
+    }
     parse_blank()
     assert_is_line_end()
     next_line()
@@ -395,19 +407,19 @@ local function parse_sequence(sequence, source, positions)
   local function try_read_param()
     if not parse_special("param") then return end
     assert_parse_blank()
-    local result = {}
-    result.name = assert_parse_identifier()
-    -- technically the '' for literal types can follow directly after the name in sumneko.lua
-    -- but we don't support that, because it does not look good
-    parse_optional_for_field_or_param(result)
-    result.param_type = assert_parse_type()
+    local result = el_util.new_param{
+      name = assert_parse_identifier(),
+      -- technically the '' for literal types can follow directly after the name in sumneko.lua
+      -- but we don't support that, because it does not look good
+      optional = parse_optional_for_field_or_param(),
+      param_type = assert_parse_type(),
+    }
     parse_blank()
     if not is_line_end() then
       assert_parse_pattern("@")
       parse_blank()
       result.description = read_block_starting_at_i()
     else
-      result.description = {}
       next_line()
     end
     return result
@@ -416,39 +428,35 @@ local function parse_sequence(sequence, source, positions)
   local function try_read_return()
     if not parse_special("return") then return end
     assert_parse_blank()
-    local result = {}
-    result.return_type = assert_parse_type()
+    local result = el_util.new_return{
+      return_type = assert_parse_type(),
+    }
     local name_would_be_valid = parse_blank()
     if parse_pattern("%?") then
       result.optional = true
       parse_blank()
       name_would_be_valid = true
-    else
-      result.optional = false
     end
     if name_would_be_valid then
-      result.name = parse_identifier()
-      parse_blank()
+      result.name = parse_identifier() -- can return nil
+      parse_blank() -- and if it did return nil, this just does nothing
     end
     if not is_line_end() then
       assert_parse_pattern("@")
       parse_blank()
       result.description = read_block_starting_at_i()
     else
-      result.description = {}
       next_line()
     end
     return result
   end
 
   local function read_function_sequence()
-    local result = {}
-    result.sequence_type = "function"
-    result.type_type = "function"
-    result.node = sequence.associated_node
-    result.description = read_block()
-    result.params = {}
-    result.returns = {}
+    local result = el_util.new_function{
+      source = source,
+      node = sequence.associated_node,
+      description = read_block(),
+    }
     while line do
       local param = try_read_param()
       if not param then

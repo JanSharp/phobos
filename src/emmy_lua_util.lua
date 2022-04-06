@@ -89,7 +89,7 @@ end
 ---@param params EmmyLuaUnionType
 local function new_union_type(params)
   local type = new_type("union", params)
-  type.union_types = assert_params_field(params.union_types)
+  type.union_types = assert_params_field(params, "union_types")
   util.debug_assert(type.union_types[1], "A union type must have at least 1 type in union_types.")
   return type
 end
@@ -153,7 +153,7 @@ end
 local function new_return(params)
   local field = {
     description = params.description or {},
-    name = assert_params_field(params, "name"),
+    name = params.name,
     optional = params.optional or false,
     return_type = assert_params_field(params, "return_type"),
   }
