@@ -123,7 +123,7 @@ do
 
   scope:add_test("2 classes with the same name", function()
     local sequences = parse("---@class foo\n\n---@class foo")
-    local got, got_errors = link_invalid(sequences)
+    local got, errors = link_invalid(sequences)
     assert.equals(sequences[1], get_class(got, 1))
     assert.equals(sequences[2], get_class(got, 2))
     assert.equals(sequences[1], get_seq(got, "foo"))
@@ -134,12 +134,12 @@ do
         sequences[2].type_name_start_position,
         sequences[2].type_name_stop_position
       ),
-    }, got_errors)
+    }, errors)
   end)
 
   scope:add_test("class and alias with the same name", function()
     local sequences = parse("---@class foo\n\n---@alias foo '1'")
-    local got, got_errors = link_invalid(sequences)
+    local got, errors = link_invalid(sequences)
     assert.equals(sequences[1], get_class(got, 1))
     assert.equals(sequences[2], get_alias(got, 1))
     assert.equals(sequences[1], get_seq(got, "foo"))
@@ -150,7 +150,7 @@ do
         sequences[2].type_name_start_position,
         sequences[2].type_name_stop_position
       ),
-    }, got_errors)
+    }, errors)
   end)
 
   scope:add_test("alias with reference type", function()
@@ -258,7 +258,7 @@ do
 
   scope:add_test("unresolved reference", function()
     local sequences = parse("---@alias foo bar")
-    local got, errors = link_invalid(sequences)
+    local _, errors = link_invalid(sequences)
     assert.contents_equals({
       new_error(
         codes.el_unresolved_reference,
@@ -272,7 +272,7 @@ do
   scope:add_test("base class isn't a reference", function()
     local sequences = parse("---@class foo")
     sequences[1].base_classes[1] = el_util.new_literal_type{value = "rip"}
-    local got, errors = link_invalid(sequences)
+    local _, errors = link_invalid(sequences)
     assert.contents_equals({
       new_error(
         codes.el_expected_reference_to_class,
@@ -285,7 +285,7 @@ do
 
   scope:add_test("base class is a reference to an alias", function()
     local sequences = parse("---@alias foo '1'\n\n---@class bar : foo")
-    local got, errors = link_invalid(sequences)
+    local _, errors = link_invalid(sequences)
     assert.contents_equals({
       new_error(
         codes.el_expected_reference_to_class,
@@ -298,7 +298,7 @@ do
 
   scope:add_test("base class is a reference to a builtin class", function()
     local sequences = parse("---@class foo : any")
-    local got, errors = link_invalid(sequences)
+    local _, errors = link_invalid(sequences)
     assert.contents_equals({
       new_error(
         codes.el_builtin_base_class,
@@ -311,11 +311,106 @@ do
 
   scope:add_test("2 errors", function()
     local sequences = parse("---@class foo\n\n---@class foo\n\n---@class foo")
-    local got, errors = link_invalid(sequences)
+    local _, errors = link_invalid(sequences)
     assert(errors[1], "missing first error")
     assert(errors[2], "missing second error")
   end)
 
-  -- TODO: function sequence adding a class field
-  -- TODO: cleanup of additional fields in local_defs
+  scope:add_test("function sequence adding a class field", function()
+    local sequences = parse("---@class foo\nlocal bar\n\n---hello world\nfunction bar.baz() end")
+    link(sequences)
+    assert(sequences[1].fields[1], "did not add class field")
+    assert.equals(sequences[2], sequences[1].fields[1].field_type, "the added field's field_type")
+  end)
+
+  scope:add_test("2 function sequences adding class fields", function()
+    local sequences = parse("---@class foo\nlocal bar\n\n\z
+      ---hello world\nfunction bar.baz() end\n\n\z
+      ---hello worlds\nfunction bar.bat() end"
+    )
+    link(sequences)
+    assert(sequences[1].fields[1], "did not add the first class field")
+    assert.equals(sequences[2], sequences[1].fields[1].field_type, "the first added field's field_type")
+    assert(sequences[1].fields[2], "did not add the second class field")
+    assert.equals(sequences[3], sequences[1].fields[2].field_type, "the second added field's field_type")
+  end)
+
+  scope:add_test("2 function sequences adding a class field to 2 locals that were defined by the same localstat", function()
+    local sequences = parse("---@class foo\nlocal bar, two\n\n\z
+      ---hello world\nfunction bar.baz() end\n\n\z
+      ---hello worlds\nfunction two.bat() end"
+    )
+    link(sequences)
+    assert(sequences[1].fields[1], "did not add the first class field")
+    assert.equals(sequences[2], sequences[1].fields[1].field_type, "the first added field's field_type")
+    assert(sequences[1].fields[2], "did not add the second class field")
+    assert.equals(sequences[3], sequences[1].fields[2].field_type, "the second added field's field_type")
+  end)
+
+  scope:add_test("function sequence adding a class field through upvals", function()
+    local sequences = parse("\z
+      ---@class foo\n\z
+      local bar\n\z
+      local function func()\n\z
+        local function func2()\n\z
+          ---hello world\n\z
+          function bar.baz() end\n\z
+        end\n\z
+      end\n\z
+      "
+    )
+    link(sequences)
+    assert(sequences[1].fields[1], "did not add class field")
+    assert.equals(sequences[2], sequences[1].fields[1].field_type, "the added field's field_type")
+  end)
+
+  do
+    local function make_text(expr, use_localstat, do_not_even_make_a_class)
+      return (do_not_even_make_a_class and "" or "---@class foo\nlocal bar\n\n")
+      .."---hello world\n"
+      ..(use_localstat and "local " or "").."function "..expr.."() end"
+    end
+
+    local function test_not_linked(expr, use_localstat, do_not_even_make_a_class)
+      local sequences = parse(make_text(expr, use_localstat, do_not_even_make_a_class))
+      link(sequences)
+      if not do_not_even_make_a_class then
+        assert(not sequences[1].fields[1], "did add the field when it was not supposed to")
+      end
+    end
+
+    scope:add_test("function sequence not adding field because node isn't a funcstat", function()
+      test_not_linked("func", true)
+    end)
+
+    scope:add_test("function sequence not adding field because node.name isn't an index", function()
+      test_not_linked("foo") -- foo is a local
+    end)
+
+    scope:add_test("function sequence not adding field because node.name.suffix isn't a string", function()
+      test_not_linked("foo[1]")
+    end)
+
+    scope:add_test("function sequence not adding field because node.name.suffix isn't an identifier", function()
+      test_not_linked("foo['2']")
+    end)
+
+    scope:add_test("function sequence does not error when the found local doesn't have a class", function()
+      test_not_linked("foo.baz", false, true)
+    end)
+  end
+
+  scope:add_test("ast remains clean with 1 localstat with 1 lhs", function()
+    local sequences = parse("---@class foo\nlocal bar")
+    local copy = util.copy(sequences[1].node)
+    link(sequences)
+    assert.contents_equals(copy, sequences[1].node)
+  end)
+
+  scope:add_test("ast remains clean with 2 localstat nodes with a total of 3 lhs", function()
+    local sequences = parse("---@class foo\nlocal one, two\n---@class bar\nlocal three")
+    local copy = util.copy(sequences[1].node)
+    link(sequences)
+    assert.contents_equals(copy, sequences[1].node)
+  end)
 end
