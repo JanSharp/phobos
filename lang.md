@@ -151,3 +151,8 @@ type annotations, somehow? steal a bunch from TypeScript?
 `break :label:` and `continue :label:` where is somehow identifying a loop
   potentially by a label being the first thing in a loop
   or by there being a special way to "name" a block/loop
+
+`--- @param field=1 number` would be a great way to show default optional values - Nexela
+`--- @todo` look pretty and doesn't show up in hovers, the separation just irks me - Nexela
+`---@usage` adds blank line above, indents following lines until empty comment line - Nexela
+`---@deprecated` more support for table fields (strikethrough when using) - Nexela

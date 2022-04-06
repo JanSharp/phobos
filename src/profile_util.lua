@@ -891,6 +891,7 @@ local function run_profile(profile, print)
     local file = file_list[i]
     print("["..(i - compile_count - copy_count).."/"..delete_count.."] "..file.output_filename)
     os.remove(file.output_filename)
+    -- TODO: somehow detect empty directories and have an option to remove them
   end
 
   cache.save(profile, all_inject_scripts, file_list)

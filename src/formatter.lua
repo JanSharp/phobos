@@ -117,23 +117,24 @@ local function format(main)
     end
   end
 
-  ---@param node AstFuncBase|AstMain
-  local function add_func_base(node, add_name)
-    if not node.is_main then
-      add_token(node.func_def.function_token)
+  ---@param node AstFunctionDef|AstMain
+  local function add_functiondef(node, add_name)
+    if node.is_main then
+      add_scope(node)
+      add_leading(node.eof_token)
+    else
+      add_token(node.function_token)
       if add_name then
         add_name()
       end
-      add_token(node.func_def.open_paren_token)
-      add_exp_list(node.func_def.params, node.func_def.param_comma_tokens)
-      if node.func_def.is_vararg then
-        add_token(node.func_def.vararg_token)
+      add_token(node.open_paren_token)
+      add_exp_list(node.params, node.param_comma_tokens)
+      if node.is_vararg then
+        add_token(node.vararg_token)
       end
-      add_token(node.func_def.close_paren_token)
-      add_scope(node.func_def)
-      add_token(node.func_def.end_token)
-    else
-      add_scope(node.func_def)
+      add_token(node.close_paren_token)
+      add_scope(node)
+      add_token(node.end_token)
     end
   end
 
@@ -207,7 +208,7 @@ local function format(main)
     end,
     ---@param node AstFuncProto
     func_proto = function(node)
-      add_func_base(node)
+      add_functiondef(node.func_def)
     end,
     ---@param node AstConstructor
     constructor = function(node)
@@ -362,7 +363,7 @@ local function format(main)
     end,
     ---@param node AstFuncStat
     funcstat = function(node)
-      add_func_base(node, function()
+      add_functiondef(node.func_def, function()
         if node.func_def.is_method then
           assert(node.name.node_type == "index")
           ---@diagnostic disable-next-line: undefined-field
@@ -374,7 +375,7 @@ local function format(main)
     ---@param node AstLocalFunc
     localfunc = function(node)
       add_token(node.local_token)
-      add_func_base(node, function()
+      add_functiondef(node.func_def, function()
         add_exp(node.name)
       end)
     end,
@@ -449,8 +450,7 @@ local function format(main)
     end
   end
 
-  add_scope(main)
-  add_leading(main.eof_token)
+  add_functiondef(main)
 
   -- dirty way of ensuring formatted code doesn't combine identifiers (or keywords or numbers)
   -- one line comments without a blank token afterwards with a newline in its value can still

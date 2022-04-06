@@ -106,21 +106,21 @@
 ---@field node_type '"functiondef"'
 ---the element in the statement list of the scope of the statement this functiondef is somehow apart of
 ---@field stat_elem ILLNode<nil,AstStatement>
----@field is_main 'nil' @ overridden by AstMain to be `true`
+---@field is_main nil @ overridden by AstMain to be `true`
 ---@field source string
 ---@field is_method boolean @ is it `function foo:bar() end`?
 ---@field func_protos AstFunctionDef[]
 ---@field upvals AstUpvalDef[]
 ---@field is_vararg boolean
 ---@field vararg_token AstTokenNode|nil @ used when `is_vararg == true`
----@field params AstLocalReference[]
 ---all parameters are `whole_block = true` locals, except vararg
+---@field params AstLocalReference[]
 ---@field param_comma_tokens AstTokenNode[] @ max length is `#params - 1`, min `0`
 ---@field open_paren_token AstTokenNode
 ---@field close_paren_token AstTokenNode
 ---@field function_token AstTokenNode @ position for any `closure` instructions
 ---@field end_token AstTokenNode
----@field eof_token 'nil' @ overridden by AstMain to be an AstTokenNode
+---@field eof_token nil @ overridden by AstMain to be an AstTokenNode
 
 ---@class AstFuncBase : AstNode
 ---@field func_def AstFunctionDef
@@ -739,3 +739,110 @@
 ---@field level integer? @ only available during generation process
 ---@field scope_levels? table<AstScope, integer> @ only available during generation process
 ---@field current_scope? AstScope @ only available during generation process
+
+--------------------------------------------------
+-- emmy lua stuff:
+
+---@alias EmmyLuaTypeType
+---| '"literal"'
+---| '"dictionary"'
+---| '"reference"'
+---| '"function"'
+---| '"array"'
+---| '"union"'
+
+---@class EmmyLuaType
+---@field type_type EmmyLuaTypeType
+---@field start_position SourcePosition @ inclusive
+---@field stop_position SourcePosition @ inclusive
+
+---@class EmmyLuaLiteralType : EmmyLuaType
+---@field type_type '"literal"'
+---@field value string
+
+---@class EmmyLuaDictionaryType : EmmyLuaType
+---@field type_type '"dictionary"'
+---@field key_type EmmyLuaType
+---@field value_type EmmyLuaType
+
+---@class EmmyLuaReferenceType : EmmyLuaType
+---@field type_type '"reference"'
+---@field type_name string
+---Once the linker ran `nil` means it could not resolve the reference
+---@field reference_sequence EmmyLuaClassSequence|EmmyLuaAliasSequence|nil
+
+---@class EmmyLuaFunctionType : EmmyLuaType
+---@field type_type '"function"'
+---@field description string[]
+---@field params EmmyLuaParam[]
+---@field returns EmmyLuaReturn[]
+
+---@class EmmyLuaParam
+---@field description string[]
+---@field name string
+---@field optional boolean
+---@field param_type EmmyLuaType
+
+---@class EmmyLuaReturn
+---@field description string[]
+---@field name string|nil @ always `nil` if a `fun()` type, if it is a sequence it is simply optional
+---@field optional boolean
+---@field return_type EmmyLuaType
+
+---@class EmmyLuaArrayType : EmmyLuaType
+---@field type_type '"array"'
+---@field value_type EmmyLuaType
+
+---@class EmmyLuaUnionType : EmmyLuaType
+---@field type_type '"union"'
+---@field union_types EmmyLuaType[]
+
+---@alias EmmyLuaSequenceType
+---| '"class"'
+---| '"alias"'
+---| '"function"'
+---| '"none"'
+
+---@class EmmyLuaSequence
+---@field sequence_type EmmyLuaSequenceType
+---@field node AstNode|nil @ whichever node this sequence was preceding
+---@field source string @ function source
+---@field start_position SourcePosition @ inclusive
+---@field stop_position SourcePosition @ inclusive
+
+---@class EmmyLuaTypeDefiningSequence : EmmyLuaSequence
+---@field type_name string
+---@field type_name_start_position SourcePosition @ inclusive
+---@field type_name_stop_position SourcePosition @ inclusive
+---Set by the linker if this is a duplicate type name
+---@field duplicate_type_error_code_inst ErrorCodeInstance|nil
+
+---@class EmmyLuaClassSequence : EmmyLuaTypeDefiningSequence
+---@field sequence_type '"class"'
+---@field node AstLocalStat|nil
+---@field description string[]
+---@field base_classes EmmyLuaType[] @ Only `"reference"`s to other classes are valid
+---@field fields EmmyLuaField[]
+---@field is_builtin boolean
+
+---@class EmmyLuaField
+---If the `field_type` is a function then its `description` and this one must refer to the same table
+---@field description string[]
+---@field name string
+---@field optional boolean
+---@field field_type EmmyLuaType
+
+---@class EmmyLuaAliasSequence : EmmyLuaTypeDefiningSequence
+---@field sequence_type '"alias"'
+---@field node nil @ overridden to be nil
+---@field description string[]
+---@field aliased_type EmmyLuaType
+
+---@class EmmyLuaFunctionSequence : EmmyLuaSequence, EmmyLuaFunctionType
+---@field sequence_type '"function"'
+---@field node AstFuncStat|AstLocalFunc
+
+---@class EmmyLuaNoneSequence : EmmyLuaSequence
+---@field sequence_type '"none"'
+---@field node AstLocalStat|nil
+---@field description string[]

@@ -10,6 +10,7 @@ local constants = require("constants")
 local phobos_version = require("phobos_version")
 local io_util = require("io_util")
 local util = require("util")
+local serialize = require("serialize")
 
 local function get_source_name(options)
   return options.text

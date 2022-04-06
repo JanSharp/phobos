@@ -46,3 +46,9 @@ done
 -- TODO: copy launch scripts into build outputs, as well as the lua and c library binaries into a bin folder in the output, which means the builds will actually be complete (the upside) but will already be platform specific (the downside). Since we'd already be doing this, it might be worth considering a build configuration specifically for the library version of phobos, that way all builds would be representative of what goes into the published packages... which would also include copying the thumbnail, readme, docs, licenses and so on... yea idk, might still exclude those and keep that logic in the publish script. it's reasonable enough
 
 when adding anything other than errors as error codes - so infos or warnings - expose severity to build profiles
+
+use this for markdown rendering https://github.com/bakpakin/luamd
+
+get rid of stat_elem problems by using intrusive linked lists
+
+think of types like rules where each rule just applies one more restriction on an inner type, which is a rule. The inner most type is therefore always `any`.

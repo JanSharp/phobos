@@ -2,31 +2,31 @@
 ---@alias IncludeOrExcludeInCompilationDef IncludeInCompilationDef|ExcludeInCompilationDef
 
 ---@class IncludeInCompilationDef : IncludeParams
----@field profile 'nil' @ no longer in the table
+---@field profile nil @ no longer in the table
 ---@field type '"include"'
 
 ---@class ExcludeInCompilationDef : ExcludeParams
----@field profile 'nil' @ no longer in the table
+---@field profile nil @ no longer in the table
 ---@field type '"exclude"'
 
 ---@alias IncludeOrExcludeCopyDef IncludeInCopyDef|ExcludeInCopyDef
 
 ---@class IncludeInCopyDef : IncludeCopyParams
----@field profile 'nil' @ no longer in the table
+---@field profile nil @ no longer in the table
 ---@field type '"include"'
 
 ---@class ExcludeInCopyDef : ExcludeCopyParams
----@field profile 'nil' @ no longer in the table
+---@field profile nil @ no longer in the table
 ---@field type '"exclude"'
 
 ---@alias IncludeOrExcludeDeleteDef IncludeInDeleteDef|ExcludeInDeleteDef
 
 ---@class IncludeInDeleteDef : IncludeDeleteParams
----@field profile 'nil' @ no longer in the table
+---@field profile nil @ no longer in the table
 ---@field type '"include"'
 
 ---@class ExcludeInDeleteDef : ExcludeDeleteParams
----@field profile 'nil' @ no longer in the table
+---@field profile nil @ no longer in the table
 ---@field type '"exclude"'
 
 ---@class PhobosProfile : NewProfileParams
@@ -44,7 +44,7 @@
 -- IMPORTANT: make sure to copy defaults and descriptions to IncludeInCompilationDef for the fields:
 -- use_load, inject_scripts, error_message_count
 
--- IMPORTANT: make sure to update doc/emmy_lua/phobos_profiles.lua when adding or removing mandatory fields.
+-- IMPORTANT: make sure to update docs/emmy_lua/phobos_profiles.lua when adding or removing mandatory fields.
 
 ---@class NewProfileParams
 ---**Mandatory**\
@@ -53,7 +53,7 @@
 ---**Mandatory**\
 ---Root path all other output paths have to be relative to.
 ---
----If this is a relative path it will be **relative to the root_dir**.
+---If this is a relative path it will be **relative to the `root_dir`**.
 ---@field output_dir string
 ---**Mandatory**\
 ---Directory all temporary files specific for this profile will be stored in.\
@@ -65,7 +65,7 @@
 ---**Default:** `false`\
 ---Should `load()` be used in the generated output to load the bytecode
 ---instead of outputting raw bytecode files?
----@field use_load boolean
+---@field use_load? boolean
 ---**Default:** `{}`\
 ---Filenames of files to run which modify the AST of every compiled file.
 ---The extension of these files is ignored; They will load as bytecode if they are bytecode files,
@@ -76,28 +76,28 @@
 ---These files will be run before any optimizations.\
 ---These files may `require` any Phobos file, such as the 'ast_walker' or 'nodes' for example.\
 ---**NOTE:** This feature is far from complete.\
----if there are relative paths they will be **relative to the root_dir**
----@field inject_scripts string[]
----**Default:** `{}` (so all optimizations set to "false")
----@field optimizations Optimizations
+---if there are relative paths they will be **relative to the `root_dir`**.
+---@field inject_scripts? string[]
+---**Default:** `{}` (so all optimizations are `nil`/falsy)
+---@field optimizations? Optimizations
 ---**Default:** `8`\
 ---The amount of info/warn/error messages to print per file
----@field error_message_count integer
+---@field error_message_count? integer
 ---**Default:** `false`\
 ---Monitors total memory allocated during the entire compilation process at the cost of ~10% longer
 ---compilation times. (Stops incremental GC. Runs full garbage collection whenever it exceeds
 ---4GB current memory usage. May overshoot by quite a bit.)
----@field measure_memory boolean
+---@field measure_memory? boolean
 ---**Default:** the directory the build profile script (entrypoint) is in.\
 ---Using `require()` or some other method to run other files does not change this default directory.\
 ---You can get the default directory using `get_current_root_dir()`.
----@field root_dir string
+---@field root_dir? string
 ---**Default:** `nil`\
 ---A function that is ran before this profile is ran. It runs before absolutely anything happens.
----@field on_pre_profile_ran function
+---@field on_pre_profile_ran? fun()
 ---**Default:** `nil`\
 ---A function that is ran after this profile is ran. It runs after absolutely everything happened.
----@field on_post_profile_ran function
+---@field on_post_profile_ran? fun()
 
 
 
@@ -114,7 +114,7 @@
 ---How many directories and sub directories deep it should enumerate.\
 ---`0` means literally none, `1` means just the given directory, `2` means this directory
 ---and all it's sub directories, but not sub directories in sub directories, and so on.
----@field recursion_depth integer
+---@field recursion_depth? integer
 ---**Default:** `""` (matches everything)\
 ---Only files matching this Lua pattern will be excluded.\
 ---The paths matched against this pattern will...
@@ -130,13 +130,14 @@
 ---Note that excluding a file that isn't included is not a problem, it simply does nothing.
 ---
 ---If you're used to "file globs" here are respective equivalents:
+---
 ---- `*` => `[^/]*` - Match a part of a filename or directory of undetermined length.
 ---- `/**/` => `/.*/` - Match any amount of directories.
 ---- `?` => `[^/]` - Match any single character within a filename or directory.
 ---
 ---For more details refer to the
 ---[Lua manual for string patterns](http://www.lua.org/manual/5.2/manual.html#6.4.1).
----@field filename_pattern string
+---@field filename_pattern? string
 
 ---@class NonDeleteIncludeAndExcludeBase : IncludeAndExcludeBase
 ---**Mandatory**\
@@ -186,10 +187,10 @@
 ---**Default:** `profile.use_load` (its default is `false`)\
 ---Should `load()` be used in the generated output to load the bytecode
 ---instead of outputting raw bytecode files?
----@field use_load boolean
+---@field use_load? boolean
 ---**Default:** `profile.error_message_count` (its default is `8`)\
 ---The amount of info/warn/error messages to print per file
----@field error_message_count integer
+---@field error_message_count? integer
 ---**Default:** `profile.inject_scripts` (its default is `{}`)\
 ---Filenames of files to run which modify the AST of every compiled file.
 ---The extension of these files is ignored; They will load as bytecode if they are bytecode files,
@@ -200,8 +201,8 @@
 ---These files will be run before any optimizations.\
 ---These files may `require` any Phobos file, such as the 'ast_walker' or 'nodes' for example.\
 ---**NOTE:** This feature is far from complete.\
----if there are relative paths they will be **relative to the root_dir**
----@field inject_scripts string[]
+---if there are relative paths they will be **relative to the `root_dir`**.
+---@field inject_scripts? string[]
 
 ---@class ExcludeParams : NonDeleteIncludeAndExcludeBase
 
@@ -218,7 +219,7 @@
 ---**Default:** `false`\
 ---Should this only exclude the latest included file when a given file was
 ---included multiple times with different output paths?
----@field pop boolean
+---@field pop? boolean
 
 
 
