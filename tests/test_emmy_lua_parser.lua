@@ -926,6 +926,10 @@ do
     scope:add_test("reference type 'table'", function()
       test_reference("table")
     end)
+
+    scope:add_test("reference type 'fun'", function()
+      test_reference("fun")
+    end)
   end
 
   -- function types
@@ -998,11 +1002,6 @@ do
   scope:add_test("function type with 2 returns without spaces anywhere", function()
     local got = parse_type("fun():any,any")
     assert.contents_equals(new_func_type{returns = {new_return{}, new_return{}}}, got)
-  end)
-
-  scope:add_test("function type without opening '('", function()
-    local got = parse_invalid_type("fun")
-    assert.contents_equals({expected_pattern("%(", new_pos(1, 24))}, got)
   end)
 
   scope:add_test("function type without closing ')'", function()

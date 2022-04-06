@@ -170,55 +170,58 @@ local function parse_sequence(sequence, source, positions)
           current_type.type_name = "table"
         end
       elseif ident == "fun" then -- function
-        current_type.type_type = "function"
-        current_type.description = {}
-        -- TODO: allow fun as a type name
-        assert_parse_pattern("%(")
-        parse_blank()
-        current_type.params = {}
-        if not parse_pattern("%)") then
-          repeat -- params
-            local param = {}
-            param.description = {}
-            parse_blank()
-            param.name = assert_parse_identifier()
-            parse_blank()
-            if parse_pattern("%?") then
-              param.optional = true
+        if parse_pattern("%(") then
+          current_type.type_type = "function"
+          current_type.description = {}
+          parse_blank()
+          current_type.params = {}
+          if not parse_pattern("%)") then
+            repeat -- params
+              local param = {}
+              param.description = {}
               parse_blank()
-            else
-              param.optional = false
-            end
-            assert_parse_pattern(":")
-            parse_blank()
-            param.param_type = assert_parse_type()
-            parse_blank()
-            current_type.params[#current_type.params+1] = param
-          until not parse_pattern(",")
-          assert_parse_pattern("%)")
-        end
-        local reset_i_to_here = i
-        parse_blank()
-        current_type.returns = {}
-        if parse_pattern(":") then
-          repeat -- returns
-            parse_blank()
-            local ret = {}
-            ret.description = {}
-            ret.return_type = assert_parse_type()
-            reset_i_to_here = i
-            parse_blank()
-            if parse_pattern("%?") then
-              ret.optional = true
+              param.name = assert_parse_identifier()
+              parse_blank()
+              if parse_pattern("%?") then
+                param.optional = true
+                parse_blank()
+              else
+                param.optional = false
+              end
+              assert_parse_pattern(":")
+              parse_blank()
+              param.param_type = assert_parse_type()
+              parse_blank()
+              current_type.params[#current_type.params+1] = param
+            until not parse_pattern(",")
+            assert_parse_pattern("%)")
+          end
+          local reset_i_to_here = i
+          parse_blank()
+          current_type.returns = {}
+          if parse_pattern(":") then
+            repeat -- returns
+              parse_blank()
+              local ret = {}
+              ret.description = {}
+              ret.return_type = assert_parse_type()
               reset_i_to_here = i
               parse_blank()
-            else
-              ret.optional = false
-            end
-            current_type.returns[#current_type.returns+1] = ret
-          until not parse_pattern(",")
+              if parse_pattern("%?") then
+                ret.optional = true
+                reset_i_to_here = i
+                parse_blank()
+              else
+                ret.optional = false
+              end
+              current_type.returns[#current_type.returns+1] = ret
+            until not parse_pattern(",")
+          end
+          i = reset_i_to_here
+        else
+          current_type.type_type = "reference"
+          current_type.type_name = "fun"
         end
-        i = reset_i_to_here
       else -- any other type
         current_type.type_type = "reference"
         current_type.type_name = ident
