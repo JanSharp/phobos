@@ -2,6 +2,7 @@
 Version: 0.1.4
   Minor Features:
     - Add `--version` argument
+    - Support files with a shebang
   Bugfixes:
     - Fix 'lua.exe' not finding 'lua52.dll' because it was called 'lua.dll'
     - Fix '(foo())' being a valid statement

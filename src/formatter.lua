@@ -449,6 +449,9 @@ local function format(main)
     end
   end
 
+  if main.shebang_line then
+    add(main.shebang_line)
+  end
   add_scope(main)
   add_leading(main.eof_token)
 
