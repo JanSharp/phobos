@@ -52,11 +52,12 @@ end
 
 ---@param options ContentsEqualsOptions
 local function contents_equals(expected, got, msg, options)
+  options = options or {}
   local equal, difference = deep_compare.deep_compare(
     expected,
     got,
-    options and options.compare_pairs_iteration_order,
-    options and options.root_name
+    options.compare_pairs_iteration_order,
+    options.root_name
   )
   if not equal then
     local err
@@ -82,7 +83,7 @@ local function contents_equals(expected, got, msg, options)
         .."at "..difference.location
     end
     local print_full_data_on_error = print_full_data_on_error_default
-    if options and options.print_full_data_on_error ~= nil then
+    if options.print_full_data_on_error ~= nil then
       print_full_data_on_error = options.print_full_data_on_error
     end
     msg = add_msg(err, msg)
