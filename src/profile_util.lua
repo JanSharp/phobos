@@ -1,6 +1,4 @@
 
----@type LFS
-local lfs = require("lfs")
 local Path = require("lib.LuaPath.path")
 Path.set_main_separator("/")
 local util = require("util")
@@ -290,10 +288,6 @@ local function get_all_optimizations()
   }
 end
 
-local function get_modification(filename)
-  return util.debug_assert(lfs.attributes(filename, "modification"))
-end
-
 local function new_inject_script_cache(root_dir)
   return {
     ---has `required_files` and `func`
@@ -330,12 +324,12 @@ local function get_inject_script_file_specific_data(filename, script_cache)
     file = Path.new(file):to_fully_qualified():normalize():str()
     required_files[i + 1] = {
       filename = file,
-      modification = get_modification(file),
+      modification = io_util.get_modification(file),
     }
   end
   required_files[1] = {
     filename = filename,
-    modification = get_modification(filename),
+    modification = io_util.get_modification(filename),
   }
   result = {
     required_files = required_files,
@@ -519,7 +513,7 @@ local function process_include(include_def, collection)
 
   local function include_dir(relative_entry_path, depth)
     if depth > include_def.recursion_depth then return end
-    for entry in lfs.dir((source_root / relative_entry_path):str()) do
+    for entry in (source_root / relative_entry_path):enumerate() do
       if entry ~= "." and entry ~= ".." then
         include_entry(relative_entry_path / entry, depth + 1)
       end
@@ -593,7 +587,7 @@ local function process_exclude(exclude_def, collection)
 
   local function exclude_dir(entry_path, depth)
     if depth > exclude_def.recursion_depth then return end
-    for entry in lfs.dir(entry_path:str()) do
+    for entry in entry_path:enumerate() do
       if entry ~= "." and entry ~= ".." then
         exclude_entry(entry_path / entry, depth + 1)
       end
@@ -698,8 +692,8 @@ local function should_update(file, action, cached_file_mapping, incremental)
       end
     end
   end
-  local source_modification = get_modification(file.source_filename)
-  local output_modification = get_modification(file.output_filename)
+  local source_modification = io_util.get_modification(file.source_filename)
+  local output_modification = io_util.get_modification(file.output_filename)
   return os.difftime(source_modification, output_modification) > 0
 end
 

@@ -93,9 +93,9 @@ local function read_file(path)
   path = Path.new(path)
 
   -- see above comment for explanation for using binary mode
-  local file = assert(io.open(path:str(), "rb"))
+  local file = util.debug_assert(io.open(path:str(), "rb"))
   local contents = file:read("*a")
-  assert(file:close())
+  util.debug_assert(file:close())
 
   return contents
 end
@@ -184,7 +184,39 @@ local function move(from, to)
 
   copy(from, to)
 
-  os.remove(from:str())
+  util.debug_assert(os.remove(from:str()))
+end
+
+local function symlink(old, new)
+  old = Path.new(old)
+  new = Path.new(new)
+
+  util.debug_assert(lfs.link(old:str(), new:str(), true))
+end
+
+local function exists(path)
+  return Path.new(path):exists()
+end
+
+local function enumerate(path)
+  return Path.new(path):enumerate()
+end
+
+local function set_working_dir(path)
+  util.debug_assert(lfs.chdir(path))
+end
+
+local function get_working_dir()
+  return util.debug_assert(lfs.currentdir()):gsub("\\", "/")
+end
+
+local function get_working_dir_path()
+  return Path.new(util.debug_assert(lfs.currentdir()):gsub("\\", "/"))
+end
+
+local function get_modification(path)
+  path = Path.new(path)
+  return util.debug_assert(path:attr("modification"))
 end
 
 return {
@@ -194,4 +226,11 @@ return {
   write_file = write_file,
   copy = copy,
   move = move,
+  symlink = symlink,
+  exists = exists,
+  enumerate = enumerate,
+  set_working_dir = set_working_dir,
+  get_working_dir = get_working_dir,
+  get_working_dir_path = get_working_dir_path,
+  get_modification = get_modification,
 }

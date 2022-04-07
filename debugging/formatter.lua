@@ -2,17 +2,11 @@
 local parse = require("parser")
 local format = require("formatter")
 local error_code_util = require("error_code_util")
+local io_util = require("io_util")
 
 local function run(filename)
   print(filename)
-  local file = assert(io.open(filename, "r"))
-  local text = file:read("*a")
-  assert(file:close())
-
-  -- assert(assert(assert(
-  --   io.open("temp/formatted_src.lua", "w"))
-  --     :write(text))
-  --     :close())
+  local text = io_util.read_file(filename)
 
   local ast, invalid_nodes = parse(text, "@"..filename)
   if invalid_nodes[1] then
@@ -31,10 +25,7 @@ local function run(filename)
   --   print("Parsing the formatted code and formatting again had a different result!")
   -- end
 
-  assert(assert(assert(
-    io.open("temp/formatted.lua", "w"))
-      :write(text))
-      :close())
+  io_util.write_file("temp/formatted.lua", text)
 end
 
 local filenames

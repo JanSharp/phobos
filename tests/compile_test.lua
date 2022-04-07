@@ -65,7 +65,10 @@ if args.help then return end
 
 local Path = require("lib.LuaPath.path")
 if not Path.new("temp"):exists() then
-  assert(require("lfs").mkdir("temp"))
+  -- io_util requires lfs, so it's in the if block to make it possible to run this file
+  -- without lfs being available
+  local io_util = require("io_util")
+  io_util.mkdir_recursive("temp")
 end
 
 local phobos_env = {}

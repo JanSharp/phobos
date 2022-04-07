@@ -1,8 +1,7 @@
 
 local serpent = require("lib.serpent")
 local disassembler = require("disassembler")
----@type LFS
-local lfs = require("lfs")
+local io_util = require("io_util")
 local Path = require("lib.LuaPath.path")
 Path.set_main_separator("/")
 local error_code_util = require("error_code_util")
@@ -66,9 +65,7 @@ local total_pho_byte_count = 0
 
 -- do return end
 
-if not Path.new("temp"):exists() then
-  lfs.mkdir("temp")
-end
+io_util.mkdir_recursive("temp")
 
 local function compile(filename)
   if print_progress then
@@ -194,9 +191,7 @@ local function compile(filename)
       for _, token in require("tokenize")(text) do
         tokens[#tokens+1] = token
       end
-      file = assert(io.open("temp/tokens.lua", "w"))
-      file:write(serpent.dump(tokens, {indent = "  ", sortkeys = true}))
-      file:close()
+      io_util.write_file("temp/tokens.lua", serpent.dump(tokens, {indent = "  ", sortkeys = true}))
     end
 
     local success, main, parser_errors = pcall(require("parser"), text, "@"..filename)
@@ -330,9 +325,7 @@ local function compile(filename)
       result[#result+1] = line.line
     end
 
-    file = assert(io.open("temp/phobos_disassembly.lua", "w"))
-    file:write(table.concat(result, "\n"))
-    file:close()
+    io_util.write_file("temp/phobos_disassembly.lua", table.concat(result, "\n"))
   end
 end
 
