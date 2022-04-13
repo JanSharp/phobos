@@ -55,6 +55,11 @@ local framework = require("test_framework")
 local assert = require("assert")
 assert.set_print_full_data_on_error_default(args.full_output)
 
+-- test testing framework
+require("test_virtual_file_system")
+require("test_virtual_io_util")
+
+-- test src
 require("test_tokenizer")
 require("test_parser")
 require("test_jump_linker")

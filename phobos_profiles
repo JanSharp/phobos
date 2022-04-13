@@ -1,8 +1,6 @@
 
 local profiles = require("phobos_profiles")
 local util = require("util")
----@type LFS
-local lfs = require("lfs")
 local io_util = require("io_util")
 local gen_util = require("scripts.generate_docs_util")
 
@@ -203,11 +201,15 @@ local function factorio_profile(params)
       generate_docs(output_root)
     end
     if not params.publish then
+      local function link(old, new)
+        if not io_util.exists(new) then
+          io_util.symlink(old, new)
+        end
+      end
       -- create symlinks for the 2 other mods needed to use the minimal-no-base-mod debug launch profiles
       -- these links are in the parent directory of the output directory, so no need to exclude_delete them
-      lfs.link("../../debugging/minimal-no-base-mod", output_root.."/../minimal-no-base-mod", true)
-      lfs.link("../../debugging/JanSharpDevEnv", output_root.."/../JanSharpDevEnv", true)
-      -- and it will just silently fail if the links already exist. that's ok
+      link("../../debugging/minimal-no-base-mod", output_root.."/../minimal-no-base-mod")
+      link("../../debugging/JanSharpDevEnv", output_root.."/../JanSharpDevEnv")
     end
   end
 end

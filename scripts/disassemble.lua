@@ -2,15 +2,12 @@
 -- TODO: make a proper cmd tool for this
 
 local disassembler = require("disassembler")
----@type LFS
-local lfs = require("lfs")
-local Path = require("lib.LuaPath.path")
+local io_util = require("io_util")
+local Path = require("lib.path")
 Path.set_main_separator("/")
 local constants = require("constants")
 
-if not Path.new("temp"):exists() then
-  lfs.mkdir("temp")
-end
+io_util.mkdir_recursive("temp")
 
 local show_keys_in_disassembly = false
 
@@ -62,19 +59,14 @@ local function disassemble_file(filename, output_postfix)
     end
   end
 
+  local contents = io_util.read_file(filename)
+
   -- TODO: make a proper function for getting bytecode from a potentially phobos compiled file
   local bytecode
-  local file = assert(io.open(filename, "rb"))
-  if file:read(4) == constants.lua_signature_str then
-    assert(file:seek("set"))
-    bytecode = file:read("*a")
-    assert(file:close())
+  if contents:sub(1, 4) == constants.lua_signature_str then
+    bytecode = contents
   else -- not a bytecode file? It might have been generated with `--use-load`
     -- check string constants in main chunk for a bytecode string
-    assert(lfs.setmode(file, "text"))
-    assert(file:seek("set"))
-    local contents = file:read("*a")
-    assert(file:close())
     local chunk = assert(load(contents, nil, "t"))
     local disassembled = disassembler.disassemble(string.dump(chunk))
     for _, constant in ipairs(disassembled.constants) do
@@ -104,9 +96,7 @@ local function disassemble_file(filename, output_postfix)
   end
 
   local output_filename = "temp/phobos_disassembly"..(output_postfix and "_"..output_postfix or "")..".lua"
-  file = assert(io.open(output_filename, "w"))
-  file:write(table.concat(result, "\n"))
-  file:close()
+  io_util.write_file(output_filename, table.concat(result, "\n"))
 end
 
 for i, filename in ipairs{...} do

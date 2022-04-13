@@ -1,7 +1,7 @@
 
 local util = require("util")
 local io_util = require("io_util")
-local Path = require("lib.LuaPath.path")
+local Path = require("lib.path")
 local binary = require("binary_serializer")
 local constants = require("constants")
 
