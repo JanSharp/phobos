@@ -1,5 +1,5 @@
 
-local Path = require("lib.LuaPath.path")
+local Path = require("lib.path")
 local util = require("util")
 
 local cross_platform_explanation = "And to make sure that when Phobos runs on a Unix like system it also \z

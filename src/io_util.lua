@@ -1,7 +1,7 @@
 
 ---@type LFS
 local lfs = require("lfs")
-local Path = require("lib.LuaPath.path")
+local Path = require("lib.path")
 local shell_util = require("shell_util")
 local util = require("util")
 
@@ -22,27 +22,25 @@ end
 ---There has to be a better way to delete directories that are not empty, right?
 local function rmdir_recursive(path)
   path = Path.new(path)
-  ---cSpell:ignore readdir, _findfirst, _findnext
-  -- I figured out that lfs is using readdir on Unix systems and _findfirst and _findnext on windows:
+  ---cSpell:ignore readdir, findfirst, findnext
+  -- I figured out that lfs is using `readdir` on Unix systems and `_findfirst` and `_findnext` on windows:
   -- https://www.ibm.com/docs/en/zos/2.3.0?topic=functions-readdir-read-entry-from-directory
   -- https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/findfirst-functions?view=msvc-170
-  -- readdir suggests that it might work just fine when the directory got modified while iterating,
+  -- `readdir` suggests that it might work just fine when the directory got modified while iterating,
   -- but it's not clear.
-  -- the remarks for _findfirst and _findnext say nothing about how it behaves when the directory
+  -- the remarks for `_findfirst` and `_findnext` say nothing about how it behaves when the directory
   -- got modified during iteration, which means I'm just going to assume that it is undefined behavior.
   -- So that is why I'm putting stuff in tables and then deleting afterwards
   local dirs = {}
   local files = {}
-  for entry in lfs.dir(path:str()) do
-    if entry ~= "." and entry ~= ".." then
-      -- since symlinkattributes is the same as attributes on windows this will actually delete
-      -- all files in symlinked directories, while on Unix this will only delete the link
-      -- that is if os.remove can actually delete symlinks, who knows
-      if (path / entry):sym_attr("mode") == "directory" then
-        dirs[#dirs+1] = path / entry
-      else
-        files[#files+1] = path / entry
-      end
+  for entry in path:enumerate() do
+    -- since symlinkattributes is the same as attributes on windows this will actually delete
+    -- all files in symlinked directories, while on Unix this will only delete the symlink.
+    -- that is if os.remove can actually delete symlinks, who knows
+    if (path / entry):sym_attr("mode") == "directory" then
+      dirs[#dirs+1] = path / entry
+    else
+      files[#files+1] = path / entry
     end
   end
   for _, dir_path in ipairs(dirs) do
@@ -207,11 +205,19 @@ local function set_working_dir(path)
 end
 
 local function get_working_dir()
-  return util.debug_assert(lfs.currentdir()):gsub("\\", "/")
+  local path = util.debug_assert(lfs.currentdir())
+  if Path.is_windows() then
+    path = path:gsub("\\", "/")
+  end
+  return path
 end
 
 local function get_working_dir_path()
-  return Path.new(util.debug_assert(lfs.currentdir()):gsub("\\", "/"))
+  local path = util.debug_assert(lfs.currentdir())
+  if Path.is_windows() then
+    path = path:gsub("\\", "/")
+  end
+  return Path.new(path)
 end
 
 local function get_modification(path)

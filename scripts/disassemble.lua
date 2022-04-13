@@ -3,7 +3,7 @@
 
 local disassembler = require("disassembler")
 local io_util = require("io_util")
-local Path = require("lib.LuaPath.path")
+local Path = require("lib.path")
 Path.set_main_separator("/")
 local constants = require("constants")
 

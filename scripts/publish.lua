@@ -1,5 +1,5 @@
 
-local Path = require("lib.LuaPath.path")
+local Path = require("lib.path")
 Path.set_main_separator("/")
 local arg_parser = require("lib.LuaArgParser.arg_parser")
 local io_util = require("io_util")

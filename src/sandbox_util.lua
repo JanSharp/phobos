@@ -1,6 +1,6 @@
 
 local util = require("util")
-local Path = require("lib.LuaPath.path")
+local Path = require("lib.path")
 local compile_util = require("compile_util")
 
 ---There is actually no use for this right now, but I'm keeping it just in case it will be needed later

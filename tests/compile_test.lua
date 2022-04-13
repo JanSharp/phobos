@@ -63,7 +63,7 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
 if not args then util.abort() end
 if args.help then return end
 
-local Path = require("lib.LuaPath.path")
+local Path = require("lib.path")
 if not Path.new("temp"):exists() then
   -- io_util requires lfs, so it's in the if block to make it possible to run this file
   -- without lfs being available

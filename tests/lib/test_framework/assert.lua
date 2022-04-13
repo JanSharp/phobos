@@ -102,10 +102,14 @@ end
 local function errors(expected_pattern, got_func, msg, plain)
   local success, err = pcall(got_func)
   if success then
-    error(add_msg("expected error pattern "..pretty_print(expected_pattern), msg))
+    error(add_msg("expected error "..(plain and "" or "pattern ")..pretty_print(expected_pattern)
+      ..", got success", msg)
+    )
   end
   if not err:find(expected_pattern, 1, plain) then
-    error(add_msg("expected error pattern "..pretty_print(expected_pattern)..", got error "..pretty_print(err), msg))
+    error(add_msg("expected error "..(plain and "" or "pattern ")..pretty_print(expected_pattern)
+      ..", got error "..pretty_print(err), msg)
+    )
   end
 end
 
