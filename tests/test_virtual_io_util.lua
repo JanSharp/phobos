@@ -59,7 +59,7 @@ do
     end)
   end
 
-  add_test("mkdir recursive 2 dirs", function()
+  add_test("mkdir_recursive 2 dirs", function()
     io_util.mkdir_recursive(get_path("/foo/bar"))
     local got_first = fs:exists("/foo")
     local got_second = fs:exists("/foo/bar")
@@ -67,21 +67,21 @@ do
     assert.equals(true, got_second, "existence of second dir")
   end)
 
-  add_test("mkdir recursive where dir already exists", function()
+  add_test("mkdir_recursive where dir already exists", function()
     fs:add_dir("/foo")
     io_util.mkdir_recursive(get_path("/foo"))
     local got_first = fs:exists("/foo")
     assert.equals(true, got_first, "existence of dir")
   end)
 
-  add_test("rmdir recursive empty dir", function()
+  add_test("rmdir_recursive empty dir", function()
     fs:add_dir("/foo")
     io_util.rmdir_recursive(get_path("/foo"))
     local got = fs:exists("/foo")
     assert.equals(false, got, "existence of removed dir")
   end)
 
-  add_test("rmdir recursive dir with 1 dir and 1 file", function()
+  add_test("rmdir_recursive dir with 1 dir and 1 file", function()
     fs:add_dir("/foo")
     fs:add_dir("/foo/bar")
     fs:add_file("/foo/baz")
@@ -90,7 +90,7 @@ do
     assert.equals(false, got, "existence of removed dir")
   end)
 
-  add_test("rmdir recursive dir with a symlink to a dir", function()
+  add_test("rmdir_recursive dir with a symlink to a dir", function()
     fs:add_dir("/foo")
     fs:add_dir("/bar")
     fs:add_file("/bar/baz")
@@ -102,23 +102,35 @@ do
     assert.equals(true, got_bar_baz, "the linked directory should still contain its contents")
   end)
 
-  add_test("attempt to rmdir recursive non existent dir", function()
+  add_test("attempt to rmdir_recursive non existent dir", function()
     assert.errors("No such file or directory '/foo'%.", function()
       io_util.rmdir_recursive(get_path("/foo"))
     end)
   end)
 
-  add_test("read file", function()
+  add_test("read_file", function()
     fs:add_file("/foo")
     fs:set_contents("/foo", "hello world")
     local got = io_util.read_file(get_path("/foo"))
     assert.equals("hello world", got, "contents")
   end)
 
-  add_test("write file", function()
+  add_test("write_file to existing file", function()
     fs:add_file("/foo")
     io_util.write_file(get_path("/foo"), "hello world")
     local got = fs:get_contents("/foo")
+    assert.equals("hello world", got, "contents after writing")
+  end)
+
+  add_test("write_file creating the file in the process", function()
+    io_util.write_file(get_path("/foo"), "hello world")
+    local got = fs:get_contents("/foo")
+    assert.equals("hello world", got, "contents after writing")
+  end)
+
+  add_test("write_file creating the parent dir in the process", function()
+    io_util.write_file(get_path("/foo/bar"), "hello world")
+    local got = fs:get_contents("/foo/bar")
     assert.equals("hello world", got, "contents after writing")
   end)
 

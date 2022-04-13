@@ -58,6 +58,7 @@ end
 
 function fake_io_util.write_file(path, contents)
   path = ensure_is_path(path)
+  fake_io_util.mkdir_recursive(path:sub(1, -2))
   if not fs:exists(path:str()) then
     fs:add_file(path:str())
   end
