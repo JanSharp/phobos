@@ -131,7 +131,21 @@ end
 local fake_lfs = {}
 
 function fake_lfs.dir(path)
-  return fs:enumerate(path)
+  local iter, start_state, start_key = fs:enumerate(path)
+  local dot = true
+  local dot_dot = true
+  return function(state, key)
+    if dot then
+      dot = false
+      return "."
+    end
+    if dot_dot then
+      dot_dot = false
+      return ".."
+    end
+    ---@diagnostic disable-next-line:redundant-parameter
+    return iter(state, key)
+  end, start_state, start_key
 end
 
 local function attributes_helper(path, request_name, do_not_follow_symlinks)
@@ -139,7 +153,7 @@ local function attributes_helper(path, request_name, do_not_follow_symlinks)
     util.debug_abort("Table argument is not supported.")
   end
   if not request_name then
-    util.debug_abort("No mode is not supported.")
+    util.debug_abort("Absent mode is not supported.")
   end
   return (({
     ["mode"] = function()
@@ -153,7 +167,7 @@ local function attributes_helper(path, request_name, do_not_follow_symlinks)
       return fs:get_modification(path, do_not_follow_symlinks)
     end,
     ["dev"] = function()
-      return 1 -- I only use this to test for existence in Path:exists()
+      return fs:exists(path) and 1 or nil -- I only use this to test for existence in Path:exists()
     end,
   })[request_name] or function()
     util.debug_abort("Request name '"..request_name.."' is not supported.")

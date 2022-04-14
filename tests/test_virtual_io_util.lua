@@ -241,4 +241,76 @@ do
     assert.equals(0, got_first, "modification of root before anything happened")
     assert.equals(1, got_second, "modification of a file created afterwards")
   end)
+
+  scope:add_test("Path.enumerate", function()
+    setup_new_fs()
+    fs:add_file("/foo")
+    local did_enter_loop = false
+    for entry in Path.new("/"):enumerate() do
+      did_enter_loop = true
+      assert.equals("foo", entry)
+    end
+    assert(did_enter_loop, "did not enter loop")
+  end)
+
+  do
+    local function setup_fs_for_attr_tests()
+      setup_new_fs()
+      fs:add_file("/foo") -- modification 1
+      fs:add_symlink("/foo", "/bar") -- modification 2
+    end
+
+    scope:add_test("Path.attr mode", function()
+      setup_fs_for_attr_tests()
+      local got = Path.new("/bar"):attr("mode")
+      assert.equals("file", got, "mode of symlink to file")
+    end)
+
+    scope:add_test("Path.sym_attr mode", function()
+      setup_fs_for_attr_tests()
+      local got = Path.new("/bar"):sym_attr("mode")
+      assert.equals("link", got, "mode of symlink to file")
+    end)
+
+    scope:add_test("Path.attr modification", function()
+      setup_fs_for_attr_tests()
+      local got = Path.new("/bar"):attr("modification")
+      assert.equals(1, got, "modification of symlink to file")
+    end)
+
+    scope:add_test("Path.sym_attr modification", function()
+      setup_fs_for_attr_tests()
+      local got = Path.new("/bar"):sym_attr("modification")
+      assert.equals(2, got, "modification of symlink to file")
+    end)
+
+    scope:add_test("Path.attr dev", function()
+      setup_fs_for_attr_tests()
+      local got = Path.new("/bar"):attr("dev")
+      assert.equals(1, got, "dev of symlink to file")
+    end)
+
+    scope:add_test("Path.sym_attr dev", function()
+      setup_fs_for_attr_tests()
+      local got = Path.new("/bar"):sym_attr("dev")
+      assert.equals(1, got, "dev of symlink to file")
+    end)
+  end
+
+  scope:add_test("Path.sym_attr dev", function()
+    setup_new_fs()
+    fs:add_file("/foo")
+    local got_true = Path.new("/foo"):exists()
+    local got_false = Path.new("/bar"):exists()
+    assert.equals(true, got_true, "existing file")
+    assert.equals(false, got_false, "non existing file")
+  end)
+
+  scope:add_test("Path.to_fully_qualified using lfs.currentdir", function()
+    setup_new_fs()
+    fs:add_dir("/foo")
+    fs:set_cwd("/foo")
+    local got = Path.new("bar"):to_fully_qualified()
+    assert.contents_equals(Path.new("/foo/bar"), got, "fully qualified path")
+  end)
 end
