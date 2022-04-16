@@ -92,7 +92,7 @@ end
 local function abort(message)
   if os then -- factorio doesn't have `os`
     if message then
-      print(message)
+      io.stderr:write(message.."\n"):flush()
     end
     error() -- error without a message apparently doesn't end up printing anything to the console
     -- the benefit is that this can still be caught by pcall
