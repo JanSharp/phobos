@@ -67,6 +67,7 @@ require("test_serialize")
 require("test_binary_serializer")
 require("test_emmy_lua_parser")
 require("test_emmy_lua_linker")
+require("test_cache")
 
 -- TODO: next ones to test:
 -- ast_util

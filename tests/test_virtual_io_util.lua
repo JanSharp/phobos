@@ -67,6 +67,13 @@ do
     assert.equals(true, got_second, "existence of second dir")
   end)
 
+  add_test("mkdir_recursive where a part of the path already exists", function()
+    fs:add_dir("/foo")
+    io_util.mkdir_recursive(get_path("/foo/bar"))
+    local got = fs:exists("/foo/bar")
+    assert.equals(true, got, "existence of dir")
+  end)
+
   add_test("mkdir_recursive where dir already exists", function()
     fs:add_dir("/foo")
     io_util.mkdir_recursive(get_path("/foo"))
@@ -123,8 +130,9 @@ do
   end)
 
   add_test("write_file creating the file in the process", function()
-    io_util.write_file(get_path("/foo"), "hello world")
-    local got = fs:get_contents("/foo")
+    fs:add_dir("/foo")
+    io_util.write_file(get_path("/foo/bar"), "hello world")
+    local got = fs:get_contents("/foo/bar")
     assert.equals("hello world", got, "contents after writing")
   end)
 

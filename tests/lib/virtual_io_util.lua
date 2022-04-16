@@ -25,7 +25,7 @@ end
 function fake_io_util.mkdir_recursive(path)
   path = ensure_is_path(path)
   for i = 1, #path do
-    if not fs:exists(path:str()) then
+    if not fs:exists(path:sub(1, i):str()) then
       fs:add_dir(path:sub(1, i):str())
     end
   end

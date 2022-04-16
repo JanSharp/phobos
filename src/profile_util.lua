@@ -790,9 +790,14 @@ local function run_profile(profile, print)
   ---can be nil
   local cached_profile, cached_file_mapping
   do
-    local file_list
-    cached_profile, file_list = cache.load(profile.cache_dir)
+    local file_list, warn
+    cached_profile, file_list, warn = cache.load(profile.root_dir, profile.cache_dir)
     cached_file_mapping = file_list and make_file_mapping_from_file_list(file_list)
+    if warn then
+      print("unable to load cache, if this is not your doing please report it as a bug:")
+      print(warn)
+      print("ignoring cache, performing rebuild")
+    end
   end
 
   local inject_script_cache = new_inject_script_cache()

@@ -6,6 +6,7 @@ local binary = require("binary_serializer")
 local constants = require("constants")
 
 local function save(profile, all_inject_scripts, file_list)
+  local cache_dir = Path.new(profile.root_dir) / profile.cache_dir
   local profile_ser = binary.new_serializer()
   profile_ser:write_raw(constants.phobos_signature)
   profile_ser:write_uint16(0) -- metadata version
@@ -21,12 +22,20 @@ local function save(profile, all_inject_scripts, file_list)
   profile_ser:write_boolean(profile.optimizations.fold_control_statements)
   profile_ser:write_boolean(profile.optimizations.tail_calls)
   profile_ser:write_small_uint32(profile.error_message_count)
+  profile_ser:write_boolean(profile.measure_memory)
   profile_ser:write_string(profile.root_dir)
-  io_util.write_file(Path.new(profile.cache_dir) / "phobos_metadata.dat", profile_ser:tostring())
+  profile_ser:write_boolean(profile.incremental)
+  io_util.write_file(cache_dir / "phobos_metadata.dat", profile_ser:tostring())
 
   local files_ser = binary.new_serializer()
   files_ser:write_medium_uint64(#all_inject_scripts)
   for _, inject_scripts in ipairs(all_inject_scripts) do
+    if inject_scripts.usage_count == 0 then
+      util.debug_abort("Attempt to save cache with inject_scripts with usage_count == 0. \z
+        this is not actually an issue, however if this is ever 0 it most likely means \z
+        there is a bug somewhere else in the code."
+      )
+    end
     files_ser:write_small_uint64(inject_scripts.id)
     files_ser:write_medium_uint64(inject_scripts.usage_count)
     files_ser:write_medium_uint64(#inject_scripts.filenames)
@@ -61,21 +70,27 @@ local function save(profile, all_inject_scripts, file_list)
       util.debug_abort("Invalid file action '"..file.action.."'.")
     end
   end
-  io_util.write_file(Path.new(profile.cache_dir) / "files.dat", files_ser:tostring())
+  io_util.write_file(cache_dir / "files.dat", files_ser:tostring())
 end
 
-local function load(cache_dir)
-  local metadata_path = Path.new(cache_dir) / "phobos_metadata.dat"
+local function load(root_dir, cache_dir)
+  cache_dir = Path.new(root_dir) / cache_dir
+  local metadata_path = cache_dir / "phobos_metadata.dat"
   if not metadata_path:exists() then
-    return nil -- no cache, nothing to load
+    return nil -- no cache, nothing to load. No warning message, this is perfectly fine
   end
   local profile_des = binary.new_deserializer(io_util.read_file(metadata_path))
+  if profile_des:get_length() < #constants.phobos_signature + 2 then
+    return nil, nil, "Invalid cache metadata, it is too short."
+  end
   if profile_des:read_raw(#constants.phobos_signature) ~= constants.phobos_signature then
-    return nil -- signature doesn't match, someone messed with it, it is invalid
+    -- signature doesn't match, someone messed with it, it is invalid
+    return nil, nil, "Invalid cache metadata signature."
   end
   local version = profile_des:read_uint16()
   if version > 0 then
-    return nil -- cache has a newer version => cannot read it => it is invalid
+    -- cache has a newer version => cannot read it => it is invalid
+    return nil, nil, "Cannot load cache version "..version.." from a newer version of Phobos."
   end
   -- if version < 0 then
   --   -- this is where migration calls will be, but there are none yet
@@ -83,10 +98,14 @@ local function load(cache_dir)
   --   -- there is also a good chance this entire structure will change with migrations
   -- end
 
+  local function assert_end_of_deserializer(des, filename)
+    util.debug_assert(des:is_done(), "Expected end of binary data in cache file '"..filename.."'.")
+  end
+
   local profile
   local file_list
 
-  local success = pcall(function()
+  local success, err = xpcall(function()
     profile = {}
     profile.phobos_version = {
       major = profile_des:read_uint16(),
@@ -103,12 +122,12 @@ local function load(cache_dir)
     optimizations.tail_calls = profile_des:read_boolean()
     profile.optimizations = optimizations
     profile.error_message_count = profile_des:read_small_uint32()
+    profile.measure_memory = profile_des:read_boolean()
     profile.root_dir = profile_des:read_string()
-    util.assert(profile_des:is_done(),
-      "There is more content in the cache phobos_metadata.dat file than there should be."
-    )
+    profile.incremental = profile_des:read_boolean()
+    assert_end_of_deserializer(profile_des, "phobos_metadata.dat")
 
-    local files_des = binary.new_deserializer(io_util.read_file(Path.new(cache_dir) / "files.dat"))
+    local files_des = binary.new_deserializer(io_util.read_file(cache_dir / "files.dat"))
     local inject_scripts_lut = {}
     for _ = 1, files_des:read_medium_uint64() do
       local inject_scripts = {}
@@ -145,7 +164,10 @@ local function load(cache_dir)
         file.source_name = files_des:read_string()
         file.use_load = files_des:read_boolean()
         file.error_message_count = files_des:read_small_uint32()
-        file.inject_scripts = util.debug_assert(inject_scripts_lut[files_des:read_small_uint64()])
+        file.inject_scripts = util.debug_assert(
+          inject_scripts_lut[files_des:read_small_uint64()],
+          "Invalid inject script ids."
+        )
       elseif file.action == constants.action_enum.copy then
         file.source_filename = files_des:read_string()
         file.output_filename = files_des:read_string()
@@ -156,10 +178,14 @@ local function load(cache_dir)
       end
       file_list[i] = file
     end
+    assert_end_of_deserializer(files_des, "files.dat")
+  end, function(msg)
+    return debug.traceback("Corrupted cache: "..msg, 2)
   end)
 
   if not success then
-    return nil -- any error while loading the cache means the cache is invalid
+    -- any error while loading the cache means the cache is invalid
+    return nil, nil, err
   end
 
   return profile, file_list
