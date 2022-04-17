@@ -110,14 +110,14 @@ local function run_tests(scope, options, print_parent_scope_header, state, full_
         test.passed = success
         if not success then
           failed_count = failed_count + 1
-          err = err:match(":%d+: (.*)")
+          err = err and err:match(":%d+: (.*)")
           test.error_message = err
         end
         if not success or not options.only_print_failed then
           print_scope_header()
           print(get_indentation(scope).."  ["..id.."] "..test.name..": "
             ..(success and (green.."passed"..reset) or (
-              red.."failed"..reset..": "..blue..err..reset
+              red.."failed"..reset..": "..blue..(err or "<no error message>")..reset
               ..(options.print_stacktrace and ("\n"..magenta..stacktrace:gsub("\t", "  ")..reset) or " ")
             ))
           )
