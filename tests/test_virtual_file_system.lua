@@ -391,48 +391,44 @@ do
 
   add_test("enumerate dir with 1 entry", function()
     fs:add_file("/foo")
-    local did_enter_loop = false
+    local count = 0
     for entry in fs:enumerate("/") do
-      did_enter_loop = true
+      count = count + 1
       assert.equals("foo", entry, "entry name")
     end
     fs:add_file("/bar") -- should not error
-    assert(did_enter_loop, "did not enter loop")
+    assert.equals(1, count, "iteration count")
   end)
 
   add_test("enumerate dir with 2 entry", function()
     fs:add_file("/bar")
     fs:add_file("/foo")
-    local first = true
-    local did_enter_loop = false
+    local count = 0
     for entry in fs:enumerate("/") do
-      did_enter_loop = true
-      if first then
-        first = false
+      count = count + 1
+      if count == 1 then
         assert.equals("bar", entry, "second entry name")
       else
         assert.equals("foo", entry, "first entry name")
       end
     end
     fs:add_file("/baz") -- should not error
-    assert(did_enter_loop, "did not enter loop")
+    assert.equals(2, count, "iteration count")
   end)
 
   add_test("enumerate enumerates in alphabetical order", function()
-    fs:add_file("/b")
-    fs:add_file("/a")
-    fs:add_file("/d")
-    fs:add_file("/c")
-    local did_enter_loop = false
+    fs:add_file("/b") -- insert first
+    fs:add_file("/a") -- insert as first_child
+    fs:add_file("/d") -- insert as last_child
+    fs:add_file("/c") -- insert in the middle
     local expected = {"a", "b", "c", "d"}
-    local i = 0
+    local count = 0
     for entry in fs:enumerate("/") do
-      did_enter_loop = true
-      i = i + 1
-      assert.equals(expected[1], entry, "entry name #"..i)
+      count = count + 1
+      assert.equals(expected[count], entry, "entry name #"..count)
     end
     fs:add_file("/foo") -- should not error
-    assert(did_enter_loop, "did not enter loop")
+    assert.equals(4, count, "iteration count")
   end)
 
   do

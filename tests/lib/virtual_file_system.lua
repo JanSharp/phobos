@@ -99,7 +99,6 @@ end
 local function insert_into_linked_list_based_on_name(parent_entry, entry)
   if parent_entry.first_child then
     local child_entry = parent_entry.first_child
-    local did_insert = false
     while child_entry do
       if entry.entry_name < child_entry.entry_name then
         if child_entry == parent_entry.first_child then
@@ -109,16 +108,16 @@ local function insert_into_linked_list_based_on_name(parent_entry, entry)
           entry.prev.next = entry
         end
         child_entry.prev = entry
-        did_insert = true
-        break
+        entry.next = child_entry
+        goto inserted
       end
       child_entry = child_entry.next
     end
-    if not did_insert then
-      parent_entry.last_child.next = entry
-      entry.prev = parent_entry.last_child
-      parent_entry.last_child = entry
-    end
+    -- did not insert, add to end
+    parent_entry.last_child.next = entry
+    entry.prev = parent_entry.last_child
+    parent_entry.last_child = entry
+    ::inserted::
   else
     parent_entry.first_child = entry
     parent_entry.last_child = entry

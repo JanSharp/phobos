@@ -253,12 +253,28 @@ do
   scope:add_test("Path.enumerate", function()
     setup_new_fs()
     fs:add_file("/foo")
-    local did_enter_loop = false
+    local count = 0
     for entry in Path.new("/"):enumerate() do
-      did_enter_loop = true
+      count = count + 1
       assert.equals("foo", entry)
     end
-    assert(did_enter_loop, "did not enter loop")
+    assert.equals(1, count, "iteration count")
+  end)
+
+  scope:add_test("Path.enumerate with 2 entry", function()
+    setup_new_fs()
+    fs:add_file("bar")
+    fs:add_file("foo")
+    local count = 0
+    for entry in Path.new("/"):enumerate() do
+      count = count + 1
+      if count == 1 then
+        assert.equals("bar", entry, "second entry name")
+      else
+        assert.equals("foo", entry, "first entry name")
+      end
+    end
+    assert.equals(2, count, "iteration count")
   end)
 
   do
