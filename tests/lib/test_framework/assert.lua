@@ -100,15 +100,19 @@ local function contents_equals(expected, got, msg, options)
 end
 
 local function errors(expected_pattern, got_func, msg, plain)
-  local success, err = pcall(got_func)
+  local stacktrace
+  local success, err = xpcall(got_func, function(err)
+    stacktrace = debug.traceback(nil, 2):gsub("\t", "  ")
+    return err
+  end)
   if success then
     error(add_msg("expected error "..(plain and "" or "pattern ")..pretty_print(expected_pattern)
       ..", got success", msg)
     )
   end
-  if not err:find(expected_pattern, 1, plain) then
+  if ((err == nil) and expected_pattern ~= nil) or not err:find(expected_pattern, 1, plain) then
     error(add_msg("expected error "..(plain and "" or "pattern ")..pretty_print(expected_pattern)
-      ..", got error "..pretty_print(err), msg)
+      ..", got error "..pretty_print(err).."\n"..stacktrace, msg)
     )
   end
 end

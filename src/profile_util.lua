@@ -453,11 +453,11 @@ local function process_include(include_def, collection)
     if collection.action ~= action_enum.delete then
       if source_path_is_file then
         if collection.action == action_enum.compile then
-          util.assert(output_root:extension() ~= constants.lua_extension,
+          util.assert(output_root:extension() == constants.lua_extension,
             "When including a single file for compilation the output file extension must be \z
             '"..constants.lua_extension.."'. (output_path: '"..include_def.output_path.."')"
           )
-          util.assert(source_path_is_file and include_def.source_name:find("?", 1, true),
+          util.assert(not include_def.source_name:find("?", 1, true),
             "When including a single file for compilation the 'source_name' must not contain '?'. \z
             It must instead define the entire source_name - it is not a pattern. \z
             (source_path: '"..include_def.source_path.."', source_name: '"..include_def.source_name.."')"
@@ -494,7 +494,7 @@ local function process_include(include_def, collection)
       }
     else
       local files = collection.files[index]
-      -- if the source an output filename combination already then exists just ignore this one
+      -- if the source an output filename combination already exists then just ignore this one
       for _, file in ipairs(files) do
         if file.source_filename == source_filename and file.output_filename == output_filename then
           -- This is the other case that was mentioned at the beginning of the function.
@@ -522,7 +522,8 @@ local function process_include(include_def, collection)
 
   function include_entry(relative_entry_path, depth)
     local source_rooted_entry_path = source_root / relative_entry_path
-    if depth == 1
+    local source_path_is_file = depth == 1
+    if source_path_is_file
       and collection.action == action_enum.delete
       and not source_rooted_entry_path:exists()
     then
@@ -532,20 +533,22 @@ local function process_include(include_def, collection)
     if mode == "directory" then
       include_dir(relative_entry_path, depth)
     elseif mode == "file" then
-      local source_path_is_file = depth == 1
+      local included = true
       -- file extension filtering is only used for compilation includes
-      local included = collection.action ~= action_enum.compile
-        or source_rooted_entry_path:extension() == constants.phobos_extension
-        or source_rooted_entry_path:extension() == constants.lua_extension
-      if not included and source_path_is_file then
-        util.abort("When including a single file for compilation the source file extension \z
+      if collection.action == action_enum.compile
+        and source_rooted_entry_path:extension() ~= constants.phobos_extension
+        and source_rooted_entry_path:extension() ~= constants.lua_extension
+      then
+        util.assert(not source_path_is_file,
+          "When including a single file for compilation the source file extension \z
           must either be '"..constants.phobos_extension.."' or '"..constants.lua_extension.."'. \z
           (source_path: '"..include_def.source_path.."')"
         )
+        included = false
       end
       -- "" matches everything, don't waste time processing all of this
-      if include_def.filename_pattern ~= "" and included then
-        included = ("/"..source_rooted_entry_path:str()):find(include_def.filename_pattern)
+      if not source_path_is_file and include_def.filename_pattern ~= "" and included then
+        included = ("/"..relative_entry_path:str()):find(include_def.filename_pattern)
       end
       if included then
         include_file(relative_entry_path, source_path_is_file)
@@ -825,7 +828,7 @@ local function run_profile(profile, print)
   do
     local i = 1
     local j = 1
-    local c = 1
+    local c = #all_inject_scripts
     while i <= c do
       local inject_scripts = all_inject_scripts[i]
       all_inject_scripts[i] = nil

@@ -110,14 +110,18 @@
 ---The profile to add this definition to.
 ---@field profile PhobosProfile
 ---**Default:** `1/0` (infinite)\
----Does nothing if `source_path` is a file.\
+---Ignored if `source_path` (`output_path` for delete actions) is a file.
+---
 ---How many directories and sub directories deep it should enumerate.\
 ---`0` means literally none, `1` means just the given directory, `2` means this directory
 ---and all it's sub directories, but not sub directories in sub directories, and so on.
 ---@field recursion_depth? integer
 ---**Default:** `""` (matches everything)\
----Only files matching this Lua pattern will be excluded.\
+---Ignored if `source_path` (`output_path` for delete actions) is a file.
+---
+---Only files matching this Lua pattern will be included/excluded.\
 ---The paths matched against this pattern will...
+---
 ---- be relative to `source_path`
 ---- have a leading `/` for convenience (so you can use `/` as an anchor for "the start of any entry")
 ---- use `/` as separators

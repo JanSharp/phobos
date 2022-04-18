@@ -68,6 +68,7 @@ require("test_binary_serializer")
 require("test_emmy_lua_parser")
 require("test_emmy_lua_linker")
 require("test_cache")
+require("test_profile_util")
 
 -- TODO: next ones to test:
 -- ast_util
@@ -87,12 +88,21 @@ require("test_cache")
 -- so for now, all of those steps we have have to hope that they "just work", which
 -- is obviously not the case. I'm certain there are bugs in there
 
+local util_abort = util.abort
+local util_assert = util.assert
+util.abort = util.debug_abort
+util.assert = util.debug_assert
+
 local result = framework.scope:run_tests{
   only_print_failed = args.print_failed,
   print_stacktrace = args.print_stacktrace,
   test_ids_to_run = args.test_ids and util.invert(args.test_ids),
   scopes = args.scopes,
 }
+
+util.debug_abort = util_abort
+util.debug_assert = util_assert
+
 if result.failed_count > 0 then
   util.abort()
 end
