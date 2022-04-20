@@ -102,6 +102,7 @@ local function abort(message)
   end
 end
 
+---`message` defaults to `"Assertion failed!"`
 local function debug_assert(value, message)
   if not value then
     debug_abort(message or "Assertion failed!")
@@ -109,9 +110,10 @@ local function debug_assert(value, message)
   return value
 end
 
+---`message` does not default to `"Assertion failed!"`, it remains `nil` if it's `nil`
 local function assert(value, message)
   if not value then
-    abort(message or "Assertion failed!")
+    abort(message)
   end
   return value
 end

@@ -308,11 +308,11 @@ local function get_inject_script_file_specific_data(filename, script_cache)
     return result
   end
   -- util.debug_print("compiling inject script "..filename)
-  local main_chunk = assert(load(compile_util.compile({
+  local main_chunk = util.debug_assert(load(util.assert(compile_util.compile({
     filename = filename,
     source_name = "@?",
     accept_bytecode = true,
-  }, script_cache.inject_script_context), nil, "b"))
+  }, script_cache.inject_script_context)), nil, "b"))
   sandbox_util.hook()
   local func = main_chunk()
   util.assert(type(func) == "function",
