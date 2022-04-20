@@ -30,6 +30,10 @@ local function pretty_print(value, serpent_opts)
     ["table"] = function()
       return serpent.block(value, serpent_opts)
     end,
+    ["function"] = function()
+      local info = debug.getinfo(value, "S")
+      return "<"..tostring(value).." ("..info.short_src..")>"
+    end,
     ["userdata"] = function()
       return tostring(value)
     end,
