@@ -514,9 +514,7 @@ local function process_include(include_def, collection)
   local function include_dir(relative_entry_path, depth)
     if depth > include_def.recursion_depth then return end
     for entry in (source_root / relative_entry_path):enumerate() do
-      if entry ~= "." and entry ~= ".." then
-        include_entry(relative_entry_path / entry, depth + 1)
-      end
+      include_entry(relative_entry_path / entry, depth + 1)
     end
   end
 
@@ -591,9 +589,7 @@ local function process_exclude(exclude_def, collection)
   local function exclude_dir(entry_path, depth)
     if depth > exclude_def.recursion_depth then return end
     for entry in entry_path:enumerate() do
-      if entry ~= "." and entry ~= ".." then
-        exclude_entry(entry_path / entry, depth + 1)
-      end
+      exclude_entry(entry_path / entry, depth + 1)
     end
   end
 

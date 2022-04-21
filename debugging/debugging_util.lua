@@ -6,8 +6,7 @@ local function find_lua_source_files()
   local filenames = {}
   local function find_files(dir)
     for entry_name in (dir or Path.new()):enumerate() do
-      if entry_name ~= "." and entry_name ~= ".."
-        and entry_name:sub(1, 1) ~= "."
+      if entry_name:sub(1, 1) ~= "."
         and entry_name ~= "bin"
         and entry_name ~= "out"
         and entry_name ~= "temp"
