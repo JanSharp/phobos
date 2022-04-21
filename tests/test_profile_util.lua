@@ -32,11 +32,23 @@ local function normalize_path(path)
   return Path.new(path):to_fully_qualified():normalize():str()
 end
 
----@return CompileUtilOptions
-local function get_compile_options(filename, index)
+---@return CompileUtilOptions|nil
+local function try_get_compile_options(filename, index)
   filename = normalize_path("src/"..filename.._pho)
   index = index or 1
-  return all_compile_options[filename][index]
+  return all_compile_options[filename] and all_compile_options[filename][index]
+end
+
+---@return CompileUtilOptions
+local function get_compile_options(filename, index)
+  local options = try_get_compile_options(filename, index)
+  if not options then
+    util.debug_abort("Unable to get compile options for '"..filename
+      ..(index and ("' (index "..index..")") or "'")..". Virtual file system tree:\n"
+      ..tutil.get_fs_tree("/")
+    )
+  end
+  return options
 end
 
 local function assert_file_compile_option(expected, filename, field_name)
@@ -44,15 +56,21 @@ local function assert_file_compile_option(expected, filename, field_name)
   assert.contents_equals(expected, compile_options[field_name], field_name.." for compiled file "..filename)
 end
 
-local function assert_output_file(filename, source_name)
-  source_name = source_name or ("@src/"..filename.._pho)
-  local out_filename = "out/"..filename.._lua
-  if not io_util.exists(out_filename) then
-    assert(false, "Missing output file '"..out_filename.."'. Virtual file system tree:\n"..tutil.get_fs_tree("/"))
+local function assert_output_file(filename)
+  if not io_util.exists("out/"..filename) then
+    assert(false, "Missing output file 'out/"..filename.."'. Virtual file system tree:\n"
+      ..tutil.get_fs_tree("/")
+    )
   end
+end
+
+local function assert_lua_output_file(filename, source_name, out_filename)
+  source_name = source_name or ("@src/"..filename.._pho)
+  out_filename = (out_filename or filename).._lua
+  assert_output_file(out_filename)
   if source_name then
     local got = compile_util.get_source_name(get_compile_options(filename))
-    assert.equals(source_name, got, "source_name for output file '"..out_filename.."'.")
+    assert.equals(source_name, got, "source_name for output file 'out/"..out_filename.."'.")
   end
 end
 
@@ -166,6 +184,15 @@ do
     io_util.write_file("src/"..filename..(extension or _pho), "")
   end
 
+  local function create_file(filename, extension)
+    filename = filename..(extension or "")
+    io_util.write_file(filename, "contents of "..filename)
+  end
+
+  local function create_output_file(filename, extension)
+    io_util.write_file("out/"..filename..(extension or _lua), "")
+  end
+
   local function create_inject_script_file(filename, extension, contents)
     io_util.write_file("scripts/"..filename..(extension or _pho), contents or "return function(ast) end")
   end
@@ -194,6 +221,25 @@ do
     return params
   end
 
+  ---@param params IncludeCopyParams
+  local function include_copy(path, params)
+    params = params or {}
+    params.profile = profile
+    params.source_path = path
+    params.output_path = params.output_path or path
+    profile_util.include_copy(params)
+    return params
+  end
+
+  ---@param params IncludeDeleteParams
+  local function include_delete(path, params)
+    params = params or {}
+    params.profile = profile
+    params.output_path = params.output_path or path
+    profile_util.include_delete(params)
+    return params
+  end
+
   -- end of util functions
 
   add_test("run basic profile that does nothing", function()
@@ -207,7 +253,7 @@ do
     create_source_file("baz")
     include_file("foo")
     run()
-    assert_output_file("foo")
+    assert_lua_output_file("foo")
     assert_action_counts(1, 0, 0)
   end)
 
@@ -218,8 +264,8 @@ do
     include_file("foo")
     include_file("baz")
     run()
-    assert_output_file("foo")
-    assert_output_file("baz")
+    assert_lua_output_file("foo")
+    assert_lua_output_file("baz")
     assert_action_counts(2, 0, 0)
   end)
 
@@ -231,9 +277,9 @@ do
     include_file("bar")
     use_pho_extension()
     run()
-    assert_output_file("foo")
+    assert_lua_output_file("foo")
     use_lua_extension()
-    assert_output_file("bar")
+    assert_lua_output_file("bar")
     use_pho_extension()
     assert_action_counts(2, 0, 0)
   end)
@@ -242,20 +288,20 @@ do
     create_source_file("foo")
     include_dir(".")
     run()
-    assert_output_file("foo")
+    assert_lua_output_file("foo")
     assert_action_counts(1, 0, 0)
   end)
 
-  add_test("include 2 dirs", function()
+  add_test("include 2 dirs with 3 files total", function()
     create_source_file("one/foo")
     create_source_file("one/bar")
     create_source_file("two/baz")
     include_dir("one")
     include_dir("two")
     run()
-    assert_output_file("one/foo")
-    assert_output_file("one/bar")
-    assert_output_file("two/baz")
+    assert_lua_output_file("one/foo")
+    assert_lua_output_file("one/bar")
+    assert_lua_output_file("two/baz")
     assert_action_counts(3, 0, 0)
   end)
 
@@ -267,9 +313,9 @@ do
     create_source_file("baz", ".txt")
     include_dir(".")
     run()
-    assert_output_file("foo")
+    assert_lua_output_file("foo")
     use_lua_extension()
-    assert_output_file("bar")
+    assert_lua_output_file("bar")
     use_pho_extension()
     assert_action_counts(2, 0, 0)
   end)
@@ -280,8 +326,8 @@ do
     include_dir(".", {error_message_count = 10})
     include_file("foo", {error_message_count = 100})
     run()
-    assert_output_file("foo")
-    assert_output_file("bar")
+    assert_lua_output_file("foo")
+    assert_lua_output_file("bar")
     assert_file_compile_option(100, "foo", "error_message_count")
     assert_file_compile_option(10, "bar", "error_message_count")
     assert_action_counts(2, 0, 0)
@@ -306,31 +352,68 @@ do
     )
   end)
 
-  add_test("include dir with 3 files, 2 matching a file_pattern", function()
+  add_test("include path that does not exist", function()
+    include_file("foo")
+    assert.errors("No such file or directory '"..normalize_path("src/foo".._pho), run)
+  end)
+
+  add_test("include the same file twice with the same output path", function()
+    create_source_file("foo")
+    include_file("foo")
+    include_file("foo") -- overwrites the previous one
+    run()
+    assert_lua_output_file("foo")
+    assert_action_counts(1, 0, 0)
+  end)
+
+  add_test("include the same file twice with different output paths", function()
+    create_source_file("foo")
+    include_file("foo")
+    include_file("foo", {output_path = "bar".._lua}) -- overwrites the previous one
+    run()
+    assert_lua_output_file("foo", nil, "bar")
+    assert_action_counts(1, 0, 0)
+  end)
+
+  add_test("include dir with 3 files, 2 matching a filename_pattern", function()
     create_source_file("foo")
     create_source_file("bar")
     create_source_file("baz")
     include_dir(".", {filename_pattern = "^/ba[rz]%".._pho.."$"})
     run()
-    assert_output_file("bar")
-    assert_output_file("baz")
+    assert_lua_output_file("bar")
+    assert_lua_output_file("baz")
     assert_action_counts(2, 0, 0)
   end)
 
-  add_test("include a file matching a file_pattern", function()
+  add_test("include a file matching a filename_pattern", function()
     create_source_file("foo")
     include_file("foo", {filename_pattern = ".?"})
     run()
-    assert_output_file("foo")
+    assert_lua_output_file("foo")
     assert_action_counts(1, 0, 0)
   end)
 
-  add_test("include a file not matching a file_pattern, still included", function()
+  add_test("include a file not matching a filename_pattern, still included", function()
     create_source_file("foo")
     include_file("foo", {filename_pattern = "food"})
     run()
-    assert_output_file("foo")
+    assert_lua_output_file("foo")
     assert_action_counts(1, 0, 0)
+  end)
+
+  add_test("include dir containing a non lua or phobos file", function()
+    create_source_file("foo", _lua.."x")
+    include_dir(".")
+    run()
+    assert_action_counts(0, 0, 0)
+  end)
+
+  add_test("include dir containing a non lua or phobos file but matching a filename_pattern", function()
+    create_source_file("foo", _lua.."x")
+    include_dir(".", {filename_pattern = "foo"})
+    run()
+    assert_action_counts(0, 0, 0)
   end)
 
   do
@@ -342,7 +425,7 @@ do
       include_dir(".", {recursion_depth = depth})
       run()
       for i = 1, depth do
-        assert_output_file(({
+        assert_lua_output_file(({
           "foo",
           "one/bar",
           "one/two/baz",
@@ -369,7 +452,7 @@ do
     create_source_file("foo")
     include_file("foo", {recursion_depth = 0})
     run()
-    assert_output_file("foo")
+    assert_lua_output_file("foo")
     assert_action_counts(1, 0, 0)
   end)
 
@@ -377,7 +460,7 @@ do
     create_source_file("foo")
     include_file("foo", {use_load = false})
     run()
-    assert_output_file("foo")
+    assert_lua_output_file("foo")
     assert_file_compile_option(false, "foo", "use_load")
     assert_action_counts(1, 0, 0)
   end)
@@ -386,7 +469,7 @@ do
     create_source_file("foo")
     include_file("foo", {use_load = true})
     run()
-    assert_output_file("foo")
+    assert_lua_output_file("foo")
     assert_file_compile_option(true, "foo", "use_load")
     assert_action_counts(1, 0, 0)
   end)
@@ -395,7 +478,7 @@ do
     create_source_file("foo")
     include_file("foo", {error_message_count = 10})
     run()
-    assert_output_file("foo")
+    assert_lua_output_file("foo")
     assert_file_compile_option(10, "foo", "error_message_count")
     assert_action_counts(1, 0, 0)
   end)
@@ -406,7 +489,7 @@ do
     local inject_scripts = {"scripts/inject".._pho}
     include_file("foo", {inject_scripts = inject_scripts})
     run()
-    assert_output_file("foo")
+    assert_lua_output_file("foo")
     assert_inject_scripts(get_compile_options("foo"), inject_scripts)
     assert_action_counts(1, 0, 0)
   end)
@@ -423,7 +506,7 @@ do
     }
     include_file("foo", {inject_scripts = inject_scripts})
     run()
-    assert_output_file("foo")
+    assert_lua_output_file("foo")
     assert_inject_scripts(get_compile_options("foo"), inject_scripts)
     assert_action_counts(1, 0, 0)
   end)
@@ -437,8 +520,8 @@ do
       include_file("foo", {inject_scripts = inject_scripts})
       include_file("bar", {inject_scripts = do_copy and util.shallow_copy(inject_scripts) or inject_scripts})
       run()
-      assert_output_file("foo")
-      assert_output_file("bar")
+      assert_lua_output_file("foo")
+      assert_lua_output_file("bar")
       local foo_options = get_compile_options("foo")
       local bar_options = get_compile_options("bar")
       assert_inject_scripts(foo_options, inject_scripts)
@@ -481,6 +564,85 @@ do
     assert.errors("No such file or directory '"..normalize_path("scripts/inject".._pho).."'%.", run)
   end)
 
+  add_test("include_copy 1 file", function()
+    create_file("foo")
+    include_copy("foo")
+    run()
+    assert_output_file("foo")
+    assert_action_counts(0, 1, 0)
+  end)
+
+  add_test("include_copy 1 file and rename it", function()
+    create_file("foo")
+    include_copy("foo", {output_path = "bar"})
+    run()
+    assert_output_file("bar")
+    assert_action_counts(0, 1, 0)
+  end)
+
+  add_test("include_copy 2 files", function()
+    create_file("foo")
+    create_file("bar")
+    include_copy("foo")
+    include_copy("bar")
+    run()
+    assert_output_file("foo")
+    assert_output_file("bar")
+    assert_action_counts(0, 2, 0)
+  end)
+
+  add_test("include_copy the same file twice the same output path", function()
+    create_file("foo")
+    include_copy("foo")
+    include_copy("foo") -- overwrites/does nothing
+    run()
+    assert_output_file("foo")
+    assert_action_counts(0, 1, 0)
+  end)
+
+  add_test("include_copy the same file twice, with different output paths", function()
+    create_file("foo")
+    include_copy("foo")
+    include_copy("foo", {output_path = "foo2"}) -- doesn't overwrite, copy the file twice
+    run()
+    assert_output_file("foo")
+    assert_output_file("foo2")
+    assert_action_counts(0, 2, 0)
+  end)
+
+  add_test("include_copy 1 dir with 3 files", function()
+    create_file("docs/foo")
+    create_file("docs/bar")
+    create_file("docs/baz")
+    include_copy("docs")
+    run()
+    assert_output_file("docs/foo")
+    assert_output_file("docs/bar")
+    assert_output_file("docs/baz")
+    assert_action_counts(0, 3, 0)
+  end)
+
+  add_test("include_copy 1 dir with 1 files", function()
+    create_file("docs/foo")
+    include_copy("docs")
+    run()
+    assert_output_file("docs/foo")
+    assert_action_counts(0, 1, 0)
+  end)
+
+  add_test("include_copy 2 dirs with 3 files total", function()
+    create_file("docs1/foo")
+    create_file("docs1/bar")
+    create_file("docs2/baz")
+    include_copy("docs1")
+    include_copy("docs2")
+    run()
+    assert_output_file("docs1/foo")
+    assert_output_file("docs1/bar")
+    assert_output_file("docs2/baz")
+    assert_action_counts(0, 3, 0)
+  end)
+
   -- add_test("include 2 files with the same name but different extensions, outputting to the same file", function()
   --   create_source_file("foo")
   --   create_source_file("foo", _lua)
@@ -490,7 +652,8 @@ do
   --   assert_action_counts(1, 0, 0)
   -- end)
 
-  -- TODO: including files or directories that don't exist
+  -- TODO: include copy filename_pattern and recursion_depth
   -- TODO: outputting to the same file when compiling
+  -- TODO: excluding files or directories that don't exist
   -- TODO: inject script incremental logic
 end
