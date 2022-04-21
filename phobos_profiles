@@ -161,8 +161,8 @@ local function standalone_profile(params)
   apply_general_changes(profile)
   apply_standalone_specific_changes(profile, params.platform)
 
-  function profile.on_post_profile_ran()
-    if params.publish or args.generate_docs then
+  if params.publish or args.generate_docs then
+    function profile.on_post_profile_ran()
       local output_root = profiles.get_current_root_dir().."/"..output_dir
       generate_docs(output_root)
     end
