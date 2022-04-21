@@ -394,12 +394,31 @@ do
     assert_action_counts(1, 0, 0)
   end)
 
-  add_test("include a file not matching a filename_pattern, still included", function()
+  add_test("include 1 file not matching a filename_pattern, still included", function()
     create_source_file("foo")
     include_file("foo", {filename_pattern = "food"})
     run()
     assert_lua_output_file("foo")
     assert_action_counts(1, 0, 0)
+  end)
+
+  add_test("include_copy 1 dir with filename_pattern", function()
+    create_file("docs/foo")
+    create_file("docs/bar")
+    create_file("docs/baz")
+    include_copy("docs", {filename_pattern = "ba[rz]"})
+    run()
+    assert_output_file("docs/bar")
+    assert_output_file("docs/baz")
+    assert_action_counts(0, 2, 0)
+  end)
+
+  add_test("include_copy 1 file not matching a filename_pattern, still included", function()
+    create_file("docs/foo")
+    include_copy("docs/foo", {filename_pattern = "bar"})
+    run()
+    assert_output_file("docs/foo")
+    assert_action_counts(0, 1, 0)
   end)
 
   add_test("include dir containing a non lua or phobos file", function()
@@ -434,21 +453,21 @@ do
       end
       assert_action_counts(depth, 0, 0)
     end
-    add_test("include dir with recursion_depth 0, so nothing", function()
+    add_test("include 1 dir with recursion_depth 0, so nothing", function()
       test_recursion_depth(0)
     end)
-    add_test("include dir with recursion_depth 1", function()
+    add_test("include 1 dir with recursion_depth 1", function()
       test_recursion_depth(1)
     end)
-    add_test("include dir with recursion_depth 2", function()
+    add_test("include 1 dir with recursion_depth 2", function()
       test_recursion_depth(2)
     end)
-    add_test("include dir with recursion_depth 3", function()
+    add_test("include 1 dir with recursion_depth 3", function()
       test_recursion_depth(3)
     end)
   end
 
-  add_test("include file with recursion_depth 0, still included", function()
+  add_test("include 1 file with recursion_depth 0, still included", function()
     create_source_file("foo")
     include_file("foo", {recursion_depth = 0})
     run()
@@ -456,7 +475,28 @@ do
     assert_action_counts(1, 0, 0)
   end)
 
-  add_test("include file with false use_load", function()
+  add_test("include_copy 1 dir with recursion_depth 3", function()
+    create_file("foo")
+    create_file("one/bar")
+    create_file("one/two/baz")
+    create_file("one/two/three/bat")
+    include_copy(".", {recursion_depth = 3})
+    run()
+    assert_output_file("foo")
+    assert_output_file("one/bar")
+    assert_output_file("one/two/baz")
+    assert_action_counts(0, 3, 0)
+  end)
+
+  add_test("include_copy 1 file with recursion_depth 0, still included", function()
+    create_file("foo")
+    include_copy("foo", {recursion_depth = 0})
+    run()
+    assert_output_file("foo")
+    assert_action_counts(0, 1, 0)
+  end)
+
+  add_test("include 1 file with false use_load", function()
     create_source_file("foo")
     include_file("foo", {use_load = false})
     run()
@@ -465,7 +505,7 @@ do
     assert_action_counts(1, 0, 0)
   end)
 
-  add_test("include file with true use_load", function()
+  add_test("include 1 file with true use_load", function()
     create_source_file("foo")
     include_file("foo", {use_load = true})
     run()
@@ -474,7 +514,7 @@ do
     assert_action_counts(1, 0, 0)
   end)
 
-  add_test("include file with 10 error_message_count", function()
+  add_test("include 1 file with 10 error_message_count", function()
     create_source_file("foo")
     include_file("foo", {error_message_count = 10})
     run()
@@ -483,7 +523,7 @@ do
     assert_action_counts(1, 0, 0)
   end)
 
-  add_test("include file with 1 inject script", function()
+  add_test("include 1 file with 1 inject script", function()
     create_source_file("foo")
     create_inject_script_file("inject")
     local inject_scripts = {"scripts/inject".._pho}
@@ -494,7 +534,7 @@ do
     assert_action_counts(1, 0, 0)
   end)
 
-  add_test("include file with 3 inject scripts", function()
+  add_test("include 1 file with 3 inject scripts", function()
     create_source_file("foo")
     create_inject_script_file("inject_foo")
     create_inject_script_file("inject_bar")
@@ -652,7 +692,6 @@ do
   --   assert_action_counts(1, 0, 0)
   -- end)
 
-  -- TODO: include copy filename_pattern and recursion_depth
   -- TODO: outputting to the same file when compiling
   -- TODO: excluding files or directories that don't exist
   -- TODO: inject script incremental logic
