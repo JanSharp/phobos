@@ -122,7 +122,7 @@
 ---Only files matching this Lua pattern will be included/excluded.\
 ---The paths matched against this pattern will...
 ---
----- be relative to `source_path`
+---- be relative to `source_path` (`output_path` for delete actions)
 ---- have a leading `/` for convenience (so you can use `/` as an anchor for "the start of any entry")
 ---- use `/` as separators
 ---- include the file extension.

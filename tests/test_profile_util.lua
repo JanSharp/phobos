@@ -254,7 +254,47 @@ do
     return params
   end
 
+  local exclude_file
+  local exclude_dir
+  do
+    local function exclude(path, params)
+      params = params or {}
+      params.profile = profile
+      params.source_path = Path.new(path):normalize():str()
+      profile_util.exclude(params)
+      return params
+    end
+
+    ---@param params ExcludeParams
+    function exclude_file(path, params)
+      return exclude("src/"..path.._pho, params)
+    end
+
+    ---@param params ExcludeParams
+    function exclude_dir(path, params)
+      return exclude("src/"..path, params)
+    end
+  end
+
+  ---@param params ExcludeCopyParams
+  local function exclude_copy(path, params)
+    params = params or {}
+    params.profile = profile
+    params.source_path = Path.new("src/"..path):normalize():str()
+    profile_util.exclude_copy(params)
+  end
+
+  ---@param params ExcludeDeleteParams
+  local function exclude_delete(path, params)
+    params = params or {}
+    params.profile = profile
+    params.output_path = Path.new("src/"..path):normalize():str()
+    profile_util.exclude_delete(params)
+  end
+
   -- end of util functions
+
+  -- process_include
 
   add_test("run basic profile that does nothing", function()
     run()
@@ -825,6 +865,26 @@ do
 
   add_test("include_delete path that does not exist", function()
     include_delete("foo")
+    run()
+    assert_action_counts(0, 0, 0)
+  end)
+
+  -- process_exclude
+
+  add_test("exclude 1 file", function()
+    create_source_file("foo")
+    include_file("foo")
+    exclude_file("foo")
+    run()
+    assert_action_counts(0, 0, 0)
+  end)
+
+  add_test("exclude 1 dir with 3 files", function()
+    create_source_file("hi/foo")
+    create_source_file("hi/bar")
+    create_source_file("hi/baz")
+    include_dir("hi")
+    exclude_dir("hi")
     run()
     assert_action_counts(0, 0, 0)
   end)
