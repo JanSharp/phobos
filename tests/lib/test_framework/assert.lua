@@ -10,8 +10,23 @@ local function get_print_full_data_on_error_default()
   return print_full_data_on_error_default
 end
 
+local err_msg_handlers = {}
+
+local function push_err_msg_handler(handler)
+  err_msg_handlers[#err_msg_handlers+1] = handler
+end
+
+local function pop_err_msg_handler()
+  err_msg_handlers[#err_msg_handlers] = nil
+end
+
 local function add_msg(err, msg)
-  return err..(msg and ": "..msg or ".")
+  -- start at the inner most handler first which was the last one added,
+  -- which also means it is the inner most scope
+  for i = #err_msg_handlers, 1, -1 do
+    msg = err_msg_handlers[i](msg)
+  end
+  return err..(msg and (": "..msg) or ".")
 end
 
 local function assert(value, msg)
@@ -120,6 +135,8 @@ end
 return setmetatable({
   set_print_full_data_on_error_default = set_print_full_data_on_error_default,
   get_print_full_data_on_error_default = get_print_full_data_on_error_default,
+  push_err_msg_handler = push_err_msg_handler,
+  pop_err_msg_handler = pop_err_msg_handler,
   assert = assert,
   equals = equals,
   not_equals = not_equals,

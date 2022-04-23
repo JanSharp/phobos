@@ -142,6 +142,13 @@ do
     assert.equals("hello world", got, "contents after writing")
   end)
 
+  add_test("delete_file", function()
+    fs:add_dir("/foo")
+    io_util.delete_file(get_path("/foo"))
+    local got = fs:exists("/foo")
+    assert.equals(false, got, "existence of the supposed-to-be-deleted file")
+  end)
+
   do
     local function assert_target_file(prev_modification)
       local got = fs:exists("/bar")

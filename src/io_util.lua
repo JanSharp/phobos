@@ -176,13 +176,18 @@ local function copy(from, to)
   end
 end
 
+local function delete_file(path)
+  path = Path.new(path)
+
+  util.debug_assert(os.remove(path:str()))
+end
+
 local function move(from, to)
   from = Path.new(from)
   to = Path.new(to)
 
   copy(from, to)
-
-  util.debug_assert(os.remove(from:str()))
+  delete_file(from)
 end
 
 local function symlink(old, new)

@@ -44,8 +44,7 @@ local function get_compile_options(filename, index)
   local options = try_get_compile_options(filename, index)
   if not options then
     util.debug_abort("Unable to get compile options for '"..filename
-      ..(index and ("' (index "..index..")") or "'")..". Virtual file system tree:\n"
-      ..tutil.get_fs_tree("/")
+      ..(index and ("' (index "..index..")") or "'").."."
     )
   end
   return options
@@ -58,9 +57,13 @@ end
 
 local function assert_output_file(filename)
   if not io_util.exists("out/"..filename) then
-    assert(false, "Missing output file 'out/"..filename.."'. Virtual file system tree:\n"
-      ..tutil.get_fs_tree("/")
-    )
+    assert(false, "Missing output file 'out/"..filename.."'.")
+  end
+end
+
+local function assert_no_output_file(filename)
+  if io_util.exists("out/"..filename) then
+    assert(false, "Output file 'out/"..filename.."' should not exist.")
   end
 end
 
@@ -99,6 +102,10 @@ end
 
 do
   local scope = framework.scope:new_scope("profile_util")
+
+  local profile
+  local printed_messages
+
   function scope.before_all()
     virtual_io_util.hook()
     spy.hook(compile_util, "compile", function(options, context)
@@ -109,14 +116,16 @@ do
       end
       target[#target+1] = options
     end)
+    assert.push_err_msg_handler(function(msg)
+      return (msg and (msg.." ") or "").."Virtual file system tree at time of error:\n"..tutil.get_fs_tree("/")
+        .."\nprinted lines:\n"..table.concat(printed_messages, "\n")
+    end)
   end
   function scope.after_all()
     virtual_io_util.unhook()
     spy.unhook_all()
+    assert.pop_err_msg_handler()
   end
-
-  local profile
-  local printed_messages
 
   local assert_action_counts
   do
@@ -137,10 +146,10 @@ do
       assert.equals(expected_count, get_action_count("compiling"), "Amount of files being compiled.")
     end
     function assert_copying_x_files(expected_count)
-      assert.equals(expected_count, get_action_count("copying"), "Amount of files being compiled.")
+      assert.equals(expected_count, get_action_count("copying"), "Amount of files being copied.")
     end
     function assert_deleting_x_files(expected_count)
-      assert.equals(expected_count, get_action_count("deleting"), "Amount of files being compiled.")
+      assert.equals(expected_count, get_action_count("deleting"), "Amount of files being deleted.")
     end
     function assert_action_counts(compile, copy, delete)
       assert_compiling_x_files(compile)
@@ -190,7 +199,12 @@ do
   end
 
   local function create_output_file(filename, extension)
-    io_util.write_file("out/"..filename..(extension or _lua), "")
+    filename = "out/"..filename..(extension or "")
+    io_util.write_file(filename, "")
+  end
+
+  local function create_lua_output_file(filename, extension)
+    create_output_file(filename, extension or _lua)
   end
 
   local function create_inject_script_file(filename, extension, contents)
@@ -357,6 +371,26 @@ do
     assert.errors("No such file or directory '"..normalize_path("src/foo".._pho), run)
   end)
 
+  do
+    local function add_invalid_output_path_tests(label, include_func)
+      add_test(label.." with absolute output_path", function()
+        include_func("foo", {output_path = "/foo"})
+        assert.errors("'output_path' must be a relative path (output_path: '/foo').", run, nil, true)
+      end)
+
+      add_test(label.." with output_path outside of output dir using '..'", function()
+        include_func("foo", {output_path = ".././foo"})
+        assert.errors("Attempt to output files outside of the output directory. \z
+          (output_path: '.././foo', normalized: '../foo').", run, nil, true
+        )
+      end)
+    end
+
+    add_invalid_output_path_tests("include", include_file)
+    add_invalid_output_path_tests("include_copy", include_copy)
+    add_invalid_output_path_tests("include_delete", include_delete)
+  end
+
   add_test("include the same file twice with the same output path", function()
     create_source_file("foo")
     include_file("foo")
@@ -419,6 +453,25 @@ do
     run()
     assert_output_file("docs/foo")
     assert_action_counts(0, 1, 0)
+  end)
+
+  add_test("include_delete 1 dir with filename_pattern", function()
+    create_output_file("docs/foo")
+    create_output_file("docs/bar")
+    create_output_file("docs/baz")
+    include_delete("docs", {filename_pattern = "ba[rz]"})
+    run()
+    assert_no_output_file("docs/bar")
+    assert_no_output_file("docs/baz")
+    assert_action_counts(0, 0, 2)
+  end)
+
+  add_test("include_delete 1 file not matching a filename_pattern, still included", function()
+    create_output_file("docs/foo")
+    include_delete("docs/foo", {filename_pattern = "bar"})
+    run()
+    assert_no_output_file("docs/foo")
+    assert_action_counts(0, 0, 1)
   end)
 
   add_test("include dir containing a non lua or phobos file", function()
@@ -494,6 +547,27 @@ do
     run()
     assert_output_file("foo")
     assert_action_counts(0, 1, 0)
+  end)
+
+  add_test("include_delete 1 dir with recursion_depth 3", function()
+    create_output_file("foo")
+    create_output_file("one/bar")
+    create_output_file("one/two/baz")
+    create_output_file("one/two/three/bat")
+    include_delete(".", {recursion_depth = 3})
+    run()
+    assert_no_output_file("foo")
+    assert_no_output_file("one/bar")
+    assert_no_output_file("one/two/baz")
+    assert_action_counts(0, 0, 3)
+  end)
+
+  add_test("include_delete 1 file with recursion_depth 0, still included", function()
+    create_output_file("foo")
+    include_delete("foo", {recursion_depth = 0})
+    run()
+    assert_no_output_file("foo")
+    assert_action_counts(0, 0, 1)
   end)
 
   add_test("include 1 file with false use_load", function()
@@ -650,6 +724,14 @@ do
     assert_action_counts(0, 2, 0)
   end)
 
+  add_test("include_copy 1 dir with 1 files", function()
+    create_file("docs/foo")
+    include_copy("docs")
+    run()
+    assert_output_file("docs/foo")
+    assert_action_counts(0, 1, 0)
+  end)
+
   add_test("include_copy 1 dir with 3 files", function()
     create_file("docs/foo")
     create_file("docs/bar")
@@ -660,14 +742,6 @@ do
     assert_output_file("docs/bar")
     assert_output_file("docs/baz")
     assert_action_counts(0, 3, 0)
-  end)
-
-  add_test("include_copy 1 dir with 1 files", function()
-    create_file("docs/foo")
-    include_copy("docs")
-    run()
-    assert_output_file("docs/foo")
-    assert_action_counts(0, 1, 0)
   end)
 
   add_test("include_copy 2 dirs with 3 files total", function()
@@ -681,6 +755,78 @@ do
     assert_output_file("docs1/bar")
     assert_output_file("docs2/baz")
     assert_action_counts(0, 3, 0)
+  end)
+
+  add_test("include_copy path that does not exist", function()
+    include_copy("docs/foo")
+    assert.errors("No such file or directory '"..normalize_path("docs/foo"), run)
+  end)
+
+  add_test("include_delete 1 file", function()
+    create_output_file("foo")
+    include_delete("foo")
+    run()
+    assert_no_output_file("foo")
+    assert_action_counts(0, 0, 1)
+  end)
+
+  add_test("include_delete 2 files", function()
+    create_output_file("foo")
+    create_output_file("bar")
+    include_delete("foo")
+    include_delete("bar")
+    run()
+    assert_no_output_file("foo")
+    assert_no_output_file("bar")
+    assert_action_counts(0, 0, 2)
+  end)
+
+  add_test("include_delete the same file twice", function()
+    create_output_file("foo")
+    include_delete("foo")
+    include_delete("foo")
+    run()
+    assert_no_output_file("foo")
+    assert_action_counts(0, 0, 1)
+  end)
+
+  add_test("include_delete 1 dir with 1 file", function()
+    create_output_file("foo")
+    include_delete(".")
+    run()
+    assert_no_output_file("foo")
+    assert_action_counts(0, 0, 1)
+  end)
+
+  add_test("include_delete 1 dir with 3 files", function()
+    create_output_file("foo/bar")
+    create_output_file("foo/baz")
+    create_output_file("foo/bat")
+    include_delete("foo")
+    run()
+    assert_no_output_file("foo/bar")
+    assert_no_output_file("foo/baz")
+    assert_no_output_file("foo/bat")
+    assert_action_counts(0, 0, 3)
+  end)
+
+  add_test("include_delete 2 dirs with 3 files total", function()
+    create_output_file("one/foo")
+    create_output_file("two/bar")
+    create_output_file("two/baz")
+    include_delete("one")
+    include_delete("two")
+    run()
+    assert_no_output_file("one/foo")
+    assert_no_output_file("two/bar")
+    assert_no_output_file("two/baz")
+    assert_action_counts(0, 0, 3)
+  end)
+
+  add_test("include_delete path that does not exist", function()
+    include_delete("foo")
+    run()
+    assert_action_counts(0, 0, 0)
   end)
 
   -- add_test("include 2 files with the same name but different extensions, outputting to the same file", function()

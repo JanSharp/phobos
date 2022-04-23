@@ -405,11 +405,11 @@ end
 local function normalize_output_path(output_path)
   local normalized_output_path = Path.new(output_path):normalize()
   if normalized_output_path:is_absolute() then
-    util.abort("'output_path' has to be a relative path (output_path: '"..output_path.."')")
+    util.abort("'output_path' must be a relative path (output_path: '"..output_path.."').")
   end
   if normalized_output_path.entries[1] == ".." then
     util.abort("Attempt to output files outside of the output directory. \z
-      (output_path: '"..output_path.."', normalized: '"..normalized_output_path:str().."')"
+      (output_path: '"..output_path.."', normalized: '"..normalized_output_path:str().."')."
     )
   end
   return normalized_output_path
@@ -888,7 +888,7 @@ local function run_profile(profile, print)
   for i = compile_count + copy_count + 1, compile_count + copy_count + delete_count do
     local file = file_list[i]
     print("["..(i - compile_count - copy_count).."/"..delete_count.."] "..file.output_filename)
-    os.remove(file.output_filename)
+    io_util.delete_file(file.output_filename)
     -- TODO: somehow detect empty directories and have an option to remove them
   end
 

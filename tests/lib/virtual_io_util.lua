@@ -70,6 +70,11 @@ function fake_io_util.copy(from, to)
   fake_io_util.write_file(to, contents)
 end
 
+function fake_io_util.delete_file(path)
+  path = ensure_is_path(path)
+  fs:remove(path:str())
+end
+
 function fake_io_util.move(from, to)
   from = ensure_is_path(from)
   fake_io_util.copy(from, to)
