@@ -17,8 +17,9 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
       field = "print_failed",
       long = "print-failed",
       short = "f",
-      description = "Only print tests that failed. Scopes will still be\n\z
-                     printed.",
+      description = "Only print tests that failed and scopes containing\n\z
+                     tests that failed, except the root result that\n\z
+                     always gets printed.",
       flag = true,
     },
     {
@@ -32,7 +33,7 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
       field = "test_ids",
       long = "test-ids",
       short = "i",
-      description = "Only run the test with the given ids.",
+      description = "Only run tests with the given ids.",
       type = "number",
       optional = true,
       min_params = 0,
