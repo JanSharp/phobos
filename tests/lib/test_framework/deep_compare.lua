@@ -1,7 +1,7 @@
 
 ---cSpell:ignore userdata, upval, upvals, nups, bytecode, metatable
 
-local pretty_print = require("pretty_print")
+local pretty_print = require("pretty_print").pretty_print
 
 -- deep compare compares the contents of 2 values
 

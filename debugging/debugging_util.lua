@@ -1,15 +1,12 @@
 
----@type LFS
-local lfs = require("lfs")
-local Path = require("lib.LuaPath.path")
-Path.use_forward_slash_as_main_separator_on_windows()
+local Path = require("lib.path")
+Path.set_main_separator("/")
 
 local function find_lua_source_files()
   local filenames = {}
   local function find_files(dir)
-    for entry_name in lfs.dir(dir and dir:str() or ".") do
-      if entry_name ~= "." and entry_name ~= ".."
-        and entry_name:sub(1, 1) ~= "."
+    for entry_name in (dir or Path.new()):enumerate() do
+      if entry_name:sub(1, 1) ~= "."
         and entry_name ~= "bin"
         and entry_name ~= "out"
         and entry_name ~= "temp"

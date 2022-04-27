@@ -33,7 +33,7 @@
         "1280x720",
       ],
       "factorioPath": "${env:PHOBOS_FACTORIO_PATH}",
-      "modsPath": "${workspaceFolder}/out/factorio/debug",
+      "modsPath": "${workspaceFolder}/out/debug_factorio",
     },
     {
       "name": "Factorio Mod (minimal no base)",
@@ -54,7 +54,7 @@
         "1280x720",
       ],
       "factorioPath": "${env:PHOBOS_FACTORIO_PATH}",
-      "modsPath": "${workspaceFolder}/out/factorio/debug",
+      "modsPath": "${workspaceFolder}/out/debug_factorio",
     },
     {
       "name": "Lua debugging/main",
@@ -295,131 +295,6 @@
       },
     },
     {
-      "name": "Lua scripts/build_src",
-      "type": "lua-local",
-      "request": "launch",
-      "linux": {
-        "args": [
-          // root
-          "src",
-          // c_lib_root
-          "bin/linux",
-          // c_lib_extension
-          ".so",
-          // main_filename
-          "scripts/build_src.lua",
-          // arguments passed along to the main file
-          "--profile",
-          "debug",
-        ],
-        "program": {
-          "file": "src/entry_point.lua",
-          "lua": "bin/linux/lua",
-        },
-      },
-      "osx": {
-        "args": [
-          // root
-          "src",
-          // c_lib_root
-          "bin/osx",
-          // c_lib_extension
-          ".so",
-          // main_filename
-          "scripts/build_src.lua",
-          // arguments passed along to the main file
-          "--profile",
-          "debug",
-        ],
-        "program": {
-          "file": "src/entry_point.lua",
-          "lua": "bin/osx/lua",
-        },
-      },
-      "windows": {
-        "args": [
-          // root
-          "src",
-          // c_lib_root
-          "bin/windows",
-          // c_lib_extension
-          ".dll",
-          // main_filename
-          "scripts/build_src.lua",
-          // arguments passed along to the main file
-          "--profile",
-          "debug",
-        ],
-        "program": {
-          "file": "src/entry_point.lua",
-          "lua": "bin/windows/lua",
-        },
-      },
-    },
-    {
-      "name": "Phobos scripts/build_src",
-      "type": "lua-local",
-      "request": "launch",
-      "preLaunchTask": "Build Debug",
-      "linux": {
-        "args": [
-          // root
-          "out/src/debug",
-          // c_lib_root
-          "bin/linux",
-          // c_lib_extension
-          ".so",
-          // main_filename
-          "scripts/build_src.lua",
-          // arguments passed along to the main file
-          "--profile",
-          "debug",
-        ],
-        "program": {
-          "file": "out/src/debug/entry_point.lua",
-          "lua": "bin/linux/lua",
-        },
-      },
-      "osx": {
-        "args": [
-          // root
-          "out/src/debug",
-          // c_lib_root
-          "bin/osx",
-          // c_lib_extension
-          ".so",
-          // main_filename
-          "scripts/build_src.lua",
-          // arguments passed along to the main file
-          "--profile",
-          "debug",
-        ],
-        "program": {
-          "file": "out/src/debug/entry_point.lua",
-          "lua": "bin/osx/lua",
-        },
-      },
-      "windows": {
-        "args": [
-          // root
-          "out/src/debug",
-          // c_lib_root
-          "bin/windows",
-          // c_lib_extension
-          ".dll",
-          // main_filename
-          "scripts/build_src.lua",
-          // arguments passed along to the main file
-          "--profile",
-          "debug",
-        ],
-        "program": {
-          "file": "out/src/debug/entry_point.lua",
-          "lua": "bin/windows/lua",
-        },
-      },
-    },
-    {
       "name": "Lua tests/compile_test",
       "type": "lua-local",
       "request": "launch",
@@ -632,6 +507,824 @@
           "lua": "bin/windows/lua",
         },
       },
+    },
+    {
+      "name": "Lua tests/main test id",
+      "type": "lua-local",
+      "request": "launch",
+      "linux": {
+        "args": [
+          // root
+          "src",
+          // c_lib_root
+          "bin/linux",
+          // c_lib_extension
+          ".so",
+          // main_filename
+          "tests/main.lua",
+          // arguments passed along to the main file
+          "--test-ids",
+          "${input:testId}",
+        ],
+        "program": {
+          "file": "src/entry_point.lua",
+          "lua": "bin/linux/lua",
+        },
+      },
+      "osx": {
+        "args": [
+          // root
+          "src",
+          // c_lib_root
+          "bin/osx",
+          // c_lib_extension
+          ".so",
+          // main_filename
+          "tests/main.lua",
+          // arguments passed along to the main file
+          "--test-ids",
+          "${input:testId}",
+        ],
+        "program": {
+          "file": "src/entry_point.lua",
+          "lua": "bin/osx/lua",
+        },
+      },
+      "windows": {
+        "args": [
+          // root
+          "src",
+          // c_lib_root
+          "bin/windows",
+          // c_lib_extension
+          ".dll",
+          // main_filename
+          "tests/main.lua",
+          // arguments passed along to the main file
+          "--test-ids",
+          "${input:testId}",
+        ],
+        "program": {
+          "file": "src/entry_point.lua",
+          "lua": "bin/windows/lua",
+        },
+      },
+    },
+    {
+      "name": "Phobos tests/main test id",
+      "type": "lua-local",
+      "request": "launch",
+      "preLaunchTask": "Build Debug",
+      "linux": {
+        "args": [
+          // root
+          "out/src/debug",
+          // c_lib_root
+          "bin/linux",
+          // c_lib_extension
+          ".so",
+          // main_filename
+          "tests/main.lua",
+          // arguments passed along to the main file
+          "--test-ids",
+          "${input:testId}",
+        ],
+        "program": {
+          "file": "out/src/debug/entry_point.lua",
+          "lua": "bin/linux/lua",
+        },
+      },
+      "osx": {
+        "args": [
+          // root
+          "out/src/debug",
+          // c_lib_root
+          "bin/osx",
+          // c_lib_extension
+          ".so",
+          // main_filename
+          "tests/main.lua",
+          // arguments passed along to the main file
+          "--test-ids",
+          "${input:testId}",
+        ],
+        "program": {
+          "file": "out/src/debug/entry_point.lua",
+          "lua": "bin/osx/lua",
+        },
+      },
+      "windows": {
+        "args": [
+          // root
+          "out/src/debug",
+          // c_lib_root
+          "bin/windows",
+          // c_lib_extension
+          ".dll",
+          // main_filename
+          "tests/main.lua",
+          // arguments passed along to the main file
+          "--test-ids",
+          "${input:testId}",
+        ],
+        "program": {
+          "file": "out/src/debug/entry_point.lua",
+          "lua": "bin/windows/lua",
+        },
+      },
+    },
+    {
+      "name": "Lua tests/main test scope",
+      "type": "lua-local",
+      "request": "launch",
+      "linux": {
+        "args": [
+          // root
+          "src",
+          // c_lib_root
+          "bin/linux",
+          // c_lib_extension
+          ".so",
+          // main_filename
+          "tests/main.lua",
+          // arguments passed along to the main file
+          "--scopes",
+          "${input:testScope}",
+        ],
+        "program": {
+          "file": "src/entry_point.lua",
+          "lua": "bin/linux/lua",
+        },
+      },
+      "osx": {
+        "args": [
+          // root
+          "src",
+          // c_lib_root
+          "bin/osx",
+          // c_lib_extension
+          ".so",
+          // main_filename
+          "tests/main.lua",
+          // arguments passed along to the main file
+          "--scopes",
+          "${input:testScope}",
+        ],
+        "program": {
+          "file": "src/entry_point.lua",
+          "lua": "bin/osx/lua",
+        },
+      },
+      "windows": {
+        "args": [
+          // root
+          "src",
+          // c_lib_root
+          "bin/windows",
+          // c_lib_extension
+          ".dll",
+          // main_filename
+          "tests/main.lua",
+          // arguments passed along to the main file
+          "--scopes",
+          "${input:testScope}",
+        ],
+        "program": {
+          "file": "src/entry_point.lua",
+          "lua": "bin/windows/lua",
+        },
+      },
+    },
+    {
+      "name": "Phobos tests/main test scope",
+      "type": "lua-local",
+      "request": "launch",
+      "preLaunchTask": "Build Debug",
+      "linux": {
+        "args": [
+          // root
+          "out/src/debug",
+          // c_lib_root
+          "bin/linux",
+          // c_lib_extension
+          ".so",
+          // main_filename
+          "tests/main.lua",
+          // arguments passed along to the main file
+          "--scopes",
+          "${input:testScope}",
+        ],
+        "program": {
+          "file": "out/src/debug/entry_point.lua",
+          "lua": "bin/linux/lua",
+        },
+      },
+      "osx": {
+        "args": [
+          // root
+          "out/src/debug",
+          // c_lib_root
+          "bin/osx",
+          // c_lib_extension
+          ".so",
+          // main_filename
+          "tests/main.lua",
+          // arguments passed along to the main file
+          "--scopes",
+          "${input:testScope}",
+        ],
+        "program": {
+          "file": "out/src/debug/entry_point.lua",
+          "lua": "bin/osx/lua",
+        },
+      },
+      "windows": {
+        "args": [
+          // root
+          "out/src/debug",
+          // c_lib_root
+          "bin/windows",
+          // c_lib_extension
+          ".dll",
+          // main_filename
+          "tests/main.lua",
+          // arguments passed along to the main file
+          "--scopes",
+          "${input:testScope}",
+        ],
+        "program": {
+          "file": "out/src/debug/entry_point.lua",
+          "lua": "bin/windows/lua",
+        },
+      },
+    },
+    {
+      "name": "Lua tests/main test scope and id",
+      "type": "lua-local",
+      "request": "launch",
+      "linux": {
+        "args": [
+          // root
+          "src",
+          // c_lib_root
+          "bin/linux",
+          // c_lib_extension
+          ".so",
+          // main_filename
+          "tests/main.lua",
+          // arguments passed along to the main file
+          "--scopes",
+          "${input:testScope}",
+          "--test-ids",
+          "${input:testId}",
+        ],
+        "program": {
+          "file": "src/entry_point.lua",
+          "lua": "bin/linux/lua",
+        },
+      },
+      "osx": {
+        "args": [
+          // root
+          "src",
+          // c_lib_root
+          "bin/osx",
+          // c_lib_extension
+          ".so",
+          // main_filename
+          "tests/main.lua",
+          // arguments passed along to the main file
+          "--scopes",
+          "${input:testScope}",
+          "--test-ids",
+          "${input:testId}",
+        ],
+        "program": {
+          "file": "src/entry_point.lua",
+          "lua": "bin/osx/lua",
+        },
+      },
+      "windows": {
+        "args": [
+          // root
+          "src",
+          // c_lib_root
+          "bin/windows",
+          // c_lib_extension
+          ".dll",
+          // main_filename
+          "tests/main.lua",
+          // arguments passed along to the main file
+          "--scopes",
+          "${input:testScope}",
+          "--test-ids",
+          "${input:testId}",
+        ],
+        "program": {
+          "file": "src/entry_point.lua",
+          "lua": "bin/windows/lua",
+        },
+      },
+    },
+    {
+      "name": "Phobos tests/main test scope and id",
+      "type": "lua-local",
+      "request": "launch",
+      "preLaunchTask": "Build Debug",
+      "linux": {
+        "args": [
+          // root
+          "out/src/debug",
+          // c_lib_root
+          "bin/linux",
+          // c_lib_extension
+          ".so",
+          // main_filename
+          "tests/main.lua",
+          // arguments passed along to the main file
+          "--scopes",
+          "${input:testScope}",
+          "--test-ids",
+          "${input:testId}",
+        ],
+        "program": {
+          "file": "out/src/debug/entry_point.lua",
+          "lua": "bin/linux/lua",
+        },
+      },
+      "osx": {
+        "args": [
+          // root
+          "out/src/debug",
+          // c_lib_root
+          "bin/osx",
+          // c_lib_extension
+          ".so",
+          // main_filename
+          "tests/main.lua",
+          // arguments passed along to the main file
+          "--scopes",
+          "${input:testScope}",
+          "--test-ids",
+          "${input:testId}",
+        ],
+        "program": {
+          "file": "out/src/debug/entry_point.lua",
+          "lua": "bin/osx/lua",
+        },
+      },
+      "windows": {
+        "args": [
+          // root
+          "out/src/debug",
+          // c_lib_root
+          "bin/windows",
+          // c_lib_extension
+          ".dll",
+          // main_filename
+          "tests/main.lua",
+          // arguments passed along to the main file
+          "--scopes",
+          "${input:testScope}",
+          "--test-ids",
+          "${input:testId}",
+        ],
+        "program": {
+          "file": "out/src/debug/entry_point.lua",
+          "lua": "bin/windows/lua",
+        },
+      },
+    },
+    {
+      "name": "Lua src/main (debug profile)",
+      "type": "lua-local",
+      "request": "launch",
+      "linux": {
+        "args": [
+          // root
+          "src",
+          // c_lib_root
+          "bin/linux",
+          // c_lib_extension
+          ".so",
+          // main_filename
+          "src/main.lua",
+          // arguments passed along to the main file
+          "--profile-names",
+          "debug",
+          "--",
+          "--platform",
+          "linux",
+        ],
+        "program": {
+          "file": "src/entry_point.lua",
+          "lua": "bin/linux/lua",
+        },
+      },
+      "osx": {
+        "args": [
+          // root
+          "src",
+          // c_lib_root
+          "bin/osx",
+          // c_lib_extension
+          ".so",
+          // main_filename
+          "src/main.lua",
+          // arguments passed along to the main file
+          "--profile-names",
+          "debug",
+          "--",
+          "--platform",
+          "osx",
+        ],
+        "program": {
+          "file": "src/entry_point.lua",
+          "lua": "bin/osx/lua",
+        },
+      },
+      "windows": {
+        "args": [
+          // root
+          "src",
+          // c_lib_root
+          "bin/windows",
+          // c_lib_extension
+          ".dll",
+          // main_filename
+          "src/main.lua",
+          // arguments passed along to the main file
+          "--profile-names",
+          "debug",
+          "--",
+          "--platform",
+          "windows",
+        ],
+        "program": {
+          "file": "src/entry_point.lua",
+          "lua": "bin/windows/lua",
+        },
+      },
+    },
+    {
+      "name": "Phobos src/main (debug profile)",
+      "type": "lua-local",
+      "request": "launch",
+      "preLaunchTask": "Build Debug",
+      "linux": {
+        "args": [
+          // root
+          "out/src/debug",
+          // c_lib_root
+          "bin/linux",
+          // c_lib_extension
+          ".so",
+          // main_filename
+          "out/src/debug/main.lua",
+          // arguments passed along to the main file
+          "--profile-names",
+          "debug",
+          "--",
+          "--platform",
+          "linux",
+        ],
+        "program": {
+          "file": "out/src/debug/entry_point.lua",
+          "lua": "bin/linux/lua",
+        },
+      },
+      "osx": {
+        "args": [
+          // root
+          "out/src/debug",
+          // c_lib_root
+          "bin/osx",
+          // c_lib_extension
+          ".so",
+          // main_filename
+          "out/src/debug/main.lua",
+          // arguments passed along to the main file
+          "--profile-names",
+          "debug",
+          "--",
+          "--platform",
+          "osx",
+        ],
+        "program": {
+          "file": "out/src/debug/entry_point.lua",
+          "lua": "bin/osx/lua",
+        },
+      },
+      "windows": {
+        "args": [
+          // root
+          "out/src/debug",
+          // c_lib_root
+          "bin/windows",
+          // c_lib_extension
+          ".dll",
+          // main_filename
+          "out/src/debug/main.lua",
+          // arguments passed along to the main file
+          "--profile-names",
+          "debug",
+          "--",
+          "--platform",
+          "windows",
+        ],
+        "program": {
+          "file": "out/src/debug/entry_point.lua",
+          "lua": "bin/windows/lua",
+        },
+      },
+    },
+    {
+      "name": "Lua src/main (debug profile with docs)",
+      "type": "lua-local",
+      "request": "launch",
+      "linux": {
+        "args": [
+          // root
+          "src",
+          // c_lib_root
+          "bin/linux",
+          // c_lib_extension
+          ".so",
+          // main_filename
+          "src/main.lua",
+          // arguments passed along to the main file
+          "--profile-names",
+          "debug",
+          "--",
+          "--platform",
+          "linux",
+          "--generate-docs",
+        ],
+        "program": {
+          "file": "src/entry_point.lua",
+          "lua": "bin/linux/lua",
+        },
+      },
+      "osx": {
+        "args": [
+          // root
+          "src",
+          // c_lib_root
+          "bin/osx",
+          // c_lib_extension
+          ".so",
+          // main_filename
+          "src/main.lua",
+          // arguments passed along to the main file
+          "--profile-names",
+          "debug",
+          "--",
+          "--platform",
+          "osx",
+          "--generate-docs",
+        ],
+        "program": {
+          "file": "src/entry_point.lua",
+          "lua": "bin/osx/lua",
+        },
+      },
+      "windows": {
+        "args": [
+          // root
+          "src",
+          // c_lib_root
+          "bin/windows",
+          // c_lib_extension
+          ".dll",
+          // main_filename
+          "src/main.lua",
+          // arguments passed along to the main file
+          "--profile-names",
+          "debug",
+          "--",
+          "--platform",
+          "windows",
+          "--generate-docs",
+        ],
+        "program": {
+          "file": "src/entry_point.lua",
+          "lua": "bin/windows/lua",
+        },
+      },
+    },
+    {
+      "name": "Phobos src/main (debug profile with docs)",
+      "type": "lua-local",
+      "request": "launch",
+      "preLaunchTask": "Build Debug",
+      "linux": {
+        "args": [
+          // root
+          "out/src/debug",
+          // c_lib_root
+          "bin/linux",
+          // c_lib_extension
+          ".so",
+          // main_filename
+          "out/src/debug/main.lua",
+          // arguments passed along to the main file
+          "--profile-names",
+          "debug",
+          "--",
+          "--platform",
+          "linux",
+          "--generate-docs",
+        ],
+        "program": {
+          "file": "out/src/debug/entry_point.lua",
+          "lua": "bin/linux/lua",
+        },
+      },
+      "osx": {
+        "args": [
+          // root
+          "out/src/debug",
+          // c_lib_root
+          "bin/osx",
+          // c_lib_extension
+          ".so",
+          // main_filename
+          "out/src/debug/main.lua",
+          // arguments passed along to the main file
+          "--profile-names",
+          "debug",
+          "--",
+          "--platform",
+          "osx",
+          "--generate-docs",
+        ],
+        "program": {
+          "file": "out/src/debug/entry_point.lua",
+          "lua": "bin/osx/lua",
+        },
+      },
+      "windows": {
+        "args": [
+          // root
+          "out/src/debug",
+          // c_lib_root
+          "bin/windows",
+          // c_lib_extension
+          ".dll",
+          // main_filename
+          "out/src/debug/main.lua",
+          // arguments passed along to the main file
+          "--profile-names",
+          "debug",
+          "--",
+          "--platform",
+          "windows",
+          "--generate-docs",
+        ],
+        "program": {
+          "file": "out/src/debug/entry_point.lua",
+          "lua": "bin/windows/lua",
+        },
+      },
+    },
+    {
+      "name": "Lua src/main (debug_factorio profile)",
+      "type": "lua-local",
+      "request": "launch",
+      "linux": {
+        "args": [
+          // root
+          "src",
+          // c_lib_root
+          "bin/linux",
+          // c_lib_extension
+          ".so",
+          // main_filename
+          "src/main.lua",
+          // arguments passed along to the main file
+          "--profile-names",
+          "debug_factorio",
+        ],
+        "program": {
+          "file": "src/entry_point.lua",
+          "lua": "bin/linux/lua",
+        },
+      },
+      "osx": {
+        "args": [
+          // root
+          "src",
+          // c_lib_root
+          "bin/osx",
+          // c_lib_extension
+          ".so",
+          // main_filename
+          "src/main.lua",
+          // arguments passed along to the main file
+          "--profile-names",
+          "debug_factorio",
+        ],
+        "program": {
+          "file": "src/entry_point.lua",
+          "lua": "bin/osx/lua",
+        },
+      },
+      "windows": {
+        "args": [
+          // root
+          "src",
+          // c_lib_root
+          "bin/windows",
+          // c_lib_extension
+          ".dll",
+          // main_filename
+          "src/main.lua",
+          // arguments passed along to the main file
+          "--profile-names",
+          "debug_factorio",
+        ],
+        "program": {
+          "file": "src/entry_point.lua",
+          "lua": "bin/windows/lua",
+        },
+      },
+    },
+    {
+      "name": "Phobos src/main (debug_factorio profile)",
+      "type": "lua-local",
+      "request": "launch",
+      "preLaunchTask": "Build Debug",
+      "linux": {
+        "args": [
+          // root
+          "out/src/debug",
+          // c_lib_root
+          "bin/linux",
+          // c_lib_extension
+          ".so",
+          // main_filename
+          "out/src/debug/main.lua",
+          // arguments passed along to the main file
+          "--profile-names",
+          "debug_factorio",
+        ],
+        "program": {
+          "file": "out/src/debug/entry_point.lua",
+          "lua": "bin/linux/lua",
+        },
+      },
+      "osx": {
+        "args": [
+          // root
+          "out/src/debug",
+          // c_lib_root
+          "bin/osx",
+          // c_lib_extension
+          ".so",
+          // main_filename
+          "out/src/debug/main.lua",
+          // arguments passed along to the main file
+          "--profile-names",
+          "debug_factorio",
+        ],
+        "program": {
+          "file": "out/src/debug/entry_point.lua",
+          "lua": "bin/osx/lua",
+        },
+      },
+      "windows": {
+        "args": [
+          // root
+          "out/src/debug",
+          // c_lib_root
+          "bin/windows",
+          // c_lib_extension
+          ".dll",
+          // main_filename
+          "out/src/debug/main.lua",
+          // arguments passed along to the main file
+          "--profile-names",
+          "debug_factorio",
+        ],
+        "program": {
+          "file": "out/src/debug/entry_point.lua",
+          "lua": "bin/windows/lua",
+        },
+      },
+    },
+  ],
+  "inputs": [
+    {
+      "id": "testId",
+      "type": "promptString",
+      "description": "The test id of the test to run.",
+      "password": false,
+    },
+    {
+      "id": "testScope",
+      "type": "promptString",
+      "description": "The scope to run.",
+      "password": false,
     },
   ],
 }

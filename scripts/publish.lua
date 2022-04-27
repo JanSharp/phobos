@@ -1,11 +1,12 @@
 
----@type LFS
-local lfs = require("lfs")
-local Path = require("lib.LuaPath.path")
-Path.use_forward_slash_as_main_separator_on_windows()
+local Path = require("lib.path")
+Path.set_main_separator("/")
 local arg_parser = require("lib.LuaArgParser.arg_parser")
 local io_util = require("io_util")
 local changelog_util = require("scripts.changelog_util")
+local shell_util = require("shell_util")
+local escape_arg = shell_util.escape_arg
+local util = require("util")
 
 local skip_able = {
   "skip_ensure_command_availability",
@@ -14,8 +15,8 @@ local skip_able = {
   "skip_tests",
   "skip_date_stamp_changelog",
   "skip_write_phobos_version",
-  "skip_build",
   "skip_cleanup_temp_dir",
+  "skip_build",
   "skip_package",
   "skip_preparation_commit",
   "skip_github_release",
@@ -50,11 +51,8 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
     end)(),
   },
 })
-if not args then return end
-
-local function escape_arg(arg)
-  return '"'..arg:gsub("[$`\"\\]", "\\%0")..'"'
-end
+if not args then util.abort() end
+if args.help then return end
 
 local function run(...)
   local command = table.concat({...}, " ")
@@ -82,6 +80,14 @@ local function seven_zip(...)
   return run("7z", ...)
 end
 
+local function phobos(...)
+  local command = table.concat({"phobos", ...}, " ")
+  if args.verbose then
+    print("  "..command)
+  end
+  return os.execute(command)
+end
+
 local main_branch = "main"
 local current_branch
 
@@ -99,8 +105,9 @@ if not args.skip_ensure_command_availability then
   ensure_command_is_available("7z", "7 zip (look for p7zip in your \z
     package manager on Linux or MacOS (ref: brew?), 7zip on windows)"
   )
+  ensure_command_is_available("phobos", "Phobos (install the previous version of the Phobos standalone)")
   if missing_commands[1] then
-    error("Missing programs "..table.concat(missing_commands, ", "))
+    util.abort("Missing programs "..table.concat(missing_commands, ", "))
   end
 end
 
@@ -109,55 +116,52 @@ print("Checking git status")
 do
   current_branch = assert(git("branch", "--show-current")[1]):gsub("\n$", "")
   if not args.skip_ensure_main_branch and current_branch ~= main_branch then
-    error("git must be on branch '"..main_branch.."', but is on '"..current_branch.."'.")
+    util.abort("git must be on branch '"..main_branch.."', but is on '"..current_branch.."'.")
   end
   local git_status = git("status", "--porcelain")
   if not args.skip_ensure_clean_working_tree and git_status[1] then
-    error("git working tree must be clean")
+    util.abort("git working tree must be clean")
   end
 end
 
 -- run all tests (currently testing is very crude, so just `tests/compile_test.lua`)
 if not args.skip_tests then
   print("Running tests")
-  local success, err = pcall(loadfile("tests/compile_test.lua"), table.unpack{
+  local success, err = pcall(loadfile("tests/main.lua"), table.unpack{
+    "--print-failed",
+    "--print-stacktrace",
+  })
+  if not success then
+    util.abort("Tests failed")
+  end
+  success, err = pcall(loadfile("tests/compile_test.lua"), table.unpack{
     "--test-disassembler",
-    -- "--ensure-clean", -- see compile_test.lua about performance problems
+    "--ensure-clean",
     "--test-formatter",
   })
   if not success then
     print(err)
     print()
-    error("Tests failed")
+    util.abort("Tests failed")
   end
 end
 
 -- get version from info.json
 print("Reading info.json")
-local info_json
-do
-  local file = assert(io.open("info.json", "r"))
-  info_json = file:read("*a")
-  assert(file:close())
-end
+local info_json = io_util.read_file("info.json")
 local info_json_version_pattern = "(\"version\"%s*:%s*\")(%d+%.%d+%.%d+)\""
 local version_str = select(2, info_json:match(info_json_version_pattern))
 if not version_str then
-  error("Unable to get version from info.json")
+  util.abort("Unable to get version from info.json")
 end
 local version = changelog_util.parse_version(version_str)
 if version_str ~= changelog_util.print_version(version) then
-  error("Version "..version_str.." has leading 0s. It should be "..changelog_util.print_version(version))
+  util.abort("Version "..version_str.." has leading 0s. It should be "..changelog_util.print_version(version))
 end
 
 -- get version_block from changelog.txt for that version
 print("Extracting version block for version "..version_str.." from changelog.txt")
-local changelog
-do
-  local file = assert(io.open("changelog.txt"))
-  changelog = changelog_util.decode(file:read("*a"))
-  assert(file:close())
-end
+local changelog = io_util.read_file("changelog.txt")
 local current_version_block
 for _, version_block in ipairs(changelog) do
   if changelog_util.compare_version(version_block.version, version) then
@@ -166,7 +170,7 @@ for _, version_block in ipairs(changelog) do
   end
 end
 if not current_version_block then
-  error("Could not find a version block for version "..version_str.." in changelog.txt")
+  util.abort("Could not find a version block for version "..version_str.." in changelog.txt")
 end
 
 -- date stamp that version block
@@ -174,56 +178,52 @@ if not args.skip_date_stamp_changelog then
   local date = os.date("!%Y-%m-%d")
   print("Setting date for version block for version "..version_str.." to "..date.." in changelog.txt")
   current_version_block.date = date
-  local file = assert(io.open("changelog.txt", "w"))
-  assert(file:write(changelog_util.encode(changelog)))
-  assert(file:close())
+  io_util.write_file("changelog.txt", changelog_util.encode(changelog))
 end
 
 local function write_phobos_version()
   if not args.skip_write_phobos_version then
     print("Writing version "..version_str.." to src/phobos_version.lua")
-    local file = assert(io.open("src/phobos_version.lua", "w"))
-    assert(file:write("\n"
-      .."----------------------------------------------------------------------------------------------------\n"
-      .."-- This file is generated by the publish script\n"
-      .."----------------------------------------------------------------------------------------------------\n"
-      .."return {\n"
-      .."  major = "..version.major..",\n"
-      .."  minor = "..version.minor..",\n"
-      .."  patch = "..version.patch..",\n"
-      .."}\n"
-      ..""
+    io_util.write_file("src/phobos_version.lua", string.format("\n\z
+      ----------------------------------------------------------------------------------------------------\n\z
+      -- This file is generated by the publish script\n\z
+      ----------------------------------------------------------------------------------------------------\n\z
+      return {\n  \z
+        major = %d,\n  \z
+        minor = %d,\n  \z
+        patch = %d,\n\z
+      }\n\z
+      ",
+      version.major,
+      version.minor,
+      version.patch
     ))
-    assert(file:close())
   end
 end
 
 write_phobos_version()
 
-if not args.skip_build then
-  -- compile src to `out/src/release`
-  print("Building src")
-  loadfile("scripts/build_src.lua")(table.unpack{
-    "--profile", "release",
-    args.verbose and "--verbose" or nil,
-  })
-
-  -- compile src to `out/factorio/release/phobos`
-  print("Building Factorio Mod")
-  loadfile("scripts/build_factorio_mod.lua")(table.unpack{
-    "--profile", "release",
-    args.verbose and "--verbose" or nil,
-  })
-end
-
 -- prepare temp dir
 print("Creating or Cleaning up 'temp/publish' dir")
-io_util.mkdir_recursive("temp/publish")
 if not args.skip_cleanup_temp_dir then
-  for entry in lfs.dir("temp/publish") do
-    if entry ~= "." and entry ~= ".." then
-      assert(os.remove("temp/publish/"..entry))
-    end
+  if Path.new("temp/publish"):exists() then
+    io_util.rmdir_recursive("temp/publish")
+  end
+end
+io_util.mkdir_recursive("temp/publish")
+
+if not args.skip_build then
+  print("Building standalone and factorio publish builds")
+  if not phobos(
+    "--profile-names",
+    "publish_linux",
+    "publish_osx",
+    "publish_windows",
+    "publish_raw",
+    "publish_factorio"
+  )
+  then
+    util.abort("A build failed, aborting.")
   end
 end
 
@@ -231,129 +231,38 @@ end
 if not args.skip_package then
   ---cSpell:ignore tzip
   -- -tzip defines the zip archive type to be "zip". whatever that exactly means
-
-  -- ** IMPORTANT **
-  -- -m0=PPMd is some better algorithm specifically made for text files
-  -- it makes a measurable difference in zip file size, but it cannot be loaded by factorio
-  -- this leads me to believe that it's too new for the majority of tools to
-  -- support it at this point so i've disabled all of them for now
-
   -- -mx9 is the highest compression level
   -- -r means recursive
+
+  -- no longer relevant, but still good info:
+  -- -m0=PPMd is some better algorithm specifically made for text files
+  --   it makes a measurable difference in zip file size, but it cannot be loaded by factorio
+  --   this leads me to believe that it's too new for the majority of tools to
+  --   support it at this point so i've disabled all of them for now
 
   local function chdir(path)
     if args.verbose then
       print("  Changing working dir to "..path)
     end
-    lfs.chdir(path)
+    io_util.set_working_dir(path)
   end
 
-  local root_path = Path.new(lfs.currentdir():gsub("\\", "/"))
-  local root_filenames = {
-    "README.md",
-    "phobos_debug_symbols.md",
-    "changelog.txt",
-    "LICENSE.txt",
-    "LICENSE_THIRD_PARTY.txt",
-    "thumbnail_1080_1080.png",
-  }
+  local root_path = io_util.get_working_dir_path()
 
-  local function create_zip(platform, no_lua_binaries)
-    local zip_path = Path.combine("temp/publish", "phobos_"..platform.."_"..version_str..".zip")
-    print("Packaging "..zip_path:str())
-
-    chdir((root_path / "out/src/release"):str())
-    seven_zip("a", "-tzip", "-mx9", "-r", escape_arg(("../../.." / zip_path):str()), escape_arg("*.lua"))
-    if not no_lua_binaries then
-      chdir((root_path / "bin" / platform):str())
-      seven_zip("a", "-tzip", "-mx9", "-r", escape_arg(("../.." / zip_path):str()), escape_arg("*"))
-    end
+  local function create_zip(name, package_name)
+    local zip_filename = package_name.."_"..version_str..".zip"
+    print("Packaging "..zip_filename)
+    chdir((root_path / ("temp/publish/publish_"..name)):str())
+    seven_zip("a", "-tzip", "-mx9", "-r", escape_arg("../"..zip_filename), escape_arg("*"))
     chdir(root_path:str())
-
-    -- not adding src files by default because the chances of someone needing them in
-    -- regular distributions is incredibly slim. It can allow for debugging, but since
-    -- the debug symbols still point to `src/` files you can manually add a `src` folder
-    -- and copy all the src files for that release into it if it's really needed
-    -- -- ~TODO: maybe ignore (don't add) the files that were ignored for this build?
-    -- seven_zip("a", "-tzip", "-mx9", "-r", --[["-m0=PPMd",]] zip_path:str(), "src/*.lua")
-
-    seven_zip("a", "-tzip", "-mx9", escape_arg(zip_path:str()), table.unpack(root_filenames))
+    -- If the src files were to be added to the packages it would be done in the build profiles
   end
 
-  create_zip("linux")
-  create_zip("osx")
-  create_zip("windows")
-  create_zip("raw", true)
-
-  -- create factorio mod zip
-  do
-    local zip_path = Path.combine("temp/publish", "phobos_"..version_str..".zip")
-    print("Packaging "..zip_path:str())
-
-    local build_root = Path.new("out/factorio/release/phobos")
-    chdir((root_path / build_root):str())
-    -- "-m0=PPMd" because for factorio mods lua files have to be text files (for now)
-    -- so this is more size efficient
-    seven_zip("a", "-tzip", "-mx9", "-r",
-      --[["-m0=PPMd",]] escape_arg(("../../../.." / zip_path):str()), escape_arg("*.lua")
-    )
-    seven_zip("a", "-tzip", "-mx9", "-r",
-      escape_arg(("../../../.." / zip_path):str()), escape_arg("thumbnail.png")
-    )
-    chdir(root_path:str())
-
-    seven_zip((function()
-      local result = {"a", "-tzip", "-mx9", "-r", --[["-m0=PPMd"]]}
-      for _, ignore in ipairs(require("scripts.factorio_build_ignore_list")) do
-        result[#result+1] = escape_arg("-x!src/"..(ignore:find("%.lua$") and ignore or (ignore.."/")))
-      end
-      result[#result+1] = escape_arg(zip_path:str())
-      result[#result+1] = escape_arg("src/*.lua")
-      return table.unpack(result)
-    end)())
-
-    root_filenames[#root_filenames+1] = "info.json"
-    seven_zip("a", "-tzip", "-mx9", escape_arg(zip_path:str()), table.unpack(root_filenames))
-    root_filenames[#root_filenames+1] = "thumbnail.png" -- added previously
-
-    -- move all files in the zip archive into a `phobos` sub dir
-
-    -- create list of all files that are in the archive
-    -- (unfortunately `7z l` doesn't give machine readable output, so this is easier)
-    local filenames = root_filenames
-    local walk_root
-    local function walk_dir(extension, sub_dir)
-      for entry in lfs.dir((walk_root / sub_dir):str()) do
-        if entry ~= "." and entry ~= ".." then
-          local entry_path = walk_root / sub_dir / entry
-          local relative_entry_path = entry_path:sub(#walk_root + 1)
-          local mode = entry_path:attr("mode")
-          if mode == "file" and entry_path:extension() == extension then
-            filenames[#filenames+1] = relative_entry_path:str()
-          elseif mode == "directory" then
-            walk_dir(extension, relative_entry_path:str())
-          end
-        end
-      end
-    end
-    walk_root = build_root
-    walk_dir(".lua")
-    walk_root = Path.new(".")
-    walk_dir(".lua", Path.new("src"))
-
-    -- create list file for 7z. lines alternate between source name and target name
-    local list_file_lines = {}
-    for _, filename in ipairs(filenames) do
-      list_file_lines[#list_file_lines+1] = filename
-      list_file_lines[#list_file_lines+1] = "phobos/"..filename
-    end
-    local list_file_filename = "temp/publish/rename_list_file.txt"
-    local list_file = assert(io.open(list_file_filename, "w"))
-    list_file:write(table.concat(list_file_lines, "\n"))
-    assert(list_file:close())
-
-    seven_zip("rn", "-tzip", escape_arg(zip_path:str()), escape_arg("@"..list_file_filename))
-  end
+  create_zip("linux", "phobos_linux")
+  create_zip("osx", "phobos_osx")
+  create_zip("windows", "phobos_windows")
+  create_zip("raw", "phobos_raw")
+  create_zip("factorio", "phobos")
 end
 
 -- create a git commit which will be the commit tagged for the release
@@ -408,9 +317,7 @@ if not args.skip_github_release then
   end
 
   out[#out] = nil
-  local file = assert(io.open(github_release_notes_filename, "w"))
-  assert(file:write(table.concat(out)))
-  assert(file:close())
+  io_util.write_file(github_release_notes_filename, table.concat(out))
 
   -- create github release
   print("Creating github release v"..version_str)
@@ -437,18 +344,14 @@ if not args.skip_increment_version then
     return prefix..version_str..'"'
   end)
   do
-    local file = assert(io.open("info.json", "w"))
-    assert(file:write(info_json))
-    assert(file:close())
+    io_util.write_file("info.json", info_json)
   end
 
   -- add new version block in changelog.txt
   print("Adding new version block for "..version_str)
   table.insert(changelog, 1, {version = version, categories = {}})
   do
-    local file = assert(io.open("changelog.txt", "w"))
-    assert(file:write(changelog_util.encode(changelog)))
-    assert(file:close())
+    io_util.write_file("changelog.txt", changelog_util.encode(changelog))
   end
 
   write_phobos_version()

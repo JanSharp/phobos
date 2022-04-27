@@ -87,7 +87,7 @@ local function before_each()
 end
 
 local function test_stat(str)
-  assert.assert(fake_main, "must run make_fake_main before each test")
+  assert(fake_main, "must run make_fake_main before each test")
   local main, got_parser_errors = parser(str, test_source)
   assert.contents_equals(
     fake_main,

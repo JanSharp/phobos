@@ -22,9 +22,12 @@ json.set_comments(result, {
 })
 local configurations = {}
 result.configurations = configurations
+local inputs = {}
+result.inputs = inputs
 json.set_order(result, {
   "version",
   "configurations",
+  "inputs",
 })
 
 local function add_profile(profile)
@@ -37,6 +40,14 @@ local function add_profile(profile)
   configurations[#configurations+1] = profile
 end
 
+local function add_input(input)
+  json.set_order(input, {
+    "id",
+    "type",
+  })
+  inputs[#inputs+1] = input
+end
+
 ---cSpell:ignore factoriomod, freeplay
 
 local function new_factorio_profile(params)
@@ -46,7 +57,7 @@ local function new_factorio_profile(params)
     request = "launch",
     preLaunchTask = "Build Factorio Mod Debug",
     factorioPath = "${env:PHOBOS_FACTORIO_PATH}",
-    modsPath = "${workspaceFolder}/out/factorio/debug",
+    modsPath = "${workspaceFolder}/out/debug_factorio",
     allowDisableBaseMod = true,
     adjustMods = {
       phobos = true,
@@ -96,8 +107,11 @@ local function add_phobos_profiles(params)
         "main_filename",
         "arguments passed along to the main file",
       })
-      for _, arg in ipairs(params.args or {}) do
-        args[#args+1] = arg
+      if params.args then
+        local param_args = type(params.args) == "table" and params.args or params.args(platform)
+        for _, arg in ipairs(param_args) do
+          args[#args+1] = arg
+        end
       end
       return {
         program = {
@@ -139,17 +153,58 @@ add_phobos_profiles{
   args = {"temp/test.lua"},
 }
 add_phobos_profiles{
-  name = "scripts/build_src",
-  main_filename = "scripts/build_src.lua",
-  args = {"--profile", "debug"},
-}
-add_phobos_profiles{
   name = "tests/compile_test",
   main_filename = "tests/compile_test.lua",
 }
 add_phobos_profiles{
   name = "tests/main",
   main_filename = "tests/main.lua",
+}
+add_input{
+  id = "testId",
+  type = "promptString",
+  description = "The test id of the test to run.",
+  default = nil,
+  password = false,
+}
+add_phobos_profiles{
+  name = "tests/main test id",
+  main_filename = "tests/main.lua",
+  args = {"--test-ids", "${input:testId}"}
+}
+add_input{
+  id = "testScope",
+  type = "promptString",
+  description = "The scope to run.",
+  default = nil,
+  password = false,
+}
+add_phobos_profiles{
+  name = "tests/main test scope",
+  main_filename = "tests/main.lua",
+  args = {"--scopes", "${input:testScope}"}
+}
+add_phobos_profiles{
+  name = "tests/main test scope and id",
+  main_filename = "tests/main.lua",
+  args = {"--scopes", "${input:testScope}", "--test-ids", "${input:testId}"}
+}
+add_phobos_profiles{
+  name = "src/main (debug profile)",
+  main_filename_in_phobos_root = "main.lua",
+  args = function(platform) return {"--profile-names", "debug", "--", "--platform", platform} end,
+}
+add_phobos_profiles{
+  name = "src/main (debug profile with docs)",
+  main_filename_in_phobos_root = "main.lua",
+  args = function(platform) return {
+    "--profile-names", "debug", "--", "--platform", platform, "--generate-docs",
+  } end,
+}
+add_phobos_profiles{
+  name = "src/main (debug_factorio profile)",
+  main_filename_in_phobos_root = "main.lua",
+  args = {"--profile-names", "debug_factorio"},
 }
 
 local file = assert(io.open(".vscode/launch.json", "w"))

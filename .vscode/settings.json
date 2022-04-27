@@ -1,6 +1,15 @@
 {
   "Lua.runtime.version": "Lua 5.2",
   "Lua.runtime.plugin": ".vscode/sumneko_lua_plugin/plugin.lua",
+  "Lua.runtime.pathStrict": true,
+  "Lua.runtime.path": [
+    "?.lua",
+    "src/?.lua",
+    "scripts/?.lua",
+    "debugging/?.lua",
+    "tests/?.lua",
+    "tests/lib/test_framework/?.lua",
+  ],
   "Lua.diagnostics.globals": [
     "commands",
     "script",
@@ -26,6 +35,9 @@
     "**/serpent.lua",
     "LICENSE.txt",
     "LICENSE_THIRD_PARTY.txt",
+    "scripts/markdown.lua",
+    "debugging/minimal-no-base-mod",
+    "debugging/JanSharpDevEnv",
   ],
   "cSpell.words": [
     "binop",
@@ -126,5 +138,12 @@
   ],
   "cSpell.enableFiletypes": [
     "factorio-changelog"
+  ],
+  "todo-tree.filtering.includeHiddenFiles": true,
+  "todo-tree.filtering.excludeGlobs": [
+    // default
+    "**/node_modules",
+    // custom
+    "**/debugging/minimal-no-base-mod",
   ],
 }

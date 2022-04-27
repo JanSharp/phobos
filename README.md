@@ -137,7 +137,7 @@ There are lots of ideas for language extensions which are not listed here in the
 
 Phobos itself is licensed under the MIT License, see [LICENSE.txt](LICENSE.txt).
 
-<!-- cSpell:ignore Kulchenko, Mischak, Wellmann -->
+<!-- cSpell:ignore Kulchenko, Mischak, Wellmann, Niklas, Frykholm -->
 
 - [Lua](https://www.lua.org/home.html) MIT License, Copyright (c) 1994–2021 Lua.org, PUC-Rio.
 - [LuaFileSystem](https://keplerproject.github.io/luafilesystem/) MIT License, Copyright (c) 2003 - 2020 Kepler Project.
@@ -148,6 +148,7 @@ Phobos itself is licensed under the MIT License, see [LICENSE.txt](LICENSE.txt).
 - [FactorioSumnekoLuaPlugin](https://github.com/JanSharp/FactorioSumnekoLuaPlugin) MIT License, Copyright (c) 2021-2022 Jan Mischak, justarandomgeek
 - [minimal-no-base-mod](https://github.com/Bilka2/minimal-no-base-mod), Copyright (c) 2020 Erik Wellmann
 - [JanSharpDevEnv](https://github.com/JanSharp/JanSharpDevEnv), Copyright (c) 2020 Jan Mischak
+- [markdown.lua](https://github.com/speedata/luamarkdown), Copyright (c) 2008 Niklas Frykholm
 
 For license details see the [LICENSE_THIRD_PARTY.txt](LICENSE_THIRD_PARTY.txt) file and or the linked repositories above.
 
@@ -171,20 +172,24 @@ git submodule init
 git submodule update
 ```
 
+-- TODO: the build_src and build_factorio_mod files no longer exist, and I don't really know how I'm going to handle all of this in the future, so this will remain outdated until I figure out how I actually want the Phobos workspace to be setup. It's in a transitional state right now.
+
 If you're using vscode just run the build tasks from the command pallet.
 
 There are `scripts/build_src.lua` and `scripts/build_factorio_mod.lua` which have to be run through `launch-scripts/phobos_dev`. The `phobos_dev` script expects the current working directory to be the root of the phobos project and 3 additional positional arguments before the actual arguments that will be passed to the lua script. Those 3 args are:
 - your platform, so `linux`, `osx` or `windows`
-- the relative path to the phobos files to be run. So `out/src/debug`, `out/src/release` or `src` (as long as `src` is still using `.lua` files)
+- the relative path to the phobos files to be run. So `out/debug`, `out/release` or `src` (as long as `src` is still using `.lua` files)
 - the relative path to the lua file to run. So in this case `scripts/build_src.lua` or `scripts/build_factorio_mod.lua`
 
 The launch scripts have a good amount of comments to assist in understanding and troubleshooting.
 
 ## Running from Source
 
+-- TODO: same as for Building from Source, though this isn't super outdated. I'm just not sure how it actually want it to work.
+
 First build from source, see above.
 
 Again, if you're using vscode just press F5. To select the right launch profile either use the side panel or press `CTRL + P`, type `debug`, then a space, and select the launch profile from there.\
-The `Phobos` and `Lua` prefixes are currently relevant since phobos itself is still written in `.lua` files. That means the `Lua` prefixed launch profiles will run directly from source while `Pho` will use phobos itself to compile `src` and then run and debug `out/src/debug`. This, however, uses the `Build Debug` task, which uses `src` to compile itself, which means if there is a bug then you can't use that to actually debug it. This will change once I require you to have a previous version of Phobos installed to compile Phobos.
+The `Phobos` and `Lua` prefixes are currently relevant since phobos itself is still written in `.lua` files. That means the `Lua` prefixed launch profiles will run directly from source while `Pho` will use phobos itself to compile `src` and then run and debug `out/debug`. This, however, uses the `Build Debug` task, which uses `src` to compile itself, which means if there is a bug then you can't use that to actually debug it. This will change once I require you to have a previous version of Phobos installed to compile Phobos.
 
 -- TODO: Running outside of vscode. Write this once the `phobos` scripts get copied into the output.

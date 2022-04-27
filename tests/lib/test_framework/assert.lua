@@ -1,6 +1,6 @@
 
 local deep_compare = require("deep_compare")
-local pretty_print = require("pretty_print")
+local pretty_print = require("pretty_print").pretty_print
 
 local print_full_data_on_error_default = false
 local function set_print_full_data_on_error_default(value)
@@ -10,36 +10,42 @@ local function get_print_full_data_on_error_default()
   return print_full_data_on_error_default
 end
 
+local err_msg_handlers = {}
+
+local function push_err_msg_handler(handler)
+  err_msg_handlers[#err_msg_handlers+1] = handler
+end
+
+local function pop_err_msg_handler()
+  err_msg_handlers[#err_msg_handlers] = nil
+end
+
 local function add_msg(err, msg)
-  return err..(msg and ": "..msg or ".")
+  -- start at the inner most handler first which was the last one added,
+  -- which also means it is the inner most scope
+  for i = #err_msg_handlers, 1, -1 do
+    msg = err_msg_handlers[i](msg)
+  end
+  return err..(msg and (": "..msg) or ".")
 end
 
 local function assert(value, msg)
   if not value then
     error(add_msg("assertion failed", msg))
   end
+  return value
 end
 
 local function equals(expected, got, msg)
-  if got ~= expected then
+  -- also test for nan
+  if got ~= expected and (got == got or expected == expected) then
     error(add_msg("expected "..pretty_print(expected)..", got "..pretty_print(got), msg))
   end
 end
 
 local function not_equals(expected, got, msg)
-  if got == expected then
-    error(add_msg("expected not "..pretty_print(got), msg))
-  end
-end
-
-local function nan(got, msg)
-  if got == got then
-    error(add_msg("expected "..pretty_print(0/0), msg))
-  end
-end
-
-local function not_nan(got, msg)
-  if got ~= got then
+  -- also tests for nan
+  if got == expected or (got ~= got and expected ~= expected) then
     error(add_msg("expected not "..pretty_print(got), msg))
   end
 end
@@ -52,11 +58,12 @@ end
 
 ---@param options ContentsEqualsOptions
 local function contents_equals(expected, got, msg, options)
+  options = options or {}
   local equal, difference = deep_compare.deep_compare(
     expected,
     got,
-    options and options.compare_pairs_iteration_order,
-    options and options.root_name
+    options.compare_pairs_iteration_order,
+    options.root_name
   )
   if not equal then
     local err
@@ -82,7 +89,7 @@ local function contents_equals(expected, got, msg, options)
         .."at "..difference.location
     end
     local print_full_data_on_error = print_full_data_on_error_default
-    if options and options.print_full_data_on_error ~= nil then
+    if options.print_full_data_on_error ~= nil then
       print_full_data_on_error = options.print_full_data_on_error
     end
     msg = add_msg(err, msg)
@@ -107,26 +114,38 @@ local function contents_equals(expected, got, msg, options)
   end
 end
 
-local function errors(expected_pattern, got_func, msg)
-  local success, err = pcall(got_func)
+local function errors(expected_pattern, got_func, msg, plain)
+  local stacktrace
+  local success, err = xpcall(got_func, function(err)
+    stacktrace = debug.traceback(nil, 2):gsub("\t", "  ")
+    return err
+  end)
   if success then
-    error(add_msg("expected error pattern "..pretty_print(expected_pattern), msg))
+    error(add_msg("expected error "..(plain and "" or "pattern ")..pretty_print(expected_pattern)
+      ..", got success", msg)
+    )
   end
-  if not err:find(expected_pattern) then
-    error(add_msg("expected error pattern "..pretty_print(expected_pattern)..", got error "..pretty_print(err), msg))
+  if ((err == nil) and expected_pattern ~= nil) or not err:find(expected_pattern, 1, plain) then
+    error(add_msg("expected error "..(plain and "" or "pattern ")..pretty_print(expected_pattern)
+      ..", got error "..pretty_print(err).."\n"..stacktrace, msg)
+    )
   end
 end
 
-return {
+return setmetatable({
   set_print_full_data_on_error_default = set_print_full_data_on_error_default,
   get_print_full_data_on_error_default = get_print_full_data_on_error_default,
+  push_err_msg_handler = push_err_msg_handler,
+  pop_err_msg_handler = pop_err_msg_handler,
   assert = assert,
   equals = equals,
   not_equals = not_equals,
-  nan = nan,
-  not_nan = not_nan,
   contents_equals = contents_equals,
   do_not_compare_flag = deep_compare.do_not_compare_flag,
   custom_comparator = deep_compare.register_custom_comparator,
   errors = errors,
-}
+}, {
+  __call = function(_, ...)
+    return assert(...)
+  end,
+})

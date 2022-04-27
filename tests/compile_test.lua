@@ -1,5 +1,10 @@
 
+package.path = package.path..";./tests/lib/test_framework/?.lua"
+
 local arg_parser = require("lib.LuaArgParser.arg_parser")
+local util = require("util")
+local serialize = require("serialize")
+local assert = require("assert")
 
 local args = arg_parser.parse_and_print_on_error_or_help({...}, {
   options = {
@@ -32,9 +37,6 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
       flag = true,
     },
     {
-      -- this is so incredibly slow at this point that it is unusable
-      -- I'm 99% sure it's serpent creating way too many increasingly big intermediate strings
-      -- however I haven't made sure that's really the case. Regardless, it's too slow
       field = "ensure_clean_data",
       long = "ensure-clean",
       short = "e",
@@ -58,11 +60,15 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
     },
   },
 })
-if not args then return end
+if not args then util.abort() end
+if args.help then return end
 
-local Path = require("lib.LuaPath.path")
+local Path = require("lib.path")
 if not Path.new("temp"):exists() then
-  assert(require("lfs").mkdir("temp"))
+  -- io_util requires lfs, so it's in the if block to make it possible to run this file
+  -- without lfs being available
+  local io_util = require("io_util")
+  io_util.mkdir_recursive("temp")
 end
 
 local phobos_env = {}
@@ -158,23 +164,28 @@ local function compile(filename)
   jump_linker(ast)
   fold_const(ast)
   fold_control_statements(ast)
-  local prev_ast_str
+  local prev_ast
   if args.ensure_clean_data then
-    prev_ast_str = serpent.block(ast)
+    prev_ast = util.copy(ast, true)
   end
-  local compiled_data = compiler(ast, true)
+  local compiled_data = compiler(ast, {
+    optimizations = {
+      tail_calls = true,
+    },
+  })
 
   if args.ensure_clean_data then
-    local ast_str = serpent.block(ast)
-    if ast_str ~= prev_ast_str then
+    local success, msg = pcall(assert.contents_equals, prev_ast, ast)
+    if not success then
       if args.diff_files then
         assert(io.open("temp/before.txt", "w"))
-          :write(prev_ast_str)
+          :write(serpent.block(prev_ast))
           :close()
         assert(io.open("temp/after.txt", "w"))
-          :write(ast_str)
+          :write(serpent.block(ast))
           :close()
       end
+      print(msg)
       error("Compiler left a mess behind.")
     end
   end
@@ -218,7 +229,7 @@ else
   filenames = require("debugging.debugging_util").find_lua_source_files()
   if args.create_filename_cache then
     local cache_file = assert(io.open("temp/compile_test_filename_cache.lua", "w"))
-    cache_file:write(serpent.dump(filenames))
+    cache_file:write(serialize(filenames))
     assert(cache_file:close())
   end
 end

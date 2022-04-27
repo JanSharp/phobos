@@ -65,53 +65,91 @@ local background_magenta = "\x1b[45m"
 local background_cyan = "\x1b[46m"
 local background_white = "\x1b[47m"
 
-function Scope:run_tests(options)
+local function run_tests(scope, options, print_parent_scope_header, state, full_scope_name, is_root)
+  -- header
   local start_time = os and os.clock()
-  print(get_indentation(self)..bold..self.name..reset..":")
-  if self.before_all then
-    self.before_all()
+  local printed_scope_header = false
+  local function print_scope_header()
+    if printed_scope_header then return end
+    printed_scope_header = true
+    print_parent_scope_header()
+    print(get_indentation(scope)..bold..scope.name..reset..":")
   end
-  local count = 0
-  local failed_count = 0
-  for _, test in ipairs(self.tests) do
-    if test.is_scope then
-      local result = test:run_tests(options)
-      count = count + result.count
-      failed_count = failed_count + result.failed_count
-    elseif test.is_test then
-      count = count + 1
-      local stacktrace
-      local success, err = xpcall(test.func, function(msg)
-        stacktrace = debug.traceback(nil, 2)
-        return msg
-      end)
-      test.passed = success
-      if not success then
-        failed_count = failed_count + 1
-        err = err:match(":%d+: (.*)")
-        test.error_message = err
-      end
-      if not success or not options.only_print_failed then
-        print(get_indentation(self).."  "..test.name..": "
-          ..(success and (green.."passed"..reset) or (red.."failed"..reset..":"..(
-            options.print_stacktrace
-              and ("\n"..magenta..stacktrace:gsub("\t", "  ")..reset.."\n")
-              or " "
-          )..blue..err..reset))
-        )
+
+  local do_run = not options.scopes
+  if not do_run then
+    for _, scope_name in ipairs(options.scopes) do
+      if full_scope_name:find(scope_name) then
+        do_run = true
+        break
       end
     end
   end
-  if self.after_all then
-    self.after_all()
+
+  -- run tests
+  if scope.before_all then
+    scope.before_all()
   end
-  print(get_indentation(self)..(count - failed_count).."/"..count.." "..green.."passed"..reset
-    ..(failed_count > 0 and (" ("..failed_count.." "..faint..red.."failed"..reset..")") or "")
-    .." in "..bold..self.name..reset
-    -- this seems to be the max precision of os.clock, at least on my system
-    ..(os and (" in "..string.format("%0.3f", (os.clock() - start_time) * 1000).."ms") or "")
-  )
+  local count = 0
+  local failed_count = 0
+  for _, test in ipairs(scope.tests) do
+    if test.is_scope then
+      local result = run_tests(test, options, print_scope_header, state, full_scope_name.."/"..test.name)
+      count = count + result.count
+      failed_count = failed_count + result.failed_count
+    elseif test.is_test and do_run then
+      local id = state.next_id
+      state.next_id = state.next_id + 1
+      if not options.test_ids_to_run or options.test_ids_to_run[id] then
+        count = count + 1
+        local stacktrace
+        local success, err = xpcall(test.func, function(msg)
+          stacktrace = debug.traceback(nil, 2)
+          return msg
+        end)
+        test.passed = success
+        if not success then
+          failed_count = failed_count + 1
+          err = err and err:match(":%d+: (.*)")
+          test.error_message = err
+        end
+        if not success or not options.only_print_failed then
+          print_scope_header()
+          print(get_indentation(scope).."  ["..id.."] "..test.name..": "
+            ..(success and (green.."passed"..reset) or (
+              red.."failed"..reset..": "..blue..(err or "<no error message>")..reset
+              ..(options.print_stacktrace and ("\n"..magenta..stacktrace:gsub("\t", "  ")..reset) or " ")
+            ))
+          )
+        end
+      end
+    end
+  end
+  if scope.after_all then
+    scope.after_all()
+  end
+
+  -- footer
+  if is_root or printed_scope_header then
+    print(get_indentation(scope)..(count - failed_count).."/"..count.." "..green.."passed"..reset
+      ..(failed_count > 0 and (" ("..failed_count.." "..faint..red.."failed"..reset..")") or "")
+      .." in "..bold..scope.name..reset
+      -- this seems to be the max precision of os.clock, at least on my system
+      ..(os and (" in "..string.format("%0.3f", (os.clock() - start_time) * 1000).."ms") or "")
+    )
+  end
   return {count = count, failed_count = failed_count}
+end
+
+function Scope:run_tests(options)
+  return run_tests(
+    self,
+    options,
+    function() end,
+    {next_id = 1, scopes = options.scopes},
+    self.name,
+    true
+  )
 end
 
 return Scope
