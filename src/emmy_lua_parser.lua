@@ -1035,10 +1035,10 @@ local function parse(ast)
 
   ---@param node AstScope
   function add_scope(node)
-    local elem = node.body.first
-    while elem do
-      add_stat(elem.value)
-      elem = elem.next
+    local stat = node.body.first
+    while stat do
+      add_stat(stat)
+      stat = stat.next
     end
   end
 

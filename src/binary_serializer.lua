@@ -4,6 +4,7 @@
 -- since those are using Lua bytecode to save and load
 
 local util = require("util")
+local nodes = require("nodes")
 
 local serializer = {}
 serializer.__index = serializer
@@ -391,26 +392,23 @@ function deserializer:read_boolean()
   return self:read_bytes(1) ~= 0
 end
 
--- HACK: these constants aren't really nodes, and can't exactly be nodes right now because of stat_elem [...]
--- once stat_elem gets fixed this can be improved
-
 do
   local const_lut = {
     [0] = function()
-      return {node_type = "nil", value = nil}
+      return nodes.new_nil{}
     end,
     [1] = function(self)
-      return {node_type = "boolean", value = self:read_boolean()}
+      return nodes.new_boolean{value = self:read_boolean()}
     end,
     [3] = function(self)
-      return {node_type = "number", value = self:read_double()}
+      return nodes.new_number{value = self:read_double()}
     end,
     [4] = function(self)
       local value = self:read_lua_string()
       if not value then
         error("Lua constant strings must not be 'nil'.")
       end
-      return {node_type = "string", value = value}
+      return nodes.new_string{value = value}
     end,
   }
   setmetatable(const_lut, {

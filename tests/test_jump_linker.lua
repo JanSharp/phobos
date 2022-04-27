@@ -9,10 +9,8 @@ local error_code_util = require("error_code_util")
 
 local tutil = require("testing_util")
 local test_source = tutil.test_source
-local append_stat = tutil.append_stat
-local fake_stat_elem = assert.do_not_compare_flag
+local append_stat = ast.append_stat
 local prevent_assert = assert.do_not_compare_flag
-nodes = tutil.wrap_nodes_constructors(nodes, fake_stat_elem)
 
 do
   local main_scope = framework.scope:new_scope("jump_linker")
@@ -57,7 +55,7 @@ do
         start = nodes.new_number{value = 1},
         stop = nodes.new_number{value = 1},
       })
-      local var_def, var_ref = ast.create_local({value = "var"}, fornum, fake_stat_elem)
+      local var_def, var_ref = ast.create_local({value = "var"}, fornum)
       var_def.whole_block = true
       fornum.locals[1] = var_def
       fornum.var = var_ref
@@ -68,7 +66,7 @@ do
         parent_scope = main,
         exp_list = {nodes.new_nil{}},
       })
-      local var_def, var_ref = ast.create_local({value = "var"}, forlist, fake_stat_elem)
+      local var_def, var_ref = ast.create_local({value = "var"}, forlist)
       var_def.whole_block = true
       forlist.locals[1] = var_def
       forlist.name_list[1] = var_ref
@@ -192,7 +190,7 @@ do
     end)
 
     add_test("(forwards) jump in inner function", function(main, should_link)
-      local foo_def, foo_ref = ast.create_local({value = "foo"}, main, fake_stat_elem)
+      local foo_def, foo_ref = ast.create_local({value = "foo"}, main)
       main.locals[1] = foo_def
       local localfunc = append_stat(main, nodes.new_localfunc{
         name = foo_ref,
@@ -242,7 +240,7 @@ do
     end)
 
     add_test("forwards jump with local before goto", function(main, should_link)
-      local bar_def, bar_ref = ast.create_local({value = "bar"}, main, fake_stat_elem)
+      local bar_def, bar_ref = ast.create_local({value = "bar"}, main)
       main.locals[1] = bar_def
       local localstat = append_stat(main, nodes.new_localstat{lhs = {bar_ref}})
       bar_def.start_at = localstat
@@ -256,7 +254,7 @@ do
 
     add_test("forwards jump to end of block", function(main, should_link)
       local go = append_stat(main, new_gotostat("foo"))
-      local bar_def, bar_ref = ast.create_local({value = "bar"}, main, fake_stat_elem)
+      local bar_def, bar_ref = ast.create_local({value = "bar"}, main)
       main.locals[1] = bar_def
       local localstat = append_stat(main, nodes.new_localstat{lhs = {bar_ref}})
       bar_def.start_at = localstat
@@ -269,7 +267,7 @@ do
 
     add_test("forwards jump to end of block with extra labels and empty stats", function(main, should_link)
       local go = append_stat(main, new_gotostat("foo"))
-      local bar_def, bar_ref = ast.create_local({value = "bar"}, main, fake_stat_elem)
+      local bar_def, bar_ref = ast.create_local({value = "bar"}, main)
       main.locals[1] = bar_def
       local localstat = append_stat(main, nodes.new_localstat{lhs = {bar_ref}})
       bar_def.start_at = localstat
@@ -289,7 +287,7 @@ do
     add_test("2 forwards jumps to end of block", function(main, should_link)
       local go1 = append_stat(main, new_gotostat("foo"))
       local go2 = append_stat(main, new_gotostat("foo"))
-      local bar_def, bar_ref = ast.create_local({value = "bar"}, main, fake_stat_elem)
+      local bar_def, bar_ref = ast.create_local({value = "bar"}, main)
       main.locals[1] = bar_def
       local localstat = append_stat(main, nodes.new_localstat{lhs = {bar_ref}})
       bar_def.start_at = localstat
@@ -349,7 +347,7 @@ do
       local ident_token = with_tokens and {value = "bar", line = 2, column = 16} or {value = "bar"}
       add_forwards_jump_into_scope_of_new_local_test("localstat", function(main)
         local bar_def
-        bar_def, bar_ref = ast.create_local(ident_token, main, fake_stat_elem)
+        bar_def, bar_ref = ast.create_local(ident_token, main)
         main.locals[1] = bar_def
         local localstat = append_stat(main, nodes.new_localstat{
           local_token = with_tokens and local_token_node or nil,
@@ -360,7 +358,7 @@ do
       end)
       add_forwards_jump_into_scope_of_new_local_test("localfunc", function(main)
         local bar_def
-        bar_def, bar_ref = ast.create_local(ident_token, main, fake_stat_elem)
+        bar_def, bar_ref = ast.create_local(ident_token, main)
         main.locals[1] = bar_def
         local localstat = append_stat(main, nodes.new_localfunc{
           local_token = with_tokens and local_token_node or nil,
@@ -407,8 +405,8 @@ do
 
     add_test("invalid forwards jump into scope of new localstat with multiple lhs", function(main, should_link)
       append_stat(main, new_gotostat("foo"))
-      local one_def, one_ref = ast.create_local({value = "one"}, main, fake_stat_elem)
-      local two_def, two_ref = ast.create_local({value = "two"}, main, fake_stat_elem)
+      local one_def, one_ref = ast.create_local({value = "one"}, main)
+      local two_def, two_ref = ast.create_local({value = "two"}, main)
       main.locals[1] = one_def
       main.locals[2] = two_def
       local localstat = append_stat(main, nodes.new_localstat{lhs = {one_ref, two_ref}})
@@ -428,7 +426,7 @@ do
     add_test("2 invalid forwards jumps into scope of new localstat", function(main, should_link)
       append_stat(main, new_gotostat("foo"))
       append_stat(main, new_gotostat("foo"))
-      local bar_def, bar_ref = ast.create_local({value = "bar"}, main, fake_stat_elem)
+      local bar_def, bar_ref = ast.create_local({value = "bar"}, main)
       main.locals[1] = bar_def
       local localstat = append_stat(main, nodes.new_localstat{lhs = {bar_ref}})
       bar_ref.start_at = localstat
@@ -448,7 +446,7 @@ do
         condition = nodes.new_boolean{value = true},
       })
       append_stat(repeatstat, new_gotostat("foo"))
-      local bar_def, bar_ref = ast.create_local({value = "bar"}, repeatstat, fake_stat_elem)
+      local bar_def, bar_ref = ast.create_local({value = "bar"}, repeatstat)
       repeatstat.locals[1] = bar_def
       local localstat = append_stat(repeatstat, nodes.new_localstat{lhs = {bar_ref}})
       bar_ref.start_at = localstat
@@ -468,7 +466,7 @@ do
       })
       append_stat(repeatstat, new_gotostat("foo"))
       append_stat(repeatstat, new_gotostat("foo"))
-      local bar_def, bar_ref = ast.create_local({value = "bar"}, repeatstat, fake_stat_elem)
+      local bar_def, bar_ref = ast.create_local({value = "bar"}, repeatstat)
       repeatstat.locals[1] = bar_def
       local localstat = append_stat(repeatstat, nodes.new_localstat{lhs = {bar_ref}})
       bar_ref.start_at = localstat

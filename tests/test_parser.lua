@@ -9,7 +9,7 @@ local ast = require("ast_util")
 local error_code_util = require("error_code_util")
 
 local tutil = require("testing_util")
-local append_stat = tutil.append_stat
+local append_stat = ast.append_stat
 local test_source = tutil.test_source
 
 local prevent_assert = nodes.new_invalid{
@@ -20,9 +20,6 @@ local prevent_assert = nodes.new_invalid{
   }
 }
 local fake_main
-local fake_stat_elem = assert.do_not_compare_flag
-
-nodes = tutil.wrap_nodes_constructors(nodes, fake_stat_elem)
 
 local empty_table_or_nil = assert.custom_comparator({[{}] = true}, true)
 
@@ -77,8 +74,14 @@ local function new_invalid(error_code, position, message_args, consumed_nodes, e
   return invalid
 end
 
+---kept this function just in case invalid nodes as statements require special treatment in the future
+local function new_invalid_statement(error_code, position, message_args, consumed_nodes, error_code_inst)
+  local invalid = new_invalid(error_code, position, message_args, consumed_nodes, error_code_inst)
+  return invalid
+end
+
 local function get_ref_helper(name, position, scope)
-  return ast.get_ref(scope or fake_main, fake_stat_elem, name, position)
+  return ast.get_ref(scope or fake_main, nil, name, position)
 end
 
 local function before_each()
@@ -165,14 +168,14 @@ do
       function()
         local local_token = next_token_node()
         local function_token = next_token_node()
-        local foo_def, foo_ref = ast.create_local(next_token(), fake_main, fake_stat_elem)
+        local foo_def, foo_ref = ast.create_local(next_token(), fake_main)
         fake_main.locals[1] = foo_def
         local localfunc = nodes.new_localfunc{
           local_token = local_token,
           name = foo_ref,
           func_def = nodes.new_functiondef{
-            source = test_source,
             parent_scope = fake_main,
+            source = test_source,
             function_token = function_token,
             open_paren_token = next_token_node(),
             close_paren_token = next_token_node(),
@@ -193,7 +196,7 @@ do
   local function append_dummy_local(scope)
     scope = scope or fake_main
     local local_token = next_token_node()
-    local foo_def, foo_ref = ast.create_local(next_token(), scope, fake_stat_elem)
+    local foo_def, foo_ref = ast.create_local(next_token(), scope)
     scope.locals[1] = foo_def
     local localstat = nodes.new_localstat{
       local_token = local_token,
@@ -320,12 +323,12 @@ do
               ifs = {testblock},
             }
             append_stat(fake_main, stat)
-            append_stat(fake_main, new_invalid(
+            append_stat(fake_main, new_invalid_statement(
               error_code_util.codes.expected_token,
               peek_next_token(),
               {"eof"}
             ))
-            append_stat(fake_main, new_invalid(
+            append_stat(fake_main, new_invalid_statement(
               error_code_util.codes.unexpected_token,
               peek_next_token(),
               nil,
@@ -450,13 +453,13 @@ do
         "fornum/forlist with invalid ident",
         "for . ;",
         function()
-          append_stat(fake_main, new_invalid(
+          append_stat(fake_main, new_invalid_statement(
             error_code_util.codes.expected_ident,
             tokens[2], -- at '.'
             nil,
             {next_token_node()} -- consuming 'for' token
           ))
-          append_stat(fake_main, new_invalid(
+          append_stat(fake_main, new_invalid_statement(
             error_code_util.codes.unexpected_token,
             peek_next_token(), -- at '.'
             nil,
@@ -470,7 +473,7 @@ do
         "fornum without '=' and forlist without ',' or 'in'",
         "for i ;",
         function()
-          append_stat(fake_main, new_invalid(
+          append_stat(fake_main, new_invalid_statement(
             error_code_util.codes.expected_eq_comma_or_in,
             tokens[3], -- at ';'
             nil,
@@ -484,7 +487,7 @@ do
     do -- fornum
       local function add_fornum_stat(has_step)
         local for_token = next_token_node()
-        local var_def, var_ref = ast.create_local(next_token(), fake_main, fake_stat_elem)
+        local var_def, var_ref = ast.create_local(next_token(), fake_main)
         var_def.whole_block = true
         local stat = nodes.new_fornum{
           parent_scope = fake_main,
@@ -527,7 +530,7 @@ do
         "for i = true ;",
         function()
           local for_token = next_token_node()
-          local var_def, var_ref = ast.create_local(next_token(), fake_main, fake_stat_elem)
+          local var_def, var_ref = ast.create_local(next_token(), fake_main)
           var_def.whole_block = true
           local stat = nodes.new_fornum{
             parent_scope = fake_main,
@@ -553,7 +556,7 @@ do
         "for i = true, true ;",
         function()
           local for_token = next_token_node()
-          local var_def, var_ref = ast.create_local(next_token(), fake_main, fake_stat_elem)
+          local var_def, var_ref = ast.create_local(next_token(), fake_main)
           var_def.whole_block = true
           local stat = nodes.new_fornum{
             parent_scope = fake_main,
@@ -580,7 +583,7 @@ do
         "for i = true, true do ;",
         function()
           local for_token = next_token_node()
-          local var_def, var_ref = ast.create_local(next_token(), fake_main, fake_stat_elem)
+          local var_def, var_ref = ast.create_local(next_token(), fake_main)
           var_def.whole_block = true
           local stat = nodes.new_fornum{
             parent_scope = fake_main,
@@ -609,7 +612,7 @@ do
         "forlist with 1 name",
         "for foo in true do ; end",
         function()
-          local name_def, name_ref = ast.create_local(tokens[2], fake_main, fake_stat_elem)
+          local name_def, name_ref = ast.create_local(tokens[2], fake_main)
           name_def.whole_block = true
           local stat = nodes.new_forlist{
             parent_scope = fake_main,
@@ -645,7 +648,7 @@ do
               if i ~= 1 then
                 stat.comma_tokens[i - 1] = next_token_node()
               end
-              local name_def, name_ref = ast.create_local(next_token(), fake_main, fake_stat_elem)
+              local name_def, name_ref = ast.create_local(next_token(), fake_main)
               name_def.whole_block = true
               stat.name_list[i] = name_ref
               stat.locals[i] = name_def
@@ -673,7 +676,7 @@ do
             exp_list = {prevent_assert},
             exp_list_comma_tokens = empty_table_or_nil,
           }
-          local name_def, name_ref = ast.create_local(next_token(), fake_main, fake_stat_elem)
+          local name_def, name_ref = ast.create_local(next_token(), fake_main)
           name_def.whole_block = true
           stat.name_list[1] = name_ref
           stat.locals[1] = name_def
@@ -698,7 +701,7 @@ do
             exp_list = {prevent_assert},
             exp_list_comma_tokens = empty_table_or_nil,
           }
-          local name_def, name_ref = ast.create_local(next_token(), fake_main, fake_stat_elem)
+          local name_def, name_ref = ast.create_local(next_token(), fake_main)
           name_def.whole_block = true
           stat.name_list[1] = name_ref
           stat.locals[1] = name_def
@@ -727,7 +730,7 @@ do
             exp_list = {prevent_assert},
             exp_list_comma_tokens = empty_table_or_nil,
           }
-          local name_def, name_ref = ast.create_local(next_token(), fake_main, fake_stat_elem)
+          local name_def, name_ref = ast.create_local(next_token(), fake_main)
           name_def.whole_block = true
           stat.name_list[1] = name_ref
           stat.locals[1] = name_def
@@ -754,7 +757,7 @@ do
             exp_list = {prevent_assert},
             exp_list_comma_tokens = empty_table_or_nil,
           }
-          local name_def, name_ref = ast.create_local(next_token(), fake_main, fake_stat_elem)
+          local name_def, name_ref = ast.create_local(next_token(), fake_main)
           name_def.whole_block = true
           stat.name_list[1] = name_ref
           stat.locals[1] = name_def
@@ -818,18 +821,13 @@ do
             repeat_token = next_token_node(),
             condition = prevent_assert,
           }
-          -- TODO: this test is failing, see description below to get some idea as to why
-          -- the fix for it is disgusting (I can think of either adding a void statement
-          -- just to get a stat_elem with an appropriate index in the correct scope,
-          -- or making stat_elem optional when resolving the reference... however that
-          -- means making stat_elem optional for every expression and then having to
-          -- handle that everywhere else that is using `stat_elem`s
-          -- fun fact, this will be fixed with the removal of `stat_elem`s, (at least from the parser)
-          -- because we then have easy full control of what is visible at what point for
-          -- resolving references
-
-          -- need the empty stat such that the stat_elem index of the inner local
-          -- is the same as the stat_elem index of the repeatstat
+          -- the comments below are describing a case where the parser implementation is using
+          -- statement nodes when getting the reference to locals, while the current implementation
+          -- actually doesn't use them, making the ast util get reference function assume we are
+          -- at the end of the current scope, so the below comments currently do not apply
+          --
+          -- need the empty stat such that the ill node index of the inner local
+          -- is the same as the index of the repeatstat
           -- this tests to make sure the correct index is used when resolving the reference,
           -- since if it uses the wrong one it doesn't find the inner local, because it thinks
           -- that one starts too late
@@ -932,7 +930,7 @@ do
               param_comma_tokens = empty_table_or_nil,
             },
           }
-          local self_def = ast.create_local_def("self", stat.func_def)
+          local self_def = ast.new_local_def("self", stat.func_def)
           self_def.whole_block = true
           self_def.src_is_method_self = true
           stat.func_def.locals[1] = self_def
@@ -948,7 +946,7 @@ do
         "function ;",
         function()
           local function_token = next_token_node()
-          append_stat(fake_main, new_invalid(
+          append_stat(fake_main, new_invalid_statement(
             error_code_util.codes.expected_ident,
             peek_next_token(), -- at ';'
             nil,
@@ -980,19 +978,19 @@ do
               param_comma_tokens = empty_table_or_nil,
             },
           }
-          local self_def = ast.create_local_def("self", stat.func_def)
+          local self_def = ast.new_local_def("self", stat.func_def)
           self_def.whole_block = true
           self_def.src_is_method_self = true
           stat.func_def.locals[1] = self_def
           fake_main.func_protos[1] = stat.func_def
           append_stat(fake_main, stat)
-          append_stat(fake_main, new_invalid(
+          append_stat(fake_main, new_invalid_statement(
             error_code_util.codes.unexpected_token,
             peek_next_token(), -- at '.'
             nil,
             {next_token_node()} -- consuming '.'
           ))
-          append_stat(fake_main, new_invalid(
+          append_stat(fake_main, new_invalid_statement(
             error_code_util.codes.unexpected_expression,
             peek_next_token(), -- at 'baz'
             nil,
@@ -1017,7 +1015,7 @@ do
               if i ~= 1 then
                 lhs_comma_tokens[i - 1] = next_token_node()
               end
-              local name_def, name_ref = ast.create_local(next_token(), fake_main, fake_stat_elem)
+              local name_def, name_ref = ast.create_local(next_token(), fake_main)
               fake_main.locals[i] = name_def
               lhs[i] = name_ref
             end
@@ -1046,7 +1044,7 @@ do
         "local foo = true, true;",
         function()
           local local_token = next_token_node()
-          local name_def, name_ref = ast.create_local(next_token(), fake_main, fake_stat_elem)
+          local name_def, name_ref = ast.create_local(next_token(), fake_main)
           fake_main.locals[1] = name_def
           local stat = nodes.new_localstat{
             local_token = local_token,
@@ -1088,7 +1086,7 @@ do
         "local foo, = true;",
         function()
           local local_token = next_token_node()
-          local foo_def, foo_ref = ast.create_local(next_token(), fake_main, fake_stat_elem)
+          local foo_def, foo_ref = ast.create_local(next_token(), fake_main)
           fake_main.locals[1] = foo_def
           local stat = nodes.new_localstat{
             local_token = local_token,
@@ -1114,7 +1112,7 @@ do
         function()
           append_dummy_local()
           local local_token = next_token_node()
-          local name_def, name_ref = ast.create_local(next_token(), fake_main, fake_stat_elem)
+          local name_def, name_ref = ast.create_local(next_token(), fake_main)
           fake_main.locals[2] = name_def
           local stat = nodes.new_localstat{
             local_token = local_token,
@@ -1201,7 +1199,7 @@ do
         "label without ident",
         ":: ;",
         function()
-          append_stat(fake_main, new_invalid(
+          append_stat(fake_main, new_invalid_statement(
             error_code_util.codes.expected_ident,
             tokens[2], -- at ';'
             nil,
@@ -1232,7 +1230,7 @@ do
       )
 
       add_label_test("label duplicate", "::foo::", function()
-        append_stat(fake_main, new_invalid(
+        append_stat(fake_main, new_invalid_statement(
           error_code_util.codes.duplicate_label,
           tokens[5], -- at the second 'foo'
           {"foo", "1:3"},
@@ -1241,13 +1239,13 @@ do
       end)
 
       add_label_test("label duplicate without closing '::'", "::foo", function()
-        append_stat(fake_main, new_invalid(
+        append_stat(fake_main, new_invalid_statement(
           error_code_util.codes.duplicate_label,
           tokens[5], -- at the second 'foo'
           {"foo", "1:3"},
           {next_token_node(), next_token_node()} -- consuming '::foo'
         ))
-        append_stat(fake_main, new_invalid(
+        append_stat(fake_main, new_invalid_statement(
           error_code_util.codes.expected_token,
           peek_next_token(), -- at ';'
           {"::"}
@@ -1332,7 +1330,7 @@ do
             semi_colon_token = next_token_node(),
           }
           append_stat(fake_main, stat)
-          append_stat(fake_main, new_invalid(
+          append_stat(fake_main, new_invalid_statement(
             error_code_util.codes.expected_token,
             peek_next_token(),
             {"eof"}
@@ -1375,7 +1373,7 @@ do
         "gotostat without ident",
         "goto ;",
         function()
-          append_stat(fake_main, new_invalid(
+          append_stat(fake_main, new_invalid_statement(
             error_code_util.codes.expected_ident,
             tokens[2], -- at ';'
             nil,
@@ -1423,7 +1421,7 @@ do
                 close_paren_token = next_token_node(),
               },
             }
-            append_stat(fake_main, new_invalid(
+            append_stat(fake_main, new_invalid_statement(
               error_code_util.codes.unexpected_expression,
               open_paren_token,
               nil,
@@ -1624,7 +1622,7 @@ do
         "expression statements pass along invalid nodes",
         "then",
         function()
-          append_stat(fake_main, new_invalid(
+          append_stat(fake_main, new_invalid_statement(
             error_code_util.codes.unexpected_token,
             peek_next_token(), -- at 'then'
             nil,
@@ -1637,13 +1635,12 @@ do
         "unexpected expression",
         "foo", -- has be a suffixed expression
         function()
-          local stat = new_invalid(
+          append_stat(fake_main, new_invalid_statement(
             error_code_util.codes.unexpected_expression,
             peek_next_token(), -- at 'foo'
             nil,
             {get_ref_helper("foo", next_token(), fake_main)} -- consuming 'foo'
-          )
-          append_stat(fake_main, stat)
+          ))
         end
       )
 
@@ -1651,7 +1648,7 @@ do
         "unexpected expression invalid node order with an expression which also has a syntax error",
         "foo.true", -- has be a suffixed expression
         function()
-          local stat = new_invalid(
+          local stat = new_invalid_statement(
             error_code_util.codes.unexpected_expression,
             peek_next_token(), -- at 'foo'
             nil,
@@ -1667,7 +1664,7 @@ do
             peek_next_token() -- at 'true'
           )
           append_stat(fake_main, stat)
-          append_stat(fake_main, new_invalid(
+          append_stat(fake_main, new_invalid_statement(
             error_code_util.codes.unexpected_token,
             peek_next_token(), -- at 'true'
             nil,
@@ -2295,7 +2292,7 @@ do
               scope.param_comma_tokens = {}
             end
             for i = 1, num_params do
-              scope.locals[i], scope.params[i] = ast.create_local(next_token(), scope, fake_stat_elem)
+              scope.locals[i], scope.params[i] = ast.create_local(next_token(), scope)
               scope.locals[i].whole_block = true
               if i ~= num_params then
                 scope.param_comma_tokens[i] = next_token_node()
@@ -2323,7 +2320,7 @@ do
         "func_proto with 1 param and vararg param",
         "foo, ...",
         function(scope)
-          scope.locals[1], scope.params[1] = ast.create_local(next_token(), scope, fake_stat_elem)
+          scope.locals[1], scope.params[1] = ast.create_local(next_token(), scope)
           scope.locals[1].whole_block = true
           scope.param_comma_tokens = {next_token_node()}
           scope.is_vararg = true
@@ -2928,14 +2925,13 @@ do
     "\1",
     function()
       local token_node = next_token_node()
-      local stat = new_invalid(
+      append_stat(fake_main, new_invalid_statement(
         nil,
         token_node, -- at '\1'
         nil,
         {token_node}, -- consuming '\1'
         token_node.error_code_insts[1] -- reusing the already existing error_code_inst for correct references
-      )
-      append_stat(fake_main, stat)
+      ))
     end
   )
 
@@ -2952,14 +2948,13 @@ do
         nil,
         token_node.error_code_insts[1] -- reusing the already existing error_code_inst for correct references
       )
-      local stat = new_invalid(
+      append_stat(fake_main, new_invalid_statement(
         nil,
         token_node, -- at '"\x'
         nil,
         {token_node}, -- consuming '"\x'
         token_node.error_code_insts[2] -- reusing the already existing error_code_inst for correct references
-      )
-      append_stat(fake_main, stat)
+      ))
     end
   )
 
@@ -2967,12 +2962,12 @@ do
     "blocks end early, expected eof",
     "end",
     function()
-      append_stat(fake_main, new_invalid(
+      append_stat(fake_main, new_invalid_statement(
         error_code_util.codes.expected_token,
         peek_next_token(), -- at 'end'
         {"eof"}
       ))
-      append_stat(fake_main, new_invalid(
+      append_stat(fake_main, new_invalid_statement(
         error_code_util.codes.unexpected_token,
         peek_next_token(), -- at 'end'
         nil,

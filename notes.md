@@ -47,8 +47,6 @@ done
 
 when adding anything other than errors as error codes - so infos or warnings - expose severity to build profiles
 
-use this for markdown rendering https://github.com/bakpakin/luamd
-
-get rid of stat_elem problems by using intrusive linked lists
-
 think of types like rules where each rule just applies one more restriction on an inner type, which is a rule. The inner most type is therefore always `any`.
+
+have an understanding of units for numbers. m/s (speed) * s (time) = m (distance) for example

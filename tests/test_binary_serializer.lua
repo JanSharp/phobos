@@ -7,7 +7,6 @@ local binary = require("binary_serializer")
 local nodes = require("nodes")
 
 local tutil = require("testing_util")
-nodes = tutil.wrap_nodes_constructors(nodes, assert.do_not_compare_flag)
 
 do
   local main_scope = framework.scope:new_scope("binary_serializer")
@@ -555,19 +554,19 @@ do
     end)
 
     add_test("nil constant", "\0", function(deserializer)
-      assert.contents_equals({node_type = "nil"}, deserializer:read_lua_constant())
+      assert.contents_equals(nodes.new_nil{}, deserializer:read_lua_constant())
     end)
 
     add_test("boolean constant", "\1\1", function(deserializer)
-      assert.contents_equals({node_type = "boolean", value = true}, deserializer:read_lua_constant())
+      assert.contents_equals(nodes.new_boolean{value = true}, deserializer:read_lua_constant())
     end)
 
     add_test("number constant", "\3\0\0\0\0\0\0\0\0", function(deserializer)
-      assert.contents_equals({node_type = "number", value = 0}, deserializer:read_lua_constant())
+      assert.contents_equals(nodes.new_number{value = 0}, deserializer:read_lua_constant())
     end)
 
     add_test("string constant", "\4\3\0\0\0\0\0\0\0hi\0", function(deserializer)
-      assert.contents_equals({node_type = "string", value = "hi"}, deserializer:read_lua_constant())
+      assert.contents_equals(nodes.new_string{value = "hi"}, deserializer:read_lua_constant())
     end)
 
     add_test("invalid nil string constant", "\4\0\0\0\0\0\0\0\0", function(deserializer)

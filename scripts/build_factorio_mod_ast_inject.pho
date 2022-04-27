@@ -29,7 +29,7 @@ local on_open = {
 }
 
 return function(main)
-  walker.walk_scope(main, {on_open = on_open})
+  walker.walk_scope(main, walker.new_context(on_open, nil))
 
   -- insert
   -- `if ... ~= "__phobos__.foo" then return require("__phobos__.foo") end`
@@ -42,51 +42,27 @@ return function(main)
     :gsub("%.pho$", "")
     :gsub("/", ".")
 
-  -- hmmm, so this is no longer temp, but I still don't love it
-  -- requiring a callback for every statement is... eh? I'm mostly annoyed by `stat_elem`
-  -- requiring an iife for every scope is also annoying but there is not much to be done about that
-  -- I really wish `stat_elem` just wasn't a thing
-  ast.prepend_stat(main, function(ifstat_elem)
-    return nodes.new_ifstat{
-      stat_elem = ifstat_elem,
-      ifs = {(function()
-        local testblock = nodes.new_testblock{ -- `if`
-          stat_elem = ifstat_elem,
-          parent_scope = main,
-          condition = nodes.new_binop{ -- `... ~= <correct_require_name>`
-            stat_elem = ifstat_elem,
-            left = nodes.new_vararg{stat_elem = ifstat_elem},
-            op = "~=",
-            right = nodes.new_string{
-              stat_elem = ifstat_elem,
-              value = correct_require_name,
-            },
+  -- requiring an iife for every scope is annoying but there is not much to be done about that
+  ast.prepend_stat(main, nodes.new_ifstat{
+    ifs = {(function()
+      local testblock = nodes.new_testblock{ -- `if`
+        parent_scope = main,
+        condition = nodes.new_binop{ -- `... ~= <correct_require_name>`
+          left = nodes.new_vararg{},
+          op = "~=",
+          right = nodes.new_string{value = correct_require_name},
+        },
+      } -- `then`
+      ast.append_stat(testblock, nodes.new_retstat{ -- `return`
+        exp_list = {nodes.new_call{
+          ex = nodes.new_index{ -- `_ENV.require`
+            ex = ast.create_ref_to(main.parent_scope.locals[1], testblock),
+            suffix = nodes.new_string{value = "require"},
           },
-        } -- `then`
-
-        ast.append_stat(testblock, function(retstat_elem)
-          return nodes.new_retstat{ -- `return`
-            stat_elem = retstat_elem,
-            exp_list = {nodes.new_call{
-              stat_elem = retstat_elem,
-              ex = nodes.new_index{ -- `_ENV.require`
-                stat_elem = retstat_elem,
-                ex = ast.get_ref(testblock, retstat_elem, "_ENV"),
-                suffix = nodes.new_string{
-                  stat_elem = retstat_elem,
-                  value = "require",
-                },
-              },
-              args = {nodes.new_string{ -- `(<correct_require_name>)`
-                stat_elem = retstat_elem,
-                value = correct_require_name,
-              }},
-            }},
-          }
-        end)
-
-        return testblock -- `end`
-      end)()},
-    }
-  end)
+          args = {nodes.new_string{value = correct_require_name}}, -- `(<correct_require_name>)`
+        }},
+      })
+      return testblock -- `end`
+    end)()},
+  })
 end

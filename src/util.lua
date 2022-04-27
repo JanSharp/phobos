@@ -39,6 +39,13 @@ local function clear_table(t)
   end
 end
 
+local function replace_table(target, new_data)
+  clear_table(target)
+  for k, v in pairs(new_data) do
+    target[k] = v
+  end
+end
+
 local function shallow_copy(t)
   local result = {}
   for k, v in pairs(t) do
@@ -166,6 +173,7 @@ return {
   floating_byte_to_number = floating_byte_to_number,
   invert = invert,
   clear_table = clear_table,
+  replace_table = replace_table,
   shallow_copy = shallow_copy,
   copy = copy,
   debug_abort = debug_abort,
