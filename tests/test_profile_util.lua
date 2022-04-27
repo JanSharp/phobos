@@ -898,6 +898,13 @@ do
   --   assert_action_counts(1, 0, 0)
   -- end)
 
+  -- NOTE: writing of tests has been put on hold because I'm not sure [...]
+  -- 1) if the profile util structure makes sense and is good. It doesn't follow the "value is the boundary"
+  --   strategy very well
+  -- 2) if the profile util and profiles in general are going to stay like this at all. I'm thinking of
+  --   completely redoing them with a much more generic include and exclude system to allow for
+  --   reuse of that system for formatting, disassembling, outputting as disassembly directly, and so on
+
   -- TODO: outputting to the same file when compiling
   -- TODO: excluding files or directories that don't exist
   -- TODO: inject script incremental logic

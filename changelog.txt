@@ -1,5 +1,12 @@
 ---------------------------------------------------------------------------------------------------
 Version: 0.2.0
+  Major Features:
+    - Add build profiles
+    - Add incremental builds
+  Minor Features:
+    - Add partial EmmyLua parser for documentation generation from source code
+  Changes:
+    - Remove the vast majority of cmd args in favor of build profiles
 ---------------------------------------------------------------------------------------------------
 Version: 0.1.4
   Minor Features:
