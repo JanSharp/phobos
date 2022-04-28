@@ -81,7 +81,7 @@ local function new_invalid_statement(error_code, position, message_args, consume
 end
 
 local function get_ref_helper(name, position, scope)
-  return ast.get_ref(scope or fake_main, nil, name, position)
+  return ast.resolve_ref_at_end(scope or fake_main, name, position)
 end
 
 local function before_each()
