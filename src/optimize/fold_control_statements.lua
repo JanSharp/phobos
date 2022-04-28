@@ -28,7 +28,7 @@ do
   }
 
   function remove_func_defs_in_scope(parent_func_def, scope)
-    local context = ast_walker.new_context(on_open)
+    local context = ast_walker.new_context(on_open, nil)
     context.parent_func_def = parent_func_def
     ast_walker.walk_scope(scope, context)
   end
