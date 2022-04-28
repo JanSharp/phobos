@@ -1438,6 +1438,11 @@ local function parse(text,source_name)
     return peek_tok, start_at
   end
 
+  -- have to reset token because if the previous `parse` call was interrupted by an error
+  -- which was caught by pcall the current token might still be eof which would cause
+  -- this parse call to do literally nothing
+  -- errors should be impossible in the parse function, but there can always be bugs
+  token = nil
   next_token()
   local main = main_func()
 
