@@ -1672,6 +1672,28 @@ do
           ))
         end
       )
+
+      add_test(
+        "unexpected expression with invalid token - and with it an invalid node - right after",
+        "foo'", -- has be a suffixed expression
+        function()
+          append_stat(fake_main, new_invalid_statement(
+            error_code_util.codes.unexpected_expression,
+            peek_next_token(), -- at 'foo'
+            nil,
+            {get_ref_helper("foo", next_token(), fake_main)} -- consuming 'foo'
+          ))
+          local token_node = next_token_node()
+          append_stat(fake_main, new_invalid_statement(
+            nil,
+            token_node, -- at "'"
+            nil,
+            {token_node}, -- consuming "'"
+            -- reusing the already existing error_code_inst for correct references
+            token_node.error_code_insts[1]
+          ))
+        end
+      )
     end -- end expression statements
 
     -- funcstat, localfunc, call are only partially tested. The rest for them is in expressions
