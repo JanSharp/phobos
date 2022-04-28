@@ -4,7 +4,7 @@ local ast = require("ast_util")
 local nodes = require("nodes")
 
 local on_open = {
-  call = function(node, scope)
+  call = function(node)
     -- add `__phobos__.` to every `require`, which are identified by
     -- a call where its expression is an index into _ENV with the key "require"
     -- and the call takes at least 1 argument which is a literal string that doesn't start with "__"
