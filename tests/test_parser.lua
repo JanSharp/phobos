@@ -1633,7 +1633,7 @@ do
 
       add_test(
         "unexpected expression",
-        "foo", -- has be a suffixed expression
+        "foo", -- must be a suffixed expression
         function()
           append_stat(fake_main, new_invalid_statement(
             error_code_util.codes.unexpected_expression,
@@ -1646,7 +1646,7 @@ do
 
       add_test(
         "unexpected expression invalid node order with an expression which also has a syntax error",
-        "foo.true", -- has be a suffixed expression
+        "foo.true", -- must be a suffixed expression
         function()
           local stat = new_invalid_statement(
             error_code_util.codes.unexpected_expression,

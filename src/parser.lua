@@ -21,7 +21,7 @@ local prevent_assert
 
 local source
 local error_code_insts
-local last_invalid_node
+local invalid_token_invalid_node_lut
 ---used to carry the position token over from `new_error_code_inst` to `syntax_error`
 local err_pos_token
 ---only used by labels, it's simply just an extra node that's going to be added
@@ -96,7 +96,12 @@ end
 ---is missing (like a closing }), but rather the actual token that was encountered that was unexpected
 ---Throw a Syntax Error at the current location
 ---@param error_code_inst ErrorCodeInstance
-local function syntax_error(error_code_inst, location_descriptor, error_code_insts_insertion_index)
+local function syntax_error(
+  error_code_inst,
+  location_descriptor,
+  error_code_insts_insertion_index,
+  current_invalid_token
+)
   if location_descriptor then
     location_descriptor = location_descriptor == "" and "" or " "..location_descriptor
   else
@@ -160,7 +165,9 @@ local function syntax_error(error_code_inst, location_descriptor, error_code_ins
   else
     error_code_insts[#error_code_insts+1] = error_code_inst
   end
-  last_invalid_node = invalid
+  if current_invalid_token then
+    invalid_token_invalid_node_lut[current_invalid_token] = invalid
+  end
   return invalid
 end
 
@@ -509,9 +516,10 @@ local function primary_exp(scope)
     return ast.resolve_ref_at_end(scope, ident.value, ident)
   else
     if token.token_type == "invalid" then
-      add_consumed_node(last_invalid_node, new_token_node())
+      local invalid = invalid_token_invalid_node_lut[token]
+      add_consumed_node(invalid, new_token_node())
       next_token()
-      return last_invalid_node
+      return invalid
     else
       local invalid = syntax_error(new_error_code_inst{
         error_code = error_code_util.codes.unexpected_token,
@@ -1378,6 +1386,7 @@ local function parse(text,source_name)
     }
   }
   error_code_insts = {}
+  invalid_token_invalid_node_lut = {}
   local token_iter, index
   token_iter,token_iter_state,index = tokenize(text)
 
@@ -1411,7 +1420,7 @@ local function parse(text,source_name)
         if token.token_type == "invalid" then
           err_pos_token = token
           for _, error_code_inst in ipairs(token.error_code_insts) do
-            syntax_error(error_code_inst)
+            syntax_error(error_code_inst, nil, nil, token)
           end
         end
         break
@@ -1438,6 +1447,7 @@ local function parse(text,source_name)
   -- clear these references to not hold on to memory
   local result_error_code_insts = error_code_insts
   error_code_insts = nil
+  invalid_token_invalid_node_lut = nil
   source = nil
   prevent_assert = nil
   prev_token = nil
