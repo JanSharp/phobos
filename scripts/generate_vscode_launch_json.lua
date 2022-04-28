@@ -160,17 +160,26 @@ add_phobos_profiles{
   name = "tests/main",
   main_filename = "tests/main.lua",
 }
-add_input{
-  id = "testId",
-  type = "promptString",
-  description = "The test id of the test to run.",
-  default = nil,
-  password = false,
-}
+local function add_test_id_input(postfix)
+  add_input{
+    id = "testId"..postfix,
+    type = "promptString",
+    description = "The test id of the test to run.",
+    default = nil,
+    password = false,
+  }
+end
+add_test_id_input("1")
+add_test_id_input("2")
 add_phobos_profiles{
   name = "tests/main test id",
   main_filename = "tests/main.lua",
-  args = {"--test-ids", "${input:testId}"}
+  args = {"--test-ids", "${input:testId1}"}
+}
+add_phobos_profiles{
+  name = "tests/main test ids",
+  main_filename = "tests/main.lua",
+  args = {"--test-ids", "${input:testId1}", "${input:testId2}"}
 }
 add_input{
   id = "testScope",
