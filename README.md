@@ -143,7 +143,7 @@ Phobos itself is licensed under the MIT License, see [LICENSE.txt](LICENSE.txt).
 - [LuaFileSystem](https://keplerproject.github.io/luafilesystem/) MIT License, Copyright (c) 2003 - 2020 Kepler Project.
 - [Serpent](https://github.com/pkulchenko/serpent) MIT License, Copyright (c) 2012-2018 Paul Kulchenko (paul AT kulchenko DOT com) (_email "encrypted" for scraping reasons_)
 - [LFSClasses](https://github.com/JanSharp/LFSClasses) The Unlicense
-- [LuaArgParser](https://github.com/JanSharp/LuaArgParser) MIT License, Copyright (c) 2021 Jan Mischak
+- [LuaArgParser](https://github.com/JanSharp/LuaArgParser) MIT License, Copyright (c) 2021-2022 Jan Mischak
 - [LuaPath](https://github.com/JanSharp/LuaPath) The Unlicense
 - [FactorioSumnekoLuaPlugin](https://github.com/JanSharp/FactorioSumnekoLuaPlugin) MIT License, Copyright (c) 2021-2022 Jan Mischak, justarandomgeek
 - [minimal-no-base-mod](https://github.com/Bilka2/minimal-no-base-mod), Copyright (c) 2020 Erik Wellmann
