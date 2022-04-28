@@ -506,7 +506,7 @@ local function primary_exp(scope)
     return ex
   elseif token.token_type == "ident" then
     local ident = assert_ident() -- can't be invalid
-    return ast.get_ref(scope, nil, ident.value, ident)
+    return ast.resolve_ref_at_end(scope, ident.value, ident)
   else
     if token.token_type == "invalid" then
       add_consumed_node(last_invalid_node, new_token_node())
@@ -1127,11 +1127,14 @@ local function local_func(local_token, function_token, scope)
     func_def = prevent_assert,
     local_token = local_token,
   }
+  node.func_def = functiondef(function_token, scope, false)
   if name_local then
+    -- set this right before returning to tell the ast_util that this local definition
+    -- doesn't have a start_at node yet when trying to resolve references to it within
+    -- the function body
     name_local.start_at = node
     name_local.start_offset = 0
   end
-  node.func_def = functiondef(function_token, scope, false)
   return node
 end
 
@@ -1182,7 +1185,7 @@ local function func_name(scope)
   if is_invalid(ident) then
     return false, ident
   end
-  local name = ast.get_ref(scope, nil, ident.value, ident)
+  local name = ast.resolve_ref_at_end(scope, ident.value, ident)
 
   while token.token_type == "." do
     name = suffixed_lut["."](name, scope)
