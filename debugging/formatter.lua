@@ -8,15 +8,9 @@ local function run(filename)
   print(filename)
   local text = io_util.read_file(filename)
 
-  local ast, invalid_nodes = parse(text, "@"..filename)
-  if invalid_nodes[1] then
-    local msgs = {}
-    for i, invalid_node in ipairs(invalid_nodes) do
-      msgs[i] = error_code_util.get_message(invalid_node.error_code_inst)
-    end
-    print((#invalid_nodes).." syntax errors in "
-      ..filename..":\n"..table.concat(msgs, "\n")
-    )
+  local ast, errors = parse(text, "@"..filename)
+  if errors[1] then
+    print(error_code_util.get_message_for_list(errors, "syntax errors in "..filename))
   end
   text = format(ast)
 

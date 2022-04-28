@@ -159,6 +159,11 @@ local function format(main)
         if node.suffix.node_type == "string" and node.suffix.src_is_ident then
           add_token(node.dot_token)
           add_exp(node.suffix)
+        elseif node.suffix.node_type == "invalid" then
+          if node.dot_token then add_token(node.dot_token) end
+          if node.suffix_open_token then add_token(node.suffix_open_token) end
+          add_invalid(node.suffix)
+          if node.suffix_close_token then add_token(node.suffix_close_token) end
         else
           add_token(node.suffix_open_token)
           add_exp(node.suffix)
