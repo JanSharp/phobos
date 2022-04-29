@@ -196,7 +196,7 @@ add_phobos_profiles{
 add_phobos_profiles{
   name = "tests/main test scope and id",
   main_filename = "tests/main.lua",
-  args = {"--scopes", "${input:testScope}", "--test-ids", "${input:testId}"}
+  args = {"--scopes", "${input:testScope}", "--test-ids", "${input:testId1}"}
 }
 add_phobos_profiles{
   name = "src/main (debug profile)",

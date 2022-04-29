@@ -907,7 +907,7 @@
           "--scopes",
           "${input:testScope}",
           "--test-ids",
-          "${input:testId}",
+          "${input:testId1}",
         ],
         "program": {
           "file": "src/entry_point.lua",
@@ -928,7 +928,7 @@
           "--scopes",
           "${input:testScope}",
           "--test-ids",
-          "${input:testId}",
+          "${input:testId1}",
         ],
         "program": {
           "file": "src/entry_point.lua",
@@ -949,7 +949,7 @@
           "--scopes",
           "${input:testScope}",
           "--test-ids",
-          "${input:testId}",
+          "${input:testId1}",
         ],
         "program": {
           "file": "src/entry_point.lua",
@@ -976,7 +976,7 @@
           "--scopes",
           "${input:testScope}",
           "--test-ids",
-          "${input:testId}",
+          "${input:testId1}",
         ],
         "program": {
           "file": "out/src/debug/entry_point.lua",
@@ -997,7 +997,7 @@
           "--scopes",
           "${input:testScope}",
           "--test-ids",
-          "${input:testId}",
+          "${input:testId1}",
         ],
         "program": {
           "file": "out/src/debug/entry_point.lua",
@@ -1018,7 +1018,7 @@
           "--scopes",
           "${input:testScope}",
           "--test-ids",
-          "${input:testId}",
+          "${input:testId1}",
         ],
         "program": {
           "file": "out/src/debug/entry_point.lua",
