@@ -255,9 +255,11 @@ do
         right_key, right_value = next(right, right_key)
       end
       location_stack_size = location_stack_size - 1
+      while right_key == do_not_compare_flag do
+        right_key = next(right, right_key)
+      end
       if right_key ~= nil then
         -- TODO: add more info about table sizes
-        -- TODO: add support for do_not_compare
         create_difference(difference_type.size, left, right)
         return false
       end
