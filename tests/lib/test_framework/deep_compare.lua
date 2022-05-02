@@ -12,7 +12,8 @@ local util = require("util")
 -- functions are compared by identity,
 -- if not equal then by bytecode and all their upvals
 
-local reference_type_lut = util.invert{"table", "function"} -- we don't care about userdata
+-- we don't care about userdata, mostly because I don't remember how light userdata behaves
+local reference_type_lut = util.invert{"table", "function", "thread"}
 
 local do_not_compare_flag = {"do_not_compare_flag"}
 
@@ -77,6 +78,7 @@ do
 
   local compare_values
 
+  ---handling `visited` is not this function's job
   local function use_custom_comparator(comparator, other, other_is_left, location)
     if type(comparator) == "table" then
       if other == nil then
@@ -97,7 +99,7 @@ do
         return true
       end
       local differences = {}
-      for value_to_compare in pairs(comparator) do
+      for _, value_to_compare in ipairs(comparator) do
         local old_visited = util.shallow_copy(visited)
         local result
         if other_is_left then
@@ -105,7 +107,6 @@ do
         else
           result = compare_values(value_to_compare, other, location)
         end
-        visited[value_to_compare] = nil
         if result then
           return true
         end
