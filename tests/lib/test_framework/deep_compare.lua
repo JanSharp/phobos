@@ -50,16 +50,28 @@ local difference_type = {
 }
 do
   local visited
+  local reference_value_locations
   local compare_tables
   local difference
   local _compare_iteration_order
+
+  local function add_reference_value_location(value, location)
+    local location_list = reference_value_locations[value]
+    if not location_list then
+      location_list = {}
+      reference_value_locations[value] = location_list
+    end
+    location_list[#location_list+1] = location
+  end
 
   local function create_difference(diff_type, left, right, location)
     difference = {
       type = diff_type,
       location = location,
       left = left,
+      left_ref_locations = reference_value_locations[left],
       right = right,
+      right_ref_locations = reference_value_locations[right],
     }
   end
 
@@ -76,6 +88,7 @@ do
           location = location,
           comparator = comparator,
           other = other,
+          other_ref_locations = reference_value_locations[other],
           other_is_left = other_is_left,
         }
         return false
@@ -105,6 +118,7 @@ do
         location = location,
         comparator = comparator,
         other = other,
+        other_ref_locations = reference_value_locations[other],
         other_is_left = other_is_left,
         inner_differences = differences,
       }
@@ -117,6 +131,7 @@ do
           location = location,
           comparator = comparator,
           other = other,
+          other_ref_locations = reference_value_locations[other],
           other_is_left = other_is_left,
           message = message,
           data = data,
@@ -157,6 +172,8 @@ do
       -- comparing identity with non reference type values doesn't make sense
       -- besides it would very most likely break identity comparison
       if reference_type_lut[type(right)] then
+        add_reference_value_location(left, location)
+        add_reference_value_location(right, location)
         visited[left] = right
         visited[right] = left
       end
@@ -166,6 +183,8 @@ do
       local result = use_custom_comparator(right, left, true, location)
       -- same here, see previous comment
       if reference_type_lut[type(left)] then
+        add_reference_value_location(left, location)
+        add_reference_value_location(right, location)
         visited[left] = right
         visited[right] = left
       end
@@ -186,6 +205,10 @@ do
     -- after type check, `left` and `right` can't be nil anymore
     visited[left] = right
     visited[right] = left
+    if reference_type_lut[left_type] then
+      add_reference_value_location(left, location)
+      add_reference_value_location(right, location)
+    end
 
     if left_type == "thread" then
       error("How did you even get a thread?")
@@ -292,8 +315,10 @@ do
   function deep_compare(left, right, compare_iteration_order, root_name)
     _compare_iteration_order = compare_iteration_order
     visited = {}
+    reference_value_locations = {}
     local result = compare_values(left, right, root_name or "ROOT")
     visited = nil
+    reference_value_locations = nil
     local difference_result = difference
     difference = nil
     return result, difference_result
