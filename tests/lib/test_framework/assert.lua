@@ -67,6 +67,10 @@ local function contents_equals(expected, got, msg, options)
   )
   local function pretty_print_diff(diff)
     local diff_type = deep_compare.difference_type
+    local function equality_diff()
+      return "expected "..pretty_print(diff.left, options.serpent_opts)..", got "
+        ..pretty_print(diff.right, options.serpent_opts).." at "..diff.location
+    end
     return (({
       [diff_type.value_type] = function()
         return "expected type '"..type(diff.left).."', got '"
@@ -78,10 +82,9 @@ local function contents_equals(expected, got, msg, options)
       [diff_type.function_bytecode] = function()
         return "function bytecode differs at "..diff.location
       end,
-      [diff_type.primitive_value] = function()
-        return "expected "..pretty_print(diff.left, options.serpent_opts)..", got "
-          ..pretty_print(diff.right, options.serpent_opts).." at "..diff.location
-      end,
+      [diff_type.primitive_value] = equality_diff,
+      [diff_type.thread] = equality_diff,
+      [diff_type.userdata] = equality_diff,
       [diff_type.size] = function()
         return "table size differs at "..diff.location
       end,

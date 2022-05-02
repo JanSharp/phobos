@@ -12,8 +12,12 @@ local util = require("util")
 -- functions are compared by identity,
 -- if not equal then by bytecode and all their upvals
 
--- we don't care about userdata, mostly because I don't remember how light userdata behaves
-local reference_type_lut = util.invert{"table", "function", "thread"}
+-- so technically speaking light userdata is a Lua value that contains just a raw pointer
+-- the equality for light userdata is determined by said raw pointer pointing to the same address
+-- so technically speaking light userdata isn't a reference type in Lua itself, but since its
+-- value is just a pointer it behaves just like a reference type to a value outside of Lua
+-- TL;DR: light userdata behaves just like full userdata for our use case of comparing identity
+local reference_type_lut = util.invert{"table", "function", "thread", "userdata"}
 
 local do_not_compare_flag = {"do_not_compare_flag"}
 
@@ -44,10 +48,12 @@ local difference_type = {
   c_function = 2, -- left or right are a c function while the other is either a non-c function or a different c function
   function_bytecode = 3, -- left and right are functions with differing bytecode
   primitive_value = 4, -- left and right are the same type, may only be a string, boolean or number but have different values
-  size = 5, -- left and right are tables of different sizes, but up to the point where one ends they are equal
-  identity_mismatch = 6, -- a reference value was visited before, but a second time they used different identities
-  custom_comparator_func = 7, -- a custom comparator function deems a value incorrect
-  custom_comparator_table = 8, -- a custom comparator table did not contain the other value
+  thread = 5, -- left and right are threads that are not equal to each other
+  userdata = 6, -- left and right are userdata that are not equal to each other
+  size = 7, -- left and right are tables of different sizes, but up to the point where one ends they are equal
+  identity_mismatch = 8, -- a reference value was visited before, but a second time they used different identities
+  custom_comparator_func = 9, -- a custom comparator function deems a value incorrect
+  custom_comparator_table = 10, -- a custom comparator table did not contain the other value
 }
 do
   local visited
@@ -212,10 +218,11 @@ do
     end
 
     if left_type == "thread" then
-      error("How did you even get a thread?")
+      create_difference(difference_type.thread, left, right, location)
+      return false
     elseif left_type == "userdata" then
-      -- TODO: check if that's even true, but it doesn't really matter right now
-      error("Cannot compare userdata")
+      create_difference(difference_type.userdata, left, right, location)
+      return false
     elseif left_type == "function" then
       local left_info = debug.getinfo(left, "Su")
       local right_info = debug.getinfo(left, "S")
