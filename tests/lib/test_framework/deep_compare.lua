@@ -2,6 +2,7 @@
 ---cSpell:ignore userdata, upval, upvals, nups, bytecode, metatable
 
 local pretty_print = require("pretty_print")
+local util = require("util")
 
 -- deep compare compares the contents of 2 values
 
@@ -11,9 +12,11 @@ local pretty_print = require("pretty_print")
 -- functions are compared by identity,
 -- if not equal then by bytecode and all their upvals
 
+local reference_type_lut = util.invert{"table", "function"} -- we don't care about userdata
+
 local do_not_compare_flag = {"do_not_compare_flag"}
 
-local custom_comparators = setmetatable({}, {__mode = "k"})
+local custom_comparators_lut = setmetatable({}, {__mode = "k"})
 local custom_comparators_allow_nil = setmetatable({}, {__mode = "k"})
 
 ---@param comparator table<any, boolean>|fun(other:any, other_is_left:boolean):boolean, string, any @
@@ -29,7 +32,7 @@ local custom_comparators_allow_nil = setmetatable({}, {__mode = "k"})
 ---on the created diff as is.
 ---@param allow_nil boolean @ only used if comparator is a lookup table
 local function register_custom_comparator(comparator, allow_nil)
-  custom_comparators[comparator] = true
+  custom_comparators_lut[comparator] = true
   custom_comparators_allow_nil[comparator] = allow_nil or nil
   return comparator
 end
@@ -69,12 +72,6 @@ do
   local compare_values
 
   local function use_custom_comparator(comparator, other, other_is_left)
-    if visited[other] ~= nil then
-      return true
-    end
-    if other ~= nil then
-      visited[other] = true
-    end
     if type(comparator) == "table" then
       if other == nil then
         if custom_comparators_allow_nil[comparator] then
@@ -95,18 +92,15 @@ do
       local init_location_stack_size = location_stack_size
       local differences = {}
       for value_to_compare in pairs(comparator) do
-        local old_visited = {}
-        for k, v in pairs(visited) do
-          old_visited[k] = v
-        end
+        local old_visited = util.shallow_copy(visited)
         local result
         if other_is_left then
           result = compare_values(other, value_to_compare)
         else
           result = compare_values(value_to_compare, other)
         end
+        visited[value_to_compare] = nil
         if result then
-          visited[value_to_compare] = nil
           return true
         end
         differences[#differences+1] = difference
@@ -149,28 +143,41 @@ do
       return true
     end
 
-    -- check for custom comparators and use those if present
-    if custom_comparators[left] then
-      if custom_comparators[right] then
-        error("Comparing 2 custom comparators is not supported")
-      end
-      return use_custom_comparator(left, right, false)
-    end
-    if custom_comparators[right] then
-      return use_custom_comparator(right, left, true)
-    end
-
     -- check if it has already been visited
     if visited[left] ~= nil or visited[right] ~= nil then
-      -- TODO: this is complaining about identity mismatches for custom comparators, even though [...]
-      -- they should be completely excluded from identity checking
-      -- if visited[left] == nil or visited[right] == nil
-      --   or visited[left] ~= right -- if `visited[left] == right` then `visited[right] == left` is also true
-      -- then
-      --   create_difference(difference_type.identity_mismatch, left, right)
-      --   return false
-      -- end
+      if visited[left] == nil or visited[right] == nil
+        or visited[left] ~= right
+        -- or visited[right] ~= left
+        -- if `visited[left] == right` then `visited[right] == left` is also true
+      then
+        create_difference(difference_type.identity_mismatch, left, right)
+        return false
+      end
       return true
+    end
+
+    -- check for custom comparators and use those if present
+    if custom_comparators_lut[left] then
+      if custom_comparators_lut[right] then
+        error("Comparing 2 custom comparators is not supported")
+      end
+      local result = use_custom_comparator(left, right, false)
+      -- comparing identity with non reference type values doesn't make sense
+      -- besides it would very most likely break identity comparison
+      if reference_type_lut[type(right)] then
+        visited[left] = right
+        visited[right] = left
+      end
+      return result
+    end
+    if custom_comparators_lut[right] then
+      local result = use_custom_comparator(right, left, true)
+      -- same here, see previous comment
+      if reference_type_lut[type(left)] then
+        visited[left] = right
+        visited[right] = left
+      end
+      return result
     end
 
     -- compare nil, boolean, string, number (including NAN)
@@ -280,7 +287,8 @@ do
           if not compare_values(nil, v) then
             return false
           end
-          error("impossible because 'v' can never be nil inside of the for loop")
+          -- compare_values can actually return true even though `v` is never `nil`,
+          -- because there might be custom comparators or `do_not_compare_flag`s
         end
       end
       location_stack_size = location_stack_size - 1
