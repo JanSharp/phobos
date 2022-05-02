@@ -2073,8 +2073,7 @@ do
             op_tokens = {next_token_node(), nil},
             concat_src_paren_wrappers = assert.custom_comparator({
               [{}] = true,
-              [{{}}] = true,
-              -- [{{}, {}}] = true,
+              [{{}, {}}] = true,
             }, true),
           }
           expr.exp_list[2] = next_true_node()
