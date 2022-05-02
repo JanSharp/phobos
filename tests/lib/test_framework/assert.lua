@@ -92,7 +92,7 @@ local function contents_equals(expected, got, msg, options)
       [diff_type.thread] = equality_diff,
       [diff_type.userdata] = equality_diff,
       [diff_type.size] = function()
-        return "table size differs at "..diff.location
+        return "expected table size "..diff.left_size..", got "..diff.right_size.." at "..diff.location
       end,
       [diff_type.identity_mismatch] = function()
         -- return "got a reference value occurring multiple times even though it should be a different instance, \z

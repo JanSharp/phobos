@@ -27,8 +27,8 @@ local custom_comparators_allow_nil = setmetatable({}, {__mode = "k"})
 ---@param comparator table<any, boolean>|fun(other:any, other_is_left:boolean):boolean, string, any @
 ---If it is a table, all keys are considered to be possible correct values on the other side.
 ---If any given value does not exist in this given table by directly indexing it, a deep compare will
----be performed on every possible value and it only fails if all given values do not match.\
----\
+---be performed on every possible value and it only fails if all given values do not match.
+---
 ---If it is a function it is given the other value, plus a flag telling you if the other value is
 ---the left side of what is being compared, just in case you need that information.\
 ---The function should return a boolean indicating wether the value is correct or not.\
@@ -253,7 +253,23 @@ do
     return false
   end
 
+  local function figure_out_table_sizes(kvp_num, remaining, remaining_key, remaining_value)
+    if remaining_key == do_not_compare_flag and remaining_value == do_not_compare_flag then
+      remaining_key = next(remaining, remaining_key)
+      kvp_num = kvp_num + 1
+    end
+    if remaining_key ~= nil then
+      repeat
+        kvp_num = kvp_num + 1
+        remaining_key = next(remaining_key)
+      until remaining_key == nil
+      local remaining_size = kvp_num - 1
+      return remaining_size
+    end
+  end
+
   function compare_tables(left, right, location)
+    -- NOTE: compare iteration order is untested and would have to be tested with Factorio Lua
     if _compare_iteration_order then
       local left_key, left_value = next(left)
       local right_key, right_value = next(right)
@@ -261,13 +277,19 @@ do
       while left_key ~= nil do
         kvp_num = kvp_num + 1
 
-        local key_location = location.."[key #"..kvp_num.."]"
         if right_key == nil then
-          -- TODO: add more info about table sizes
-          -- TODO: add support for do_not_compare
-          create_difference(difference_type.size, left, right, key_location)
-          return false
+          local right_size = kvp_num - 1
+          local left_size = figure_out_table_sizes(kvp_num, left, left_key, left_value)
+          if left_size then
+            create_difference(difference_type.size, left, right, location)
+            difference.left_size = left_size
+            difference.right_size = right_size
+            return false
+          end
+          break
         end
+
+        local key_location = location.."[key #"..kvp_num.."]"
         if not compare_values(left_key, right_key, key_location) then
           return false
         end
@@ -280,14 +302,16 @@ do
         left_key, left_value = next(left, left_key)
         right_key, right_value = next(right, right_key)
       end
-      while right_key == do_not_compare_flag do
-        right_key = next(right, right_key)
-      end
-      if right_key ~= nil then
-        -- TODO: add more info about table sizes
+
+      local left_size = kvp_num - 1
+      local right_size = figure_out_table_sizes(kvp_num, right, right_key, right_value)
+      if right_size then
         create_difference(difference_type.size, left, right, location)
+        difference.left_size = left_size
+        difference.right_size = right_size
         return false
       end
+
     else
       local done = {}
       for k, v in pairs(left) do
