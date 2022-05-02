@@ -22,7 +22,7 @@ local prevent_assert = nodes.new_invalid{
 local fake_main
 
 local function empty_table_or_nil()
-  return assert.custom_comparator({[{}] = true}, true)
+  return assert.custom_comparator({{}}, true)
 end
 
 local function make_fake_main()
@@ -2072,8 +2072,8 @@ do
             exp_list = {next_true_node(), nil, nil},
             op_tokens = {next_token_node(), nil},
             concat_src_paren_wrappers = assert.custom_comparator({
-              [{}] = true,
-              [{{}, {}}] = true,
+              {},
+              {{}, {}},
             }, true),
           }
           expr.exp_list[2] = next_true_node()
@@ -2161,8 +2161,8 @@ do
             },
             op_tokens = {op_2},
             concat_src_paren_wrappers = assert.custom_comparator({
-              [{}] = true,
-              [{{}}] = true,
+              {},
+              {{}},
             }, true),
           }
           return expr

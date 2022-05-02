@@ -351,7 +351,7 @@
 ---The `open_paren_token` comes before that expression, the `close_paren_token`
 ---comes after the very last expression.\
 ---For that reason this array will always be 1 shorter than the `exp_list`,
----since the wrappers around the last expression are handled by it's own
+---since the wrappers around the last expression are handled by its own
 ---`src_paren_wrappers`.\
 ---a concat node is right associative, which means no paren wrapper can close
 ---any earlier than after the last expression. That means an expression like
