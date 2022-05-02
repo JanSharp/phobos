@@ -50,20 +50,14 @@ local difference_type = {
 }
 do
   local visited
-  local location_stack
-  local location_stack_size
   local compare_tables
   local difference
   local _compare_iteration_order
 
-  local function create_location()
-    return table.concat(location_stack, nil, 1, location_stack_size)
-  end
-
-  local function create_difference(diff_type, left, right)
+  local function create_difference(diff_type, left, right, location)
     difference = {
       type = diff_type,
-      location = create_location(),
+      location = location,
       left = left,
       right = right,
     }
@@ -71,7 +65,7 @@ do
 
   local compare_values
 
-  local function use_custom_comparator(comparator, other, other_is_left)
+  local function use_custom_comparator(comparator, other, other_is_left, location)
     if type(comparator) == "table" then
       if other == nil then
         if custom_comparators_allow_nil[comparator] then
@@ -79,7 +73,7 @@ do
         end
         difference = {
           type = difference_type.custom_comparator_table,
-          location = create_location(),
+          location = location,
           comparator = comparator,
           other = other,
           other_is_left = other_is_left,
@@ -89,15 +83,14 @@ do
       if comparator[other] then
         return true
       end
-      local init_location_stack_size = location_stack_size
       local differences = {}
       for value_to_compare in pairs(comparator) do
         local old_visited = util.shallow_copy(visited)
         local result
         if other_is_left then
-          result = compare_values(other, value_to_compare)
+          result = compare_values(other, value_to_compare, location)
         else
-          result = compare_values(value_to_compare, other)
+          result = compare_values(value_to_compare, other, location)
         end
         visited[value_to_compare] = nil
         if result then
@@ -106,11 +99,10 @@ do
         differences[#differences+1] = difference
         difference = nil
         visited = old_visited
-        location_stack_size = init_location_stack_size
       end
       difference = {
         type = difference_type.custom_comparator_table,
-        location = create_location(),
+        location = location,
         comparator = comparator,
         other = other,
         other_is_left = other_is_left,
@@ -122,7 +114,7 @@ do
       if not success then
         difference = {
           type = difference_type.custom_comparator_func,
-          location = create_location(),
+          location = location,
           comparator = comparator,
           other = other,
           other_is_left = other_is_left,
@@ -137,7 +129,7 @@ do
     end
   end
 
-  function compare_values(left, right)
+  function compare_values(left, right, location)
     -- one of them is flagged as "don't compare these", so don't
     if left == do_not_compare_flag or right == do_not_compare_flag then
       return true
@@ -150,7 +142,7 @@ do
         -- or visited[right] ~= left
         -- if `visited[left] == right` then `visited[right] == left` is also true
       then
-        create_difference(difference_type.identity_mismatch, left, right)
+        create_difference(difference_type.identity_mismatch, left, right, location)
         return false
       end
       return true
@@ -161,7 +153,7 @@ do
       if custom_comparators_lut[right] then
         error("Comparing 2 custom comparators is not supported")
       end
-      local result = use_custom_comparator(left, right, false)
+      local result = use_custom_comparator(left, right, false, location)
       -- comparing identity with non reference type values doesn't make sense
       -- besides it would very most likely break identity comparison
       if reference_type_lut[type(right)] then
@@ -171,7 +163,7 @@ do
       return result
     end
     if custom_comparators_lut[right] then
-      local result = use_custom_comparator(right, left, true)
+      local result = use_custom_comparator(right, left, true, location)
       -- same here, see previous comment
       if reference_type_lut[type(left)] then
         visited[left] = right
@@ -187,7 +179,7 @@ do
     local left_type = type(left)
     local right_type = type(right)
     if left_type ~= right_type then
-      create_difference(difference_type.value_type, left, right)
+      create_difference(difference_type.value_type, left, right, location)
       return false
     end
 
@@ -206,92 +198,83 @@ do
       if left_info.what == "C" or right_info.what == "C" then
         -- equality was already compared at the start, they are not equal
         -- or one isn't a c function
-        create_difference(difference_type.c_function, left, right)
+        create_difference(difference_type.c_function, left, right, location)
         return false
       end
       if string.dump(left) ~= string.dump(right) then
-        create_difference(difference_type.function_bytecode, left, right)
+        create_difference(difference_type.function_bytecode, left, right, location)
         return false
       end
       -- compare upvals
-      location_stack_size = location_stack_size + 1
       for i = 1, left_info.nups do
         local name, left_value = debug.getupvalue(left, i)
         local _, right_value = debug.getupvalue(right, i)
-        location_stack[location_stack_size] = "[upval #"..i.." ("..name..")]"
-        if not compare_values(left_value, right_value) then
+        if not compare_values(left_value, right_value, location.."[upval #"..i.." ("..name..")]") then
           return false
         end
       end
-      location_stack_size = location_stack_size - 1
       return true
     elseif left_type == "table" then
-      return compare_tables(left, right)
+      return compare_tables(left, right, location)
     end
 
-    create_difference(difference_type.primitive_value, left, right)
+    create_difference(difference_type.primitive_value, left, right, location)
     return false
   end
 
-  function compare_tables(left, right)
+  function compare_tables(left, right, location)
     if _compare_iteration_order then
       local left_key, left_value = next(left)
       local right_key, right_value = next(right)
-      location_stack_size = location_stack_size + 1
       local kvp_num = 0
       while left_key ~= nil do
         kvp_num = kvp_num + 1
 
-        location_stack[location_stack_size] = "[key #"..kvp_num.."]"
+        local key_location = location.."[key #"..kvp_num.."]"
         if right_key == nil then
           -- TODO: add more info about table sizes
           -- TODO: add support for do_not_compare
-          create_difference(difference_type.size, left, right)
+          create_difference(difference_type.size, left, right, key_location)
           return false
         end
-        if not compare_values(left_key, right_key) then
+        if not compare_values(left_key, right_key, key_location) then
           return false
         end
 
-        location_stack[location_stack_size] = "["..pretty_print(left_key).." (value #"..kvp_num..")]"
-        if not compare_values(left_value, right_value) then
+        local value_location = location.."["..pretty_print(left_key).." (value #"..kvp_num..")]"
+        if not compare_values(left_value, right_value, value_location) then
           return false
         end
 
         left_key, left_value = next(left, left_key)
         right_key, right_value = next(right, right_key)
       end
-      location_stack_size = location_stack_size - 1
       while right_key == do_not_compare_flag do
         right_key = next(right, right_key)
       end
       if right_key ~= nil then
         -- TODO: add more info about table sizes
-        create_difference(difference_type.size, left, right)
+        create_difference(difference_type.size, left, right, location)
         return false
       end
     else
-      location_stack_size = location_stack_size + 1
       local done = {}
       for k, v in pairs(left) do
-        location_stack[location_stack_size] = "["..pretty_print(k).."]"
         done[k] = true
         local r_v = right[k]
-        if not compare_values(v, r_v) then
+        if not compare_values(v, r_v, location.."["..pretty_print(k).."]") then
           return false
         end
       end
       for k, v in pairs(right) do
         if not done[k] then
-          location_stack[location_stack_size] = "["..pretty_print(k).."]"
-          if not compare_values(nil, v) then
+          if not compare_values(nil, v, location.."["..pretty_print(k).."]") then
             return false
           end
           -- compare_values can actually return true even though `v` is never `nil`,
           -- because there might be custom comparators or `do_not_compare_flag`s
         end
       end
-      location_stack_size = location_stack_size - 1
     end
 
     local left_meta = debug.getmetatable(left)
@@ -299,10 +282,7 @@ do
     if left_meta ~= nil or right_meta ~= nil then
       assert(type(left_meta) == "table", "Unexpected metatable type '"..type(left_meta).."'")
       assert(type(right_meta) == "table", "Unexpected metatable type '"..type(right_meta).."'")
-      location_stack_size = location_stack_size + 1
-      location_stack[location_stack_size] = "[metatable]"
-      local result = compare_values(left_meta, right_meta)
-      location_stack_size = location_stack_size - 1
+      local result = compare_values(left_meta, right_meta, location.."[metatable]")
       return result
     end
 
@@ -312,10 +292,7 @@ do
   function deep_compare(left, right, compare_iteration_order, root_name)
     _compare_iteration_order = compare_iteration_order
     visited = {}
-    location_stack = {root_name or "ROOT"}
-    location_stack_size = 1
-    local result = compare_values(left, right)
-    location_stack = nil
+    local result = compare_values(left, right, root_name or "ROOT")
     visited = nil
     local difference_result = difference
     difference = nil
