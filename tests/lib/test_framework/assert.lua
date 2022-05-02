@@ -56,6 +56,12 @@ end
 ---@field root_name string
 ---@field serpent_opts table
 
+local function get_ref_locations(locations, side)
+  return locations
+    and ("\n"..side.." previous references:\n  "..table.concat(locations, "\n  "))
+    or ("\n"..side.." none")
+end
+
 ---@param options ContentsEqualsOptions
 local function contents_equals(expected, got, msg, options)
   options = options or {}
@@ -89,6 +95,8 @@ local function contents_equals(expected, got, msg, options)
         -- return "got a reference value occurring multiple times even though it should be a different instance, \z
         --   or expected a previously referenced reference value but did not get said value at "..diff.location
         return "reference value identity mismatch at "..diff.location
+          ..get_ref_locations(diff.left_ref_locations, "expected")
+          ..get_ref_locations(diff.right_ref_locations, "got")
       end,
       [diff_type.custom_comparator_func] = function()
         return "custom compare failed "..(diff.message and ("("..diff.message..") ") or "")
