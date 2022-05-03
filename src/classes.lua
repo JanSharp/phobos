@@ -800,7 +800,7 @@
 ---@class EmmyLuaSequence
 ---@field sequence_type EmmyLuaSequenceType
 ---@field node AstNode|nil @ whichever node this sequence was preceding
----@field source string @ function source
+---@field source string|nil @ function source -- TODO: check if nil source would cause any trouble
 ---@field start_position SourcePosition @ inclusive
 ---@field stop_position SourcePosition @ inclusive
 
