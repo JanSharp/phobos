@@ -348,68 +348,60 @@ local function read_block_string(str,index,state)
   end
 end
 
--- TODO: remove code duplication and double check if this can really read all formats of numbers
-local function try_read_number(str, index, state)
-  -- hex numbers: "0x%x*" followed by "%.%x+" followed by "[pP][+-]?%x+"
-  local hex_start,hex_end = str:find("^0[xX]%x*",index) -- "integer part"
-  if hex_start then
-    -- this basically means %x* didn't match anything
-    local omitted_integer_part = hex_start + 1 == hex_end
-    local _,fractional_end = str:find("^%.%x+",hex_end+1)
-    if fractional_end then
-      hex_end = fractional_end
-    elseif omitted_integer_part then
-      -- this actually only ever happens if the number is just 0x or 0X
-      local token = new_token("invalid",index,state.line,index - state.line_offset)
-      token.value = str:sub(hex_start,hex_end)
-      add_error_code_inst(token, error_code_util.new_error_code{
-        error_code = error_code_util.codes.malformed_number,
-        message_args = {token.value},
-        source = state.source,
-        -- start at the first char of the number
-        start_position = {line = state.line, column = hex_start - state.line_offset},
-        -- stop at the last char of the number
-        stop_position = {line = state.line, column = hex_end - state.line_offset},
-      })
-      return hex_end+1,token
-    else
-      -- consume trailing dot
-      _, fractional_end = str:find("^%.", hex_end + 1)
-      hex_end = fractional_end or hex_end
-    end
-    local exponent_start,exponent_end = str:find("^[pP][%-%+]?%x+",hex_end+1)
-    if exponent_start then
-      hex_end = exponent_end
-    end
-    local token = new_token("number",index,state.line,index - state.line_offset)
-    token.src_value = str:sub(hex_start,hex_end)
-    token.value = tonumber(token.src_value)
-    return hex_end+1,token
-  end
-
+-- TODO: double check if this can really read all formats of numbers
+local function try_read_number_part(str, index, state, num_pattern, start_prefix, exponent_prefix)
   -- decimal numbers: "%d*" followed by "%.%d+" followed by "[eE][+-]?%d+"
-  local num_start,num_end = str:find("^%d*",index) -- "integer part"
+  -- "integer part"
+  local num_start,num_end,middle_pos = str:find("^"..start_prefix.."()"..num_pattern.."*",index)
   if num_start then
-    -- this basically means %d* didn't match anything
-    local omitted_integer_part = num_start > num_end
-    local _,fractional_end = str:find("^%.%d+",num_end+1)
+    -- this basically means `num_pattern*` didn't match anything
+    local omitted_integer_part = middle_pos > num_end
+    local _,fractional_end = str:find("^%."..num_pattern.."+",num_end+1)
     if fractional_end then
       num_end = fractional_end
     elseif omitted_integer_part then
-      return
+      return false
     else
       -- consume trailing dot
       _, fractional_end = str:find("^%.", num_end + 1)
       num_end = fractional_end or num_end
     end
-    local exponent_start,exponent_end = str:find("^[eE][%-%+]?%d+",num_end+1)
+    local exponent_start,exponent_end = str:find("^"..exponent_prefix.."[%-%+]?"..num_pattern.."+",num_end+1)
     if exponent_start then
       num_end = exponent_end
     end
     local token = new_token("number",index,state.line,index - state.line_offset)
     token.src_value = str:sub(num_start,num_end)
     token.value = tonumber(token.src_value)
-    return num_end+1,token
+    return true, num_end+1,token
+  end
+end
+
+local function try_read_number(str, index, state)
+  local success, result_end, token = try_read_number_part(str, index, state, "%x", "0[xX]", "[pP]")
+  if success then
+    return result_end, token
+  end
+  if success == false then
+    -- this actually only ever happens if the number is just 0x or 0X
+    result_end = index + 1
+    token = new_token("invalid",index,state.line,index - state.line_offset)
+    token.value = str:sub(index, result_end)
+    add_error_code_inst(token, error_code_util.new_error_code{
+      error_code = error_code_util.codes.malformed_number,
+      message_args = {token.value},
+      source = state.source,
+      -- start at the first char of the number
+      start_position = {line = state.line, column = index - state.line_offset},
+      -- stop at the last char of the number
+      stop_position = {line = state.line, column = result_end - state.line_offset},
+    })
+    return result_end + 1, token
+  end
+
+  success, result_end, token = try_read_number_part(str, index, state, "%d", "", "[eE]")
+  if success then
+    return result_end, token
   end
 end
 
