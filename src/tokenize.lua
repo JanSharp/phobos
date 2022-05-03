@@ -348,7 +348,9 @@ local function read_block_string(str,index,state)
   end
 end
 
--- TODO: double check if this can really read all formats of numbers
+---cSpell:ignore strtod
+-- just like Lua, using C99 the `strtod` format (https://en.cppreference.com/w/c/string/byte/strtof)
+-- except that the leading + and - are not allowed as well as nan and inf
 local function try_read_number_part(str, index, state, num_pattern, start_prefix, exponent_prefix)
   -- decimal numbers: "%d*" followed by "%.%d+" followed by "[eE][+-]?%d+"
   -- "integer part"
