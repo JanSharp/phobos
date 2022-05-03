@@ -230,6 +230,16 @@ else
   )
 end
 
+standalone_profile{
+  name = "debug_raw",
+  platform = nil,
+}
+standalone_profile{
+  name = "release_raw",
+  platform = nil,
+  optimizations = profiles.get_all_optimizations(),
+}
+
 factorio_profile{
   name = "debug",
 }
