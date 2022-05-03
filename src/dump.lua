@@ -51,7 +51,7 @@ do
   end
 end
 
----all strings can be nil, except in the constant table\
+---all strings can be nil, except in the constant table and local variable names (debug)
 ---@return string dumped_string
 ---@return integer byte_count
 local function dump_string(str)
@@ -328,7 +328,9 @@ local function dump_function(func)
 
   -- [debug]
   -- string source
-  dump[#dump+1] = dump_string(func.source --[[or "(unknown Phobos source)"]]) -- TODO: how does nil behave
+  -- considering stripped Lua bytecode has `null` source
+  -- we don't need to have some default for when `func.source` is `nil`
+  dump[#dump+1] = dump_string(func.source)
 
   -- int num_lines (always same as num_instructions)
   -- int[] lines (line number per instruction)
@@ -351,6 +353,9 @@ local function dump_function(func)
       if loc.start_at <= loc.stop_at then
         temp[#temp+1] = loc
         num_locals = num_locals + 1
+        ---cSpell:ignore getlocalname
+        -- these must not be null. get_local_debug_symbols ensures that already
+        -- Lua blindly dereferences this pointer when getting local names in `luaF_getlocalname`
         dump[#dump+1] = dump_string(loc.name)
         -- convert from one based including including
         -- to zero based including excluding
@@ -365,7 +370,9 @@ local function dump_function(func)
   dump[#dump+1] = dump_int(#func.upvals)
   -- string[] upvals
   for _,u in ipairs(func.upvals) do
-    dump[#dump+1] = dump_string(u.name) -- TODO: how to deal with nil names?
+    -- stripped Lua bytecode ultimately also ends up loading `null` for upval names
+    -- so dumping `null` (`nil`) as the name should be fine
+    dump[#dump+1] = dump_string(u.name)
   end
 
   return table.concat(dump)
