@@ -17,12 +17,10 @@ Phobos currently only supports bytecode for Lua 5.2 with [this](src/constants.lu
 Download the zip for your platform from the GitHub Releases, extract all files and run it using this command in your command line or terminal:\
 (If your OS blocks the executable for security reasons either allow them to run in properties (on windows) or preferences (on osx/macOS), or use your own Lua and LuaFileSystem binaries with the raw Phobos package)
 ```bash
-./lua -- main.lua -h
+phobos
 ```
-**The working directory has to be the directory containing the main.lua file.** Use the `--working-dir` argument if you wish to use relative paths to said directory. Otherwise they are relative to the `main.lua` file, as that is the working directory.
 
-<!-- cSpell:ignore cpath -->
-You could also change the `LUA_PATH` and `LUA_CPATH` environment variables to include the Phobos directory but beware of name collisions. (See [package.path](https://www.lua.org/manual/5.2/manual.html#pdf-package.path) and [package.cpath](https://www.lua.org/manual/5.2/manual.html#pdf-package.cpath) and maybe [here](https://www.lua.org/manual/5.2/manual.html#7))
+(If you're coming from `0.1.x`: The working directory is now handled properly similar to the vast majority of other applications)
 
 # Library (not really supported)
 
@@ -43,24 +41,16 @@ When compiling (see next section) for a Factorio mod you currently **must** use 
 
 Additionally it is recommended to use `--source-name @__mod-name__/?` to match Factorio's source name pattern (`mod-name` being your internal mod name).
 
-If the your dev environment is setup such that the root of the `.pho` source files is the same as the `info.json` file then you most likely want to omit `--output` to generate compiled `.lua` files directly next to the source files.\
-An example:
-```
-MyMod
-  |- control.pho
-  |- info.json
-```
-Would look like this after compilation:
-```
-MyMod
-  |- control.lua
-  |- control.pho
-  |- info.json
-```
-
 # Compiling
 
-`main.lua` is the entry point for compiling. Use `--help` for information on it's arguments.
+Run `phobos` in a terminal. Use `--help` for information on its arguments. The help message should instruct you on how to run phobos profiles (see below). Once you have phobos profiles set your working directory using `cd` to the root of your project then run `phobos --list` (or `phobos -l`) to get a list of all profiles defined in the `phobos_profiles` file. And to run a profile run `phobos --profile-names my_profile_name`. (or simply `phobos -n my_profile_name`)
+
+# Phobos Profiles
+
+Create a `phobos_profiles` file (note the lack of a file extension) at the root of your project. This is using the default for `--profile-files` allowing you to omit that argument when running `phobos`.
+
+To define profiles put `local profiles = require("phobos_profiles")` at the top of the profiles file and refer to the documentation for the profiles API.
+<!-- TODO: link to docs website, local and remote -->
 
 # Disassembling (partially implemented)
 
@@ -166,30 +156,69 @@ Phobos is still in it's early stages (i would say anyway) and i plan on refactor
 
 # Building from Source
 
+When doing anything in the source tree, always have your working directory be the root of the project.
+
 Clone the repo and init and or update all submodules. something like this should work:
-```
+```bash
 git submodule init
 git submodule update
 ```
 
--- TODO: the build_src and build_factorio_mod files no longer exist, and I don't really know how I'm going to handle all of this in the future, so this will remain outdated until I figure out how I actually want the Phobos workspace to be setup. It's in a transitional state right now.
+If you're using vscode/vscodium you can just run the build tasks from the command pallet.
 
-If you're using vscode just run the build tasks from the command pallet.
+Run one of these, whichever is the most applicable:
+```bash
+launch_scripts/phobos_dev linux src src/main.lua -n debug -- -p linux
+launch_scripts/phobos_dev osx src src/main.lua -n debug -- -p osx
+launch_scripts/phobos_dev windows src src/main.lua -n debug -- -p windows
+```
 
-There are `scripts/build_src.lua` and `scripts/build_factorio_mod.lua` which have to be run through `launch-scripts/phobos_dev`. The `phobos_dev` script expects the current working directory to be the root of the phobos project and 3 additional positional arguments before the actual arguments that will be passed to the lua script. Those 3 args are:
+To build the factorio mod, run (again most applicable):
+```bash
+launch_scripts/phobos_dev linux src src/main.lua -n debug_factorio
+launch_scripts/phobos_dev osx src src/main.lua -n debug_factorio
+launch_scripts/phobos_dev windows src src/main.lua -n debug_factorio
+```
+
+To build release versions replace `debug` with `release` in any of the above.
+
+On windows you should be able to use both MS DOS or some shell like git bash. In theory.
+
+The `phobos_dev` script expects 3 args:
 - your platform, so `linux`, `osx` or `windows`
 - the relative path to the phobos files to be run. So `out/debug`, `out/release` or `src` (as long as `src` is still using `.lua` files)
-- the relative path to the lua file to run. So in this case `scripts/build_src.lua` or `scripts/build_factorio_mod.lua`
+- the relative path to the lua file to run. In this case `src/main.lua`, but could be any Lua file, regardless of file extension.
 
 The launch scripts have a good amount of comments to assist in understanding and troubleshooting.
 
 ## Running from Source
 
--- TODO: same as for Building from Source, though this isn't super outdated. I'm just not sure how it actually want it to work.
-
 First build from source, see above.
 
-Again, if you're using vscode just press F5. To select the right launch profile either use the side panel or press `CTRL + P`, type `debug`, then a space, and select the launch profile from there.\
-The `Phobos` and `Lua` prefixes are currently relevant since phobos itself is still written in `.lua` files. That means the `Lua` prefixed launch profiles will run directly from source while `Pho` will use phobos itself to compile `src` and then run and debug `out/debug`. This, however, uses the `Build Debug` task, which uses `src` to compile itself, which means if there is a bug then you can't use that to actually debug it. This will change once I require you to have a previous version of Phobos installed to compile Phobos.
+Again, if you're using vscode/vscodium just press F5. To select the right launch profile either use the side panel or press `CTRL + P`, type `debug`, then a space, and select the launch profile from there.\
+The `Phobos` and `Lua` prefixes are currently relevant since phobos itself is still written in `.lua` files. That means the `Lua` prefixed launch profiles will run directly from source while `Phobos` will use phobos itself to compile `src` and then run and debug `out/debug`. This, however, uses the `Build Debug` task, which uses `src` to compile itself, which means if there is a bug then you can't use that to actually debug it. This will change once I require you to have a previous version of Phobos installed to compile Phobos.
 
--- TODO: Running outside of vscode. Write this once the `phobos` scripts get copied into the output.
+Run one of these, whichever is the most applicable:
+```bash
+# run directly from the source tree
+launch_scripts/phobos_dev linux src src/main.lua -h
+launch_scripts/phobos_dev osx src src/main.lua -h
+launch_scripts/phobos_dev windows src src/main.lua -h
+
+# run generated output
+launch_scripts/phobos_dev linux out/debug out/debug/main.lua -h
+launch_scripts/phobos_dev osx out/debug out/debug/main.lua -h
+launch_scripts/phobos_dev windows out/debug out/debug/main.lua -h
+# same with release
+
+# run generated output directly (can only run the main.lua file with this approach)
+out/debug/phobos
+# or
+out/release/phobos
+```
+
+## Running tests
+
+It's literally the same thing as running from source, including vscode/vscodium launch profiles, but using `tests/main.lua` instead of `src/main.lua`. Tests are using the same arg parser as phobos itself, so you can get help using `-h` just like for `src/main.lua`.
+
+`out/debug/phobos` can't be used to run tests, since that's always running the phobos main file as the entry point. So you have to use the `phobos_dev` script.
