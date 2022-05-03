@@ -957,20 +957,21 @@ end
 ---@param scope AstScope
 ---@return AstForNum
 local function for_num(first_name, scope)
-  -- TODO: check this when doing IL: the scope of this is wrong imo... but I'm not sure.
-  local var_local, var_ref = ast.create_local(first_name, scope)
-  var_local.whole_block = true
   -- currently the only place calling for_num is for_stat which will only call
   -- this function if the current token is '=', but we're handling invalid anyway
   local invalid = assert_next("=")
   local node = nodes.new_fornum{
     parent_scope = scope,
-    var = var_ref,
-    locals = {var_local},
+    var = prevent_assert,
+    locals = {prevent_assert},
     eq_token = invalid or new_token_node(true),
     start = prevent_assert,
     stop = prevent_assert,
   }
+  local var_local, var_ref = ast.create_local(first_name, node)
+  var_local.whole_block = true
+  node.locals[1] = var_local
+  node.var = var_ref
   if invalid then
     return node, true
   end
@@ -1077,7 +1078,7 @@ end
 
 local function test_then_block(scope)
   -- test_then_block -> [IF | ELSEIF] condition THEN block
-  --TODO: [IF | ELSEIF] ( condition | name_list '=' exp_list  [';' condition] ) THEN block
+  -- NOTE: [IF | ELSEIF] ( condition | name_list '=' exp_list  [';' condition] ) THEN block
   -- if first token is ident, and second is ',' or '=', use if-init, else original parse
   -- if no condition in if-init, first name/expr is used
   local node = nodes.new_testblock{

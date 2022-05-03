@@ -489,18 +489,21 @@ do
     do -- fornum
       local function add_fornum_stat(has_step)
         local for_token = next_token_node()
-        local var_def, var_ref = ast.create_local(next_token(), fake_main)
-        var_def.whole_block = true
+        local local_token = next_token()
         local stat = nodes.new_fornum{
           parent_scope = fake_main,
           for_token = for_token,
-          var = var_ref,
-          locals = {var_def},
+          var = prevent_assert,
+          locals = {prevent_assert},
           eq_token = next_token_node(),
           start = next_true_node(),
           first_comma_token = next_token_node(),
           stop = next_true_node(),
         }
+        local var_def, var_ref = ast.create_local(local_token, stat)
+        var_def.whole_block = true
+        stat.var = var_ref
+        stat.locals[1] = var_def
         if has_step then
           stat.second_comma_token = next_token_node()
           stat.step = next_true_node()
@@ -532,13 +535,12 @@ do
         "for i = true ;",
         function()
           local for_token = next_token_node()
-          local var_def, var_ref = ast.create_local(next_token(), fake_main)
-          var_def.whole_block = true
+          local local_token = next_token()
           local stat = nodes.new_fornum{
             parent_scope = fake_main,
             for_token = for_token,
-            var = var_ref,
-            locals = {var_def},
+            var = prevent_assert,
+            locals = {prevent_assert},
             eq_token = next_token_node(),
             start = next_true_node(),
             first_comma_token = new_invalid(
@@ -548,6 +550,10 @@ do
             ),
             stop = prevent_assert,
           }
+          local var_def, var_ref = ast.create_local(local_token, stat)
+          var_def.whole_block = true
+          stat.var = var_ref
+          stat.locals[1] = var_def
           append_stat(fake_main, stat)
           append_empty(fake_main, next_token_node())
         end
@@ -558,13 +564,12 @@ do
         "for i = true, true ;",
         function()
           local for_token = next_token_node()
-          local var_def, var_ref = ast.create_local(next_token(), fake_main)
-          var_def.whole_block = true
+          local local_token = next_token()
           local stat = nodes.new_fornum{
             parent_scope = fake_main,
             for_token = for_token,
-            var = var_ref,
-            locals = {var_def},
+            var = prevent_assert,
+            locals = {prevent_assert},
             eq_token = next_token_node(),
             start = next_true_node(),
             first_comma_token = next_token_node(),
@@ -575,6 +580,10 @@ do
               {"do"}
             ),
           }
+          local var_def, var_ref = ast.create_local(local_token, stat)
+          var_def.whole_block = true
+          stat.var = var_ref
+          stat.locals[1] = var_def
           append_stat(fake_main, stat)
           append_empty(fake_main, next_token_node())
         end
@@ -585,19 +594,22 @@ do
         "for i = true, true do ;",
         function()
           local for_token = next_token_node()
-          local var_def, var_ref = ast.create_local(next_token(), fake_main)
-          var_def.whole_block = true
+          local local_token = next_token()
           local stat = nodes.new_fornum{
             parent_scope = fake_main,
             for_token = for_token,
-            var = var_ref,
-            locals = {var_def},
+            var = prevent_assert,
+            locals = {prevent_assert},
             eq_token = next_token_node(),
             start = next_true_node(),
             first_comma_token = next_token_node(),
             stop = next_true_node(),
             do_token = next_token_node(),
           }
+          local var_def, var_ref = ast.create_local(local_token, stat)
+          var_def.whole_block = true
+          stat.var = var_ref
+          stat.locals[1] = var_def
           append_empty(stat, next_token_node())
           stat.end_token = new_invalid(
             error_code_util.codes.expected_closing_match,
