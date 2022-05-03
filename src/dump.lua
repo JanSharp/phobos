@@ -3,7 +3,7 @@ local phobos_consts = require("constants")
 
 ---@return string dumped_integer
 ---@return integer byte_count
-local function DumpInt(i)
+local function dump_int(i)
   -- int is 4 bytes
   -- **little endian**
   return string.char(
@@ -16,15 +16,15 @@ end
 
 ---@return string dumped_size
 ---@return integer byte_count
-local function DumpSize(s)
+local function dump_size(s)
   -- size_t is 8 bytes
   -- but i really only support 32bit for now, so just write four extra zeros
   -- maybe expand this one day to 48bit? maybe all the way to 53?
   -- If i'm compiling a program with >4gb strings, something has gone horribly wrong anyway
-  return DumpInt(s) .. "\0\0\0\0", 8
+  return dump_int(s) .. "\0\0\0\0", 8
 end
 
-local DumpDouble
+local dump_double
 do
   local s , e = string.dump(load[[return 523123.123145345]])
                       :find("\3\54\208\25\126\204\237\31\65")
@@ -37,7 +37,7 @@ do
     [1/0] = "\3\0\0\0\0\0\0\xf0\x7f",
     [-1/0] = "\3\0\0\0\0\0\0\xf0\xff",
   }
-  function DumpDouble(d)
+  function dump_double(d)
     if d ~= d then
       -- nan
       return "\3\xff\xff\xff\xff\xff\xff\xff\xff"
@@ -54,33 +54,33 @@ end
 ---all strings can be nil, except in the constant table\
 ---@return string dumped_string
 ---@return integer byte_count
-local function DumpString(str)
+local function dump_string(str)
   -- typedef string:
   -- size_t length (including trailing \0, 0 for nil)
   -- char[] value (not present for nil)
   if not str then
-    return DumpSize(0), 8
+    return dump_size(0), 8
   else
-    return DumpSize(#str + 1) .. str .. "\0", 8 + #str + 1
+    return dump_size(#str + 1) .. str .. "\0", 8 + #str + 1
   end
 end
 
 --   byte type={nil=0,boolean=1,number=3,string=4}
-local dumpConstantByType = {
+local dump_constant_by_type = {
   ["nil"] = function() return "\0" end,
 --   <boolean> byte value
   ["boolean"] = function(val) return val and "\1\1" or "\1\0" end,
 --   <number> double value
--- DumpDouble has the \3 type tag already
-  ["number"] = DumpDouble,
+-- dump_double has the \3 type tag already
+  ["number"] = dump_double,
 --   <string> string value
-  ["string"] = function(val) return "\4" .. DumpString(val) end,
+  ["string"] = function(val) return "\4" .. dump_string(val) end,
 }
-local function DumpConstant(constant)
-  return dumpConstantByType[type(constant.value)](constant.value)
+local function dump_constant(constant)
+  return dump_constant_by_type[type(constant.value)](constant.value)
 end
 
-local function DumpPhobosDebugSymbols(dump, func)
+local function dump_phobos_debug_symbols(dump, func)
   -- open string constant
   dump[#dump+1] = "\4" -- a "string" constant
   local i = #dump + 1 -- + 1 to reserve a slot for the string size
@@ -110,34 +110,34 @@ local function DumpPhobosDebugSymbols(dump, func)
   end
 
   -- uint32 column_defined (0 for unknown or main chunk)
-  add(DumpInt(func.column_defined or 0))
+  add(dump_int(func.column_defined or 0))
   -- uint32 last_column_defined (0 for unknown or main chunk)
-  add(DumpInt(func.last_column_defined or 0))
+  add(dump_int(func.last_column_defined or 0))
 
   -- uint32 num_instruction_positions (always same as num_instructions)
   -- uint32[] column (columns of each instruction)
-  add(DumpInt(#func.instructions))
+  add(dump_int(#func.instructions))
   for _, inst in ipairs(func.instructions) do
-    add(DumpInt(inst.column or 0)) -- 0 for unknown
+    add(dump_int(inst.column or 0)) -- 0 for unknown
   end
 
   -- uint32 num_sources
-  add(DumpInt(0))
+  add(dump_int(0))
   -- string[] source (all sources used in this function)
 
   -- uint32 num_sections
-  add(DumpInt(0))
+  add(dump_int(0))
   -- (uint32 instruction_index, uint32 file_index)[]
 
   -- close string constant
   add("\0", 1)
-  dump[size_entry_index] = DumpSize(byte_count)
+  dump[size_entry_index] = dump_size(byte_count)
 end
 
 ---outputs locals that start after they end.
 ---those locals should be ignored when processing the data further\
 ---output indexes are one based including excluding
-local function GetLocalDebugSymbols(func)
+local function get_local_debug_symbols(func)
   local locals = {} -- output debug symbols
   local reg_stack = {} -- **zero based** array
   local top_reg = -1 -- **zero based**
@@ -250,12 +250,12 @@ local function GetLocalDebugSymbols(func)
 end
 
 ---@param func CompiledFunc
-local function DumpFunction(func)
+local function dump_function(func)
   local dump = {}
   -- int line_defined (0 for unknown or main chunk)
-  dump[#dump+1] = DumpInt(func.line_defined or 0)
+  dump[#dump+1] = dump_int(func.line_defined or 0)
   -- int last_line_defined (0 for unknown or main chunk)
-  dump[#dump+1] = DumpInt(func.last_line_defined or 0)
+  dump[#dump+1] = dump_int(func.last_line_defined or 0)
   assert(func.num_params)
   assert(func.max_stack_size >= 2)
   dump[#dump+1] = string.char(
@@ -264,9 +264,9 @@ local function DumpFunction(func)
     func.max_stack_size        -- byte max_stack_size, min of 2, reg0/1 always valid
   )
 
-  -- [Code]
+  -- [code]
   -- int num_instructions
-  dump[#dump+1] = DumpInt(#func.instructions)
+  dump[#dump+1] = dump_int(#func.instructions)
   -- Instruction[] instructions
   for _,instruction in ipairs(func.instructions) do
     local inst_int = instruction.op.id
@@ -289,33 +289,33 @@ local function DumpFunction(func)
         end
       end
     end
-    dump[#dump+1] = DumpInt(inst_int)
+    dump[#dump+1] = dump_int(inst_int)
   end
 
 
-  -- [Constants]
+  -- [constants]
   -- int num_consts
-  dump[#dump+1] = DumpInt(#func.constants + 1) -- + 1 for Phobos debug symbols
+  dump[#dump+1] = dump_int(#func.constants + 1) -- + 1 for Phobos debug symbols
   -- TValue[] consts
   for _,constant in ipairs(func.constants) do
-    dump[#dump+1] = DumpConstant(constant)
+    dump[#dump+1] = dump_constant(constant)
   end
 
   -- when adding an option to disable these ensure to add an extra unused `nil` constant
   -- instead if the last constant happens to look just like Phobos debug symbols
-  DumpPhobosDebugSymbols(dump, func)
+  dump_phobos_debug_symbols(dump, func)
 
   -- [func_protos]
   -- int num_funcs
-  dump[#dump+1] = DumpInt(#func.inner_functions)
-  -- DumpFunction[] funcs
+  dump[#dump+1] = dump_int(#func.inner_functions)
+  -- dump_function[] funcs
   for _,f in ipairs(func.inner_functions) do
-    dump[#dump+1] = DumpFunction(f)
+    dump[#dump+1] = dump_function(f)
   end
 
-  -- [Upvals]
+  -- [upvals]
   -- int num_upvals
-  dump[#dump+1] = DumpInt(#func.upvals)
+  dump[#dump+1] = dump_int(#func.upvals)
   -- upvals[] upvals
   for _,upval in ipairs(func.upvals) do
     -- byte in_stack (is a local in parent scope, else upvalue in parent scope)
@@ -326,15 +326,15 @@ local function DumpFunction(func)
     )
   end
 
-  -- [Debug]
+  -- [debug]
   -- string source
-  dump[#dump+1] = DumpString(func.source --[[or "(unknown Phobos source)"]]) -- TODO: how does nil behave
+  dump[#dump+1] = dump_string(func.source --[[or "(unknown Phobos source)"]]) -- TODO: how does nil behave
 
   -- int num_lines (always same as num_instructions)
   -- int[] lines (line number per instruction)
-  dump[#dump+1] = DumpInt(#func.instructions)
+  dump[#dump+1] = dump_int(#func.instructions)
   for i, instruction in ipairs(func.instructions) do
-    dump[#dump+1] = DumpInt(instruction.line or 0)
+    dump[#dump+1] = dump_int(instruction.line or 0)
   end
 
   -- int num_locals
@@ -347,43 +347,36 @@ local function DumpFunction(func)
     local num_locals_index = #dump
     local num_locals = 0
     local temp = {}
-    for _, loc in ipairs(GetLocalDebugSymbols(func)) do
+    for _, loc in ipairs(get_local_debug_symbols(func)) do
       if loc.start_at <= loc.stop_at then
         temp[#temp+1] = loc
         num_locals = num_locals + 1
-        dump[#dump+1] = DumpString(loc.name)
+        dump[#dump+1] = dump_string(loc.name)
         -- convert from one based including including
         -- to zero based including excluding
-        dump[#dump+1] = DumpInt(loc.start_at - 1)
-        dump[#dump+1] = DumpInt(loc.stop_at)
+        dump[#dump+1] = dump_int(loc.start_at - 1)
+        dump[#dump+1] = dump_int(loc.stop_at)
       end
     end
-    dump[num_locals_index] = DumpInt(num_locals)
+    dump[num_locals_index] = dump_int(num_locals)
   end
 
   -- int num_upvals
-  dump[#dump+1] = DumpInt(#func.upvals)
+  dump[#dump+1] = dump_int(#func.upvals)
   -- string[] upvals
   for _,u in ipairs(func.upvals) do
-    dump[#dump+1] = DumpString(u.name) -- TODO: how to deal with nil names?
+    dump[#dump+1] = dump_string(u.name) -- TODO: how to deal with nil names?
   end
-
-  -- lua will stop reading here
-  -- extra Phobos debug sections:
-  -- Phobos signature: "\x1bPhobos"
-  -- byte version = "\x01"
-  -- [branch annotations]
-  -- int num_branches
 
   return table.concat(dump)
 end
 
-local function DumpLuaHeader()
+local function dump_lua_header()
   return phobos_consts.lua_header_str
 end
 
-local function DumpMain(main)
-  return DumpLuaHeader() .. DumpFunction(main)
+local function dump_main(main)
+  return dump_lua_header() .. dump_function(main)
 end
 
-return DumpMain
+return dump_main
