@@ -11,7 +11,10 @@ do
   end
 
   function get_function_label(func)
-    return func.source..":" -- TODO: if source can be nil (which i'm quite sure it can) change this here
+    ---cSpell:ignore addinfo, chunkid
+    -- in Lua's `addinfo` it defaults to "?", otherwise uses `luaO_chunkid` to format the function source
+    -- TODO: write a proper function similar to `luaO_chunkid` to format the function source in a readable way
+    return (func.source or "?")..":"
       ..get_position(func.line_defined, func.column_defined).."-"
       ..get_position(func.last_line_defined, func.last_column_defined)
   end
