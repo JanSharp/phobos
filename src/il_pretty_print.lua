@@ -143,7 +143,9 @@ return function(func, format_callback)
   local out = {}
   local context = new_context()
   local data = {}
-  for pc, inst in ipairs(func.instructions) do
+  local inst = func.instructions.first
+  local pc = 1
+  while inst do
     local label, description = get_label(inst, context)
     data.pc = pc
     data.label = label..string.rep(" ", 8 - #label)
@@ -154,6 +156,8 @@ return function(func, format_callback)
       out[#out+1] = line
       out[#out+1] = "\n"
     end
+    pc = pc + 1
+    inst = inst.next
   end
   return table.concat(out)
 end

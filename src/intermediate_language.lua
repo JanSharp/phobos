@@ -1,7 +1,7 @@
 
 local ast = require("ast_util")
 local nodes = require("nodes")
-local util = require("util")
+local ill = require("indexed_linked_list")
 
 ---same as in parser
 local prevent_assert = {prevent_assert = true}
@@ -282,7 +282,7 @@ local generate_stat
 local generate_functiondef
 
 local function get_last_used_position(func)
-  return func.instructions[#func.instructions] and func.instructions[#func.instructions].position
+  return func.instructions.last and func.instructions.last.position
 end
 
 local function find_local(expr, func)
@@ -327,7 +327,7 @@ local function const_or_local_or_fetch(expr, func)
 end
 
 local function add_inst(func, inst)
-  func.instructions[#func.instructions+1] = inst
+  ill.append(func.instructions, inst)
   return inst
 end
 
@@ -365,8 +365,8 @@ local function jump_here(jumps, func, label_position)
     return
   end
   local label
-  if func.instructions[#func.instructions].inst_type == "label" then
-    label = func.instructions[#func.instructions]
+  if func.instructions.last.inst_type == "label" then
+    label = func.instructions.last
     if not (label.position == label_position
         or (label.position and label_position
           and label.position.line == label_position.line
@@ -1155,7 +1155,7 @@ function generate_functiondef(functiondef, parent_func)
   local func = {
     parent_func = parent_func,
     inner_functions = {},
-    instructions = {},
+    instructions = ill.new(true),
     temp = {
       local_reg_lut = {},
       upval_def_lut = {},
@@ -1166,6 +1166,7 @@ function generate_functiondef(functiondef, parent_func)
     upvals = {},
     param_regs = {},
     is_vararg = functiondef.is_vararg,
+    source = functiondef.source,
   }
 
   if parent_func then
