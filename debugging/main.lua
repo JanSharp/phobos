@@ -31,6 +31,9 @@ local total_pho_byte_count = 0
 local instruction_line_format = util.parse_interpolated_string(
   "-- {line:%3d} {column:%3d} {prefix}: {func_id:%3d}f  {pc:%4d}  {op_label}  {description:%-50s}  {args}"
 )
+local il_instruction_line_format = util.parse_interpolated_string(
+  "-- {line:%3d} {column:%3d} IL1: {func_id:%3d}f  {pc:%4d}  {label}  {description}"
+)
 
 -- local ill = require("indexed_linked_list")
 
@@ -218,17 +221,12 @@ local function compile(filename)
         local function il_add_func_lines(func)
           il_func_id = il_func_id + 1
           -- "-- < line column compiler :  func_id  pc  opcode  description  params >\n"
-          pretty_print(func, function(pc, label, description, inst)
-            local line = get_line(inst.position and inst.position.line)
-            line[#line+1] = string.format(
-              "-- %s %3d IL1: %2df  %4d  %s  %s",
-              format_line_num(inst.position and inst.position.line or 0),
-              inst.position and inst.position.column or 0,
-              il_func_id,
-              pc,
-              label,
-              description
-            )
+          pretty_print(func, function(data)
+            data.line = format_line_num(data.inst.position and data.inst.position.line or 0)
+            data.column = data.inst.position and data.inst.position.column or 0
+            data.func_id = il_func_id
+            local line = get_line(data.inst.position and data.inst.position.line)
+            line[#line+1] = util.format_interpolated(il_instruction_line_format, data)
           end)
           for _, inner_func in ipairs(func.inner_functions) do
             il_add_func_lines(inner_func)

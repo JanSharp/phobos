@@ -142,9 +142,14 @@ end
 return function(func, format_callback)
   local out = {}
   local context = new_context()
+  local data = {}
   for pc, inst in ipairs(func.instructions) do
     local label, description = get_label(inst, context)
-    local line = format_callback(pc, label..string.rep(" ", 8 - #label), description, inst)
+    data.pc = pc
+    data.label = label..string.rep(" ", 8 - #label)
+    data.description = description
+    data.inst = inst
+    local line = format_callback(data)
     if line then
       out[#out+1] = line
       out[#out+1] = "\n"
