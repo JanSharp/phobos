@@ -672,6 +672,7 @@
 ---@class Opcode
 ---@field id integer @ **zero based**
 ---@field name string @ opcode name. Commonly used as the identifier to look up opcodes
+---@field label string @ the `name` but all caps
 ---@field params OpcodeParams
 ---@field reduce_if_not_zero OpcodeReduceIfNotZero
 ---@field next_op OpcodeNextOpcode|nil

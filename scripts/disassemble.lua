@@ -6,10 +6,14 @@ local io_util = require("io_util")
 local Path = require("lib.path")
 Path.set_main_separator("/")
 local constants = require("constants")
+local util = require("util")
 
 io_util.mkdir_recursive("temp")
 
 local show_keys_in_disassembly = false
+local instruction_line_format = util.parse_interpolated_string(
+  "-- {line:%3d} {column:%3d}: {func_id:%3d}f  {pc:%4d}  {op_label}  {description:%-50s}  {args}"
+)
 
 local function disassemble_file(filename, output_postfix)
   local lines = {}
@@ -34,25 +38,19 @@ local function disassemble_file(filename, output_postfix)
   local func_id = 0
   local function add_func_to_lines_recursive(func)
     func_id = func_id + 1
-    -- TODO: fix this api. god it's awful
-    disassembler.get_disassembly(func, function(description)
-      local line = get_line(func.line_defined)
-      line[#line+1] = "-- "..(description:gsub("\n", "\n-- "))
-    end, function(line_num, column_num, instruction_index, padded_opcode, description, description_with_keys, raw_values)
-      description = show_keys_in_disassembly and description_with_keys or description
-      local line = get_line(line_num)
-      local min_description_len = 50
-      line[#line+1] = string.format("-- %s %3d: %2df %4d  %s  %s%s  %s",
-        format_line_num(line_num or 0),
-        column_num or 0,
-        func_id,
-        instruction_index,
-        padded_opcode,
-        description,
-        (min_description_len - #description > 0) and string.rep(" ", min_description_len - #description) or "",
-        raw_values
-      )
-    end)
+    disassembler.get_disassembly(
+      func,
+      function(description)
+        local line = get_line(func.line_defined)
+        line[#line+1] = "-- "..(description:gsub("\n", "\n-- "))
+      end,
+      function(data)
+        data.func_id = func_id
+        local line = get_line(data.line)
+        line[#line+1] = util.format_interpolated(instruction_line_format, data)
+      end,
+      show_keys_in_disassembly
+    )
 
     for _, inner_func in ipairs(func.inner_functions) do
       add_func_to_lines_recursive(inner_func)

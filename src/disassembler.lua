@@ -20,7 +20,7 @@ do
   end
 end
 
-local get_instruction_label
+local get_instruction_description
 do
   local func, pc, constant_labels, display_keys, current, next_inst
   -- pc is **one based** to work best with func.debug_registers
@@ -37,7 +37,8 @@ do
 
   local function get_constant_label(key, idx)
     idx = idx or current[key]
-    -- this key is pretty "in the way", but it says here (commented out) to know where and how to add it if needed
+    -- this key is pretty "in the way", but it stays here (commented out)
+    -- to know where and how to add it if needed
     return constant_labels[idx + 1]--.." ("..key..")"
   end
 
@@ -52,7 +53,8 @@ do
 
   local function get_upval_label(key, idx)
     idx = idx or current[key]
-    return "Up("..(display_keys and (key..": ") or "")..idx..(func.upvals[idx + 1] and ("|"..func.upvals[idx + 1].name) or "")..")"
+    return "Up("..(display_keys and (key..": ") or "")..idx
+      ..(func.upvals[idx + 1] and ("|"..func.upvals[idx + 1].name) or "")..")"
   end
 
   local function get_label(key, idx)
@@ -60,138 +62,152 @@ do
     return (display_keys and (key..": ") or "")..idx
   end
 
-  local instruction_label_getter_lut = {
+  local instruction_description_getter_lut = {
     [opcodes.move] = function()
-      return "MOVE", get_register_label("a").." := "..get_register_label("b")
+      return get_register_label("a").." := "..get_register_label("b")
     end,
     [opcodes.loadk] = function()
-      return "LOADK", get_register_label("a").." := "..get_constant_label("bx")
+      return get_register_label("a").." := "..get_constant_label("bx")
     end,
     [opcodes.loadkx] = function()
-      return "LOADKX", get_register_label("a").." := "..get_constant_label("next.ax", next_inst.ax)
+      return get_register_label("a").." := "..get_constant_label("next.ax", next_inst.ax)
     end,
     [opcodes.loadbool] = function()
-      return "LOADBOOL", get_register_label("a").." := "..(tostring(current.b ~= 0))..(current.c ~= 0 and " pc++" or "")
+      return get_register_label("a").." := "..(tostring(current.b ~= 0))..(current.c ~= 0 and " pc++" or "")
     end,
     [opcodes.loadnil] = function()
-      return "LOADNIL", get_register_label("a")..", ..., "..get_register_label("a+b", current.a + current.b).." := nil"
+      return get_register_label("a")..", ..., "..get_register_label("a+b", current.a + current.b).." := nil"
     end,
 
     [opcodes.getupval] = function()
-      return "GETUPVAL", get_register_label("a").." := "..get_upval_label("b")
+      return get_register_label("a").." := "..get_upval_label("b")
     end,
     [opcodes.gettabup] = function()
-      return "GETTABUP", get_register_label("a").." := "..get_upval_label("b").."["..get_register_or_constant_label("c").."]"
+      return get_register_label("a").." := "..get_upval_label("b")
+        .."["..get_register_or_constant_label("c").."]"
     end,
     [opcodes.gettable] = function()
-      return "GETTABLE", get_register_label("a").." := "..get_register_label("b").."["..get_register_or_constant_label("c").."]"
+      return get_register_label("a").." := "..get_register_label("b")
+        .."["..get_register_or_constant_label("c").."]"
     end,
     [opcodes.settabup] = function()
-      return "SETTABUP", get_upval_label("a").."["..get_register_or_constant_label("b").."] := "..get_register_or_constant_label("c")
+      return get_upval_label("a").."["..get_register_or_constant_label("b").."] := "
+        ..get_register_or_constant_label("c")
     end,
     [opcodes.setupval] = function()
-      return "SETUPVAL", get_upval_label("b").." := "..get_register_label("a")
+      return get_upval_label("b").." := "..get_register_label("a")
     end,
     [opcodes.settable] = function()
-      return "SETTABLE", get_register_label("a").."["..get_register_or_constant_label("b").."] := "..get_register_or_constant_label("c")
+      return get_register_label("a").."["..get_register_or_constant_label("b").."] := "
+        ..get_register_or_constant_label("c")
     end,
 
     [opcodes.newtable] = function()
-      return "NEWTABLE", get_register_label("a").." := {} size("
+      return get_register_label("a").." := {} size("
         ..get_label("b", util.floating_byte_to_number(current.b))..", "
         ..get_label("c", util.floating_byte_to_number(current.c))..")"
     end,
     [opcodes.self] = function()
-      return "SELF", get_register_label("a+1", current.a + 1).." := "..get_register_label("b").."; "
-        ..get_register_label("a").." := "..get_register_label("b").."["..get_register_or_constant_label("c").."]"
+      return get_register_label("a+1", current.a + 1).." := "..get_register_label("b").."; "
+        ..get_register_label("a").." := "..get_register_label("b")
+        .."["..get_register_or_constant_label("c").."]"
     end,
 
     [opcodes.add] = function()
-      return "ADD", get_register_label("a").." := "..get_register_or_constant_label("b").." + "..get_register_or_constant_label("c")
+      return get_register_label("a").." := "..get_register_or_constant_label("b")
+        .." + "..get_register_or_constant_label("c")
     end,
     [opcodes.sub] = function()
-      return "SUB", get_register_label("a").." := "..get_register_or_constant_label("b").." - "..get_register_or_constant_label("c")
+      return get_register_label("a").." := "..get_register_or_constant_label("b")
+        .." - "..get_register_or_constant_label("c")
     end,
     [opcodes.mul] = function()
-      return "MUL", get_register_label("a").." := "..get_register_or_constant_label("b").." * "..get_register_or_constant_label("c")
+      return get_register_label("a").." := "..get_register_or_constant_label("b")
+        .." * "..get_register_or_constant_label("c")
     end,
     [opcodes.div] = function()
-      return "DIV", get_register_label("a").." := "..get_register_or_constant_label("b").." / "..get_register_or_constant_label("c")
+      return get_register_label("a").." := "..get_register_or_constant_label("b")
+        .." / "..get_register_or_constant_label("c")
     end,
     [opcodes.mod] = function()
-      return "MOD", get_register_label("a").." := "..get_register_or_constant_label("b").." % "..get_register_or_constant_label("c")
+      return get_register_label("a").." := "..get_register_or_constant_label("b")
+        .." % "..get_register_or_constant_label("c")
     end,
     [opcodes.pow] = function()
-      return "POW", get_register_label("a").." := "..get_register_or_constant_label("b").." ^ "..get_register_or_constant_label("c")
+      return get_register_label("a").." := "..get_register_or_constant_label("b")
+        .." ^ "..get_register_or_constant_label("c")
     end,
     [opcodes.unm] = function()
-      return "UNM", get_register_label("a").." := -"..get_register_or_constant_label("b")
+      return get_register_label("a").." := -"..get_register_or_constant_label("b")
     end,
     [opcodes["not"]] = function()
-      return "NOT", get_register_label("a").." := not "..get_register_or_constant_label("b")
+      return get_register_label("a").." := not "..get_register_or_constant_label("b")
     end,
     [opcodes.len] = function()
-      return "LEN", get_register_label("a").." := length of "..get_register_or_constant_label("b")
+      return get_register_label("a").." := length of "..get_register_or_constant_label("b")
     end,
 
     [opcodes.concat] = function()
-      return "CONCAT", get_register_label("a").." := "..get_register_label("b")..".. ... .."..get_register_label("c")
+      return get_register_label("a").." := "..get_register_label("b")..".. ... .."..get_register_label("c")
     end,
 
     [opcodes.jmp] = function()
-      return "JMP", "-> "..(pc + current.sbx + 1).." (pc += "..get_label("sbx")..")"
+      return "-> "..(pc + current.sbx + 1).." (pc += "..get_label("sbx")..")"
         ..(current.a ~= 0 and ("; close all upvals >= "..get_register_label("a-1", current.a - 1)) or "")
     end,
     [opcodes.eq] = function()
-      return "EQ", "if ("..get_register_or_constant_label("b").." "..(current.a ~= 0 and "~=" or "==").." "
+      return "if ("..get_register_or_constant_label("b").." "..(current.a ~= 0 and "~=" or "==").." "
         ..get_register_or_constant_label("c")..") then pc++"
     end,
     [opcodes.lt] = function()
-      return "LT", "if ("..get_register_or_constant_label("b").." "..(current.a ~= 0 and ">=" or "<").." "
+      return "if ("..get_register_or_constant_label("b").." "..(current.a ~= 0 and ">=" or "<").." "
         ..get_register_or_constant_label("c")..") then pc++"
     end,
     [opcodes.le] = function()
-      return "LE", "if ("..get_register_or_constant_label("b").." "..(current.a ~= 0 and ">" or "<=").." "
+      return "if ("..get_register_or_constant_label("b").." "..(current.a ~= 0 and ">" or "<=").." "
         ..get_register_or_constant_label("c")..") then pc++"
     end,
 
     [opcodes.test] = function()
-      return "TEST", "if "..(current.c ~= 0 and "not " or "")..get_register_label("a").." then pc++"
+      return "if "..(current.c ~= 0 and "not " or "")..get_register_label("a").." then pc++"
     end,
     [opcodes.testset] = function()
-      return "TESTSET", "if "..(current.c ~= 0 and "" or "not ")..get_register_label("b").." then "
+      return "if "..(current.c ~= 0 and "" or "not ")..get_register_label("b").." then "
         ..get_register_label("a").." := "..get_register_label("b").." else pc++"
     end,
 
     [opcodes.call] = function()
-      return "CALL", get_register_label("a").."("..(current.b ~= 0 and (current.b - 1) or "var").." args, "
+      return get_register_label("a").."("..(current.b ~= 0 and (current.b - 1) or "var").." args, "
         ..(current.c ~= 0 and (current.c - 1) or "var").." returns)"
     end,
     [opcodes.tailcall] = function()
-      return "TAILCALL", "return "..get_register_label("a").."("..(current.b ~= 0 and (current.b - 1) or "var").." args)"
+      return "return "..get_register_label("a").."("..(current.b ~= 0 and (current.b - 1) or "var").." args)"
     end,
     [opcodes["return"]] = function()
-      return "RETURN", "return "..(current.b ~= 0 and (current.b - 1) or "var")
+      return "return "..(current.b ~= 0 and (current.b - 1) or "var")
         .." results starting at "..get_register_label("a")
     end,
 
     [opcodes.forloop] = function()
-      return "FORLOOP", get_register_label("a").." += "..get_register_label("a+2", current.a + 2).."; "
-        .."if "..get_register_label("a").." (step < 0 ? >= : <=) "..get_register_label("a+1", current.a + 1).." then { "
+      return get_register_label("a").." += "..get_register_label("a+2", current.a + 2).."; "
+        .."if "..get_register_label("a").." (step < 0 ? >= : <=) "
+        ..get_register_label("a+1", current.a + 1).." then { "
         .."-> "..(pc + current.sbx + 1).." (pc += "..get_label("sbx").."); "
         ..get_register_label("a+3", current.a + 3).." := "..get_register_label("a")
         .." }"
     end,
     [opcodes.forprep] = function()
-      return "FORPREP", get_register_label("a").." -= "..get_register_label("a+2", current.a + 2).."; "
+      return get_register_label("a").." -= "..get_register_label("a+2", current.a + 2).."; "
         .."-> "..(pc + current.sbx + 1).." (pc += "..get_label("sbx")..")"
     end,
     [opcodes.tforcall] = function()
-      return "TFORCALL", get_register_label("a+3", current.a + 3)..", ..., "..get_register_label("a+2+c", current.a + 2 + current.c).." := "
-        ..get_register_label("a").."(2 args: "..get_register_label("a+1", current.a + 1)..", "..get_register_label("a+2", current.a + 2)..")"
+      return get_register_label("a+3", current.a + 3)..", ..., "
+        ..get_register_label("a+2+c", current.a + 2 + current.c).." := "
+        ..get_register_label("a").."(2 args: "..get_register_label("a+1", current.a + 1)..", "
+        ..get_register_label("a+2", current.a + 2)..")"
     end,
     [opcodes.tforloop] = function()
-      return "TFORLOOP", "if "..get_register_label("a+1", current.a + 1).." ~= nil then { "
+      return "if "..get_register_label("a+1", current.a + 1).." ~= nil then { "
         ..get_register_label("a").." := "..get_register_label("a+1", current.a + 1).."; "
         .."-> "..(pc + current.sbx + 1).." (pc += "..get_label("sbx")..")"
         .." }"
@@ -199,24 +215,25 @@ do
 
     [opcodes.setlist] = function()
       local c = (current.c ~= 0 and current.c or next_inst.ax) - 1
-      return "SETLIST", get_register_label("a").."["..(c * phobos_consts.fields_per_flush + 1)..", ..."
+      return get_register_label("a").."["..(c * phobos_consts.fields_per_flush + 1)..", ..."
         ..(current.b ~= 0 and (", "..(c * phobos_consts.fields_per_flush + current.b)) or "").."] := "
-        ..get_register_label("a+1", current.a + 1)..", ..., "..(current.b ~= 0 and get_register_label("a+b", current.a + current.b) or "top")
+        ..get_register_label("a+1", current.a + 1)..", ..., "
+        ..(current.b ~= 0 and get_register_label("a+b", current.a + current.b) or "top")
     end,
     [opcodes.closure] = function()
       local inner_func = func.inner_functions[current.bx + 1]
-      return "CLOSURE", get_register_label("a").." := closure("..get_function_label(inner_func)..")"
+      return get_register_label("a").." := closure("..get_function_label(inner_func)..")"
     end,
     [opcodes.vararg] = function()
-      return "VARARG", get_register_label("a")..", ..., "
+      return get_register_label("a")..", ..., "
         ..(current.b ~= 0 and get_register_label("a+b-2", current.a + current.b - 2) or "top")
         .." := vararg"
     end,
     [opcodes.extraarg] = function()
-      return "EXTRAARG", "."
+      return "."
     end,
   }
-  function get_instruction_label(_func, _pc, _constant_labels, _display_keys)
+  function get_instruction_description(_func, _pc, _constant_labels, _display_keys)
     func = _func
     pc = _pc
     constant_labels = _constant_labels
@@ -224,10 +241,8 @@ do
     current = func.instructions[pc]
     next_inst = func.instructions[pc + 1]
     return (
-      instruction_label_getter_lut[current.op]
-      or function()
-        return "UNKNOWN", "OP("..current.op..")"
-      end
+      instruction_description_getter_lut[current.op]
+        or util.debug_abort("Missing disassembly formatter for opcode '"..current.op.name.."'.")
     )()
   end
 end
@@ -544,12 +559,21 @@ for opcode_name in pairs(opcodes) do
   end
 end
 
+---@class DisassemblyInstructionData
+---@field line integer @ 0 for unknown
+---@field column integer @ 0 for unknown
+---@field pc integer @ process counter, 1 based
+---@field op_label string @ padded with spaces on the right to always have the same length
+---@field description string @ description for the instruction, unknown length
+---@field args string @ contains raw values for the instruction arguments (a, b, c, ax, bx, sbx)
+
 ---@param func CompiledFunc
+---@param func_description_callback fun(description: string) @
 ---called once at the beginning with general information about the function. Contains 2 newlines.
----@param func_description_callback fun(description: string)
----gets called for every instruction. instruction_index is 1-based
----@param instruction_callback fun(line?: integer, column?: integer, instruction_index: integer, padded_opcode: string, description: string, description_with_keys: string, raw_values: string)
-local function get_disassembly(func, func_description_callback, instruction_callback)
+---@param instruction_callback fun(inst_data: DisassemblyInstructionData) @
+---gets called for every instruction. The instance of this table gets reused every iteration\
+---intended to be used in combination with `util.format_interpolated`
+local function get_disassembly(func, func_description_callback, instruction_callback, display_keys)
   func_description_callback("function at "..get_function_label(func).."\n"
     ..(func.is_vararg and "vararg" or (func.num_params.." params")).." | "
     ..(#func.upvals).." upvals | "..func.max_stack_size.." max stack\n"
@@ -567,29 +591,29 @@ local function get_disassembly(func, func_description_callback, instruction_call
     elseif constant.node_type == "nil" then
       constant_labels[i] = "nil"
     else
-      error("Invalid compiled constant type '"..constant.node_type.."'.")
+      util.debug_abort("Invalid constant type '"..constant.node_type.."'.")
     end
   end
 
   local instructions = func.instructions
+  local data = {}
   for i = 1, #instructions do
-    local label, description = get_instruction_label(func, i, constant_labels)
-    local _, description_with_keys = get_instruction_label(func, i, constant_labels, true)
+    local label = instructions[i].op.label
+    local description = get_instruction_description(func, i, constant_labels, display_keys)
     local parts = {}
     for _, key in ipairs{"a", "b", "c", "ax", "bx", "sbx"} do
       if instructions[i].op.params[key] then
         parts[#parts+1] = "["..key.." "..instructions[i][key].."]"
       end
     end
-    instruction_callback(
-      instructions[i].line,
-      instructions[i].column,
-      i,
-      label..string.rep(" ", max_opcode_name_length - #label),
-      description,
-      description_with_keys,
-      table.concat(parts, " ")
-    )
+    local args = table.concat(parts, " ")
+    data.line = instructions[i].line or 0
+    data.column = instructions[i].column or 0
+    data.pc = i
+    data.op_label = label..string.rep(" ", max_opcode_name_length - #label)
+    data.description = description
+    data.args = args
+    instruction_callback(data)
   end
 end
 

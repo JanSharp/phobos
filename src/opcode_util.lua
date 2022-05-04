@@ -46,6 +46,7 @@ local function op(name, params, special)
   local opcode = {
     id = next_id,
     name = name,
+    label = string.upper(name),
     params = params,
     reduce_if_not_zero = reduce_if_not_zero,
     conditional = conditional,

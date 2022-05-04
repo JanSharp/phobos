@@ -5,6 +5,7 @@ local io_util = require("io_util")
 local Path = require("lib.path")
 Path.set_main_separator("/")
 local error_code_util = require("error_code_util")
+local util = require("util")
 
 local unsafe = true
 local print_progress = true
@@ -26,6 +27,10 @@ local total_lua_inst_count = 0
 local total_pho_inst_count = 0
 local total_lua_byte_count = 0
 local total_pho_byte_count = 0
+
+local instruction_line_format = util.parse_interpolated_string(
+  "-- {line:%3d} {column:%3d} {prefix}: {func_id:%3d}f  {pc:%4d}  {op_label}  {description:%-50s}  {args}"
+)
 
 -- local ill = require("indexed_linked_list")
 
@@ -126,25 +131,20 @@ local function compile(filename)
 
       if create_disassembly then
         func_id = func_id + 1
-        disassembler.get_disassembly(func, function(description)
-          local line = get_line(func.line_defined)
-          line[#line+1] = "-- "..prefix..": "..(description:gsub("\n", "\n-- "..prefix..": "))
-        end, function(line_num, column_num, instruction_index, padded_opcode, description, description_with_keys, raw_values)
-          description = show_keys_in_disassembly and description_with_keys or description
-          local line = get_line(line_num)
-          local min_description_len = 50
-          line[#line+1] = string.format("-- %s %3d %s: %2df  %4d  %s  %s%s  %s",
-            format_line_num(line_num or 0),
-            column_num or 0,
-            prefix,
-            func_id,
-            instruction_index,
-            padded_opcode,
-            description,
-            (min_description_len - #description > 0) and string.rep(" ", min_description_len - #description) or "",
-            raw_values
-          )
-        end)
+        disassembler.get_disassembly(
+          func,
+          function(description)
+            local line = get_line(func.line_defined)
+            line[#line+1] = "-- "..prefix..": "..(description:gsub("\n", "\n-- "..prefix..": "))
+          end,
+          function(data)
+            data.prefix = prefix
+            data.func_id = func_id
+            local line = get_line(data.line)
+            line[#line+1] = util.format_interpolated(instruction_line_format, data)
+          end,
+          show_keys_in_disassembly
+        )
       end
 
       for _, inner_func in ipairs(func.inner_functions) do

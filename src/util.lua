@@ -168,6 +168,70 @@ local function new_pos(line, column)
   }
 end
 
+---@class ParsedInterpolatedString
+---@field field_names string[] @ field names used in the interpolated string
+---@field format_string string @ `string.format` pattern
+
+---@param interpolated_string string
+---@return ParsedInterpolatedString
+local function parse_interpolated_string(interpolated_string)
+  local field_names = {}
+  local format_parts = {}
+  do
+    local function add_literal_part(str)
+      format_parts[#format_parts+1] = str:gsub("%%", "%%%0")
+      -- format_parts[#format_parts+1] = str:gsub("[%^$()%%.%[%]*+%-?]", "%%%0")
+    end
+    local name, options, trailing, pos, stop
+    trailing, pos = interpolated_string:match("^([^{]*)()")
+    add_literal_part(trailing)
+    while true do
+      name, trailing, stop = interpolated_string:match("^{([%a_][%w_]*)}([^{]*)()", pos)
+      options = nil
+      if not name then
+        name, options, trailing, stop = interpolated_string:match("^{([%a_][%w_]*):(%%[^}]+)}([^{]*)()", pos)
+      end
+      if not name then
+        break
+      end
+      field_names[#field_names+1] = name
+      format_parts[#format_parts+1] = options or "%s" -- %s on non strings will `tostring` them
+      add_literal_part(trailing)
+      pos = stop
+    end
+    if pos <= #interpolated_string then
+      debug_abort("Malformed interpolated string '"..interpolated_string
+        .."', stopped parsing at "..(pos - 1).."."
+      )
+    end
+  end
+  return {
+    field_names = field_names,
+    format_string = table.concat(format_parts),
+  }
+end
+
+---@param interpolated_string string|ParsedInterpolatedString @
+---if this is a `string` it will be parsed using `parse_interpolated_string`
+---@param data table @ table containing all fields used by the interpolated string
+---@return string
+local function format_interpolated(interpolated_string, data)
+  if type(interpolated_string) == "string" then
+    interpolated_string = parse_interpolated_string(interpolated_string)
+  end
+  local args = {}
+  for i, field_name in ipairs(interpolated_string.field_names) do
+    local field = data[field_name]
+    if field == nil then
+      debug_abort("Attempt to format field '"..field_name.."' in an interpolated string where no such field \z
+        is in the provided data table."
+      )
+    end
+    args[i] = field
+  end
+  return interpolated_string.format_string:format(table.unpack(args))
+end
+
 return {
   number_to_floating_byte = number_to_floating_byte,
   floating_byte_to_number = floating_byte_to_number,
@@ -185,4 +249,6 @@ return {
   format_version = format_version,
   assert_params_field = assert_params_field,
   new_pos = new_pos,
+  parse_interpolated_string = parse_interpolated_string,
+  format_interpolated = format_interpolated,
 }
