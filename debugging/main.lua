@@ -11,7 +11,7 @@ local unsafe = true
 local print_progress = true
 local use_regular_lua_compiler = false
 local use_phobos_compiler = true
-local use_il = false
+local use_il = true
 local do_create_inline_iife = false
 local do_fold_const = true
 local do_fold_control_statements = true
@@ -81,7 +81,7 @@ local function compile(filename)
   local text = file:read("*a")
 
   local lines
-  if create_disassembly then
+  if create_disassembly or use_il then
     file:seek("set")
     lines = {}
     for line in file:lines() do
@@ -97,7 +97,7 @@ local function compile(filename)
 
   file:close()
 
-  if create_disassembly then
+  if create_disassembly or use_il then
     if not lines[1] then -- empty file edge case
       lines[1] = {line = ""}
     end
@@ -316,7 +316,7 @@ local function compile(filename)
     total_pho_byte_count = total_pho_byte_count + (pho or 0)
   end
 
-  if create_disassembly then
+  if create_disassembly or use_il then
     local result = {}
     for _, line in ipairs(lines) do
       for _, pre in ipairs(line) do

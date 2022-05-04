@@ -1,6 +1,7 @@
 
 local ast = require("ast_util")
 local nodes = require("nodes")
+local util = require("util")
 
 ---same as in parser
 local prevent_assert = {prevent_assert = true}
@@ -229,14 +230,12 @@ local function new_vararg(params)
 end
 
 ---@class ILScopingParams : ILInstParamsBase
----@field set_regs ILRegister[]|nil
----@field get_regs ILRegister[]|nil
+---@field regs ILRegister[]
 
 ---@param params ILScopingParams
 local function new_scoping(params)
   local inst = new_inst(params, "scoping")
-  inst.set_regs = params.set_regs or {}
-  inst.get_regs = params.get_regs or {}
+  inst.regs = params.regs or {}
   return inst
 end
 
@@ -669,12 +668,35 @@ do
   end
 end
 
-local function generate_scope(scope, func)
+local function add_scoping_for_scope_locals(scope, func)
+  local regs = {}
+  for i, local_def in ipairs(scope.locals) do
+    regs[i] = func.temp.local_reg_lut[local_def]
+  end
+  if regs[1] then
+    add_inst(func, new_scoping{
+      position = get_last_used_position(func),
+      regs = regs,
+    })
+  end
+end
+
+local function generate_scope(scope, func, pre_block, post_block)
+  if pre_block then
+    pre_block()
+  end
   local stat = scope.body.first
   while stat do
     generate_stat(stat, func)
     stat = stat.next
   end
+  if post_block then
+    post_block()
+  end
+  -- must keep all all locals until the end of the block because the last usage of a local
+  -- might be inside an inner loop scope at which point the local would get closed too early
+  -- (or even a manual loop using gotos would cause the same problem)
+  add_scoping_for_scope_locals(scope, func)
 end
 
 do
@@ -826,6 +848,16 @@ do
         label = start_label,
       })
 
+      -- prevent internal regs from going out of scope too early
+      add_inst(func, new_scoping{
+        position = stat.end_token,
+        regs = {
+          index_reg,
+          limit_reg,
+          step_reg,
+        },
+      })
+
       jump_here(leave_jumps, func, stat.end_token)
       breaks_jump_here(stat, func, stat.end_token)
     end,
@@ -882,16 +914,26 @@ do
         label = start_label,
       })
 
+      -- prevent internal regs from going out of scope too early
+      add_inst(func, new_scoping{
+        position = stat.end_token,
+        regs = {generator_reg, state_reg, control_reg},
+      })
+
       jump_here({leave_jump}, func, stat.end_token)
       breaks_jump_here(stat, func, stat.end_token)
     end,
     ["repeatstat"] = function(stat, func)
       local start_label = add_inst(func, new_label{position = stat.repeat_token})
-      generate_scope(stat, func)
-      -- we just want to continue without jumping if it's not successful
-      -- so failure has to jump back up
-      local failure_jump = generate_test(stat.condition, func, false)
-      failure_jump.label = start_label
+      generate_scope(stat, func, nil, function()
+        -- the condition is in the post_block callback in order for
+        -- all locals in the scope to stay alive until past the condition
+        --
+        -- we just want to continue without jumping if it's not successful
+        -- so failure has to jump back up
+        local failure_jump = generate_test(stat.condition, func, false)
+        failure_jump.label = start_label
+      end)
       breaks_jump_here(stat, func, get_last_used_position(func))
     end,
     ["funcstat"] = function(stat, func)
@@ -1153,6 +1195,7 @@ function generate_functiondef(functiondef, parent_func)
     end
   end
 
+  -- special handling for methods because self is not in the params list
   if functiondef.is_method then
     func.param_regs[1] = new_reg("self")
     func.temp.local_reg_lut[functiondef.locals[1]] = func.param_regs[1]
@@ -1163,7 +1206,17 @@ function generate_functiondef(functiondef, parent_func)
     set_local_reg(param, func.param_regs[i + param_offset], func)
   end
 
+  -- all parameters have to be in scope from the beginning because they are automatically set by Lua
+  if func.param_regs[1] then
+    add_inst(func, new_scoping{
+      position = not functiondef.is_main and functiondef.function_token or nil,
+      regs = func.param_regs, -- using a reference to the same table!
+    })
+  end
+
   generate_scope(functiondef, func)
+
+  -- self does have a local so it gets included in the scope's SCOPING instruction
 
   -- as per usual, an extra return for good measure
   add_inst(func, new_ret{position = functiondef.end_token or get_last_used_position(func)})

@@ -91,7 +91,7 @@ local instruction_label_getter_lut = {
     return "BINOP", get_reg(inst.result_reg, context).." := "..get_ptr(inst.left_ptr, context).." "..inst.op.." "..get_ptr(inst.right_ptr, context)
   end,
   ["unop"] = function(inst, context)
-    return "BINOP", get_reg(inst.result_reg, context).." := "..inst.op.." "..get_ptr(inst.right_ptr, context)
+    return "UNOP", get_reg(inst.result_reg, context).." := "..inst.op.." "..get_ptr(inst.right_ptr, context)
   end,
   ["label"] = function(inst, context)
     return "LABEL", get_label_label(inst, context)
@@ -115,7 +115,7 @@ local instruction_label_getter_lut = {
     return "VARARG", get_list(get_reg, inst.result_regs, context).." := vararg"
   end,
   ["scoping"] = function(inst, context)
-    return "SCOPING", get_list(get_reg, inst.result_regs, context).." := vararg"
+    return "SCOPING", "alive: "..get_list(get_reg, inst.regs, context)
   end,
 }
 

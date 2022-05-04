@@ -102,7 +102,10 @@
 ---@field node_type '"functiondef"'
 ---@field is_main nil @ overridden by AstMain to be `true`
 ---@field source string
----@field is_method boolean @ is it `function foo:bar() end`?
+---is it `function foo:bar() end`?\
+---`self` does not get added to `params`, but it does get a `whole_block = true` local,
+---which is always the first one
+---@field is_method boolean
 ---@field func_protos AstFunctionDef[]
 ---@field upvals AstUpvalDef[]
 ---@field is_vararg boolean
@@ -529,6 +532,7 @@
 
 ---@class ILInstruction
 ---@field inst_type ILInstructionType
+---@field position ILPosition|nil
 
 ---@class ILMove
 ---@field inst_type '"move"'
@@ -612,8 +616,7 @@
 
 ---@class ILScoping
 ---@field inst_type '"scoping"'
----@field set_regs ILRegister[]|nil
----@field get_regs ILRegister[]|nil
+---@field regs ILRegister[]
 
 ---@class ILFunction
 ---@field parent_func ILFunction|nil @ `nil` if main chunk
