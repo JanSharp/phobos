@@ -209,7 +209,7 @@ end
 local function compile(func)
   local data = {func = func}
   make_bytecode_func(data)
-  step_one(data)
+  -- step_one(data)
   generate(data)
   return data.result
 end

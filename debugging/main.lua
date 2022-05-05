@@ -32,7 +32,7 @@ local instruction_line_format = util.parse_interpolated_string(
   "-- {line:%3d} {column:%3d} {prefix}: {func_id:%3d}f  {pc:%4d}  {op_label}  {description:%-50s}  {args}"
 )
 local il_instruction_line_format = util.parse_interpolated_string(
-  "-- {line:%3d} {column:%3d} IL1: {func_id:%3d}f  {pc:%4d}  {label}  {description}"
+  "-- {line:%3d} {column:%3d} IL1: {func_id:%3d}f  {pc:%4d}  {label}  {block_id}  {description}"
 )
 
 -- local ill = require("indexed_linked_list")
@@ -215,9 +215,14 @@ local function compile(filename)
       success, il = pcall(require("intermediate_language"), main)
       if not success then print(il) goto finish end
 
+      success, err = pcall(require("il_blocks"), il)
+      if not success then print(err) goto finish end
+
       success, err = pcall(function()
         local il_func_id = 0
         local pretty_print = require("il_pretty_print")
+        local block_ids = {}
+        local next_block_id = 0
         local function il_add_func_lines(func)
           il_func_id = il_func_id + 1
           -- "-- < line column compiler :  func_id  pc  opcode  description  params >\n"
@@ -225,6 +230,13 @@ local function compile(filename)
             data.line = format_line_num(data.inst.position and data.inst.position.line or 0)
             data.column = data.inst.position and data.inst.position.column or 0
             data.func_id = il_func_id
+            local block_id = block_ids[data.inst.block]
+            if not block_id then
+              block_id = next_block_id
+              next_block_id = next_block_id + 1
+              block_ids[data.inst.block] = block_id
+            end
+            data.block_id = block_id
             local line = get_line(data.inst.position and data.inst.position.line)
             line[#line+1] = util.format_interpolated(il_instruction_line_format, data)
           end)
@@ -236,10 +248,10 @@ local function compile(filename)
       end)
       if not success then print(err) goto finish end
 
-      local compiled
-      success, compiled = pcall(require("il_compiler"), il)
-      if not success then print(compiled) goto finish end
-      add_func_to_lines("ILR", compiled)
+      -- local compiled
+      -- success, compiled = pcall(require("il_compiler"), il)
+      -- if not success then print(compiled) goto finish end
+      -- add_func_to_lines("ILR", compiled)
     end
 
     if do_fold_const then
