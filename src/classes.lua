@@ -559,7 +559,7 @@
 ---@field inst_type '"set_table"'
 ---@field table_reg ILRegister
 ---@field key_ptr ILPointer
----Can be a `ILVarargRegister` at which point `key_ptr` has to be an integer constant >= 1
+---Can be a `ILVarargRegister` at which point `key_ptr` must be an integer constant >= 1
 ---@field right_ptr ILPointer
 
 ---@class ILNewTable
@@ -625,6 +625,7 @@
 ---@field upvals ILUpval[]
 ---@field param_regs ILRegister[]
 ---@field is_vararg boolean
+---@field source string|nil
 
 --------------------------------------------------
 -- generated/bytecode stuff:
@@ -695,8 +696,8 @@
 ---@alias CompiledConstant AstString|AstNumber|AstBoolean|AstNil
 
 ---@class CompiledRegister
----@field reg integer @ **zero based** index of the register this name is for from start_at until stop_at
----@field name string
+---@field reg integer @ **zero based** index of the register
+---@field name string @ this name is for from start_at until stop_at
 ---@field start_at integer @ **one based including**
 ---@field stop_at integer @ **one based including**
 ---temporary data during compilation
@@ -705,7 +706,6 @@
 ---@field in_scope_at integer|nil @ pc **one based including** used to figure out how many upvals to close
 
 ---@class CompiledUpval
----@field index integer @ **zero based**
 ---@field name string
 ---@field in_stack boolean
 ---used when `in_stack` is `false`. index of the parent upval for bytecode
@@ -713,6 +713,8 @@
 ---used when `in_stack` is `true`.
 ---register index of the local variable at the time of creating the closure
 ---@field local_idx number|nil
+---temporary data during compilation
+---@field index integer @ **zero based** index for inner functions to figure out their `upval_idx`s
 
 ---@class CompiledFunc
 ---@field line_defined integer|nil

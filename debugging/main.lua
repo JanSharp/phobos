@@ -235,6 +235,11 @@ local function compile(filename)
         il_add_func_lines(il)
       end)
       if not success then print(err) goto finish end
+
+      local compiled
+      success, compiled = pcall(require("il_compiler"), il)
+      if not success then print(compiled) goto finish end
+      add_func_to_lines("ILR", compiled)
     end
 
     if do_fold_const then
