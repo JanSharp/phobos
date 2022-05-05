@@ -118,31 +118,71 @@ do
   end
 end
 
+local eval_live_regs
+do
+  function eval_live_regs(data)
+    local start_at_lut = {}
+    local stop_at_lut = {}
+    for _, reg in ipairs(data.all_regs) do
+      local list = start_at_lut[reg.start_at]
+      if not list then
+        list = {}
+        start_at_lut[reg.start_at] = list
+      end
+      list[#list+1] = reg
+      -- using a lut instead of a list for stop_at
+      local lut = stop_at_lut[reg.stop_at]
+      if not lut then
+        lut = {}
+        stop_at_lut[reg.stop_at] = lut
+      end
+      lut[reg] = true
+    end
+    local live_regs = {}
+    local inst = data.func.instructions.first
+    while inst do
+      inst.live_regs = live_regs
+      -- starting at this instruction, add them to live_regs for this instruction
+      local list = start_at_lut[inst]
+      if list then
+        for _, reg in ipairs(list) do
+          live_regs[#live_regs+1] = reg
+        end
+      end
+      live_regs = util.shallow_copy(live_regs)
+      -- stopping at this instruction, remove them from live_regs for the next instruction
+      local lut = stop_at_lut[inst]
+      if lut then
+        local i = 1
+        local j = 1
+        local c = #live_regs
+        while i <= c do
+          local reg = live_regs[i]
+          live_regs[i] = nil
+          if not lut[reg] then -- if it's not stopping it's still alive
+            live_regs[j] = reg
+            j = j + 1
+          end
+          i = i + 1
+        end
+      end
+      inst = inst.next
+    end
+  end
+end
+
 local eval_blocks
 do
-  local function get_live_regs(data, at_inst)
-    local regs = {}
-    for _, reg in ipairs(data.all_regs) do
-      if reg.start_at.index <= at_inst.index and at_inst.index <= reg.stop_at.index then
-        regs[#regs+1] = reg
-      end
-    end
-    return regs
-  end
-
   -- label isn't in this list because labels can be the start of a block
   -- but if a label is not the first instruction in a block then it does still end the block
   -- so it's handled in the loop down below
   local block_ends = util.invert{"jump", "test", "ret"}
   local function create_block(data, inst)
-    local start_regs = get_live_regs(data, inst)
     -- non intrusive because the instructions are already in an intrusive indexed linked list
     local instructions = ill.new()
     local block = {
       source_links = {},
-      start_regs = start_regs,
       instructions = instructions,
-      stop_regs = nil,
       target_links = {},
     }
     ill.append(instructions, inst)
@@ -155,7 +195,6 @@ do
       ill.append(instructions, inst)
       inst.block = block
     end
-    block.stop_regs = get_live_regs(data, instructions.last.value)
     return block
   end
 
@@ -226,6 +265,7 @@ end
 local function make_blocks(func)
   local data = {func = func}
   eval_start_stop_for_regs(data)
+  eval_live_regs(data)
   eval_blocks(data)
   link_blocks(data)
   func.all_regs = data.all_regs
