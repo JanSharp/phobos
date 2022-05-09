@@ -419,6 +419,7 @@ do
         for _, left_kvp in ipairs(left_type.kvps) do
           for _, right_kvp in ipairs(right_type.kvps) do
             local key = intersect(left_kvp.key_type, right_kvp.key_type)
+            -- TODO: properly compare types for equality
             if key.type_id ~= "empty" then
               result.kvps[#result.kvps+1] = {
                 key_type = key,
@@ -537,10 +538,28 @@ do
         or (right_type.type_id == "table" and right_type.is_table)
     end,
     ["class"] = function(left_type, right_type)
-      if right_type.type_id == "inverted" then
+      if right_type.type_id ~= "class"
+        or (right_type.is_table and not left_type.is_table)
+        or (right_type.is_userdata and not left_type.is_userdata)
+      then
         return false
       end
-      util.debug_abort("-- TODO: idk how the heck")
+      for _, left_kvp in ipairs(right_type.kvps) do
+        for _, right_kvp in ipairs(left_type.kvps) do
+          -- TODO: instead of checking contains, use intersections. When not empty, check if
+          -- the right value type is contained, if yes add the current intersection to a union.
+          -- then check if the current union is equal to the right key_type
+          -- and only if that is true then the current right kvp is contained
+          if contains(left_kvp.key_type, right_kvp.key_type) then
+            if contains(left_kvp.value_type, right_kvp.value_type) then
+              goto is_contained
+            end
+          end
+        end
+        do return false end
+        ::is_contained::
+      end
+      return true
     end,
     ["union"] = function(left_type, right_type)
       for _, union_type in ipairs(left_type.union_types) do
@@ -580,7 +599,8 @@ do
       end
       return true
     elseif right_type.type_id == "intersection" then
-      -- TODO: is there a case where all intersected types are not included but the type as a whole would be?
+      -- TODO: similar to a class containing another class, keep track of intersections, create a union and
+      -- check if the union is equal to the current type. Although now i'm scared of type equality
       for _, intersected_type in ipairs(right_type.intersected_types) do
         if contains(left_type, intersected_type) then
           return true
