@@ -174,17 +174,6 @@ local function new_union(params)
   return il_type
 end
 
----@class ILUnionParams : ILTypeBaseParams
----@field union_types ILType[]
-
----@param params ILUnionParams
----@return ILType
-local function new_union(params)
-  local il_type = new_il_type("union", params)
-  il_type.union_types = params.union_types or {}
-  return il_type
-end
-
 ---@class ILIntersectionParams : ILTypeBaseParams
 ---@field intersected_types ILType[]
 
