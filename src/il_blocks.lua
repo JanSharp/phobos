@@ -145,6 +145,7 @@ do
       -- starting at this instruction, add them to live_regs for this instruction
       local list = start_at_lut[inst]
       if list then
+        inst.regs_start_at_list = list
         for _, reg in ipairs(list) do
           live_regs[#live_regs+1] = reg
         end
@@ -153,6 +154,7 @@ do
       -- stopping at this instruction, remove them from live_regs for the next instruction
       local lut = stop_at_lut[inst]
       if lut then
+        inst.regs_stop_at_lut = lut
         local i = 1
         local j = 1
         local c = #live_regs

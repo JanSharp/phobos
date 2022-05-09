@@ -168,6 +168,10 @@ local function new_pos(line, column)
   }
 end
 
+local function pos_str(position)
+  return (position and position.line or 0)..":"..(position and position.column or 0)
+end
+
 ---@class ParsedInterpolatedString
 ---@field field_names string[] @ field names used in the interpolated string
 ---@field format_string string @ `string.format` pattern
@@ -249,6 +253,7 @@ return {
   format_version = format_version,
   assert_params_field = assert_params_field,
   new_pos = new_pos,
+  pos_str = pos_str,
   parse_interpolated_string = parse_interpolated_string,
   format_interpolated = format_interpolated,
 }

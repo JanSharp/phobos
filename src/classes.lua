@@ -481,6 +481,9 @@
 ---@class ILRegister : ILPointer
 ---@field ptr_type '"reg"'
 ---@field name string|nil
+---post IL generation data
+---@field start_at ILInstruction
+---@field stop_at ILInstruction
 
 ---@class ILVarargRegister : ILRegister
 ---@field ptr_type '"vararg"'
@@ -512,6 +515,45 @@
 ---@field line number
 ---@field column number
 
+---@alias ILTypeId
+---| '"any"'
+---| '"empty"'
+---| '"nil"'
+---| '"string"' @ any string
+---| '"literal_string"'
+---| '"number"' @ any number
+---| '"literal_number"'
+---| '"boolean"' @ any boolean
+---| '"literal_boolean"'
+---| '"function"' @ any function
+---| '"literal_function"'
+---| '"userdata"' @ any userdata
+---| '"thread"' @ any thread
+---| '"table"' @ any table
+---| '"class"' @ specific table/userdata structure
+---| '"union"'
+---| '"intersection"'
+---| '"inverted"' @ -- TODO: good or bad?
+
+---@class ILType
+---@field type_id ILTypeId
+---@field inferred boolean @ was this type inferred by usage?
+---@field value string|number|boolean|nil @ for `literal_string`, `literal_number` and `literal_boolean`
+---@field func ILFunction @ -- TODO: some way to identify `literal_function`s
+---@field union_types ILType[] @ for `union`
+---@field intersected_types ILType[] @ for `intersection`
+---@field inverted_type ILType @ for `inverted`
+
+---@class ILClass : ILType
+---@field type_id '"class"'
+---@field kvps ILClassKvp[]
+---@field is_table boolean
+---@field is_userdata boolean
+
+---@class ILClassKvp
+---@field key_type ILType
+---@field value_types ILType
+
 ---@alias ILInstructionType
 ---| '"move"'
 ---| '"get_upval"'
@@ -533,6 +575,16 @@
 ---@class ILInstruction
 ---@field inst_type ILInstructionType
 ---@field position ILPosition|nil
+---post IL generation data
+---@field block ILBlock
+---@field regs_start_at_list ILRegister[]|nil
+---@field regs_stop_at_lut table<ILRegister, boolean>|nil
+---@field live_regs ILRegister[]
+---@field pre_state ILState
+---@field post_state ILState
+
+---@class ILState
+---@field reg_types table<ILRegister, ILType>
 
 ---@class ILMove
 ---@field inst_type '"move"'
@@ -621,11 +673,28 @@
 ---@class ILFunction
 ---@field parent_func ILFunction|nil @ `nil` if main chunk
 ---@field inner_functions ILFunction[]
----@field instructions ILInstruction[]
+---@field instructions ILInstruction[] @ intrusive ILL
 ---@field upvals ILUpval[]
 ---@field param_regs ILRegister[]
 ---@field is_vararg boolean
 ---@field source string|nil
+---post IL generation data
+---@field all_regs ILRegister[]
+---@field blocks ILBlock[] @ intrusive ILL
+
+---@class ILBlock
+---@field source_links ILBlockLink[] @ blocks flowing into this block
+---@field instructions ILInstruction[] @ ILL
+---@field is_main_entry_block boolean
+---@field target_links ILBlockLink[] @ blocks this block can flow to
+
+---@class ILBlockLink
+---@field source_block ILBlock @ the block flowing to `target_block`
+---@field target_block ILBlock @ the block `source_block` is flowing to
+---a loop link is the link determined to be the one closing the loop of a collection of blocks
+---which are ultimately forming a loop.
+---(currently all backwards jumps are marked as loop links)
+---@field is_loop boolean
 
 --------------------------------------------------
 -- generated/bytecode stuff:
