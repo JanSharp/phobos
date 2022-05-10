@@ -533,15 +533,14 @@
 ---| '"class"' @ specific table/userdata structure
 ---| '"union"'
 ---| '"intersection"'
----| '"inverted"' @ -- TODO: good or bad?
+---| '"inverted"' @ -- TODO: good or bad? definitely annoying
 
 ---@class ILType
 ---@field type_id ILTypeId
 ---@field inferred boolean @ was this type inferred by usage?
 ---@field value string|number|boolean|nil @ for `literal_string`, `literal_number` and `literal_boolean`
 ---@field func ILFunction @ -- TODO: some way to identify `literal_function`s
----@field union_types ILType[] @ for `union`
----@field intersected_types ILType[] @ for `intersection`
+---@field inner_types ILType[] @ for `union` and `intersection`
 ---@field inverted_type ILType @ for `inverted`
 
 ---@class ILClass : ILType

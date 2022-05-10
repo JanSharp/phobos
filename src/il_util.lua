@@ -164,24 +164,38 @@ local function new_class(params)
 end
 
 ---@class ILUnionParams : ILTypeBaseParams
----@field union_types ILType[]
+---@field inner_types ILType[]
 
 ---@param params ILUnionParams
 ---@return ILType
 local function new_union(params)
   local il_type = new_il_type("union", params)
-  il_type.union_types = params.union_types or {}
+  if params.inner_types then
+    for _, inner_type in ipairs(params.inner_types) do
+      if inner_type.type_id == "union" then
+        util.debug_abort("Unions must not contain unions, use the smart_union function.")
+      end
+    end
+  end
+  il_type.inner_types = params.inner_types or {}
   return il_type
 end
 
 ---@class ILIntersectionParams : ILTypeBaseParams
----@field intersected_types ILType[]
+---@field inner_types ILType[]
 
 ---@param params ILIntersectionParams
 ---@return ILType
 local function new_intersection(params)
-  local il_type = new_il_type("union", params)
-  il_type.intersected_types = params.intersected_types or {}
+  local il_type = new_il_type("intersection", params)
+  if params.inner_types then
+    for _, inner_type in ipairs(params.inner_types) do
+      if inner_type.type_id == "intersection" then
+        util.debug_abort("Intersections must not contain intersections, use the smart_intersection function.")
+      end
+    end
+  end
+  il_type.inner_types = params.inner_types or {}
   return il_type
 end
 
@@ -252,6 +266,173 @@ local function make_type_from_ptr(state, ptr)
   end)()
 end
 
+-- Alright, comparing types is even harder than intersecting and contains
+-- I think I need to normalize types before I can compare them for equality
+-- there are just too many formats to represent the same type
+-- but honestly that is the problem
+-- there being multiple ways to represent the same type
+-- that needs to be disallowed
+-- simply impossible
+-- but how
+-- maybe intersections are the problem
+-- i mean inverted types have already caused lots of trouble
+-- but intersections haven't made my life particularly easy either
+-- so what are the alternatives?
+-- what other way is there to represent types in a way where I can exclude specific types
+-- well, lets think about it:
+--[[
+
+types which when excluded can still be represented as a union of other types or some other type in general:
+"any"
+"empty"
+"nil"
+"string"
+"number"
+"boolean"
+"function"
+"userdata"
+"thread"
+"table"
+future ones like less than, greater than
+
+special
+"literal_string"
+"literal_number"
+"literal_boolean"
+"literal_function"
+future special ones like integral, function identity, table identity
+
+very special. so special that I don't like them anymore
+-- "class"
+"union"
+-- "intersection"
+-- "inverted"
+
+I could add a list of excluded types to unions
+which would cover the special ones, but not the very special ones
+with that we could nuke both intersection and inverted
+with intersection and inverted nuked, we're left with classes
+but we only really need to be able to exclude table identity, which is not a class pre se
+so i'm pretty sure we could simply disallow classes as being "excluded"
+
+]]
+
+local equals
+do
+  local equals_lut = {
+    ["any"] = function(left_type, right_type)
+      return right_type.type_id == "any"
+    end,
+    ["empty"] = function(left_type, right_type)
+      return right_type.type_id == "empty"
+    end,
+    ["nil"] = function(left_type, right_type)
+      return right_type.type_id == "nil"
+    end,
+    ["string"] = function(left_type, right_type)
+      return right_type.type_id == "string"
+    end,
+    ["literal_string"] = function(left_type, right_type)
+      return right_type.type_id == "literal_string" and right_type.value == left_type.value
+    end,
+    ["number"] = function(left_type, right_type)
+      return right_type.type_id == "number"
+    end,
+    ["literal_number"] = function(left_type, right_type)
+      return right_type.type_id == "literal_number" and right_type.value == left_type.value
+    end,
+    ["boolean"] = function(left_type, right_type)
+      return right_type.type_id == "boolean"
+    end,
+    ["literal_boolean"] = function(left_type, right_type)
+      return right_type.type_id == "literal_boolean" and right_type.value == left_type.value
+    end,
+    ["function"] = function(left_type, right_type)
+      return right_type.type_id == "function"
+    end,
+    ["literal_function"] = function(left_type, right_type)
+      return right_type.type_id == "literal_function" and right_type.func == left_type.func
+    end,
+    ["userdata"] = function(left_type, right_type)
+      return right_type.type_id == "userdata"
+    end,
+    ["thread"] = function(left_type, right_type)
+      return right_type.type_id == "thread"
+    end,
+    ["table"] = function(left_type, right_type)
+      return right_type.type_id == "table"
+    end,
+    ["class"] = function(left_type, right_type)
+      -- TODO: compare kvps
+      return right_type.type_id == "class"
+        and right_type.is_table == left_type.is_table
+        and right_type.is_userdata == left_type.is_userdata
+    end,
+    ["union"] = function(left_type, right_type)
+      if right_type.type_id == "intersection" then
+        -- `intersection(union(string(), number()), union(string(), boolean()))` is a valid type
+        -- and is equal to `string()`. And I hate it.
+        -- TODO: table flip
+      elseif right_type.type_id == "union" then
+        -- NOTE: this whole comparison works based on the assumption [...]
+        -- that a union does not contain the same type twice
+        if #left_type.inner_types ~= #right_type.inner_types then
+          return false
+        end
+        local right_lut = {} -- prevent comparing against the same right inner type twice
+        for _, inner_type in ipairs(right_type.inner_types) do
+          right_lut[inner_type] = true
+        end
+        for _, left_inner_type in ipairs(left_type.inner_types) do
+          for _, right_inner_type in ipairs(right_type.inner_types) do
+            if not right_lut[right_type] and equals(left_inner_type, right_inner_type) then
+              right_lut[right_type] = nil
+              goto got_right_match
+            end
+          end
+          do return false end
+          ::got_right_match::
+        end
+        return true
+      elseif right_type.type_id == "inverted" then
+        -- TODO: flip the table even more
+      end
+      -- a union of a single type does not exist, therefore this is always false at this point
+      return false
+    end,
+    ["intersection"] = function(left_type, right_type)
+      if right_type.type_id == "intersection" then
+        -- TODO: impl
+      elseif right_type.type_id == "inverted" then
+        -- TODO: impl
+      end
+      return false
+    end,
+    ["inverted"] = function(left_type, right_type)
+      if right_type.type_id == "inverted" then
+        return equals(left_type.inverted_type, right_type.inverted_type)
+      end
+      return false -- TODO: think
+    end,
+  }
+  function equals(left_type, right_type)
+    -- prevent types that contain other types from being on the right side,
+    -- unless both sides have the same type_id. and "class"es can be on the right side
+    if left_type.type_id ~= right_type.type_id then
+      if right_type.type_id == "union"
+        or right_type.type_id == "intersection"
+        or right_type.type_id == "inverted"
+      then
+        -- this means that "union" can have "intersection" and "inverted" as the right_type
+        -- "intersection" can have "inverted" as the right_type
+        -- and of course all of them can have their own type_id as the right_type
+        return equals(right_type, left_type)
+      end
+    end
+    return equals_lut[left_type.type_id](left_type, right_type)
+  end
+end
+
 -- how to intersect these 2:
 -- union{literal_number(1), literal_number(2)}
 -- literal_number(1)
@@ -300,22 +481,36 @@ end
 --------------------------------------------------
 -- an intersect on an inverted type really is just removing the inverted_type from the other type
 
----does **not** copy `left_type` nor `right_type`
-local function smart_union(left_type, right_type)
-  if left_type.type_id == "union" then
-    if right_type.type_id == "union" then
-      for _, union_type in ipairs(right_type.union_types) do
-        left_type.union_types[#left_type.union_types+1] = union_type
+local smart_union
+local smart_intersection
+do
+  local function smart_inner_types(types)
+    local inner_types = {}
+    for _, type in ipairs(types) do
+      if type.type_id == "union" then
+        for _, inner_type in ipairs(type.inner_types) do
+          inner_types[#inner_types+1] = inner_type
+        end
+      else
+        inner_types[#inner_types+1] = type
       end
-    else
-      left_type.union_types[#left_type.union_types+1] = right_type
     end
-    return left_type
-  elseif right_type.type_id == "union" then
-    right_type.union_types[#right_type.union_types+1] = left_type
-    return right_type
+    return inner_types
   end
-  return new_union{union_types = {left_type, right_type}}
+
+  ---does **not** copy `left_type` nor `right_type`
+  function smart_union(types)
+    if not types[1] then return nil end
+    if not types[2] then return types[1] end
+    return new_union{inner_types = smart_inner_types(types)}
+  end
+
+  ---does **not** copy `left_type` nor `right_type`
+  function smart_intersection(types)
+    if not types[1] then return nil end
+    if not types[2] then return types[1] end
+    return new_intersection{inner_types = smart_inner_types(types)}
+  end
 end
 
 local intersect
@@ -343,11 +538,6 @@ do
       if intersected.type_id ~= "empty" then
         result_types[#result_types+1] = intersected
       end
-    end
-    if not result_types[1] then
-      return
-    elseif result_types[2] then
-      return result_types[1]
     end
     return result_types
   end
@@ -429,10 +619,10 @@ do
       end
     end,
     ["union"] = function(left_type, right_type)
-      return new_union{union_types = intersect_collection(left_type.union_types, right_type)}
+      return smart_union(intersect_collection(left_type.inner_types, right_type))
     end,
     ["intersection"] = function(left_type, right_type)
-      return new_intersection{intersected_types = intersect_collection(left_type.intersected_types, right_type)}
+      return smart_intersection(intersect_collection(left_type.inner_types, right_type))
     end,
     ["inverted"] = function(left_type, right_type)
       -- if right_type.type_id == "inverted" then
@@ -441,12 +631,11 @@ do
       --     copy_type(right_type.inverted_type)
       --   )}
       -- end
-      -- NOTE: this is the only cases where intersect resorts to creating a plain intersection of 2 types
-      return new_intersection{
-        intersected_types = {
-          copy_type(left_type),
-          copy_type(right_type),
-        },
+      -- NOTE: this is the only case where intersect resorts to creating a plain intersection of 2 types
+      -- TODO: really think about when this could result in an empty type. When it does it should return empty
+      return smart_intersection{
+        copy_type(left_type),
+        copy_type(right_type),
       }
       -- return exclude(right_type, left_type.inverted_type)
     end,
@@ -455,13 +644,17 @@ do
   ---@param right_type ILType
   function intersect(left_type, right_type)
     -- prevent types that contain other types from being on the right side,
-    -- unless both sides have the same type_id
+    -- unless both sides have the same type_id. and "class"es can be on the right side
     if left_type.type_id ~= right_type.type_id then
-      if right_type.type_id == "union"
+      if right_type.type_id == "any" -- also flip any so we don't have to check for it everywhere
+        or right_type.type_id == "union"
         or right_type.type_id == "intersection"
         or right_type.type_id == "inverted"
-        or right_type.type_id == "any" -- also flip any so we don't have to check for it everywhere
       then
+        -- this means that "any" can have "union", "intersection" and "inverted" as the right_type
+        -- "union" can have "intersection" and "inverted" as the right_type
+        -- "intersection" can have "inverted" as the right_type
+        -- and of course all of them can have their own type_id as the right_type
         return intersect(right_type, left_type)
       end
     end
@@ -551,16 +744,16 @@ do
       return true
     end,
     ["union"] = function(left_type, right_type)
-      for _, union_type in ipairs(left_type.union_types) do
-        if contains(union_type, right_type) then
+      for _, inner_type in ipairs(left_type.inner_types) do
+        if contains(inner_type, right_type) then
           return true
         end
       end
       return false
     end,
     ["intersection"] = function(left_type, right_type)
-      for _, intersected_type in ipairs(left_type.intersected_types) do
-        if not contains(intersected_type, right_type) then
+      for _, inner_type in ipairs(left_type.inner_types) do
+        if not contains(inner_type, right_type) then
           return false
         end
       end
@@ -581,8 +774,8 @@ do
     if right_type.type_id == "empty" then
       return true
     elseif right_type.type_id == "union" then
-      for _, union_type in ipairs(right_type.union_types) do
-        if not contains(left_type, union_type) then
+      for _, inner_type in ipairs(right_type.inner_types) do
+        if not contains(left_type, inner_type) then
           return false
         end
       end
@@ -590,8 +783,8 @@ do
     elseif right_type.type_id == "intersection" then
       -- TODO: similar to a class containing another class, keep track of intersections, create a union and
       -- check if the union is equal to the current type. Although now i'm scared of type equality
-      for _, intersected_type in ipairs(right_type.intersected_types) do
-        if contains(left_type, intersected_type) then
+      for _, inner_type in ipairs(right_type.inner_types) do
+        if contains(left_type, inner_type) then
           return true
         end
       end
@@ -601,7 +794,6 @@ do
   end
 end
 
--- TODO: type equality
 -- TODO: type indexing
 -- TODO: type normalization
 
@@ -627,6 +819,7 @@ return {
   new_table = new_table,
   new_class = new_class,
   new_union = new_union,
+  new_intersection = new_intersection,
   new_inverted = new_inverted,
   make_type_from_ptr = make_type_from_ptr,
   is_logical_binop = is_logical_binop,
