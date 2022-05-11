@@ -58,6 +58,11 @@ local function shallow_copy(t)
   return result
 end
 
+local function optional_shallow_copy(t)
+  if not t then return nil end
+  return shallow_copy(t)
+end
+
 local function copy(t, copy_metatables)
   local visited = {}
   local function copy_recursive(value)
@@ -243,6 +248,7 @@ return {
   clear_table = clear_table,
   replace_table = replace_table,
   shallow_copy = shallow_copy,
+  optional_shallow_copy = optional_shallow_copy,
   copy = copy,
   debug_abort = debug_abort,
   abort = abort,

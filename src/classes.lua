@@ -515,43 +515,56 @@
 ---@field line number
 ---@field column number
 
----@alias ILTypeId
----| '"any"'
----| '"empty"'
----| '"nil"'
----| '"string"' @ any string
----| '"literal_string"'
----| '"number"' @ any number
----| '"literal_number"'
----| '"boolean"' @ any boolean
----| '"literal_boolean"'
----| '"function"' @ any function
----| '"literal_function"'
----| '"userdata"' @ any userdata
----| '"thread"' @ any thread
----| '"table"' @ any table
----| '"class"' @ specific table/userdata structure
----| '"union"'
----| '"intersection"'
----| '"inverted"' @ -- TODO: good or bad? definitely annoying
+---@alias ILTypeFlags
+---| '1' @ nil
+---| '2' @ boolean
+---| '4' @ number
+---| '8' @ string
+---| '16' @ function
+---| '32' @ table
+---| '64' @ userdata
+---| '128' @ thread
 
 ---@class ILType
----@field type_id ILTypeId
----@field inferred boolean @ was this type inferred by usage?
----@field value string|number|boolean|nil @ for `literal_string`, `literal_number` and `literal_boolean`
----@field func ILFunction @ -- TODO: some way to identify `literal_function`s
----@field inner_types ILType[] @ for `union` and `intersection`
----@field inverted_type ILType @ for `inverted`
+---@field type_flags ILTypeFlags @ bit field
+---@field number_ranges? ILTypeNumberRange[]|nil
+---@field string_ranges? ILTypeNumberRange[]|nil @ restriction on strings, like tostring-ed numbers
+---@field string_values? string[]|nil @ nil means no restriction - any string
+---@field boolean_value? boolean|nil
+---@field function_prototypes? ILFunction[]|nil
+---@field identities? ILTypeIdentity[]|nil
+---@field table_class? ILClass|nil
+---@field userdata_class? ILClass|nil @ class with a metatable for full userdata objects
+---@field light_userdata_prototypes? string[]|nil @ named light userdata to make it comparable
 
----@class ILClass : ILType
----@field type_id '"class"'
----@field kvps ILClassKvp[]
----@field is_table boolean
----@field is_userdata boolean
+-- TODO: what do threads even look like and what data do I need to represent a group of them?
+
+---@class ILClass
+---@field kvps? ILClassKvp[]|nil @ `nil` if this class is for a (full) userdata object
+---@field metatable? ILClass|nil
 
 ---@class ILClassKvp
 ---@field key_type ILType
----@field value_types ILType
+---@field value_type ILType
+
+---Ranges must be in ascending order
+---Ranges must not overlap nor touch each other
+---@class ILTypeNumberRange
+---@field from number @ only the first range is allowed to have `-1/0` as the value
+---@field to number @ only the last range is allowed to have `1/0` as the value
+---@field inclusive_from boolean
+---@field inclusive_to boolean
+---@field integral boolean @ if this is `true` both inclusive fields must also be `true`
+
+---The big benefit with this is that none of the data needs to be compared,
+---it's just the id that needs to match
+---@class ILTypeIdentity
+---@field id number @ -- TODO: just how global is this id? I feel like it has to be truly unique
+---@field type_flag ILTypeFlags @ a single flag indicating what type the identity is for
+---@field function_instance? any|nil @ -- TODO: what data structure
+---@field table_instance? any|nil @ -- TODO: what data structure
+---@field userdata_instance? any|nil @ -- TODO: what data structure
+---@field thread_instance? any|nil @ -- TODO: what data structure
 
 ---@alias ILInstructionType
 ---| '"move"'
