@@ -97,6 +97,47 @@ local function invert(t)
   return tt
 end
 
+local function insert_range(target, range, target_index, range_start_index, range_stop_index)
+  range_start_index = range_start_index or 1
+  range_stop_index = range_stop_index or #range
+  if not target_index then
+    target_index = #target
+  else
+    local range_len = range_stop_index - range_start_index + 1
+    for i = #target, target_index, -1 do
+      target[i + range_len] = target[i]
+    end
+    target_index = target_index - 1
+  end
+  for i = range_start_index, range_stop_index do
+    target[target_index + i] = range[i]
+  end
+end
+
+local function remove_range(target, start_index, stop_index)
+  local target_len = #target
+  local range_len = stop_index - start_index + 1
+  for i = start_index, target_len - range_len do
+    target[i] = target[i + range_len]
+    target[i + range_len] = nil
+  end
+end
+
+local function replace_range(target, range, start_index, stop_index, range_start_index, range_stop_index)
+  range_start_index = range_start_index or 1
+  range_stop_index = range_stop_index or #range
+  local target_range_len = stop_index - start_index + 1
+  local range_len = range_stop_index - range_start_index + 1
+  for i = 0, math.min(target_range_len, range_len) - 1 do
+    target[start_index + i] = range[range_start_index + i]
+  end
+  if target_range_len > range_len then
+    remove_range(target, start_index + range_len, stop_index)
+  elseif range_len > target_range_len then
+    insert_range(target, range, start_index + target_range_len, range_start_index + target_range_len, range_stop_index)
+  end
+end
+
 local function debug_abort(message)
   return error(message)
 end
@@ -250,6 +291,9 @@ return {
   shallow_copy = shallow_copy,
   optional_shallow_copy = optional_shallow_copy,
   copy = copy,
+  insert_range = insert_range,
+  remove_range = remove_range,
+  replace_range = replace_range,
   debug_abort = debug_abort,
   abort = abort,
   debug_assert = debug_assert,

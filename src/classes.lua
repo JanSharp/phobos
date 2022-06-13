@@ -547,14 +547,22 @@
 ---@field key_type ILType
 ---@field value_type ILType
 
+---@alias ILTypeNumberRangeType
+---| '0' @ all_numbers
+---| '1' @ integral
+---| '2' @ non_integral
+
 ---Ranges must be in ascending order
----Ranges must not overlap nor touch each other
+---Ranges must not overlap with each other
 ---@class ILTypeNumberRange
+---@field range_type ILTypeNumberRangeType
 ---@field from number @ only the first range is allowed to have `-1/0` as the value
 ---@field to number @ only the last range is allowed to have `1/0` as the value
----@field inclusive_from boolean
----@field inclusive_to boolean
----@field integral boolean @ if this is `true` both inclusive fields must also be `true`
+---@field inclusive_from boolean @ if `from` is `-1/0` this is always allowed to be `true` or `false`
+---@field inclusive_to boolean @ if `to` is `1/0` this is always allowed to be `true` or `false`
+---
+---@field integral boolean @ if this is `true` both inclusive fields must be `true`
+---@field non_integral boolean @ if this is `true` both inclusive fields must be `false`
 
 ---The big benefit with this is that none of the data needs to be compared,
 ---it's just the id that needs to match

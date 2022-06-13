@@ -18,6 +18,24 @@ local function new_type(params)
   return params
 end
 
+local range_type = {
+  all_numbers = 0,
+  integral = 1,
+  non_integral = 2,
+}
+
+local function is_all_numbers(range)
+  return range.range_type == range_type.all_numbers
+end
+
+local function is_integral(range)
+  return range.range_type == range_type.integral
+end
+
+local function is_non_integral(range)
+  return range.range_type == range_type.non_integral
+end
+
 local copy_identity
 local copy_identities
 local copy_class
@@ -266,123 +284,345 @@ do
         zero values making it invalid. Use library functions to create and manipulate ranges."
       )
       if (range.from % 1) == 0 then
-        range.integral = true
+        if is_all_numbers(range) then
+          range.range_type = range_type.integral
+        end
       end
     end
     return range
   end
 
-  local function union_ranges(left_ranges, right_ranges)
-    -- if one of them is nil the result will also be nil
-    if not left_ranges or not right_ranges then return nil end
+  ---does the `range_in_question` overlap at the `from`-end of the `base_range`
+  local function range_overlaps_at_from(range_in_question, base_range)
+    return base_range.to > range_in_question.from
+      or (base_range.to == range_in_question.from
+        and base_range.inclusive_to
+        and range_in_question.inclusive_from
+      )
+  end
+
+  ---does the `range_in_question` overlap at the `to`-end of the `base_range`
+  local function range_overlaps_at_to(range_in_question, base_range)
+    return range_overlaps_at_from(base_range, range_in_question)
+  end
+
+  ---do these ranges overlap in some way
+  local function ranges_overlap(range_one, range_two)
+    return range_overlaps_at_from(range_one, range_two) and range_overlaps_at_to(range_one, range_two)
+  end
+
+  ---expects `left_range` to come before `right_range`
+  local function ranges_touch(left_range, right_range)
+    return (left_range.to == right_range.from and (left_range.inclusive_to == not right_range.inclusive_from))
+      or (is_integral(left_range) and is_integral(right_range) and left_range.to + 1 == right_range.from)
+      or (is_non_integral(left_range) and is_non_integral(right_range) and left_range.to == right_range.from)
+  end
+
+  local function ranges_match(range_one, range_two)
+    return range_one.range_type == range_two.range_type
+  end
+
+  ---modifies `to_extend`, `integral` must be the same on both ranges
+  local function extend_matching_ranges(to_extend, to_merge)
+    if to_merge.from < to_extend.from then
+      to_extend.from = to_merge.from
+      to_extend.inclusive_from = to_merge.inclusive_from
+    elseif to_merge.from == to_extend.from and to_merge.inclusive_from then
+      to_extend.inclusive_from = to_merge.inclusive_from
+    end
+    if to_merge.to > to_extend.to then
+      to_extend.to = to_merge.to
+      to_extend.inclusive_to = to_merge.inclusive_to
+    elseif to_merge.to == to_extend.to and to_merge.inclusive_to then
+      to_extend.inclusive_to = to_merge.inclusive_to
+    end
+  end
+
+  ---returns `-1` if other_range starts earlier than base_range\
+  ---returns `0` if other_range starts at the same point as the base_range\
+  ---returns `1` if other_range starts later than base_range
+  local function compare_ranges_start(base_range, other_range)
+    if other_range.from < base_range.from then
+      return -1
+    end
+    if other_range.from > base_range.from then
+      return 1
+    end
+    if other_range.inclusive_from == base_range.inclusive_from then
+      return 0
+    end
+    if other_range.inclusive_from then -- `and not base_range.inclusive_from` is implied/guaranteed
+      return -1
+    else
+      return 1
+    end
+  end
+
+  ---returns `-1` if other_range stops earlier than base_range\
+  ---returns `0` if other_range stops at the same point as the base_range\
+  ---returns `1` if other_range stops later than base_range
+  local function compare_ranges_stop(base_range, other_range)
+    if other_range.to < base_range.to then
+      return -1
+    end
+    if other_range.to > base_range.to then
+      return 1
+    end
+    if other_range.inclusive_to == base_range.inclusive_to then
+      return 0
+    end
+    if other_range.inclusive_to then -- `and not base_range.inclusive_to` is implied/guaranteed
+      return -1
+    else
+      return 1
+    end
+  end
+
+  local function combine_ranges(left_ranges, right_ranges)
     local ranges = {}
-    do -- put all ranges into one list ordered by `from`
+    local count = 0
+    do -- put all ranges into one list ordered by their staring point, earliest first
       local left_index = 1
       local left = left_ranges[1]
       for _, right in ipairs(right_ranges) do
-        while left and left.from <= right.from do
-          ranges[#ranges+1] = util.shallow_copy(left)
+        while left and compare_ranges_start(right, left) == -1 do
+          count=count+1;ranges[count] = left
           left_index = left_index + 1
           left = left_ranges[left_index]
         end
-        ranges[#ranges+1] = util.shallow_copy(right)
+        count=count+1;ranges[count] = right
       end
     end
+    ranges.count = count
+    return ranges
+  end
+
+  local function insert_range(ranges, range, start_index)
+    local new_count = ranges.count + 1
+    for i = start_index or 1, new_count do
+      if i == new_count or compare_ranges_start(ranges[i], range) ~= -1 then
+        table.insert(ranges, i, range)
+        ranges.count = new_count
+        return
+      end
+    end
+    util.debug_abort("Impossible because the above loop loops until 1 past the count with a check in \z
+      the loop if we reached said last index to then return out of this function."
+    )
+  end
+
+  -- ---may modify both ranges and may even invalidate one of the 2 ranges
+  -- ---NOTE: unused code, just as a reminder for how I wanted to handle this if I ever care to actually do it
+  -- local function normalize_mismatching_touching_ranges(left_range, right_range)
+  --   if is_integral(left_range) then
+  --     if is_non_integral(right_range) then
+  --       -- would have to create a new range between left and right
+  --       -- said range would have to be all_numbers starting at the last number of the left
+  --       -- range and stopping at just before the second number of the right range
+  --       -- then it would have to shift both left and right range back and forwards accordingly
+  --       -- potentially invalidating both of them
+  --     else -- right_range is all_numbers
+  --       left_range.to = left_range.to - 1
+  --       right_range.inclusive_from = true
+  --       if left_range.from > left_range.to then
+  --         left_range.invalid = true
+  --       end
+  --     end
+  --   elseif is_non_integral(left_range) then
+  --     if is_integral(right_range) then
+  --       -- same thing as left being integral and right being non integral, just flipped
+  --     else -- right_range is all_numbers
+  --       -- similar to integral ranges and all_number ranges, extend the all number range
+  --       -- and shorten the non integral range potentially invalidating it
+  --     end
+  --   else -- left_range is all_numbers
+  --     if is_integral(right_range) then
+  --       right_range.from = right_range.from + 1
+  --       left_range.inclusive_to = true
+  --       if right_range.from > right_range.to then
+  --         right_range.invalid = true
+  --       end
+  --     else -- right_range is non_integral
+  --       -- similar to integral ranges aid all_number ranges, extend the all number range
+  --       -- and shorten the non integral range potentially invalidating it
+  --     end
+  --   end
+  -- end
+
+  local function split_overlapping_ranges(left_range, right_range)
     local result = {}
-    do
-      local current_result = normalize_integral(ranges[1])
-      for i = 2, #ranges do
-        local range = normalize_integral(ranges[i])
-        -- first let's figure out if the current range is even overlapping or apart of the current_result
-        if range.from <= current_result.to then
-          -- there is still one case where these 2 ranges are actually not apart of each other
-          -- this condition makes sure that is not the case
-          -- TODO: there is a chance that current_result.to == range.from, but both are not inclusive [...]
-          -- then the next range - next iteration - extends the now new current_result backwards by setting
-          -- inclusive_from to true. [...]
-          -- this would cause ranges to be touching each other retroactively which is invalid
-          if range.from == current_result.to
-            and range.inclusive_from or current_result.inclusive_to
-          then
-            -- alright, so we need to combine these 2
-            -- but there is this case where the range could stop or even split the current_result range
-            if not range.integral and current_result.integral then
-              -- we need to cut the current_result short
-              local actual_integral_to = current_result.to -- remember
-              current_result.to = math.floor(range.from)
-              -- but what if the 2 are equal to each other?
-              if current_result.to == range.from then
-                -- well it depends on if the current range is inclusive_from or not
-                if range.inclusive_from then
-                  -- now we need to push the current_result back by 1
-                  current_result.to = range.from - 1
-                  -- and now there is a chance that we just made current_result invalid
-                  if current_result.to < current_result.from then
-                    current_result = nil -- if so, drop it
-                  end
-                end
-              end
-              -- at this point current_result has been cut of or even dropped
-              result[#result+1] = current_result -- works with nil
-              -- the previous current_result might have reached past the current range
-              if actual_integral_to > range.to then
-                -- in that case we have to create a new integral range past the current range
-                local new_from = math.ceil(range.to)
-                if new_from == range.to and range.inclusive_to then
-                  -- again, if they are equal and overlapping, adjust by 1
-                  new_from = new_from + 1
-                end
-                -- that creates a potential of creating an invalid range, so don't do that
-                if new_from > actual_integral_to then
-                  local new_range = {
-                    from = new_from,
-                    to = actual_integral_to,
-                    integral = true,
-                    inclusive_from = true,
-                    inclusive_to = true,
-                  }
-                  result[#result+1] = range -- with that we can add the current range
-                  current_result = new_range -- and keep the new_range as the next current_result
-                  -- TODO: this creates a potential of invalid overlapping ranges, because the current [...]
-                  -- range has been added to the result list without checking if there are more ranges that
-                  -- overlap with it. A problem for later
-                  goto continue -- and we are done
-                end
-              end
-              -- alright, didn't add a new range past the current range so just use the current range
-              -- as the next current_result and move on
-              current_result = range
-              goto continue
-            end
-            -- ok, not splitting ranges, just overlapping or right next to each other
-            -- check if we need to extend the current_result
-            if current_result.to < range.to then
-              -- range shoots past current_result, completely overwrite its range end
-              current_result.to = range.to
-              current_result.inclusive_to = range.inclusive_to
-            elseif current_result.to == range.to and range.inclusive_to then
-              -- stopping right on top of each other, but inclusive_to might still make it reach further
-              current_result.inclusive_to = true
-            end
-            -- alright, extended, now move on to the next without adding anything to the result
-            goto continue
-          end
-          -- not touching, just leave and let the code below handle it
-        elseif range.integral and current_result.integral then
-          -- integral ranges are special in that they are technically filled with gaps
-          -- that means if there is exactly one gap between this one and the previous one
-          -- they are still apart of each other
-          if range.from - 1 == current_result.to then
-            current_result.to = range.to -- extend the current_result
-            goto continue -- and we are done
+    if left_range.from <= right_range.from then
+      local left_not_overlapping_range
+      if left_range.from ~= right_range.from
+        or (left_range.inclusive_from and not right_range.inclusive_from)
+      then
+        -- not completely overlapping starting points
+        left_not_overlapping_range = {
+          range_type = left_range.range_type,
+          from = left_range.from,
+          to = right_range.from,
+          inclusive_from = left_range.inclusive_from,
+          inclusive_to = not right_range.inclusive_from,
+        }
+        if not is_all_numbers(left_range)
+          and left_not_overlapping_range.to ~= (-1/0)
+          and left_not_overlapping_range.inclusive_to ~= left_range.inclusive_to
+        then
+          left_not_overlapping_range.to = left_not_overlapping_range.to - 1
+          if left_not_overlapping_range.to < left_not_overlapping_range.from then
+            left_not_overlapping_range = nil
           end
         end
-        -- if we get here the range is not apart of the current_result in any way
-        result[#result+1] = current_result
-        current_result = range
-        ::continue::
       end
-      -- we're done combining stuff, just add the last one and then we're truly done
+      result.left_not_overlapping_range = left_not_overlapping_range
+    end
+    ---expects `left_range` to stop earlier than or at the same point as `right_range`
+    local function get_not_overlapping_range_top_end(left_range, right_range)
+      -- copy paste from above except that it's all flipped
+      local not_overlapping_range
+      if left_range.to >= right_range.to then
+        if left_range.to ~= right_range.to
+          or (not left_range.inclusive_to and right_range.inclusive_to)
+        then
+          -- not completely overlapping stopping points
+          not_overlapping_range = {
+            range_type = right_range.range_type,
+            from = left_range.to,
+            to = right_range.to,
+            inclusive_from = not left_range.inclusive_from,
+            inclusive_to = right_range.inclusive_from,
+          }
+          if not is_all_numbers(right_range)
+            and not_overlapping_range.from ~= (1/0)
+            and not_overlapping_range.inclusive_from ~= right_range.inclusive_from
+          then
+            not_overlapping_range.from = not_overlapping_range.from + 1
+            if not_overlapping_range.to < not_overlapping_range.from then
+              not_overlapping_range = nil
+            end
+          end
+        end
+      end
+      return not_overlapping_range
+    end
+    local overlapping_range = {
+      range_type = nil, -- unknown at this point in time
+      from = right_range.from,
+      inclusive_from = right_range.inclusive_from,
+    }
+    result.overlapping_range = overlapping_range
+    if compare_ranges_stop(left_range, right_range) == -1 then
+      overlapping_range.to = right_range.to
+      overlapping_range.inclusive_to = right_range.inclusive_to
+      result.left_not_overlapping_range_top_end = get_not_overlapping_range_top_end(right_range, left_range)
+    else
+      overlapping_range.to = left_range.to
+      overlapping_range.inclusive_to = left_range.inclusive_to
+      result.right_not_overlapping_range = get_not_overlapping_range_top_end(left_range, right_range)
+    end
+    return result
+  end
+
+  ---NOTE: this can totally generate touching ranges in many cases
+  local function cut_mismatching_overlapping_ranges_short(left_range, right_range, ranges, current_index)
+    local split_ranges = split_overlapping_ranges(left_range, right_range)
+    if split_ranges.left_not_overlapping_range then
+      left_range.to = split_ranges.left_not_overlapping_range.to
+      left_range.inclusive_to = split_ranges.left_not_overlapping_range.inclusive_to
+    else
+      left_range.invalid = true
+    end
+    if split_ranges.left_not_overlapping_range_top_end then
+      insert_range(ranges, split_ranges.left_not_overlapping_range_top_end, current_index + 1)
+    elseif split_ranges.right_not_overlapping_range then
+      insert_range(ranges, split_ranges.right_not_overlapping_range, current_index + 1)
+    end
+    local overlapping = split_ranges.overlapping_range
+    overlapping.range_type = range_type.all_numbers
+    return overlapping
+    -- This is just here to make it obvious that any of the 6 possible mismatching combinations
+    -- result in an overlapping range with the type all_numbers
+    -- -- if is_integral(left_range) then
+    -- --   if is_non_integral(right_range) then
+    -- --     overlapping.range_type = range_type.all_numbers
+    -- --   else -- right_range is all_numbers
+    -- --     overlapping.range_type = range_type.all_numbers
+    -- --   end
+    -- -- elseif is_non_integral(left_range) then
+    -- --   if is_integral(right_range) then
+    -- --     overlapping.range_type = range_type.all_numbers
+    -- --   else -- right_range is all_numbers
+    -- --     overlapping.range_type = range_type.all_numbers
+    -- --   end
+    -- -- else -- left_range is all_numbers
+    -- --   if is_integral(right_range) then
+    -- --     overlapping.range_type = range_type.all_numbers
+    -- --   else -- right_range is non_integral
+    -- --     overlapping.range_type = range_type.all_numbers
+    -- --   end
+    -- -- end
+    -- -- return overlapping
+  end
+
+  ---checks if this range is a valid range on its own
+  ---TODO: update for range_type and non_integral
+  local function is_valid_range(range)
+    if range.invalid then
+      return false
+    end
+    if range.integral then
+      if not (range.from == (-1/0) or ((range.from % 1) == 0 and range.inclusive_from))
+        or not (range.to == (1/0) or ((range.to % 1) == 0 and range.inclusive_to))
+      then
+        return false
+      end
+    end
+    return range.from < range.to
+      or (range.from == range.to and range.inclusive_from and range.inclusive_to)
+  end
+
+  local function process_right_range(left_range, right_range, ranges, current_index)
+    local are_overlapping = range_overlaps_at_from(left_range, right_range)
+    local are_touching = ranges_touch(left_range, right_range)
+    if not are_overlapping and not are_touching then return left_range end
+    if are_touching then
+      if ranges_match(left_range, right_range) then
+        extend_matching_ranges(left_range, right_range)
+        return left_range
+      else
+        -- there is no reason to normalize these touching ranges
+        -- it complicates things soo much for quite literally no gain
+        return right_range
+      end
+    end
+    if ranges_match(left_range, right_range) then
+      extend_matching_ranges(left_range, right_range)
+      return left_range
+    end
+    local overlapping_range = cut_mismatching_overlapping_ranges_short(left_range, right_range, ranges, current_index)
+    -- left_range might have been invalidated, handled in the calling function
+    return overlapping_range
+  end
+
+  local function union_ranges(left_ranges, right_ranges)
+    -- if one of them is nil the result will also be nil
+    if not left_ranges or not right_ranges then return nil end
+    local ranges = combine_ranges(util.copy(left_ranges), util.copy(right_ranges))
+    local result = {}
+    local current_result = ranges[1]
+    local i = 1 -- actually starting at 2, see start of the loop
+    while i <= ranges.count do
+      i = i + 1
+      local range = ranges[i]
+      local new_current_result = process_right_range(current_result, range, ranges, i)
+      if new_current_result ~= current_result then
+        if not current_result.invalid then
+          result[#result+1] = current_result
+        end
+        current_result = new_current_result
+      end
+    end
+    if current_result and not current_result.invalid then
       result[#result+1] = current_result
     end
     return result
