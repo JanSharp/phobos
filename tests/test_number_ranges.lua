@@ -9,13 +9,13 @@ local inc = number_ranges.inclusive
 local exc = number_ranges.exclusive
 
 local function make_ranges(type, values)
-  local ranges = {}
+  local ranges = {inc(-1/0)}
   local len = #values
   for i, value in ipairs(values) do
     if i == len then
-      ranges[i] = exc(value)
+      ranges[i + 1] = exc(value)
     else
-      ranges[i] = inc(value, type)
+      ranges[i + 1] = inc(value, type)
     end
   end
   return ranges
@@ -79,9 +79,23 @@ do
   --  |---<---->>
   --  |---<
   -- ab-ab
+  --
+  -- 11
+  --  |---<---->>
+  --  |-------->>
+  -- ab-a-b(inf)
+  --
+  -- 12
+  --  |-------->>
+  --   |-<
+  -- a-b-b
 
   local function perform_union_range(ranges, from_value, to_value)
-    return number_ranges.union_range(ranges, inc(from_value, range_type.non_integral), exc(to_value))
+    return number_ranges.union_range(
+      ranges,
+      inc(from_value, range_type.non_integral),
+      to_value and exc(to_value) or nil
+    )
   end
 
   -- 1
@@ -92,6 +106,7 @@ do
     local ranges = make_ranges(range_type.integral, {2, 6})
     local got = perform_union_range(ranges, 1, 3)
     assert.contents_equals({
+      inc(-1/0),
       inc(1, range_type.non_integral),
       inc(2, range_type.everything),
       exc(3, range_type.integral),
@@ -107,6 +122,7 @@ do
     local ranges = make_ranges(range_type.integral, {2, 6})
     local got = perform_union_range(ranges, 1, 7)
     assert.contents_equals({
+      inc(-1/0),
       inc(1, range_type.non_integral),
       inc(2, range_type.everything),
       exc(6, range_type.non_integral),
@@ -122,6 +138,7 @@ do
     local ranges = make_ranges(range_type.integral, {2, 6})
     local got = perform_union_range(ranges, 3, 7)
     assert.contents_equals({
+      inc(-1/0),
       inc(2, range_type.integral),
       inc(3, range_type.everything),
       exc(6, range_type.non_integral),
@@ -137,6 +154,7 @@ do
     local ranges = make_ranges(range_type.integral, {2, 6})
     local got = perform_union_range(ranges, 3, 5)
     assert.contents_equals({
+      inc(-1/0),
       inc(2, range_type.integral),
       inc(3, range_type.everything),
       exc(5, range_type.integral),
@@ -152,6 +170,7 @@ do
     local ranges = make_ranges(range_type.integral, {2, 4, 6})
     local got = perform_union_range(ranges, 3, 5)
     assert.contents_equals({
+      inc(-1/0),
       inc(2, range_type.integral),
       inc(3, range_type.everything),
       inc(4, range_type.everything),
@@ -168,6 +187,7 @@ do
     local ranges = make_ranges(range_type.integral, {2, 4, 6})
     local got = perform_union_range(ranges, 3, 7)
     assert.contents_equals({
+      inc(-1/0),
       inc(2, range_type.integral),
       inc(3, range_type.everything),
       inc(4, range_type.everything),
@@ -184,6 +204,7 @@ do
     local ranges = make_ranges(range_type.integral, {2, 4, 6})
     local got = perform_union_range(ranges, 1, 5)
     assert.contents_equals({
+      inc(-1/0),
       inc(1, range_type.non_integral),
       inc(2, range_type.everything),
       inc(4, range_type.everything),
@@ -200,6 +221,7 @@ do
     local ranges = make_ranges(range_type.integral, {2, 6})
     local got = perform_union_range(ranges, 2, 5)
     assert.contents_equals({
+      inc(-1/0),
       inc(2, range_type.everything),
       exc(5, range_type.integral),
       exc(6),
@@ -214,6 +236,7 @@ do
     local ranges = make_ranges(range_type.integral, {2, 6})
     local got = perform_union_range(ranges, 3, 6)
     assert.contents_equals({
+      inc(-1/0),
       inc(2, range_type.integral),
       inc(3, range_type.everything),
       exc(6),
@@ -228,8 +251,37 @@ do
     local ranges = make_ranges(range_type.integral, {2, 6})
     local got = perform_union_range(ranges, 2, 6)
     assert.contents_equals({
+      inc(-1/0),
       inc(2, range_type.everything),
       exc(6),
+    }, got)
+  end)
+
+  -- 11
+  --  |---<---->>
+  --  |-------->>
+  -- ab-a-b(inf)
+  add_test("union_range ab-a-b(inf)", function()
+    local ranges = make_ranges(range_type.integral, {2, 6})
+    local got = perform_union_range(ranges, 2, nil)
+    assert.contents_equals({
+      inc(-1/0),
+      inc(2, range_type.everything),
+      exc(6, range_type.non_integral),
+    }, got)
+  end)
+
+  -- 12
+  --  |-------->>
+  --   |-<
+  -- a-b-b
+  add_test("union_range a-b-b", function()
+    local ranges = {inc(-1/0, range_type.integral)}
+    local got = perform_union_range(ranges, 3, 5)
+    assert.contents_equals({
+      inc(-1/0, range_type.integral),
+      inc(3, range_type.everything),
+      exc(5, range_type.integral),
     }, got)
   end)
 end

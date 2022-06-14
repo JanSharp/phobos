@@ -1,10 +1,13 @@
 
+local util = require("util")
+
 ---@alias ILRangePointType
 ---| '0' @ nothing
 ---| '1' @ everything
 ---| '2' @ integral
 ---| '3' @ non_integral
 
+---the first point in a ranges array must always exist and must be (-1/0) inclusive
 ---@class ILRangePoint
 ---@field range_type ILRangePointType
 ---@field value number
@@ -35,10 +38,10 @@ end
 
 local function compare_point(base_point, other_point)
   if not base_point then
-    return 1
+    return other_point and -1 or 0
   end
   if not other_point then
-    return -1
+    return 1
   end
   if other_point.value < base_point.value then
     return -1
@@ -82,7 +85,7 @@ local function union_range(ranges, from, to)
   local c = #ranges
   local prev_point
   local prev_range_type
-  while i <= c do
+  while i <= c + 1 do
     local point = ranges[i]
     if compare_point(point, from) == -1 then
       -- the range to add starts before `point`
@@ -111,9 +114,9 @@ local function union_range(ranges, from, to)
     prev_point = point
     i = i + 1
   end
-  to.range_type = prev_range_type
-  ranges[c + 1] = to
-  return ranges
+  util.debug_abort("impossible because the condition for the second return in the loop \z
+    should always be true in the last iteration."
+  )
 end
 
 local function union_ranges(left_ranges, right_ranges)
