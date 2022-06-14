@@ -288,4 +288,204 @@ do
       }, got)
     end)
   end
+
+  do
+    local union_ranges_scope = main_scope:new_scope("union_ranges")
+
+    local function add_test(name, func)
+      union_ranges_scope:add_test(name, func)
+    end
+
+    -- 1
+    -- |--<---<-->>
+    -- |-<---<--->>
+    -- ab-b-a-b-a
+    --
+    -- 2
+    -- |--<---<-->>
+    -- |-<-----<->>
+    -- ab-b-a-a-b
+    --
+    -- 3
+    -- |--<---<-->>
+    -- |---<-<--->>
+    -- ab-a-b-b-a
+    --
+    -- 4
+    -- |--<---<-->>
+    -- |---<---<->>
+    -- ab-a-b-a-b
+    --
+    -- 5
+    -- |--<---<-->>
+    -- |--<---<-->>
+    -- ab-ab-ab
+    --
+    -- 6
+    -- |--<---<-->>
+    -- |--<--<--->>
+    -- ab-ab-b-a
+    --
+    -- 7
+    -- |--<---<-->>
+    -- |--<----<->>
+    -- ab-ab-a-b
+    --
+    -- 8
+    -- |--<---<-->>
+    -- |-<----<-->>
+    -- ab-b-a-ab
+    --
+    -- 9
+    -- |--<---<-->>
+    -- |---<--<-->>
+    -- ab-a-b-ab
+
+    -- 1
+    -- |--<---<-->>
+    -- |-<---<--->>
+    -- ab-b-a-b-a
+    add_test("union_ranges ab-b-a-b-a", function()
+      local left_ranges = make_ranges(range_type.integral, {2, 6})
+      local right_ranges = make_ranges(range_type.non_integral, {1, 5})
+      local got = number_ranges.union_ranges(left_ranges, right_ranges)
+      assert.contents_equals({
+        inc(-1/0),
+        inc(1, range_type.non_integral),
+        inc(2, range_type.everything),
+        exc(5, range_type.integral),
+        exc(6),
+      }, got)
+    end)
+
+    -- 2
+    -- |--<---<-->>
+    -- |-<-----<->>
+    -- ab-b-a-a-b
+    add_test("union_ranges ab-b-a-a-b", function()
+      local left_ranges = make_ranges(range_type.integral, {2, 6})
+      local right_ranges = make_ranges(range_type.non_integral, {1, 7})
+      local got = number_ranges.union_ranges(left_ranges, right_ranges)
+      assert.contents_equals({
+        inc(-1/0),
+        inc(1, range_type.non_integral),
+        inc(2, range_type.everything),
+        exc(6, range_type.non_integral),
+        exc(7),
+      }, got)
+    end)
+
+    -- 3
+    -- |--<---<-->>
+    -- |---<-<--->>
+    -- ab-a-b-b-a
+    add_test("union_ranges ab-a-b-b-a", function()
+      local left_ranges = make_ranges(range_type.integral, {2, 6})
+      local right_ranges = make_ranges(range_type.non_integral, {3, 5})
+      local got = number_ranges.union_ranges(left_ranges, right_ranges)
+      assert.contents_equals({
+        inc(-1/0),
+        inc(2, range_type.integral),
+        inc(3, range_type.everything),
+        exc(5, range_type.integral),
+        exc(6),
+      }, got)
+    end)
+
+    -- 4
+    -- |--<---<-->>
+    -- |---<---<->>
+    -- ab-a-b-a-b
+    add_test("union_ranges ab-a-b-a-b", function()
+      local left_ranges = make_ranges(range_type.integral, {2, 6})
+      local right_ranges = make_ranges(range_type.non_integral, {3, 7})
+      local got = number_ranges.union_ranges(left_ranges, right_ranges)
+      assert.contents_equals({
+        inc(-1/0),
+        inc(2, range_type.integral),
+        inc(3, range_type.everything),
+        exc(6, range_type.non_integral),
+        exc(7),
+      }, got)
+    end)
+
+    -- 5
+    -- |--<---<-->>
+    -- |--<---<-->>
+    -- ab-ab-ab
+    add_test("union_ranges ab-ab-ab", function()
+      local left_ranges = make_ranges(range_type.integral, {2, 6})
+      local right_ranges = make_ranges(range_type.non_integral, {2, 6})
+      local got = number_ranges.union_ranges(left_ranges, right_ranges)
+      assert.contents_equals({
+        inc(-1/0),
+        inc(2, range_type.everything),
+        exc(6),
+      }, got)
+    end)
+
+    -- 6
+    -- |--<---<-->>
+    -- |--<--<--->>
+    -- ab-ab-b-a
+    add_test("union_ranges ab-ab-b-a", function()
+      local left_ranges = make_ranges(range_type.integral, {2, 6})
+      local right_ranges = make_ranges(range_type.non_integral, {2, 5})
+      local got = number_ranges.union_ranges(left_ranges, right_ranges)
+      assert.contents_equals({
+        inc(-1/0),
+        inc(2, range_type.everything),
+        exc(5, range_type.integral),
+        exc(6),
+      }, got)
+    end)
+
+    -- 7
+    -- |--<---<-->>
+    -- |--<----<->>
+    -- ab-ab-a-b
+    add_test("union_ranges ab-ab-a-b", function()
+      local left_ranges = make_ranges(range_type.integral, {2, 6})
+      local right_ranges = make_ranges(range_type.non_integral, {2, 7})
+      local got = number_ranges.union_ranges(left_ranges, right_ranges)
+      assert.contents_equals({
+        inc(-1/0),
+        inc(2, range_type.everything),
+        exc(6, range_type.non_integral),
+        exc(7),
+      }, got)
+    end)
+
+    -- 8
+    -- |--<---<-->>
+    -- |-<----<-->>
+    -- ab-b-a-ab
+    add_test("union_ranges ab-b-a-ab", function()
+      local left_ranges = make_ranges(range_type.integral, {2, 6})
+      local right_ranges = make_ranges(range_type.non_integral, {1, 6})
+      local got = number_ranges.union_ranges(left_ranges, right_ranges)
+      assert.contents_equals({
+        inc(-1/0),
+        inc(1, range_type.non_integral),
+        inc(2, range_type.everything),
+        exc(6),
+      }, got)
+    end)
+
+    -- 9
+    -- |--<---<-->>
+    -- |---<--<-->>
+    -- ab-a-b-ab
+    add_test("union_ranges ab-a-b-ab", function()
+      local left_ranges = make_ranges(range_type.integral, {2, 6})
+      local right_ranges = make_ranges(range_type.non_integral, {2, 6})
+      local got = number_ranges.union_ranges(left_ranges, right_ranges)
+      assert.contents_equals({
+        inc(-1/0),
+        inc(2, range_type.integral),
+        inc(3, range_type.everything),
+        exc(6),
+      }, got)
+    end)
+  end
 end
