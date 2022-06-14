@@ -92,12 +92,12 @@ local function add_phobos_profiles(params)
   for _, compiler in ipairs{"Lua", "Phobos"} do
     local function make_platform_specific_stuff(platform)
       local args = {
-        compiler == "Phobos" and "out/src/debug" or "src",
+        compiler == "Phobos" and "out/debug" or "src",
         "bin/"..platform,
         platform == "windows" and ".dll" or ".so",
         params.main_filename
           or compiler == "Phobos"
-            and "out/src/debug/"..params.main_filename_in_phobos_root
+            and "out/debug/"..params.main_filename_in_phobos_root
             or "src/"..params.main_filename_in_phobos_root,
       }
       json.set_comments(args, {
@@ -116,7 +116,7 @@ local function add_phobos_profiles(params)
       return {
         program = {
           lua = "bin/"..platform.."/lua",
-          file = compiler == "Phobos" and "out/src/debug/entry_point.lua" or "src/entry_point.lua",
+          file = compiler == "Phobos" and "out/debug/entry_point.lua" or "src/entry_point.lua",
         },
         args = args,
       }

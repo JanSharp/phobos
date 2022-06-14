@@ -70,6 +70,7 @@ require("test_emmy_lua_parser")
 require("test_emmy_lua_linker")
 require("test_cache")
 require("test_profile_util")
+require("test_number_ranges")
 
 -- TODO: next ones to test:
 -- ast_util

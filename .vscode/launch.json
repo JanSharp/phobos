@@ -123,7 +123,7 @@
       "linux": {
         "args": [
           // root
-          "out/src/debug",
+          "out/debug",
           // c_lib_root
           "bin/linux",
           // c_lib_extension
@@ -134,14 +134,14 @@
           "temp/test.lua",
         ],
         "program": {
-          "file": "out/src/debug/entry_point.lua",
+          "file": "out/debug/entry_point.lua",
           "lua": "bin/linux/lua",
         },
       },
       "osx": {
         "args": [
           // root
-          "out/src/debug",
+          "out/debug",
           // c_lib_root
           "bin/osx",
           // c_lib_extension
@@ -152,14 +152,14 @@
           "temp/test.lua",
         ],
         "program": {
-          "file": "out/src/debug/entry_point.lua",
+          "file": "out/debug/entry_point.lua",
           "lua": "bin/osx/lua",
         },
       },
       "windows": {
         "args": [
           // root
-          "out/src/debug",
+          "out/debug",
           // c_lib_root
           "bin/windows",
           // c_lib_extension
@@ -170,7 +170,7 @@
           "temp/test.lua",
         ],
         "program": {
-          "file": "out/src/debug/entry_point.lua",
+          "file": "out/debug/entry_point.lua",
           "lua": "bin/windows/lua",
         },
       },
@@ -242,7 +242,7 @@
       "linux": {
         "args": [
           // root
-          "out/src/debug",
+          "out/debug",
           // c_lib_root
           "bin/linux",
           // c_lib_extension
@@ -253,14 +253,14 @@
           "temp/test.lua",
         ],
         "program": {
-          "file": "out/src/debug/entry_point.lua",
+          "file": "out/debug/entry_point.lua",
           "lua": "bin/linux/lua",
         },
       },
       "osx": {
         "args": [
           // root
-          "out/src/debug",
+          "out/debug",
           // c_lib_root
           "bin/osx",
           // c_lib_extension
@@ -271,14 +271,14 @@
           "temp/test.lua",
         ],
         "program": {
-          "file": "out/src/debug/entry_point.lua",
+          "file": "out/debug/entry_point.lua",
           "lua": "bin/osx/lua",
         },
       },
       "windows": {
         "args": [
           // root
-          "out/src/debug",
+          "out/debug",
           // c_lib_root
           "bin/windows",
           // c_lib_extension
@@ -289,7 +289,7 @@
           "temp/test.lua",
         ],
         "program": {
-          "file": "out/src/debug/entry_point.lua",
+          "file": "out/debug/entry_point.lua",
           "lua": "bin/windows/lua",
         },
       },
@@ -355,7 +355,7 @@
       "linux": {
         "args": [
           // root
-          "out/src/debug",
+          "out/debug",
           // c_lib_root
           "bin/linux",
           // c_lib_extension
@@ -364,14 +364,14 @@
           "tests/compile_test.lua",
         ],
         "program": {
-          "file": "out/src/debug/entry_point.lua",
+          "file": "out/debug/entry_point.lua",
           "lua": "bin/linux/lua",
         },
       },
       "osx": {
         "args": [
           // root
-          "out/src/debug",
+          "out/debug",
           // c_lib_root
           "bin/osx",
           // c_lib_extension
@@ -380,14 +380,14 @@
           "tests/compile_test.lua",
         ],
         "program": {
-          "file": "out/src/debug/entry_point.lua",
+          "file": "out/debug/entry_point.lua",
           "lua": "bin/osx/lua",
         },
       },
       "windows": {
         "args": [
           // root
-          "out/src/debug",
+          "out/debug",
           // c_lib_root
           "bin/windows",
           // c_lib_extension
@@ -396,7 +396,7 @@
           "tests/compile_test.lua",
         ],
         "program": {
-          "file": "out/src/debug/entry_point.lua",
+          "file": "out/debug/entry_point.lua",
           "lua": "bin/windows/lua",
         },
       },
@@ -462,7 +462,7 @@
       "linux": {
         "args": [
           // root
-          "out/src/debug",
+          "out/debug",
           // c_lib_root
           "bin/linux",
           // c_lib_extension
@@ -471,14 +471,14 @@
           "tests/main.lua",
         ],
         "program": {
-          "file": "out/src/debug/entry_point.lua",
+          "file": "out/debug/entry_point.lua",
           "lua": "bin/linux/lua",
         },
       },
       "osx": {
         "args": [
           // root
-          "out/src/debug",
+          "out/debug",
           // c_lib_root
           "bin/osx",
           // c_lib_extension
@@ -487,14 +487,14 @@
           "tests/main.lua",
         ],
         "program": {
-          "file": "out/src/debug/entry_point.lua",
+          "file": "out/debug/entry_point.lua",
           "lua": "bin/osx/lua",
         },
       },
       "windows": {
         "args": [
           // root
-          "out/src/debug",
+          "out/debug",
           // c_lib_root
           "bin/windows",
           // c_lib_extension
@@ -503,7 +503,7 @@
           "tests/main.lua",
         ],
         "program": {
-          "file": "out/src/debug/entry_point.lua",
+          "file": "out/debug/entry_point.lua",
           "lua": "bin/windows/lua",
         },
       },
@@ -578,7 +578,7 @@
       "linux": {
         "args": [
           // root
-          "out/src/debug",
+          "out/debug",
           // c_lib_root
           "bin/linux",
           // c_lib_extension
@@ -590,14 +590,14 @@
           "${input:testId1}",
         ],
         "program": {
-          "file": "out/src/debug/entry_point.lua",
+          "file": "out/debug/entry_point.lua",
           "lua": "bin/linux/lua",
         },
       },
       "osx": {
         "args": [
           // root
-          "out/src/debug",
+          "out/debug",
           // c_lib_root
           "bin/osx",
           // c_lib_extension
@@ -609,14 +609,14 @@
           "${input:testId1}",
         ],
         "program": {
-          "file": "out/src/debug/entry_point.lua",
+          "file": "out/debug/entry_point.lua",
           "lua": "bin/osx/lua",
         },
       },
       "windows": {
         "args": [
           // root
-          "out/src/debug",
+          "out/debug",
           // c_lib_root
           "bin/windows",
           // c_lib_extension
@@ -628,7 +628,7 @@
           "${input:testId1}",
         ],
         "program": {
-          "file": "out/src/debug/entry_point.lua",
+          "file": "out/debug/entry_point.lua",
           "lua": "bin/windows/lua",
         },
       },
@@ -706,7 +706,7 @@
       "linux": {
         "args": [
           // root
-          "out/src/debug",
+          "out/debug",
           // c_lib_root
           "bin/linux",
           // c_lib_extension
@@ -719,14 +719,14 @@
           "${input:testId2}",
         ],
         "program": {
-          "file": "out/src/debug/entry_point.lua",
+          "file": "out/debug/entry_point.lua",
           "lua": "bin/linux/lua",
         },
       },
       "osx": {
         "args": [
           // root
-          "out/src/debug",
+          "out/debug",
           // c_lib_root
           "bin/osx",
           // c_lib_extension
@@ -739,14 +739,14 @@
           "${input:testId2}",
         ],
         "program": {
-          "file": "out/src/debug/entry_point.lua",
+          "file": "out/debug/entry_point.lua",
           "lua": "bin/osx/lua",
         },
       },
       "windows": {
         "args": [
           // root
-          "out/src/debug",
+          "out/debug",
           // c_lib_root
           "bin/windows",
           // c_lib_extension
@@ -759,7 +759,7 @@
           "${input:testId2}",
         ],
         "program": {
-          "file": "out/src/debug/entry_point.lua",
+          "file": "out/debug/entry_point.lua",
           "lua": "bin/windows/lua",
         },
       },
@@ -834,7 +834,7 @@
       "linux": {
         "args": [
           // root
-          "out/src/debug",
+          "out/debug",
           // c_lib_root
           "bin/linux",
           // c_lib_extension
@@ -846,14 +846,14 @@
           "${input:testScope}",
         ],
         "program": {
-          "file": "out/src/debug/entry_point.lua",
+          "file": "out/debug/entry_point.lua",
           "lua": "bin/linux/lua",
         },
       },
       "osx": {
         "args": [
           // root
-          "out/src/debug",
+          "out/debug",
           // c_lib_root
           "bin/osx",
           // c_lib_extension
@@ -865,14 +865,14 @@
           "${input:testScope}",
         ],
         "program": {
-          "file": "out/src/debug/entry_point.lua",
+          "file": "out/debug/entry_point.lua",
           "lua": "bin/osx/lua",
         },
       },
       "windows": {
         "args": [
           // root
-          "out/src/debug",
+          "out/debug",
           // c_lib_root
           "bin/windows",
           // c_lib_extension
@@ -884,7 +884,7 @@
           "${input:testScope}",
         ],
         "program": {
-          "file": "out/src/debug/entry_point.lua",
+          "file": "out/debug/entry_point.lua",
           "lua": "bin/windows/lua",
         },
       },
@@ -965,7 +965,7 @@
       "linux": {
         "args": [
           // root
-          "out/src/debug",
+          "out/debug",
           // c_lib_root
           "bin/linux",
           // c_lib_extension
@@ -979,14 +979,14 @@
           "${input:testId1}",
         ],
         "program": {
-          "file": "out/src/debug/entry_point.lua",
+          "file": "out/debug/entry_point.lua",
           "lua": "bin/linux/lua",
         },
       },
       "osx": {
         "args": [
           // root
-          "out/src/debug",
+          "out/debug",
           // c_lib_root
           "bin/osx",
           // c_lib_extension
@@ -1000,14 +1000,14 @@
           "${input:testId1}",
         ],
         "program": {
-          "file": "out/src/debug/entry_point.lua",
+          "file": "out/debug/entry_point.lua",
           "lua": "bin/osx/lua",
         },
       },
       "windows": {
         "args": [
           // root
-          "out/src/debug",
+          "out/debug",
           // c_lib_root
           "bin/windows",
           // c_lib_extension
@@ -1021,7 +1021,7 @@
           "${input:testId1}",
         ],
         "program": {
-          "file": "out/src/debug/entry_point.lua",
+          "file": "out/debug/entry_point.lua",
           "lua": "bin/windows/lua",
         },
       },
@@ -1105,13 +1105,13 @@
       "linux": {
         "args": [
           // root
-          "out/src/debug",
+          "out/debug",
           // c_lib_root
           "bin/linux",
           // c_lib_extension
           ".so",
           // main_filename
-          "out/src/debug/main.lua",
+          "out/debug/main.lua",
           // arguments passed along to the main file
           "--profile-names",
           "debug",
@@ -1120,20 +1120,20 @@
           "linux",
         ],
         "program": {
-          "file": "out/src/debug/entry_point.lua",
+          "file": "out/debug/entry_point.lua",
           "lua": "bin/linux/lua",
         },
       },
       "osx": {
         "args": [
           // root
-          "out/src/debug",
+          "out/debug",
           // c_lib_root
           "bin/osx",
           // c_lib_extension
           ".so",
           // main_filename
-          "out/src/debug/main.lua",
+          "out/debug/main.lua",
           // arguments passed along to the main file
           "--profile-names",
           "debug",
@@ -1142,20 +1142,20 @@
           "osx",
         ],
         "program": {
-          "file": "out/src/debug/entry_point.lua",
+          "file": "out/debug/entry_point.lua",
           "lua": "bin/osx/lua",
         },
       },
       "windows": {
         "args": [
           // root
-          "out/src/debug",
+          "out/debug",
           // c_lib_root
           "bin/windows",
           // c_lib_extension
           ".dll",
           // main_filename
-          "out/src/debug/main.lua",
+          "out/debug/main.lua",
           // arguments passed along to the main file
           "--profile-names",
           "debug",
@@ -1164,7 +1164,7 @@
           "windows",
         ],
         "program": {
-          "file": "out/src/debug/entry_point.lua",
+          "file": "out/debug/entry_point.lua",
           "lua": "bin/windows/lua",
         },
       },
@@ -1251,13 +1251,13 @@
       "linux": {
         "args": [
           // root
-          "out/src/debug",
+          "out/debug",
           // c_lib_root
           "bin/linux",
           // c_lib_extension
           ".so",
           // main_filename
-          "out/src/debug/main.lua",
+          "out/debug/main.lua",
           // arguments passed along to the main file
           "--profile-names",
           "debug",
@@ -1267,20 +1267,20 @@
           "--generate-docs",
         ],
         "program": {
-          "file": "out/src/debug/entry_point.lua",
+          "file": "out/debug/entry_point.lua",
           "lua": "bin/linux/lua",
         },
       },
       "osx": {
         "args": [
           // root
-          "out/src/debug",
+          "out/debug",
           // c_lib_root
           "bin/osx",
           // c_lib_extension
           ".so",
           // main_filename
-          "out/src/debug/main.lua",
+          "out/debug/main.lua",
           // arguments passed along to the main file
           "--profile-names",
           "debug",
@@ -1290,20 +1290,20 @@
           "--generate-docs",
         ],
         "program": {
-          "file": "out/src/debug/entry_point.lua",
+          "file": "out/debug/entry_point.lua",
           "lua": "bin/osx/lua",
         },
       },
       "windows": {
         "args": [
           // root
-          "out/src/debug",
+          "out/debug",
           // c_lib_root
           "bin/windows",
           // c_lib_extension
           ".dll",
           // main_filename
-          "out/src/debug/main.lua",
+          "out/debug/main.lua",
           // arguments passed along to the main file
           "--profile-names",
           "debug",
@@ -1313,7 +1313,7 @@
           "--generate-docs",
         ],
         "program": {
-          "file": "out/src/debug/entry_point.lua",
+          "file": "out/debug/entry_point.lua",
           "lua": "bin/windows/lua",
         },
       },
@@ -1388,57 +1388,57 @@
       "linux": {
         "args": [
           // root
-          "out/src/debug",
+          "out/debug",
           // c_lib_root
           "bin/linux",
           // c_lib_extension
           ".so",
           // main_filename
-          "out/src/debug/main.lua",
+          "out/debug/main.lua",
           // arguments passed along to the main file
           "--profile-names",
           "debug_factorio",
         ],
         "program": {
-          "file": "out/src/debug/entry_point.lua",
+          "file": "out/debug/entry_point.lua",
           "lua": "bin/linux/lua",
         },
       },
       "osx": {
         "args": [
           // root
-          "out/src/debug",
+          "out/debug",
           // c_lib_root
           "bin/osx",
           // c_lib_extension
           ".so",
           // main_filename
-          "out/src/debug/main.lua",
+          "out/debug/main.lua",
           // arguments passed along to the main file
           "--profile-names",
           "debug_factorio",
         ],
         "program": {
-          "file": "out/src/debug/entry_point.lua",
+          "file": "out/debug/entry_point.lua",
           "lua": "bin/osx/lua",
         },
       },
       "windows": {
         "args": [
           // root
-          "out/src/debug",
+          "out/debug",
           // c_lib_root
           "bin/windows",
           // c_lib_extension
           ".dll",
           // main_filename
-          "out/src/debug/main.lua",
+          "out/debug/main.lua",
           // arguments passed along to the main file
           "--profile-names",
           "debug_factorio",
         ],
         "program": {
-          "file": "out/src/debug/entry_point.lua",
+          "file": "out/debug/entry_point.lua",
           "lua": "bin/windows/lua",
         },
       },

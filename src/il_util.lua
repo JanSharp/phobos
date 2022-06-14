@@ -1,4 +1,3 @@
-
 local util = require("util")
 
 local nil_flag = 1
@@ -610,9 +609,8 @@ do
     local ranges = combine_ranges(util.copy(left_ranges), util.copy(right_ranges))
     local result = {}
     local current_result = ranges[1]
-    local i = 1 -- actually starting at 2, see start of the loop
+    local i = 2
     while i <= ranges.count do
-      i = i + 1
       local range = ranges[i]
       local new_current_result = process_right_range(current_result, range, ranges, i)
       if new_current_result ~= current_result then
@@ -621,6 +619,7 @@ do
         end
         current_result = new_current_result
       end
+      i = i + 1
     end
     if current_result and not current_result.invalid then
       result[#result+1] = current_result
