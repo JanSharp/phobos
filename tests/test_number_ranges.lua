@@ -478,7 +478,7 @@ do
     -- ab-a-b-ab
     add_test("union_ranges ab-a-b-ab", function()
       local left_ranges = make_ranges(range_type.integral, {2, 6})
-      local right_ranges = make_ranges(range_type.non_integral, {2, 6})
+      local right_ranges = make_ranges(range_type.non_integral, {3, 6})
       local got = number_ranges.union_ranges(left_ranges, right_ranges)
       assert.contents_equals({
         inc(-1/0),

@@ -114,52 +114,56 @@ local function union_range(ranges, from, to)
     prev_point = point
     i = i + 1
   end
-  util.debug_abort("impossible because the condition for the second return in the loop \z
+  util.debug_abort("Impossible because the condition for the second return in the loop \z
     should always be true in the last iteration."
   )
 end
 
 local function union_ranges(left_ranges, right_ranges)
-  local left_index = 1
+  local left_index = 2
   local left_count = #left_ranges
-  local left_from
+  local left_from = left_ranges[1]
   local right_index = 3
-  local right_count = #right_ranges
   local right_from = right_ranges[1]
   local right_to = right_ranges[2]
-  while left_index <= left_count do
+  while left_index <= left_count + 1 do
     local left_to = left_ranges[left_index]
     if compare_point(left_to, right_from) == -1 then
       -- the current right range starts before the current left range stops => overlap
       local prev_left_range_type = get_range_type(left_from)
-      local overlap_from
-      if compare_point(left_from, right_from) <= 0 then
-        overlap_from = left_from -- overwrite
-      else
-        overlap_from = copy_point(right_from) -- insert new
-        table.insert(left_ranges, left_index, overlap_from)
-        left_count = left_count + 1
-      end
-      overlap_from.range_type = union_range_type(left_from, right_from)
+      -- this logic ends up being much simpler than the `union_range` because the logic below
+      -- ends up inserting `right_to` causing the next iteration's `left_from` to always start
+      -- at `right_from`. If I understand correctly `right_from` doesn't even come before `left_from`
+      -- ever, but both those cases are handled the same way
+      left_from.range_type = union_range_type(left_from, right_from)
 
-      if right_index <= right_count then
-        local diff = compare_point(left_to, right_to)
-        if diff <= 0 then
-          right_from = right_to
-          right_to = right_ranges[right_index]
-          right_index = right_index + 1
-          if diff == -1 then
-            -- the right range stops before the left range stops => move on to the next right range
-            goto continue
-          end
-        end
+      if compare_point(left_to, right_to) == 0 then
+        -- the right range already stops at the exact same point as `left_to`, so nothing needs to change
+      elseif compare_point(left_to, right_to) == -1 then
+        -- the right range stops before `left_to`
+        local new_point = copy_point(right_to)
+        new_point.range_type = prev_left_range_type
+        table.insert(left_ranges, left_index, new_point)
+        left_count = left_count + 1
+        left_to = new_point
+      else
+        goto skip_advance_right
       end
+
+      if not right_to then
+        return left_ranges
+      end
+      right_from = right_to
+      right_to = right_ranges[right_index]
+      right_index = right_index + 1
+      ::skip_advance_right::
     end
     left_from = left_to
     left_index = left_index + 1
-    ::continue::
   end
-  return left_ranges
+  util.debug_abort("Impossible because the condition for the second return in the loop \z
+    should always be true in the last iteration."
+  )
 end
 
 return {
