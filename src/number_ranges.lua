@@ -68,7 +68,7 @@ local function copy_point(point)
 end
 
 local function get_range_type(point)
-  return point and point.range_type or range_type.nothing
+  return point.range_type
 end
 
 local function union_range_type(point_one, point_two)
