@@ -81,9 +81,9 @@ local function union_range_type(point_one, point_two)
 end
 
 local function union_range(ranges, from, to)
-  local i = 1
+  local i = 2
   local c = #ranges
-  local prev_point
+  local prev_point = ranges[1]
   local prev_range_type
   while i <= c + 1 do
     local point = ranges[i]
