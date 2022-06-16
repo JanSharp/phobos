@@ -488,4 +488,76 @@ do
       }, got)
     end)
   end
+
+  do
+    local normalize_scope = main_scope:new_scope("normalize")
+
+    local function add_test(name, func)
+      normalize_scope:add_test(name, func)
+    end
+
+    local normalize = number_ranges.normalize
+
+    add_test("normalize removing 0 points", function()
+      local ranges = {
+        inc(-1/0),
+        inc(1, range_type.everything),
+        exc(10),
+      }
+      local got = normalize(number_ranges.copy_ranges(ranges))
+      assert.contents_equals(ranges, got)
+    end)
+
+    add_test("normalize removing 1 point", function()
+      local ranges = {
+        inc(-1/0),
+        inc(1, range_type.everything),
+        inc(2, range_type.everything),
+        exc(10),
+      }
+      local got = normalize(number_ranges.copy_ranges(ranges))
+      table.remove(ranges, 3)
+      assert.contents_equals(ranges, got)
+    end)
+
+    add_test("normalize removing the last point", function()
+      local ranges = {
+        inc(-1/0),
+        exc(10),
+      }
+      local got = normalize(number_ranges.copy_ranges(ranges))
+      table.remove(ranges, 2)
+      assert.contents_equals(ranges, got)
+    end)
+
+    add_test("normalize removing 2 points in a row", function()
+      local ranges = {
+        inc(-1/0),
+        inc(1, range_type.everything),
+        inc(2, range_type.everything),
+        inc(3, range_type.everything),
+        exc(10),
+      }
+      local got = normalize(number_ranges.copy_ranges(ranges))
+      table.remove(ranges, 4)
+      table.remove(ranges, 3)
+      assert.contents_equals(ranges, got)
+    end)
+
+    add_test("normalize removing 2 separate points", function()
+      local ranges = {
+        inc(-1/0),
+        inc(1, range_type.everything),
+        inc(2, range_type.everything),
+        inc(3, range_type.nothing),
+        inc(4, range_type.integral),
+        inc(5, range_type.integral),
+        exc(10),
+      }
+      local got = normalize(number_ranges.copy_ranges(ranges))
+      table.remove(ranges, 6)
+      table.remove(ranges, 3)
+      assert.contents_equals(ranges, got)
+    end)
+  end
 end

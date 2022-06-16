@@ -67,8 +67,34 @@ local function copy_point(point)
   }
 end
 
+local function copy_ranges(ranges)
+  local copy = {}
+  for i, point in ipairs(ranges) do
+    copy[i] = copy_point(point)
+  end
+  return copy
+end
+
 local function get_range_type(point)
   return point.range_type
+end
+
+local function normalize(ranges)
+  local prev_type = get_range_type(ranges[1])
+  local target_index = 2
+  for i = 2, #ranges do
+    local point = ranges[i]
+    ranges[i] = nil
+    local type = get_range_type(point)
+    if type == prev_type then
+      target_index = target_index - 1
+    else
+      ranges[target_index] = point
+      prev_type = type
+    end
+    target_index = target_index + 1
+  end
+  return ranges
 end
 
 local function union_range_type(point_one, point_two)
@@ -170,6 +196,9 @@ return {
   range_type = range_type,
   inclusive = inclusive,
   exclusive = exclusive,
+  copy_point = copy_point,
+  copy_ranges = copy_ranges,
+  normalize = normalize,
   union_range = union_range,
   union_ranges = union_ranges,
 }
