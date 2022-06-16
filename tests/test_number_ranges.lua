@@ -25,6 +25,61 @@ do
   local main_scope = framework.scope:new_scope("number_ranges")
 
   do
+    local compare_point_scope = main_scope:new_scope("compare_point")
+
+    local function add_test(name, func)
+      compare_point_scope:add_test(name, func)
+    end
+
+    local compare_point = number_ranges.compare_point
+
+    add_test("compare_point nil base, nil other", function()
+      local got = compare_point(nil, nil)
+      assert.equals(0, got)
+    end)
+
+    add_test("compare_point nil base, non nil other", function()
+      local got = compare_point(nil, inc(0))
+      assert.equals(-1, got)
+    end)
+
+    add_test("compare_point non nil base, non nil other", function()
+      local got = compare_point(inc(0), nil)
+      assert.equals(1, got)
+    end)
+
+    add_test("compare_point same value, inclusive base, inclusive other", function()
+      local got = compare_point(inc(0), inc(0))
+      assert.equals(0, got)
+    end)
+
+    add_test("compare_point same value, exclusive base, exclusive other", function()
+      local got = compare_point(exc(0), exc(0))
+      assert.equals(0, got)
+    end)
+
+    add_test("compare_point same value, inclusive base, exclusive other", function()
+      local got = compare_point(inc(0), exc(0))
+      assert.equals(1, got)
+    end)
+
+    add_test("compare_point same value, exclusive base, inclusive other", function()
+      local got = compare_point(exc(0), inc(0))
+      assert.equals(-1, got)
+    end)
+
+    add_test("compare_point 0 base, -1 other", function()
+      local got = compare_point(inc(0), inc(-1))
+      assert.equals(-1, got)
+    end)
+
+    add_test("compare_point 0 base, 1 other", function()
+      local got = compare_point(inc(0), inc(1))
+      assert.equals(1, got)
+    end)
+  end
+
+  do
     local union_range_scope = main_scope:new_scope("union_range")
 
     local function add_test(name, func)

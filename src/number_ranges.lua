@@ -196,9 +196,11 @@ return {
   range_type = range_type,
   inclusive = inclusive,
   exclusive = exclusive,
+  compare_point = compare_point,
   copy_point = copy_point,
   copy_ranges = copy_ranges,
   normalize = normalize,
+  union_range_type = union_range_type,
   union_range = union_range,
   union_ranges = union_ranges,
 }
