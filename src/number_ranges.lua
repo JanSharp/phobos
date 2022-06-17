@@ -1,18 +1,6 @@
 
 local util = require("util")
 
----@alias ILRangePointType
----| '0' @ nothing
----| '1' @ everything
----| '2' @ integral
----| '3' @ non_integral
-
----the first point in a ranges array must always exist and must be (-1/0) inclusive
----@class ILRangePoint
----@field range_type ILRangePointType
----@field value number
----@field inclusive boolean
-
 local range_type = {
   nothing = 0,
   everything = 1,
