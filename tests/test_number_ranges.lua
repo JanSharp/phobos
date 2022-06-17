@@ -109,7 +109,7 @@ do
     }
     do
       add_test("union_range_type "..type_str_lut[data.one].." "..type_str_lut[data.two], function()
-        local got = union_range_type(inc(0, data.one), inc(0, data.two))
+        local got = union_range_type(data.one, data.two)
         assert.equals(data.result, got)
       end)
     end

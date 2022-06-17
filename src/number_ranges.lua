@@ -92,12 +92,10 @@ local function normalize(ranges)
   return ranges
 end
 
-local function union_range_type(point_one, point_two)
-  if not point_one then return get_range_type(point_two) end
-  if not point_two then return point_one.range_type end
-  if point_one.range_type == point_two.range_type then return point_one.range_type end
-  if point_one.range_type == range_type.nothing then return point_two.range_type end
-  if point_two.range_type == range_type.nothing then return point_one.range_type end
+local function union_range_type(type_one, type_two)
+  if type_one == type_two then return type_one end
+  if type_one == range_type.nothing then return type_two end
+  if type_two == range_type.nothing then return type_one end
   return range_type.everything
 end
 
@@ -120,7 +118,7 @@ local function union_range(ranges, from, to)
         i = i + 1
         c = c + 1
       end
-      overlap_from.range_type = union_range_type(prev_point, from)
+      overlap_from.range_type = union_range_type(get_range_type(prev_point), get_range_type(from))
 
       if compare_point(point, to) == 0 then
         -- the range to add already stops at the exact same point as `point`, so nothing needs to change
@@ -156,7 +154,7 @@ local function union_ranges(left_ranges, right_ranges)
       -- ends up inserting `right_to` causing the next iteration's `left_from` to always start
       -- at `right_from`. If I understand correctly `right_from` doesn't even come before `left_from`
       -- ever, but both those cases are handled the same way
-      left_from.range_type = union_range_type(left_from, right_from)
+      left_from.range_type = union_range_type(get_range_type(left_from), get_range_type(right_from))
 
       if compare_point(left_to, right_to) == 0 then
         -- the right range already stops at the exact same point as `left_to`, so nothing needs to change
