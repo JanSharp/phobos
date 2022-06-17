@@ -651,4 +651,43 @@ do
       assert.contents_equals(ranges, got)
     end)
   end
+
+  do
+    local contains_range_type_scope = main_scope:new_scope("contains_range_type")
+
+    local function add_test(name, func)
+      contains_range_type_scope:add_test(name, func)
+    end
+
+    local contains_range_type = number_ranges.contains_range_type
+    local type_str_lut = number_ranges.range_type_str_lut
+
+    for _, data in ipairs{
+      {base = range_type.nothing, other = range_type.nothing, result = true},
+      {base = range_type.nothing, other = range_type.everything, result = false},
+      {base = range_type.nothing, other = range_type.integral, result = false},
+      {base = range_type.nothing, other = range_type.non_integral, result = false},
+      {base = range_type.everything, other = range_type.nothing, result = true},
+      {base = range_type.everything, other = range_type.everything, result = true},
+      {base = range_type.everything, other = range_type.integral, result = true},
+      {base = range_type.everything, other = range_type.non_integral, result = true},
+      {base = range_type.integral, other = range_type.nothing, result = true},
+      {base = range_type.integral, other = range_type.everything, result = false},
+      {base = range_type.integral, other = range_type.integral, result = true},
+      {base = range_type.integral, other = range_type.non_integral, result = false},
+      {base = range_type.non_integral, other = range_type.nothing, result = true},
+      {base = range_type.non_integral, other = range_type.everything, result = false},
+      {base = range_type.non_integral, other = range_type.integral, result = false},
+      {base = range_type.non_integral, other = range_type.non_integral, result = true},
+    }
+    do
+      add_test("contains_range_type "..type_str_lut[data.base]
+        ..(data.result and " contains " or " does not contain ")
+        ..type_str_lut[data.other],
+      function()
+        local got = contains_range_type(data.base, data.other)
+        assert.equals(data.result, got)
+      end)
+    end
+  end
 end

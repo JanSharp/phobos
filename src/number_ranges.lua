@@ -199,6 +199,23 @@ local function union_ranges(left_ranges, right_ranges)
   )
 end
 
+local function contains_range_type(base_type, other_type)
+  return (({
+    [range_type.everything] = function()
+      return true
+    end,
+    [range_type.integral] = function()
+      return other_type == range_type.integral or other_type == range_type.nothing
+    end,
+    [range_type.non_integral] = function()
+      return other_type == range_type.non_integral or other_type == range_type.nothing
+    end,
+    [range_type.nothing] = function()
+      return other_type == range_type.nothing
+    end,
+  })[base_type] or util.debug_abort("Unknown range_type '"..tostring(base_type).."'."))()
+end
+
 return {
   range_type = range_type,
   range_type_str_lut = range_type_str_lut,
@@ -211,4 +228,5 @@ return {
   union_range_type = union_range_type,
   union_range = union_range,
   union_ranges = union_ranges,
+  contains_range_type = contains_range_type,
 }
