@@ -206,40 +206,7 @@ local function contains_range_type(base_type, other_type)
   })[base_type] or util.debug_abort("Unknown range_type '"..tostring(base_type).."'."))()
 end
 
-local function contains_ranges(base_ranges, other_ranges)
-  local base_from = base_ranges[1]
-  local base_to = base_ranges[2]
-  local base_index = 3
-  local other_from = other_ranges[1]
-  local other_to = other_ranges[2]
-  local other_index = 3
-  while true do
-    if not contains_range_type(get_range_type(base_from), get_range_type(other_from)) then
-      return false
-    end
-    -- advance whichever side is behind the other
-    -- or both if they are equal
-    local diff = compare_point(base_to, other_to)
-    if diff <= 0 then
-      if not other_to then
-        -- other_to is nil and diff <= 0 which means base_to is also nil
-        -- which means we have reached the end
-        return true
-      end
-      other_from = other_to
-      other_to = other_ranges[other_index]
-      other_index = other_index + 1
-    end
-    if diff >= 0 then
-      base_from = base_to
-      base_to = base_ranges[base_index]
-      base_index = base_index + 1
-    end
-  end
-end
-
--- NOTE: literally copy paste of contains_ranges except for the return false condition
-local function ranges_equal(left_ranges, right_ranges)
+local function compare_ranges(left_ranges, right_ranges, comparator)
   local left_from = left_ranges[1]
   local left_to = left_ranges[2]
   local left_index = 3
@@ -247,7 +214,7 @@ local function ranges_equal(left_ranges, right_ranges)
   local right_to = right_ranges[2]
   local right_index = 3
   while true do
-    if get_range_type(left_from) ~= get_range_type(right_from) then
+    if not comparator(left_from, right_from) then
       return false
     end
     -- advance whichever side is behind the right
@@ -269,6 +236,18 @@ local function ranges_equal(left_ranges, right_ranges)
       left_index = left_index + 1
     end
   end
+end
+
+local function contains_ranges(base_ranges, other_ranges)
+  return compare_ranges(base_ranges, other_ranges, function(base_point, other_point)
+    return contains_range_type(get_range_type(base_point), get_range_type(other_point))
+  end)
+end
+
+local function ranges_equal(left_ranges, right_ranges)
+  return compare_ranges(left_ranges, right_ranges, function(left_point, right_point)
+    return get_range_type(left_point) == get_range_type(right_point)
+  end)
 end
 
 local function intersect_range_type(left_type, right_type)
