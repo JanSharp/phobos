@@ -20,6 +20,13 @@ local range_type = {
   non_integral = 3,
 }
 
+local range_type_str_lut = {
+  [0] = "nothing",
+  [1] = "everything",
+  [2] = "integral",
+  [3] = "non_integral",
+}
+
 local function inclusive(value, type)
   return {
     range_type = type or range_type.nothing,
@@ -194,6 +201,7 @@ end
 
 return {
   range_type = range_type,
+  range_type_str_lut = range_type_str_lut,
   inclusive = inclusive,
   exclusive = exclusive,
   compare_point = compare_point,

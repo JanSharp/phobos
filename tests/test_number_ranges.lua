@@ -80,6 +80,42 @@ do
   end
 
   do
+    local union_range_type_scope = main_scope:new_scope("union_range_type")
+
+    local function add_test(name, func)
+      union_range_type_scope:add_test(name, func)
+    end
+
+    local union_range_type = number_ranges.union_range_type
+    local type_str_lut = number_ranges.range_type_str_lut
+
+    for _, data in ipairs{
+      {one = range_type.nothing, two = range_type.nothing, result = range_type.nothing},
+      {one = range_type.nothing, two = range_type.everything, result = range_type.everything},
+      {one = range_type.nothing, two = range_type.integral, result = range_type.integral},
+      {one = range_type.nothing, two = range_type.non_integral, result = range_type.non_integral},
+      {one = range_type.everything, two = range_type.nothing, result = range_type.everything},
+      {one = range_type.everything, two = range_type.everything, result = range_type.everything},
+      {one = range_type.everything, two = range_type.integral, result = range_type.everything},
+      {one = range_type.everything, two = range_type.non_integral, result = range_type.everything},
+      {one = range_type.integral, two = range_type.nothing, result = range_type.integral},
+      {one = range_type.integral, two = range_type.everything, result = range_type.everything},
+      {one = range_type.integral, two = range_type.integral, result = range_type.integral},
+      {one = range_type.integral, two = range_type.non_integral, result = range_type.everything},
+      {one = range_type.non_integral, two = range_type.nothing, result = range_type.non_integral},
+      {one = range_type.non_integral, two = range_type.everything, result = range_type.everything},
+      {one = range_type.non_integral, two = range_type.integral, result = range_type.everything},
+      {one = range_type.non_integral, two = range_type.non_integral, result = range_type.non_integral},
+    }
+    do
+      add_test("union_range_type "..type_str_lut[data.one].." "..type_str_lut[data.two], function()
+        local got = union_range_type(inc(0, data.one), inc(0, data.two))
+        assert.equals(data.result, got)
+      end)
+    end
+  end
+
+  do
     local union_range_scope = main_scope:new_scope("union_range")
 
     local function add_test(name, func)
