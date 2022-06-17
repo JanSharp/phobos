@@ -690,4 +690,84 @@ do
       end)
     end
   end
+
+  do
+    local contains_ranges_scope = main_scope:new_scope("contains_ranges")
+
+    local function add_test(name, func)
+      contains_ranges_scope:add_test(name, func)
+    end
+
+    local contains_ranges = number_ranges.contains_ranges
+
+    add_test("contains_ranges identical base and other", function()
+      local base = {inc(-1/0), inc(1, range_type.everything), exc(10)}
+      local other = {inc(-1/0), inc(1, range_type.everything), exc(10)}
+      local got = contains_ranges(base, other)
+      assert.equals(true, got)
+    end)
+
+    add_test("contains_ranges longer other", function()
+      local base = {inc(-1/0), inc(1, range_type.everything), exc(10)}
+      local other = {inc(-1/0), inc(1, range_type.everything), exc(11)}
+      local got = contains_ranges(base, other)
+      assert.equals(false, got)
+    end)
+
+    add_test("contains_ranges shorter other", function()
+      local base = {inc(-1/0), inc(1, range_type.everything), exc(10)}
+      local other = {inc(-1/0), inc(1, range_type.everything), exc(9)}
+      local got = contains_ranges(base, other)
+      assert.equals(true, got)
+    end)
+
+    add_test("contains_ranges shorter other also starting later", function()
+      local base = {inc(-1/0), inc(1, range_type.everything), exc(10)}
+      local other = {inc(-1/0), inc(2, range_type.everything), exc(9)}
+      local got = contains_ranges(base, other)
+      assert.equals(true, got)
+    end)
+
+    add_test("contains_ranges other overlapping with multiple base ranges", function()
+      local base = {inc(-1/0), inc(1, range_type.everything), inc(5, range_type.everything), exc(10)}
+      local other = {inc(-1/0), inc(2, range_type.everything), exc(9)}
+      local got = contains_ranges(base, other)
+      assert.equals(true, got)
+    end)
+
+    add_test("contains_ranges with one non containing range in the middle of one big overlap", function()
+      local base = {inc(-1/0), inc(1, range_type.everything), inc(3), inc(5, range_type.everything), exc(10)}
+      local other = {inc(-1/0), inc(2, range_type.everything), exc(9)}
+      local got = contains_ranges(base, other)
+      assert.equals(false, got)
+    end)
+
+    add_test("contains_ranges multiple other overlapping with the same base", function()
+      local base = {inc(-1/0), inc(1, range_type.everything), exc(10)}
+      local other = {inc(-1/0), inc(2, range_type.everything), inc(5), inc(7, range_type.everything), exc(9)}
+      local got = contains_ranges(base, other)
+      assert.equals(true, got)
+    end)
+
+    add_test("contains_ranges uses contains_range_type", function()
+      local base = {inc(-1/0), inc(1, range_type.everything), exc(10)}
+      local other = {inc(-1/0), inc(1, range_type.integral), exc(10)}
+      local got = contains_ranges(base, other)
+      assert.equals(true, got)
+    end)
+
+    add_test("contains_ranges just with -inf", function()
+      local base = {inc(-1/0)}
+      local other = {inc(-1/0)}
+      local got = contains_ranges(base, other)
+      assert.equals(true, got)
+    end)
+
+    add_test("contains_ranges just with -inf with non containing types", function()
+      local base = {inc(-1/0)}
+      local other = {inc(-1/0, range_type.non_integral)}
+      local got = contains_ranges(base, other)
+      assert.equals(false, got)
+    end)
+  end
 end

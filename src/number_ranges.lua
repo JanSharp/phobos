@@ -216,6 +216,38 @@ local function contains_range_type(base_type, other_type)
   })[base_type] or util.debug_abort("Unknown range_type '"..tostring(base_type).."'."))()
 end
 
+local function contains_ranges(base_ranges, other_ranges)
+  local base_from = base_ranges[1]
+  local base_to = base_ranges[2]
+  local base_index = 3
+  local other_from = other_ranges[1]
+  local other_to = other_ranges[2]
+  local other_index = 3
+  while true do
+    if not contains_range_type(get_range_type(base_from), get_range_type(other_from)) then
+      return false
+    end
+    -- advance whichever side is behind the other
+    -- or both if they are equal
+    local diff = compare_point(base_to, other_to)
+    if diff <= 0 then
+      if not other_to then
+        -- other_to is nil and diff <= 0 which means base_to is also nil
+        -- which means we have reached the end
+        return true
+      end
+      other_from = other_to
+      other_to = other_ranges[other_index]
+      other_index = other_index + 1
+    end
+    if diff >= 0 then
+      base_from = base_to
+      base_to = base_ranges[base_index]
+      base_index = base_index + 1
+    end
+  end
+end
+
 return {
   range_type = range_type,
   range_type_str_lut = range_type_str_lut,
@@ -229,4 +261,5 @@ return {
   union_range = union_range,
   union_ranges = union_ranges,
   contains_range_type = contains_range_type,
+  contains_ranges = contains_ranges,
 }
