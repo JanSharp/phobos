@@ -533,8 +533,8 @@
 ---@field boolean_value? boolean|nil
 ---@field function_prototypes? ILFunction[]|nil
 ---@field identities? ILTypeIdentity[]|nil
----@field table_class? ILClass|nil
----@field userdata_class? ILClass|nil @ class with a metatable for full userdata objects
+---@field table_classes? ILClass[]|nil @ union of classes
+---@field userdata_classes? ILClass[]|nil @ union of classes with metatables for full userdata objects
 ---@field light_userdata_prototypes? string[]|nil @ named light userdata to make it comparable
 
 -- TODO: what do threads even look like and what data do I need to represent a group of them?

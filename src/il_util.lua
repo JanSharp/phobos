@@ -22,6 +22,7 @@ end
 local copy_identity
 local copy_identities
 local copy_class
+local copy_classes
 local copy_type
 local copy_types
 do
@@ -62,6 +63,10 @@ do
     return result
   end
 
+  function copy_classes(classes)
+    return copy_list(classes, copy_class)
+  end
+
   function copy_type(type)
     local result = new_type{
       type_flags = type.type_flags,
@@ -73,8 +78,8 @@ do
       light_userdata_prototypes = util.optional_shallow_copy(type.light_userdata_prototypes),
     }
     result.identities = copy_identities(type.identities)
-    result.table_class = copy_class(type.table_class)
-    result.userdata_class = copy_class(type.userdata_class)
+    result.table_classes = copy_classes(type.table_classes)
+    result.userdata_classes = copy_classes(type.userdata_classes)
   end
 
   function copy_types(types)
@@ -117,7 +122,6 @@ do
   -- NOTE: classes with key value pairs where multiple of their value types are equal are invalid [...]
   -- and will result in this compare function to potentially return false in cases where it shouldn't
   local function compare_class(left_class, right_class)
-    if not left_class then return not right_class end
     if left_class.kvps then
       if not right_class.kvps then return false end
       if #left_class.kvps ~= #right_class.kvps then return false end
@@ -139,6 +143,23 @@ do
     if left_class.metatable then
       if not right_class.metatable then return false end
       return compare_class(left_class.metatable, right_class.metatable)
+    end
+    return true
+  end
+
+  local function compare_classes(left_classes, right_classes)
+    if not left_classes then return not right_classes end
+    if #left_classes ~= #right_classes then return false end
+    local finished_right_index_lut = {}
+    for _, left_class in ipairs(left_classes) do
+      for right_index, right_class in ipairs(right_classes) do
+        if not finished_right_index_lut[right_index] and compare_class(left_class, right_class) then
+          finished_right_index_lut[right_index] = true
+          goto found_match
+        end
+      end
+      do return false end
+      ::found_match::
     end
     return true
   end
@@ -177,7 +198,7 @@ do
       end
     end
     if bit32.band(type_flags, table_flag) ~= 0 then
-      if not compare_class(left_type.table_class, right_type.table_class) then
+      if not compare_classes(left_type.table_classes, right_type.table_classes) then
         return false
       end
     end
@@ -188,7 +209,7 @@ do
       ) then
         return false
       end
-      if not compare_class(left_type.userdata_class, right_type.userdata_class) then
+      if not compare_classes(left_type.userdata_classes, right_type.userdata_classes) then
         return false
       end
     end
@@ -284,7 +305,7 @@ do
     if do_merge then
       -- TODO: class
     elseif base then
-      result.table_class = copy_class(base.table_class)
+      result.table_classes = copy_classes(base.table_classes)
     end
     base, do_merge = get_types_to_combine(left_type, right_type, userdata_flag)
     if do_merge then
@@ -295,7 +316,7 @@ do
       -- TODO: class
     elseif base then
       result.light_userdata_prototypes = util.optional_shallow_copy(base.light_userdata_prototypes)
-      result.userdata_class = copy_class(base.userdata_class)
+      result.userdata_classes = copy_classes(base.userdata_classes)
     end
     base, do_merge = get_types_to_combine(left_type, right_type, thread_flag)
     if do_merge then
@@ -322,11 +343,14 @@ end
 
 local contains
 do
-  local function contains_class(left_class, right_class)
+  local function contains_classes(left_classes, right_classes)
     -- TODO: instead of checking contains, use intersections. When not empty, check if
     -- the right value type is contained, if yes add the current intersection to a union.
     -- then check if the current union is equal to the right key_type
     -- and only if that is true then the current right kvp is contained
+    --
+    -- and then somehow deal with the fact that left and right are unions of classes, probably similar to
+    -- how equals compares each left class with each right class
   end
 
   function contains(left_type, right_type)
@@ -362,7 +386,7 @@ do
       end
     end
     if bit32.band(type_flags, table_flag) ~= 0 then
-      if not contains_class(left_type.table_class, right_type.table_class) then
+      if not contains_classes(left_type.table_classes, right_type.table_classes) then
         return false
       end
     end
@@ -373,7 +397,7 @@ do
       ) then
         return false
       end
-      if not contains_class(left_type.userdata_class, right_type.userdata_class) then
+      if not contains_classes(left_type.userdata_classes, right_type.userdata_classes) then
         return false
       end
     end
@@ -412,6 +436,7 @@ return {
   copy_identity = copy_identity,
   copy_identities = copy_identities,
   copy_class = copy_class,
+  copy_classes = copy_classes,
   copy_type = copy_type,
   copy_types = copy_types,
   equals = equals,
