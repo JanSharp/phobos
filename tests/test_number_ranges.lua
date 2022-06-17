@@ -770,4 +770,63 @@ do
       assert.equals(false, got)
     end)
   end
+
+  do
+    local ranges_equal_scope = main_scope:new_scope("ranges_equal")
+
+    local function add_test(name, func)
+      ranges_equal_scope:add_test(name, func)
+    end
+
+    local ranges_equal = number_ranges.ranges_equal
+
+    add_test("ranges_equal with just -inf", function()
+      local left = {inc(-1/0)}
+      local right = {inc(-1/0)}
+      local got = ranges_equal(left, right)
+      assert.equals(true, got)
+    end)
+
+    add_test("ranges_equal with just -inf with different types", function()
+      local left = {inc(-1/0)}
+      local right = {inc(-1/0, range_type.non_integral)}
+      local got = ranges_equal(left, right)
+      assert.equals(false, got)
+    end)
+
+    add_test("ranges_equal with extra points with the same type on the left", function()
+      local left = {inc(-1/0), exc(1), inc(2)}
+      local right = {inc(-1/0)}
+      local got = ranges_equal(left, right)
+      assert.equals(true, got)
+    end)
+
+    add_test("ranges_equal with extra points with the same type on the right", function()
+      local left = {inc(-1/0)}
+      local right = {inc(-1/0), exc(1), inc(2)}
+      local got = ranges_equal(left, right)
+      assert.equals(true, got)
+    end)
+
+    add_test("ranges_equal with extra point with a different type on the left", function()
+      local left = {inc(-1/0), inc(1, range_type.everything)}
+      local right = {inc(-1/0)}
+      local got = ranges_equal(left, right)
+      assert.equals(false, got)
+    end)
+
+    add_test("ranges_equal with extra point with a different type on the right", function()
+      local left = {inc(-1/0)}
+      local right = {inc(-1/0), inc(1, range_type.everything)}
+      local got = ranges_equal(left, right)
+      assert.equals(false, got)
+    end)
+
+    add_test("ranges_equal with a second pair with different types than the previous points", function()
+      local left = {inc(-1/0), exc(1, range_type.everything)}
+      local right = {inc(-1/0), exc(1, range_type.everything)}
+      local got = ranges_equal(left, right)
+      assert.equals(true, got)
+    end)
+  end
 end

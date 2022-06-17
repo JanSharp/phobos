@@ -248,6 +248,39 @@ local function contains_ranges(base_ranges, other_ranges)
   end
 end
 
+-- NOTE: literally copy paste of contains_ranges except for the return false condition
+local function ranges_equal(left_ranges, right_ranges)
+  local left_from = left_ranges[1]
+  local left_to = left_ranges[2]
+  local left_index = 3
+  local right_from = right_ranges[1]
+  local right_to = right_ranges[2]
+  local right_index = 3
+  while true do
+    if get_range_type(left_from) ~= get_range_type(right_from) then
+      return false
+    end
+    -- advance whichever side is behind the right
+    -- or both if they are equal
+    local diff = compare_point(left_to, right_to)
+    if diff <= 0 then
+      if not right_to then
+        -- right_to is nil and diff <= 0 which means left_to is also nil
+        -- which means we have reached the end
+        return true
+      end
+      right_from = right_to
+      right_to = right_ranges[right_index]
+      right_index = right_index + 1
+    end
+    if diff >= 0 then
+      left_from = left_to
+      left_to = left_ranges[left_index]
+      left_index = left_index + 1
+    end
+  end
+end
+
 return {
   range_type = range_type,
   range_type_str_lut = range_type_str_lut,
@@ -262,4 +295,5 @@ return {
   union_ranges = union_ranges,
   contains_range_type = contains_range_type,
   contains_ranges = contains_ranges,
+  ranges_equal = ranges_equal,
 }
