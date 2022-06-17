@@ -829,4 +829,76 @@ do
       assert.equals(true, got)
     end)
   end
+
+  do
+    local intersect_range_type_scope = main_scope:new_scope("intersect_range_type")
+
+    local function add_test(name, func)
+      intersect_range_type_scope:add_test(name, func)
+    end
+
+    local intersect_range_type = number_ranges.intersect_range_type
+    local type_str_lut = number_ranges.range_type_str_lut
+
+    for _, data in ipairs{
+      {left = range_type.nothing, right = range_type.nothing, result = range_type.nothing},
+      {left = range_type.nothing, right = range_type.everything, result = range_type.nothing},
+      {left = range_type.nothing, right = range_type.integral, result = range_type.nothing},
+      {left = range_type.nothing, right = range_type.non_integral, result = range_type.nothing},
+      {left = range_type.everything, right = range_type.nothing, result = range_type.nothing},
+      {left = range_type.everything, right = range_type.everything, result = range_type.everything},
+      {left = range_type.everything, right = range_type.integral, result = range_type.integral},
+      {left = range_type.everything, right = range_type.non_integral, result = range_type.non_integral},
+      {left = range_type.integral, right = range_type.nothing, result = range_type.nothing},
+      {left = range_type.integral, right = range_type.everything, result = range_type.integral},
+      {left = range_type.integral, right = range_type.integral, result = range_type.integral},
+      {left = range_type.integral, right = range_type.non_integral, result = range_type.nothing},
+      {left = range_type.non_integral, right = range_type.nothing, result = range_type.nothing},
+      {left = range_type.non_integral, right = range_type.everything, result = range_type.non_integral},
+      {left = range_type.non_integral, right = range_type.integral, result = range_type.nothing},
+      {left = range_type.non_integral, right = range_type.non_integral, result = range_type.non_integral},
+    }
+    do
+      add_test("intersect_range_type "..type_str_lut[data.left].." and "..type_str_lut[data.right], function()
+        local got = intersect_range_type(data.left, data.right)
+        assert.equals(data.result, got)
+      end)
+    end
+  end
+
+  do
+    local intersect_ranges_scope = main_scope:new_scope("intersect_ranges")
+
+    local function add_test(name, func)
+      intersect_ranges_scope:add_test(name, func)
+    end
+
+    local intersect_ranges = number_ranges.intersect_ranges
+
+    -- |--<--<-<-->>
+    -- |--<-<---<->>
+    add_test("intersect_ranges (if union_ranges work, this also works)", function()
+      local left_ranges = {
+        inc(-1/0),
+        inc(2, range_type.integral),
+        inc(5, range_type.everything),
+        exc(7),
+      }
+      local right_ranges = {
+        inc(-1/0),
+        inc(2, range_type.integral),
+        inc(4, range_type.non_integral),
+        exc(8),
+      }
+      local got = intersect_ranges(left_ranges, right_ranges)
+      assert.contents_equals({
+        inc(-1/0),
+        inc(2, range_type.integral),
+        inc(4),
+        inc(5, range_type.non_integral),
+        exc(7),
+        exc(8),
+      }, got)
+    end)
+  end
 end
