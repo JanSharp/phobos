@@ -118,42 +118,20 @@ do
 end
 
 local equals
-do
-  -- NOTE: classes with key value pairs where multiple of their value types are equal are invalid [...]
-  -- and will result in this compare function to potentially return false in cases where it shouldn't
-  local function compare_class(left_class, right_class)
-    if left_class.kvps then
-      if not right_class.kvps then return false end
-      if #left_class.kvps ~= #right_class.kvps then return false end
-      local finished_right_index_lut = {}
-      for _, left_kvp in ipairs(left_class.kvps) do
-        for right_index, right_kvp in ipairs(right_class.kvps) do
-          if not finished_right_index_lut[right_index] and equals(left_kvp.key_type, right_kvp.key_type) then
-            if not equals(left_kvp.value_type, right_kvp.value_type) then
-              return false
-            end
-            finished_right_index_lut[right_index] = true
-            goto found_match
-          end
-        end
-        do return false end
-        ::found_match::
-      end
-    end
-    if left_class.metatable then
-      if not right_class.metatable then return false end
-      return compare_class(left_class.metatable, right_class.metatable)
-    end
-    return true
-  end
 
-  local function compare_classes(left_classes, right_classes)
-    if not left_classes then return not right_classes end
-    if #left_classes ~= #right_classes then return false end
+-- NOTE: classes with key value pairs where multiple of their value types are equal are invalid [...]
+-- and will result in this compare function to potentially return false in cases where it shouldn't
+local function class_equals(left_class, right_class)
+  if left_class.kvps then
+    if not right_class.kvps then return false end
+    if #left_class.kvps ~= #right_class.kvps then return false end
     local finished_right_index_lut = {}
-    for _, left_class in ipairs(left_classes) do
-      for right_index, right_class in ipairs(right_classes) do
-        if not finished_right_index_lut[right_index] and compare_class(left_class, right_class) then
+    for _, left_kvp in ipairs(left_class.kvps) do
+      for right_index, right_kvp in ipairs(right_class.kvps) do
+        if not finished_right_index_lut[right_index] and equals(left_kvp.key_type, right_kvp.key_type) then
+          if not equals(left_kvp.value_type, right_kvp.value_type) then
+            return false
+          end
           finished_right_index_lut[right_index] = true
           goto found_match
         end
@@ -161,9 +139,32 @@ do
       do return false end
       ::found_match::
     end
-    return true
   end
+  if left_class.metatable then
+    if not right_class.metatable then return false end
+    return class_equals(left_class.metatable, right_class.metatable)
+  end
+  return true
+end
 
+local function classes_equal(left_classes, right_classes)
+  if not left_classes then return not right_classes end
+  if #left_classes ~= #right_classes then return false end
+  local finished_right_index_lut = {}
+  for _, left_class in ipairs(left_classes) do
+    for right_index, right_class in ipairs(right_classes) do
+      if not finished_right_index_lut[right_index] and class_equals(left_class, right_class) then
+        finished_right_index_lut[right_index] = true
+        goto found_match
+      end
+    end
+    do return false end
+    ::found_match::
+  end
+  return true
+end
+
+do
   ---@param left_type ILType
   ---@param right_type ILType
   function equals(left_type, right_type)
@@ -198,7 +199,7 @@ do
       end
     end
     if bit32.band(type_flags, table_flag) ~= 0 then
-      if not compare_classes(left_type.table_classes, right_type.table_classes) then
+      if not classes_equal(left_type.table_classes, right_type.table_classes) then
         return false
       end
     end
@@ -209,7 +210,7 @@ do
       ) then
         return false
       end
-      if not compare_classes(left_type.userdata_classes, right_type.userdata_classes) then
+      if not classes_equal(left_type.userdata_classes, right_type.userdata_classes) then
         return false
       end
     end
@@ -261,6 +262,25 @@ do
     return result
   end
 
+  local function union_classes(left_classes, right_classes)
+    -- if one of them is nil the result will also be nil
+    if not left_classes or not right_classes then return nil end
+    left_classes = copy_classes(left_classes)
+    local visited_left_index_lut = {}
+    local left_count = #left_classes
+    for _, right_class in ipairs(right_classes) do
+      for left_index = 1, left_count do
+        if not visited_left_index_lut[left_index] and class_equals(left_classes[left_index], right_class) then
+          visited_left_index_lut[left_index] = true
+          goto found_match
+        end
+      end
+      left_count = left_count + 1
+      left_classes[left_count] = copy_class(right_class)
+      ::found_match::
+    end
+  end
+
   function union(left_type, right_type)
     local result = new_type{type_flags = bit32.bor(left_type.type_flags, right_type.type_flags)}
     local base, do_merge
@@ -303,7 +323,7 @@ do
     end
     base, do_merge = get_types_to_combine(left_type, right_type, table_flag)
     if do_merge then
-      -- TODO: class
+      result.table_classes = union_classes(left_type.table_classes, right_type.table_classes)
     elseif base then
       result.table_classes = copy_classes(base.table_classes)
     end
@@ -313,7 +333,7 @@ do
         left_type.light_userdata_prototypes,
         right_type.light_userdata_prototypes
       )
-      -- TODO: class
+      result.userdata_classes = union_classes(left_type.userdata_classes, right_type.userdata_classes)
     elseif base then
       result.light_userdata_prototypes = util.optional_shallow_copy(base.light_userdata_prototypes)
       result.userdata_classes = copy_classes(base.userdata_classes)
