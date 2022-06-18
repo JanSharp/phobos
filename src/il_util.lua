@@ -281,6 +281,25 @@ do
     end
   end
 
+  -- NOTE: very similar to shallow_list_union, just id comparison is different
+  local function identities_union(left_identities, right_identities)
+    -- if one of them is nil the result will also be nil
+    if not left_identities or not right_identities then return nil end
+    local lut = {}
+    local result = {}
+    for i, id in ipairs(left_identities) do
+      lut[id.id] = true
+      result[i] = id
+    end
+    for _, id in ipairs(right_identities) do
+      -- TODO: if it finds the id in the lut it should probably create a union of the respective instance data
+      if not lut[id.id] then
+        result[#result+1] = id
+      end
+    end
+    return result
+  end
+
   function union(left_type, right_type)
     local result = new_type{type_flags = bit32.bor(left_type.type_flags, right_type.type_flags)}
     local base, do_merge
@@ -342,22 +361,10 @@ do
     if do_merge then
     elseif base then
     end
-    -- hmm I haven't thought about the combination of classes and identities yet
-    -- great point for me to take a break
 
-    -- TODO: identities
-    -- if not left_list or not right_list then return nil end
-    -- local lut = {}
-    -- local result = {}
-    -- for i, value in ipairs(left_list) do
-    --   lut[value] = true
-    --   result[i] = value
-    -- end
-    -- for _, value in ipairs(right_list) do
-    --   if not lut[value] then
-    --     result[#result+1] = value
-    --   end
-    -- end
+    result.identities = identities_union(left_type.identities, right_type.identities)
+
+    return result
   end
 end
 
@@ -436,7 +443,6 @@ do
   end
 end
 
--- TODO: finish union
 -- TODO: intersect
 -- TODO: finish contains
 -- TODO: exclude?
