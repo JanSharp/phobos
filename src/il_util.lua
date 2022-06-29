@@ -368,6 +368,140 @@ do
   end
 end
 
+local intersect
+do
+  local function shallow_list_intersect(left_list, right_list)
+    if not left_list then
+      if not right_list then
+        return nil
+      else
+        return util.shallow_copy(right_list)
+      end
+    elseif not right_list then
+      return util.shallow_copy(left_list)
+    else
+      local value_lut = {}
+      for _, value in ipairs(left_list) do
+        value_lut[value] = true
+      end
+      local string_values = {}
+      for _, value in ipairs(right_list) do
+        if value_lut[value] then
+          string_values[#string_values+1] = value
+        end
+      end
+      return string_values
+    end
+  end
+
+  local function ranges_intersect(left_ranges, right_ranges)
+    if not left_ranges then
+      if not right_ranges then
+        return nil
+      end
+      return number_ranges.copy_ranges(right_ranges)
+    elseif not right_ranges then
+      return number_ranges.copy_ranges(left_ranges)
+    end
+    return number_ranges.intersect_ranges(left_ranges, right_ranges)
+  end
+
+  local function classes_intersect(left_classes, right_classes)
+    if not left_classes then
+      if not right_classes then
+        return nil
+      else
+        return copy_classes(right_classes)
+      end
+    elseif not right_classes then
+      return copy_classes(left_classes)
+    end
+    local finished_right_index_lut = {}
+    local result = {}
+    for _, left_class in ipairs(left_classes) do
+      for right_index, right_class in ipairs(right_classes) do
+        if not finished_right_index_lut[right_index] and class_equals(left_class, right_class) then
+          finished_right_index_lut[right_index] = true
+          result[#result+1] = copy_class(left_class)
+          break
+        end
+      end
+    end
+    return result
+  end
+
+  -- NOTE: very similar to shallow_list_union, just copying and id comparison is different
+  local function identities_intersect(left_identities, right_identities)
+    if not left_identities then
+      if not right_identities then
+        return nil
+      else
+        return copy_identities(right_identities)
+      end
+    elseif not right_identities then
+      return copy_identities(left_identities)
+    else
+      local id_lut = {}
+      for _, id in ipairs(left_identities) do
+        id_lut[id.id] = true
+      end
+      local result = {}
+      for _, id in ipairs(right_identities) do
+        if id_lut[id.id] then
+          result[#result+1] = id
+        end
+      end
+      return result
+    end
+  end
+
+  function intersect(left_type, right_type)
+    local result = new_type{type_flags = bit32.band(left_type.type_flags, right_type.type_flags)}
+    local type_flags = result.type_flags
+    if bit32.band(type_flags, nil_flag) ~= 0 then
+      -- nothing to do
+    end
+    if bit32.band(type_flags, boolean_flag) ~= 0 then
+      if left_type.boolean_value == right_type.boolean_value then
+        result.boolean_value = left_type.boolean_value
+      elseif left_type.boolean_value == nil then
+        result.boolean_value = right_type.boolean_value
+      elseif right_type.boolean_value == nil then
+        result.boolean_value = left_type.boolean_value
+      else
+        result.type_flags = bit32.bxor(result.type_flags, boolean_flag)
+      end
+    end
+    if bit32.band(type_flags, number_flag) ~= 0 then
+      result.number_ranges = ranges_intersect(left_type.number_ranges, right_type.number_ranges)
+    end
+    if bit32.band(type_flags, string_flag) ~= 0 then
+      result.string_ranges = ranges_intersect(left_type.string_ranges, right_type.string_ranges)
+      result.string_values = shallow_list_intersect(left_type.string_values, right_type.string_values)
+    end
+    if bit32.band(type_flags, function_flag) ~= 0 then
+      result.function_prototypes = shallow_list_intersect(
+        left_type.function_prototypes,
+        right_type.function_prototypes
+      )
+    end
+    if bit32.band(type_flags, table_flag) ~= 0 then
+      result.table_classes = classes_intersect(left_type.table_classes, right_type.table_classes)
+    end
+    if bit32.band(type_flags, userdata_flag) ~= 0 then
+      result.light_userdata_prototypes = shallow_list_intersect(
+        left_type.light_userdata_prototypes,
+        right_type.light_userdata_prototypes
+      )
+      result.userdata_classes = classes_intersect(left_type.userdata_classes, right_type.userdata_classes)
+    end
+    if bit32.band(type_flags, thread_flag) ~= 0 then
+    end
+    result.identities = identities_intersect(left_type.identities, right_type.identities)
+    return result
+  end
+end
+
 local contains
 do
   local function contains_classes(left_classes, right_classes)
@@ -443,7 +577,6 @@ do
   end
 end
 
--- TODO: intersect
 -- TODO: finish contains
 -- TODO: exclude?
 -- TODO: indexing
@@ -467,5 +600,6 @@ return {
   copy_types = copy_types,
   equals = equals,
   union = union,
+  intersect = intersect,
   contains = contains,
 }
