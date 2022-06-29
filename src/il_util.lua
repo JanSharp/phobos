@@ -505,13 +505,20 @@ end
 local contains
 do
   local function contains_classes(left_classes, right_classes)
-    -- TODO: instead of checking contains, use intersections. When not empty, check if
-    -- the right value type is contained, if yes add the current intersection to a union.
-    -- then check if the current union is equal to the right key_type
-    -- and only if that is true then the current right kvp is contained
-    --
-    -- and then somehow deal with the fact that left and right are unions of classes, probably similar to
-    -- how equals compares each left class with each right class
+    if not right_classes then return not left_classes end
+    if #left_classes < #right_classes then return false end
+    local finished_left_index_lut = {}
+    for _, right_class in ipairs(right_classes) do
+      for left_index, left_class in ipairs(left_classes) do
+        if not finished_left_index_lut[left_index] and class_equals(left_class, right_class) then
+          finished_left_index_lut[left_index] = true
+          goto found_match
+        end
+      end
+      do return false end
+      ::found_match::
+    end
+    return true
   end
 
   function contains(left_type, right_type)
@@ -577,7 +584,6 @@ do
   end
 end
 
--- TODO: finish contains
 -- TODO: exclude?
 -- TODO: indexing
 -- TODO: range utilities
