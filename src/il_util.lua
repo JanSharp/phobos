@@ -10,6 +10,7 @@ local function_flag = 16
 local table_flag = 32
 local userdata_flag = 64
 local thread_flag = 128
+local every_flag = 255
 
 ---@class ILTypeParams
 ---@field type_flags ILTypeFlags
@@ -597,6 +598,7 @@ return {
   table_flag = table_flag,
   userdata_flag = userdata_flag,
   thread_flag = thread_flag,
+  every_flag = every_flag,
   new_type = new_type,
   copy_identity = copy_identity,
   copy_identities = copy_identities,
