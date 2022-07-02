@@ -1,6 +1,7 @@
 
 local util = require("util")
 local number_ranges = require("number_ranges")
+local error_code_util = require("error_code_util")
 
 local nil_flag = 1
 local boolean_flag = 2
@@ -71,8 +72,8 @@ do
   function copy_type(type)
     local result = new_type{
       type_flags = type.type_flags,
-      number_ranges = number_ranges.copy_ranges(type.number_ranges),
-      string_ranges = number_ranges.copy_ranges(type.string_ranges),
+      number_ranges = type.number_ranges and number_ranges.copy_ranges(type.number_ranges),
+      string_ranges = type.string_ranges and number_ranges.copy_ranges(type.string_ranges),
       string_values = util.optional_shallow_copy(type.string_values),
       boolean_value = type.boolean_value,
       function_prototypes = util.optional_shallow_copy(type.function_prototypes),
@@ -585,9 +586,97 @@ do
   end
 end
 
+local function has_all_flags(type_flags, other_flags)
+  return bit32.band(type_flags, other_flags) == other_flags
+end
+
+local function has_any_flags(type_flags, other_flags)
+  return bit32.band(type_flags, other_flags) ~= 0
+end
+
 -- TODO: exclude?
--- TODO: indexing
 -- TODO: range utilities
+
+local type_indexing
+local class_indexing
+
+do
+  local __index_key_type = new_type{
+    type_flags = string_flag,
+    string_ranges = {number_ranges.inclusive(-1/0)},
+    string_values = {"__index"},
+  }
+
+  function class_indexing(class, index_type, do_rawget)
+    local result_type = new_type{type_flags = 0}
+    if class.kvps then
+      for _, kvp in ipairs(class.kvps) do
+        local overlap_key_type = intersect(kvp.key_type, index_type)
+        if overlap_key_type.type_flags ~= 0 then
+          result_type = union(result_type, overlap_key_type)
+          result_type = union(result_type, kvp.value_type)
+        end
+      end
+    end
+    if not equals(result_type, index_type) then
+      if not do_rawget and class.metatable then
+        local __index_value_type = class_indexing(class.metatable, __index_key_type, true)
+        local value_type_flags = __index_value_type.type_flags
+        if has_all_flags(value_type_flags, nil_flag) then
+          result_type = union(result_type, new_type{type_flags = nil_flag})
+        end
+        if has_all_flags(value_type_flags, table_flag) then
+          result_type = union(result_type, type_indexing(__index_value_type, index_type))
+        end
+        if has_all_flags(value_type_flags, function_flag) then
+          util.debug_print("-- TODO: validate `__index` function signatures and use function return types.")
+          -- TODO: this function call could modify the entire current state which must be tracked somehow
+        end
+        if has_any_flags(value_type_flags, bit32.bnot(nil_flag + table_flag + function_flag)) then
+          util.debug_print("-- TODO: probably warn about invalid `__index` value type.")
+        end
+      else
+        result_type = union(result_type, new_type{type_flags = nil_flag})
+      end
+    end
+    return result_type
+  end
+
+  function type_indexing(base_type, index_type, do_rawget)
+    local err
+    do
+      local all_invalid_flags = nil_flag + boolean_flag + number_flag + function_flag + thread_flag
+      local invalid_flags = bit32.band(base_type.type_flags, all_invalid_flags)
+      if invalid_flags ~= 0 then
+        err = error_code_util.new_error_code{
+          error_code = error_code_util.codes.ts_invalid_index_base_type,
+          message_args = {string.format("%x", invalid_flags)}, -- TODO: format flags as a meaningful string
+        }
+      end
+    end
+    local result_type = new_type{type_flags = 0}
+    if bit32.band(base_type.type_flags, string_flag) then
+      util.debug_print("-- TODO: add inbuilt string library function(s) to result type.")
+    end
+    if bit32.band(base_type.type_flags, table_flag) ~= 0 then
+      if not base_type.table_classes then
+        return new_type{type_flags = every_flag}, err
+      end
+      result_type = union(result_type, class_indexing(base_type.table_classes, index_type, do_rawget))
+    end
+    if bit32.band(base_type.type_flags, userdata_flag) ~= 0 then
+      -- TODO: how to detect light userdata? indexing into light userdata is an error to my knowledge
+      if not base_type.userdata_classes then
+        return new_type{type_flags = every_flag}, err
+      end
+      result_type = union(result_type, class_indexing(base_type.userdata_classes, index_type, do_rawget))
+    end
+    if result_type.type_flags == 0 then -- default to nil, because that's how indexing works
+      result_type.type_flags = nil_flag
+    end
+    return result_type, err
+  end
+end
 
 return {
   nil_flag = nil_flag,
@@ -610,4 +699,8 @@ return {
   union = union,
   intersect = intersect,
   contains = contains,
+  has_all_flags = has_all_flags,
+  has_any_flags = has_any_flags,
+  class_indexing = class_indexing,
+  type_indexing = type_indexing,
 }

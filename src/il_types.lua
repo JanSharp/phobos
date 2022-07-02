@@ -2,6 +2,7 @@
 local util = require("util")
 local il = require("il_util")
 local number_ranges = require("number_ranges")
+local error_code_util = require("error_code_util")
 
 local function set_type(state, reg, reg_type)
   state.reg_types[reg] = reg_type
@@ -76,25 +77,13 @@ local modify_post_state_func_lut = {
   end,
   ["set_upval"] = function(data, inst)
   end,
-  ["get_table"] = function(data, inst) -- TODO: redo using new type system
-    local table_type = util.debug_assert(get_type(inst.pre_state, inst.table_reg),
-      "trying to get a field from a register that wasn't even alive?!"
-    )
-    -- if not table_type or table_type == "unknown" then
-    --   set_type(inst.pre_state, inst.table_reg, il.new_table{})
-    -- elseif not il.contains_type(table_type, il.new_table{}) then
-    --   -- TODO : make this a proper warning somehow
-    --   print("Expected to index into type 'table', got '"..table_type.type_id.."' at "
-    --     ..util.pos_str(inst.position)
-    --   )
-    -- end
-    if table_type.inst_type == "class" then -- TODO: better check for classes - see unions for example
-      -- TODO: validate that the key used is actually valid for this class
-      -- TODO: search for key type in the kvps and evaluate a resulting type
-      set_type(inst.post_state, inst.result_reg, il.new_type{type_flags = il.every_flag})
-    else
-      set_type(inst.post_state, inst.result_reg, il.new_type{type_flags = il.every_flag})
+  ["get_table"] = function(data, inst)
+    local base_type = get_type(inst.pre_state, inst.table_reg)
+    local result_type, err = il.type_indexing(base_type, make_type_from_ptr(inst.pre_state, inst.key_ptr))
+    if err then
+      util.debug_print(error_code_util.get_message(err))
     end
+    set_type(inst.post_state, inst.result_reg, result_type)
   end,
   ["set_table"] = function(data, inst) -- TODO: redo using new type system
     local table_type = util.debug_assert(get_type(inst.pre_state, inst.table_reg),

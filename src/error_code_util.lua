@@ -6,6 +6,7 @@ local types = {
   compiler = 4,
   emmy_lua_parser = 5,
   emmy_lua_linker = 6,
+  type_system = 7,
 }
 local error_codes = {}
 local error_codes_by_id = {}
@@ -216,6 +217,12 @@ add_error_code(
   types.emmy_lua_linker,
   "el_builtin_base_class",
   "Base class %s for the class --TODO%%s is a builtin class which is not allowed"
+)
+
+add_error_code(
+  types.type_system,
+  "ts_invalid_index_base_type",
+  "Unable to index a type that may be %s"
 )
 
 ---@alias ErrorCodeType integer
