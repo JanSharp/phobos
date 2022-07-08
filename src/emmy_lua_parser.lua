@@ -144,13 +144,13 @@ local function parse_sequence(sequence, source, positions)
     local current_type
     local start_position = get_position()
 
-    local char = parse_pattern("([\"'`])")
-    if char then -- literal
-      local value = parse_pattern("([^"..char.."]*)"..char)
+    local char = parse_pattern("([\"'])")
+    if char then -- literal string
+      local value = parse_pattern("([^"..char.."]*"..char..")")
       if not value then i = start_i return end
       current_type = el_util.new_literal_type{
         start_position = start_position,
-        value = value--[[@as string]],
+        value = char..value,
       }
     else
       local ident = parse_identifier()

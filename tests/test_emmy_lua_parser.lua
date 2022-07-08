@@ -848,7 +848,7 @@ do
       local got = parse_type(text)
       assert.contents_equals(new_type{
         type_type = "literal",
-        value = "hello world",
+        value = text,
       }, got)
     end
 
@@ -858,10 +858,6 @@ do
 
     scope:add_test("literal type using \"", function()
       test_literal('"hello world"')
-    end)
-
-    scope:add_test("literal type using `", function()
-      test_literal("`hello world`")
     end)
   end
 

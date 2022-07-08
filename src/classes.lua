@@ -846,9 +846,10 @@
 ---@field start_position Position @ inclusive
 ---@field stop_position Position @ inclusive
 
+---NOTE: this is currently purely a literal string, any other literal is currently not supported
 ---@class EmmyLuaLiteralType : EmmyLuaType
 ---@field type_type "literal"
----@field value string
+---@field value string @ has quotes
 
 ---@class EmmyLuaDictionaryType : EmmyLuaType
 ---@field type_type "dictionary"
