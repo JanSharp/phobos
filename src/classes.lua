@@ -604,14 +604,14 @@
 ---@alias ILPosition Position
 
 ---@alias ILTypeFlags
----| '1' @ nil
----| '2' @ boolean
----| '4' @ number
----| '8' @ string
----| '16' @ function
----| '32' @ table
----| '64' @ userdata
----| '128' @ thread
+---| 1 @ nil
+---| 2 @ boolean
+---| 4 @ number
+---| 8 @ string
+---| 16 @ function
+---| 32 @ table
+---| 64 @ userdata
+---| 128 @ thread
 
 ---@class ILType
 ---@field type_flags ILTypeFlags @ bit field

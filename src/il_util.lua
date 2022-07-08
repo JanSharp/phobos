@@ -17,8 +17,9 @@ local every_flag = 255
 ---@field type_flags ILTypeFlags
 
 ---@param params ILTypeParams
+---@return ILType
 local function new_type(params)
-  return params
+  return params--[[@as ILType]]
 end
 
 local copy_identity
@@ -28,8 +29,11 @@ local copy_classes
 local copy_type
 local copy_types
 do
+  ---@generic T : table?
+  ---@param list T
+  ---@return T
   local function copy_list(list, copy_func)
-    if not list then return end
+    if not list then return nil end
     local result = {}
     for i, value in ipairs(list) do
       result[i] = copy_func(value)
@@ -65,6 +69,9 @@ do
     return result
   end
 
+  ---@generic T : ILClass[]?
+  ---@param classes T
+  ---@return T
   function copy_classes(classes)
     return copy_list(classes, copy_class)
   end
@@ -115,7 +122,7 @@ do
   function identity_list_equal(left, right, get_value)
     if not left then return not right end
     local result, lut = contains_internal(left, right, get_value)
-    return result and not next(lut)
+    return result and not next(lut--[[@as table]])
   end
 end
 
@@ -264,6 +271,8 @@ do
     return result
   end
 
+  ---@param left_classes ILClass[]?
+  ---@param right_classes ILClass[]?
   local function union_classes(left_classes, right_classes)
     -- if one of them is nil the result will also be nil
     if not left_classes or not right_classes then return nil end
