@@ -11,64 +11,64 @@
 -- tokens stuff:
 
 ---@alias TokenType
----| '"blank"'
----| '"comment"'
----| '"string"'
----| '"number"'
----| '"ident"' @ identifier
----| '"eof"' @ not created in the tokenizer, but created and used by the parser
----| '"invalid"'
+---| "blank"
+---| "comment"
+---| "string"
+---| "number"
+---| "ident" @ identifier
+---| "eof" @ not created in the tokenizer, but created and used by the parser
+---| "invalid"
 ---
----| '"+"'
----| '"*"'
----| '"/"'
----| '"%"'
----| '"^"'
----| '"#"'
----| '";"'
----| '","'
----| '"("'
----| '")"'
----| '"{"'
----| '"}"'
----| '"]"'
----| '"["'
----| '"<"'
----| '"<="'
----| '"="'
----| '"=="'
----| '">"'
----| '">="'
----| '"-"'
----| '"~="'
----| '"::"'
----| '":"'
----| '"..."'
----| '".."'
----| '"."'
+---| "+"
+---| "*"
+---| "/"
+---| "%"
+---| "^"
+---| "#"
+---| ";"
+---| ","
+---| "("
+---| ")"
+---| "{"
+---| "}"
+---| "]"
+---| "["
+---| "<"
+---| "<="
+---| "="
+---| "=="
+---| ">"
+---| ">="
+---| "-"
+---| "~="
+---| "::"
+---| ":"
+---| "..."
+---| ".."
+---| "."
 ---keywords:
----| '"and"'
----| '"break"'
----| '"do"'
----| '"else"'
----| '"elseif"'
----| '"end"'
----| '"false"'
----| '"for"'
----| '"function"'
----| '"if"'
----| '"in"'
----| '"local"'
----| '"nil"'
----| '"not"'
----| '"or"'
----| '"repeat"'
----| '"return"'
----| '"then"'
----| '"true"'
----| '"until"'
----| '"while"'
----| '"goto"'
+---| "and"
+---| "break"
+---| "do"
+---| "else"
+---| "elseif"
+---| "end"
+---| "false"
+---| "for"
+---| "function"
+---| "if"
+---| "in"
+---| "local"
+---| "nil"
+---| "not"
+---| "or"
+---| "repeat"
+---| "return"
+---| "then"
+---| "true"
+---| "until"
+---| "while"
+---| "goto"
 
 ---@class AstTokenParams : Position
 ---@field token_type TokenType
@@ -93,48 +93,48 @@
 
 ---@alias AstNodeType
 ---special:
----| '"env_scope"'
----| '"functiondef"'
----| '"token"'
----| '"invalid"'
+---| "env_scope"
+---| "functiondef"
+---| "token"
+---| "invalid"
 ---statements:
----| '"empty"'
----| '"ifstat"'
----| '"testblock"'
----| '"elseblock"'
----| '"whilestat"'
----| '"dostat"'
----| '"fornum"'
----| '"forlist"'
----| '"repeatstat"'
----| '"funcstat"'
----| '"localstat"'
----| '"localfunc"'
----| '"label"'
----| '"retstat"'
----| '"breakstat"'
----| '"gotostat"'
----| '"call"' @ expression or statement
----| '"assignment"'
+---| "empty"
+---| "ifstat"
+---| "testblock"
+---| "elseblock"
+---| "whilestat"
+---| "dostat"
+---| "fornum"
+---| "forlist"
+---| "repeatstat"
+---| "funcstat"
+---| "localstat"
+---| "localfunc"
+---| "label"
+---| "retstat"
+---| "breakstat"
+---| "gotostat"
+---| "call" @ expression or statement
+---| "assignment"
 ---expressions:
----| '"local_ref"'
----| '"upval_ref"'
----| '"index"'
----| '"unop"'
----| '"binop"'
----| '"concat"'
----| '"number"'
----| '"string"'
----| '"nil"'
----| '"boolean"'
----| '"vararg"'
----| '"func_proto"'
----| '"constructor"'
+---| "local_ref"
+---| "upval_ref"
+---| "index"
+---| "unop"
+---| "binop"
+---| "concat"
+---| "number"
+---| "string"
+---| "nil"
+---| "boolean"
+---| "vararg"
+---| "func_proto"
+---| "constructor"
 ---optimizer statements:
----| '"inline_iife_retstat"' @ inline immediately invoked function expression return statement
----| '"loopstat"'
+---| "inline_iife_retstat" @ inline immediately invoked function expression return statement
+---| "loopstat"
 ---optimizer expressions:
----| '"inline_iife"' @ inline immediately invoked function expression
+---| "inline_iife" @ inline immediately invoked function expression
 
 ---line, column and leading is only used for some node types that represent a single token\
 ---each ose these nodes have a comment noting this\
@@ -148,13 +148,13 @@
 ---uses line, column and leading\
 ---purely describing the syntax
 ---@class AstTokenNode : AstNode, Token
----@field node_type '"token"'
+---@field node_type "token"
 ---@field index nil @ overridden to `nil`
 
 ---the location of the error is defined in the ErrorCodeInstance\
 ---indicates a syntax error
 ---@class AstInvalidNode : AstNode
----@field node_type '"invalid"'
+---@field node_type "invalid"
 ---@field error_code_inst ErrorCodeInstance
 ---nodes that ended up being unused due to this syntax error\
 ---99% of the time these are AstTokenNodes, however for unexpected_expression they
@@ -186,8 +186,8 @@
 ---@field labels AstLabel[]
 
 ---@class AstFunctionDef : AstScope, AstNode
----@field node_type '"functiondef"'
----@field is_main 'nil' @ overridden by AstMain to be `true`
+---@field node_type "functiondef"
+---@field is_main nil @ overridden by AstMain to be `true`
 ---@field source string
 ---@field is_method boolean @ is it `function foo:bar() end`?
 ---@field func_protos AstFunctionDef[]
@@ -209,23 +209,23 @@
 
 
 ---@class AstEmpty : AstStatement
----@field node_type '"empty"'
+---@field node_type "empty"
 ---@field semi_colon_token AstTokenNode
 
 ---@class AstIfStat : AstStatement
----@field node_type '"ifstat"'
+---@field node_type "ifstat"
 ---@field ifs AstTestBlock[]
 ---@field elseblock AstElseBlock|nil
 ---@field end_token AstTokenNode
 
 ---@class AstTestBlock : AstScope
----@field node_type '"testblock"'
+---@field node_type "testblock"
 ---@field condition AstExpression
 ---@field if_token AstTokenNode @ for the first test block this is an `if` node_type, otherwise `elseif`
 ---@field then_token AstTokenNode @ position for the failure `jup` instruction
 
 ---@class AstElseBlock : AstScope
----@field node_type '"elseblock"'
+---@field node_type "elseblock"
 ---@field else_token AstTokenNode
 
 ---@class AstLoop
@@ -234,19 +234,19 @@
 ---@field linked_breaks AstBreakStat[]|nil
 
 ---@class AstWhileStat : AstStatement, AstScope, AstLoop
----@field node_type '"whilestat"'
+---@field node_type "whilestat"
 ---@field condition AstExpression
 ---@field while_token AstTokenNode
 ---@field do_token AstTokenNode @ position for the failure `jmp` instruction
 ---@field end_token AstTokenNode @ position for the loop `jmp` instruction
 
 ---@class AstDoStat : AstStatement, AstScope
----@field node_type '"dostat"'
+---@field node_type "dostat"
 ---@field do_token AstTokenNode
 ---@field end_token AstTokenNode
 
 ---@class AstForNum : AstStatement, AstScope, AstLoop
----@field node_type '"fornum"'
+---@field node_type "fornum"
 ---`var` is referring to a `whole_block = true` local
 ---@field var AstLocalReference
 ---@field start AstExpression
@@ -261,7 +261,7 @@
 ---@field end_token AstTokenNode
 
 ---@class AstForList : AstStatement, AstScope, AstLoop
----@field node_type '"forlist"'
+---@field node_type "forlist"
 ---@field name_list AstLocalReference[]
 ---@field exp_list AstExpression[]
 ---@field exp_list_comma_tokens AstTokenNode[]
@@ -273,22 +273,22 @@
 ---@field end_token AstTokenNode
 
 ---@class AstRepeatStat : AstStatement, AstScope, AstLoop
----@field node_type '"repeatstat"'
+---@field node_type "repeatstat"
 ---@field condition AstExpression
 ---@field repeat_token AstTokenNode
 ---@field until_token AstTokenNode @ position for the loop `jmp` instruction
 
 ---@class AstFuncStat : AstStatement, AstFuncBase
----@field node_type '"funcstat"'
+---@field node_type "funcstat"
 ---@field name AstExpression
 
 ---@class AstLocalFunc : AstStatement, AstFuncBase
----@field node_type '"localfunc"'
+---@field node_type "localfunc"
 ---@field name AstLocalReference
 ---@field local_token AstTokenNode
 
 ---@class AstLocalStat : AstStatement
----@field node_type '"localstat"'
+---@field node_type "localstat"
 ---@field lhs AstLocalReference[]
 ---@field rhs AstExpression[]|nil @ `nil` = no assignment
 ---@field local_token AstTokenNode
@@ -297,7 +297,7 @@
 ---@field eq_token AstTokenNode|nil @ only used if `rhs` is not `nil`
 
 ---@class AstLabel : AstStatement
----@field node_type '"label"'
+---@field node_type "label"
 ---@field name string
 ---@field name_token AstTokenNode @ its value is `nil`
 ---@field open_token AstTokenNode @ opening `::`
@@ -305,26 +305,26 @@
 ---@field linked_gotos AstGotoStat[]|nil @ evaluated by the jump linker. not `nil` after successful linking
 
 ---@class AstRetStat : AstStatement
----@field node_type '"retstat"'
+---@field node_type "retstat"
 ---@field exp_list AstExpression[]|nil @ `nil` = no return values
 ---@field return_token AstTokenNode @ position for the `return` instruction
 ---@field exp_list_comma_tokens AstTokenNode[]
 ---@field semi_colon_token AstTokenNode|nil @ trailing `;`. `nil` = no semi colon
 
 ---@class AstBreakStat : AstStatement
----@field node_type '"breakstat"'
+---@field node_type "breakstat"
 ---@field break_token AstTokenNode @ position for the break `jmp` instruction
 ---@field linked_loop AstLoop[]|nil @ evaluated by the jump linker. not `nil` after successful linking
 
 ---@class AstGotoStat : AstStatement
----@field node_type '"gotostat"'
+---@field node_type "gotostat"
 ---@field target_name string @ name of the label to jump to
 ---@field target_token AstTokenNode @ its value is `nil`
 ---@field goto_token AstTokenNode @ position for the goto `jmp` instruction
 ---@field linked_label AstLabel|nil @ evaluated by the jump linker. not `nil` after successful linking
 
 ---@class AstCall : AstStatement, AstExpression
----@field node_type '"call"'
+---@field node_type "call"
 ---@field is_selfcall boolean
 ---@field ex AstExpression
 ---only used if `is_selfcall == true`\
@@ -337,7 +337,7 @@
 ---@field close_paren_token AstTokenNode|nil @ position for `move` instructions moving out of temp regs
 
 ---@class AstAssignment : AstStatement
----@field node_type '"assignment"'
+---@field node_type "assignment"
 ---@field lhs AstExpression[]
 ---@field rhs AstExpression[]
 ---@field lhs_comma_tokens AstTokenNode[]
@@ -347,7 +347,7 @@
 
 
 ---@class AstInlineIIFERetstat : AstStatement
----@field node_type '"inline_iife_retstat"'
+---@field node_type "inline_iife_retstat"
 ---@field return_token AstTokenNode
 ---@field exp_list AstExpression[]|nil @ `nil` = no return values
 ---@field exp_list_comma_tokens AstTokenNode[]
@@ -356,7 +356,7 @@
 ---@field leave_block_goto AstGotoStat
 
 ---@class AstLoopStat : AstStatement, AstScope, AstLoop
----@field node_type '"loopstat"'
+---@field node_type "loopstat"
 ---@field do_jump_back boolean|nil @ when false behaves like a dostat, except breakstat can link to this
 ---@field open_token AstTokenNode
 ---@field close_token AstTokenNode @ position for the loop `jmp` instruction
@@ -365,18 +365,18 @@
 
 ---uses line, column and leading
 ---@class AstLocalReference : AstExpression
----@field node_type '"local_ref"'
+---@field node_type "local_ref"
 ---@field name string
 ---@field reference_def AstLocalDef
 
 ---uses line, column and leading
 ---@class AstUpvalReference : AstExpression
----@field node_type '"upval_ref"'
+---@field node_type "upval_ref"
 ---@field name string
 ---@field reference_def AstUpvalDef
 
 ---@class AstIndex : AstExpression
----@field node_type '"index"'
+---@field node_type "index"
 ---@field ex AstExpression
 ---if this is an AstString with `src_is_ident == true`
 ---then it is representing a literal identifier
@@ -393,7 +393,7 @@
 
 ---uses line, column and leading
 ---@class AstString : AstExpression
----@field node_type '"string"'
+---@field node_type "string"
 ---@field value string
 ---if it was just an identifier in source.\
 ---Used in record field keys for table constructors\
@@ -407,26 +407,26 @@
 ---@field src_has_leading_newline boolean|nil @ for block strings
 ---@field src_pad string|nil @ the `=` chain for block strings
 
----@alias AstUnOpOp '"not"'|'"-"'|'"#"'
+---@alias AstUnOpOp "not"|"-"|"#"
 
 ---@class AstUnOp : AstExpression
----@field node_type '"unop"'
+---@field node_type "unop"
 ---@field op AstUnOpOp
 ---@field ex AstExpression
 ---@field op_token AstTokenNode @ position for the various unop instructions
 
----@alias ILBinOpOpBase '"^"'|'"*"'|'"/"'|'"%"'|'"+"'|'"-"'|'"=="'|'"<"'|'"<="'|'"~="'|'">"'|'">="'
----@alias AstBinOpOp ILBinOpOpBase|'"and"'|'"or"'
+---@alias ILBinOpOpBase "^"|"*"|"/"|"%"|"+"|"-"|"=="|"<"|"<="|"~="|">"|">="
+---@alias AstBinOpOp ILBinOpOpBase|"and"|"or"
 
 ---@class AstBinOp : AstExpression
----@field node_type '"binop"'
+---@field node_type "binop"
 ---@field op AstBinOpOp
 ---@field left AstExpression
 ---@field right AstExpression
 ---@field op_token AstTokenNode @ position for the various binop instructions
 
 ---@class AstConcat : AstExpression
----@field node_type '"concat"'
+---@field node_type "concat"
 ---@field exp_list AstExpression[]
 ---max length is `#exp_list - 1`\
 ---first one is position for the `concat` instruction
@@ -447,31 +447,31 @@
 
 ---uses line, column and leading
 ---@class AstNumber : AstExpression
----@field node_type '"number"'
+---@field node_type "number"
 ---@field value number
 ---@field src_value string
 
 ---uses line, column and leading
 ---@class AstNil : AstExpression
----@field node_type '"nil"'
+---@field node_type "nil"
 
 ---uses line, column and leading
 ---@class AstBoolean : AstExpression
----@field node_type '"boolean"'
+---@field node_type "boolean"
 ---@field value boolean
 
 ---uses line, column and leading
 ---@class AstVarArg : AstExpression
----@field node_type '"vararg"'
+---@field node_type "vararg"
 
 ---@class AstFuncProto : AstExpression, AstFuncBase
----@field node_type '"func_proto"'
+---@field node_type "func_proto"
 
 ---@class AstField
----@field type '"rec"'|'"list"'
+---@field type "rec"|"list"
 
 ---@class AstRecordField : AstField
----@field type '"rec"'
+---@field type "rec"
 ---to represent a literal identifier this is
 ---a string expression with `src_is_ident == true`
 ---@field key AstExpression
@@ -481,11 +481,11 @@
 ---@field eq_token AstTokenNode @ position for the `settable` instruction
 
 ---@class AstListField : AstField
----@field type '"list"'
+---@field type "list"
 ---@field value AstExpression
 
 ---@class AstConstructor : AstExpression
----@field node_type '"constructor"'
+---@field node_type "constructor"
 ---@field fields AstField[]
 ---@field open_token AstTokenNode @ position for the `newtable` instruction
 ---`,` or `;` tokens, max length is `#fields`\
@@ -501,14 +501,14 @@
 
 
 ---@class AstInlineIIFE : AstExpression, AstScope
----@field node_type '"inline_iife"'
+---@field node_type "inline_iife"
 ---@field leave_block_label AstLabel
 ---@field linked_inline_iife_retstats AstInlineIIFERetstat[]
 
 
 
 ---@class AstUpvalDef
----@field def_type '"upval"'
+---@field def_type "upval"
 ---@field name string
 ---@field scope AstScope
 ---@field parent_def AstUpvalDef|AstLocalDef
@@ -516,7 +516,7 @@
 ---@field refs AstUpvalReference[] @ all upval references referring to this upval
 
 ---@class AstLocalDef
----@field def_type '"local"'
+---@field def_type "local"
 ---@field name string
 ---@field scope AstScope
 ---i think this means it is defined at the start of
@@ -547,7 +547,7 @@
 ---@field eof_token AstTokenNode @ to store trailing blank and comment tokens
 
 ---@class AstENVScope : AstScope
----@field node_type '"env_scope"'
+---@field node_type "env_scope"
 ---@field parent_scope nil @ overridden
 ---@field main AstMain
 ---@field body AstStatementList @ always empty
@@ -558,41 +558,41 @@
 -- intermediate language:
 
 ---@alias ILPointerType
----| '"reg"'
----| '"vararg"'
----| '"number"'
----| '"string"'
----| '"boolean"'
----| '"nil"'
+---| "reg"
+---| "vararg"
+---| "number"
+---| "string"
+---| "boolean"
+---| "nil"
 
 ---@class ILPointer
 ---@field ptr_type ILPointerType
 
 ---@class ILRegister : ILPointer
----@field ptr_type '"reg"'
+---@field ptr_type "reg"
 ---@field name string|nil
 
 ---@class ILVarargRegister : ILRegister
----@field ptr_type '"vararg"'
+---@field ptr_type "vararg"
 
 ---@class ILNumber : ILPointer
----@field ptr_type '"number"'
+---@field ptr_type "number"
 ---@field value number
 
 ---@class ILString : ILPointer
----@field ptr_type '"string"'
+---@field ptr_type "string"
 ---@field value string
 
 ---@class ILBoolean : ILPointer
----@field ptr_type '"boolean"'
+---@field ptr_type "boolean"
 ---@field value boolean
 
 ---@class ILNil : ILPointer
----@field ptr_type '"nil"'
+---@field ptr_type "nil"
 
 ---@class ILUpval
 ---@field name string|nil
----@field parent_type '"upval"'|'"local"'|'"env"'
+---@field parent_type "upval"|"local"|"env"
 ---@field parent_upval ILUpval|nil @ used if `parent_type == "upval"`
 ---@field reg_in_parent_func ILRegister|nil @ used if `parent_type == "local"`
 ---@field child_upvals ILUpval[]
@@ -601,108 +601,108 @@
 ---@alias ILPosition Position
 
 ---@alias ILInstructionType
----| '"move"'
----| '"get_upval"'
----| '"set_upval"'
----| '"get_table"'
----| '"set_table"'
----| '"new_table"'
----| '"binop"'
----| '"unop"'
----| '"label"'
----| '"jump"'
----| '"test"'
----| '"call"'
----| '"ret"'
----| '"closure"'
----| '"vararg"'
----| '"scoping"'
+---| "move"
+---| "get_upval"
+---| "set_upval"
+---| "get_table"
+---| "set_table"
+---| "new_table"
+---| "binop"
+---| "unop"
+---| "label"
+---| "jump"
+---| "test"
+---| "call"
+---| "ret"
+---| "closure"
+---| "vararg"
+---| "scoping"
 
 ---@class ILInstruction
 ---@field inst_type ILInstructionType
 
 ---@class ILMove
----@field inst_type '"move"'
+---@field inst_type "move"
 ---@field result_reg ILRegister
 ---@field right_ptr ILPointer
 
 ---@class ILGetUpval
----@field inst_type '"get_upval"'
+---@field inst_type "get_upval"
 ---@field result_reg ILRegister
 ---@field upval ILUpval
 
 ---@class ILSetUpval
----@field inst_type '"set_upval"'
+---@field inst_type "set_upval"
 ---@field upval ILUpval
 ---@field right_ptr ILPointer
 
 ---@class ILGetTable
----@field inst_type '"get_table"'
+---@field inst_type "get_table"
 ---@field result_reg ILRegister
 ---@field table_reg ILRegister
 ---@field key_ptr ILPointer
 
 ---@class ILSetTable
----@field inst_type '"set_table"'
+---@field inst_type "set_table"
 ---@field table_reg ILRegister
 ---@field key_ptr ILPointer
 ---Can be a `ILVarargRegister` at which point `key_ptr` has to be an integer constant >= 1
 ---@field right_ptr ILPointer
 
 ---@class ILNewTable
----@field inst_type '"new_table"'
+---@field inst_type "new_table"
 ---@field result_reg ILRegister
 ---@field array_size integer
 ---@field hash_size integer
 
 ---@class ILBinop
----@field inst_type '"binop"'
+---@field inst_type "binop"
 ---@field result_reg ILRegister
----@field op ILBinOpOpBase|'".."' @ note the absence of "and" and "or", but presence of ".."
+---@field op ILBinOpOpBase|".." @ note the absence of "and" and "or", but presence of ".."
 ---@field left_ptr ILPointer
 ---@field right_ptr ILPointer
 
 ---@class ILUnop
----@field inst_type '"unop"'
+---@field inst_type "unop"
 ---@field result_reg ILRegister
 ---@field op AstUnOpOp
 ---@field right_ptr ILPointer
 
 ---@class ILLabel
----@field inst_type '"label"'
+---@field inst_type "label"
 ---@field name string|nil
 
 ---@class ILJump
----@field inst_type '"jump"'
+---@field inst_type "jump"
 ---@field label ILLabel
 
 ---@class ILTest
----@field inst_type '"test"'
+---@field inst_type "test"
 ---@field label ILLabel
 ---@field condition_ptr ILPointer
 ---@field jump_if_true boolean
 
 ---@class ILCall
----@field inst_type '"call"'
+---@field inst_type "call"
 ---@field func_reg ILRegister
 ---@field arg_ptrs ILPointer[] @ The last one can be an `ILVarargRegister`
 ---@field result_regs ILRegister[] @ The last one can be an `ILVarargRegister`
 
 ---@class ILRet
----@field inst_type '"ret"'
+---@field inst_type "ret"
 ---@field ptrs ILPointer[] @ The last one can be an `ILVarargRegister`
 
 ---@class ILClosure
----@field inst_type '"closure"'
+---@field inst_type "closure"
 ---@field result_reg ILRegister
 ---@field func ILFunction
 
 ---@class ILVararg
----@field inst_type '"vararg"'
+---@field inst_type "vararg"
 ---@field result_regs ILRegister[] @ The last one can be an `ILVarargRegister`
 
 ---@class ILScoping
----@field inst_type '"scoping"'
+---@field inst_type "scoping"
 ---@field set_regs ILRegister[]|nil
 ---@field get_regs ILRegister[]|nil
 
@@ -726,15 +726,15 @@
 -- generated/bytecode stuff:
 
 ---@alias OpcodeParamType
----| '1' @ register
----| '2' @ constant
----| '3' @ register_or_constant
----| '4' @ upval
----| '5' @ bool
----| '6' @ floating_byte
----| '7' @ jump_pc_offset
----| '8' @ other
----| 'nil' @ unused
+---| 1 @ register
+---| 2 @ constant
+---| 3 @ register_or_constant
+---| 4 @ upval
+---| 5 @ bool
+---| 6 @ floating_byte
+---| 7 @ jump_pc_offset
+---| 8 @ other
+---| nil @ unused
 
 ---@class OpcodeParams
 ---@field a OpcodeParamType
