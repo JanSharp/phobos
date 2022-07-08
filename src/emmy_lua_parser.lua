@@ -59,6 +59,7 @@ local function parse_sequence(sequence, source, positions)
     emmy_lua_abort(error_code, message_args)
   end
 
+  ---@return (string|boolean)?
   local function parse_pattern(pattern)
     local _, stop, result = line:find("^"..pattern, i)
     if not stop then return end
@@ -87,11 +88,11 @@ local function parse_sequence(sequence, source, positions)
   end
 
   local function parse_special(tag)
-    return parse_pattern(" ?@"..tag)
+    return parse_pattern(" ?@"..tag)--[[@as boolean?]]
   end
 
   local function parse_identifier()
-    return parse_pattern("([_%a][_%w]*)")
+    return parse_pattern("([_%a][_%w]*)")--[[@as string?]]
   end
 
   local function assert_parse_identifier()
@@ -149,7 +150,7 @@ local function parse_sequence(sequence, source, positions)
       if not value then i = start_i return end
       current_type = el_util.new_literal_type{
         start_position = start_position,
-        value = value,
+        value = value--[[@as string]],
       }
     else
       local ident = parse_identifier()
@@ -293,6 +294,7 @@ local function parse_sequence(sequence, source, positions)
   end
 
   local function read_block_starting_at_i()
+    ---@type string[]
     local description = {not is_line_end() and get_rest_of_line() or nil}
     local offset = description[1] and 1 or 0
     next_line()
@@ -617,7 +619,7 @@ local function parse(ast)
 
   ---if there was anything that wasn't a blank token since the prev blank token, finish.
   ---(don't need to check for a newline because there is always a newline after a non block comment)
-  ---@return boolean did_finish
+  ---@return boolean? did_finish
   local function finish_if_there_was_some_token_since_prev_blank(current_token)
     if prev_blank_end_column ~= current_token.column - 1 then
       finish()
@@ -796,15 +798,13 @@ local function parse(ast)
     ---@param node AstConstructor
     constructor = function(node)
       add_token(node.open_token)
-      ---@type AstListField|AstRecordField
       for i, field in ipairs(node.fields) do
         if field.type == "list" then
-          -- ---@narrow field AstListField
+          ---@cast field AstListField
           add_exp(field.value)
         else
-          -- ---@narrow field AstRecordField
-          ---@diagnostic disable-next-line: undefined-field
-          if field.key.node_type == "string" and field.key.src_is_ident then
+          ---@cast field AstRecordField
+          if field.key.node_type == "string" and field.key--[[@as AstString]].src_is_ident then
             add_exp(field.key)
           else
             add_token(field.key_open_token)
@@ -1028,7 +1028,7 @@ local function parse(ast)
     end,
   }
 
-  ---@param node AstStatement
+  ---@param node AstStatement|AstTestBlock|AstElseBlock
   function add_stat(node)
     stats[node.node_type](node)
   end
@@ -1037,7 +1037,7 @@ local function parse(ast)
   function add_scope(node)
     local stat = node.body.first
     while stat do
-      add_stat(stat)
+      add_stat(stat--[[@as AstStatement]])
       stat = stat.next
     end
   end

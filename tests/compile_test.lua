@@ -61,6 +61,7 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
   },
 })
 if not args then util.abort() end
+---@cast args -?
 if args.help then return end
 
 local Path = require("lib.path")

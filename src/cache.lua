@@ -145,6 +145,8 @@ local function load(root_dir, cache_dir)
       for i = 1, files_des:read_medium_uint64() do
         local filename = files_des:read_string()
         local modification = files_des:read_uint64()
+        util.debug_assert(filename, "Corrupted 'files.dat': nil filename.")
+        ---@cast filename -?
         modification_lut[filename] = modification
         required_files[i] = {
           filename = filename,

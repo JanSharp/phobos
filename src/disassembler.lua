@@ -273,7 +273,7 @@ local header_length = #phobos_consts.lua_header_str
 
 local to_double
 do
-  local dumped = string.dump(load[[return 523123.123145345]])
+  local dumped = string.dump(load([[return 523123.123145345]])--[[@as function]])
   local s, e = dumped:find("\3\54\208\25\126\204\237\31\65")
   if s == nil then
     error("Unable to set up bytes to double conversion")
@@ -559,9 +559,9 @@ for opcode_name in pairs(opcodes) do
   end
 end
 
----@class DisassemblyInstructionData
----@field line integer @ 0 for unknown
----@field column integer @ 0 for unknown
+---@class DisassemblyInstructionData : Position
+---@field line integer @ 0 for unknown (overridden to remove `nil`)
+---@field column integer @ 0 for unknown (overridden to remove `nil`)
 ---@field pc integer @ process counter, 1 based
 ---@field op_label string @ padded with spaces on the right to always have the same length
 ---@field description string @ description for the instruction, unknown length

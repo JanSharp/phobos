@@ -8,6 +8,7 @@ local io_util = require("io_util")
 
 local io_util_copy = util.shallow_copy(io_util)
 
+---only `nil` when unhooked or when `new_fs` was never called
 ---@type VirtualFileSystem
 local fs
 
@@ -239,7 +240,7 @@ end
 
 ---reverts all replaced functions
 local function unhook()
-  fs = nil
+  fs = (nil)--[[@as VirtualFileSystem]]
   replace_path_lfs_upvalue("real")
   replace_io_util(io_util_copy)
 end

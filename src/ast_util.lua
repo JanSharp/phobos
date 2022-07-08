@@ -34,10 +34,10 @@ end
 ---@return AstLocalDef def
 ---@return AstLocalReference ref
 function ast.create_local(ident_token, scope)
-  local local_def = ast.new_local_def(ident_token.value, scope)
+  local local_def = ast.new_local_def(ident_token.value--[[@as string]], scope)
   local ref = nodes.new_local_ref{
     position = ident_token,
-    name = ident_token.value,
+    name = ident_token.value--[[@as string]],
     reference_def = local_def,
   }
   local_def.refs[#local_def.refs+1] = ref
@@ -129,13 +129,13 @@ do
   ---@param stat_stack? AstStatement[] @ `nil` means "at the end of all scopes"
   ---@param name string
   ---@param node_for_position? AstNode
-  ---@return AstUpvalReference|AstLocalReference
+  ---@return AstLocalReference|AstUpvalReference
   function ast.resolve_ref(target_scope, stat_stack, name, node_for_position)
     node_for_position = node_for_position or {}
     local def = try_get_def(target_scope, stat_stack, name)
     if def then
       -- `local_ref` or `upval_ref`
-      local ref = (def.def_type == "local" and nodes.new_local_ref or nodes.new_upval_ref){
+      local ref = (def.def_type == "local" and nodes.new_local_ref or nodes.new_upval_ref)--[[@as (fun(params: AstLocalReferenceParams):AstLocalReference)|(fun(params: AstUpvalReferenceParams):AstUpvalReference)]]{
         name = name,
         reference_def = def,
       }
@@ -239,7 +239,7 @@ function ast.get_functiondef(scope)
 end
 
 function ast.new_main(source)
-  local env_scope = nodes.new_env_scope{main = true} -- prevent assert
+  local env_scope = nodes.new_env_scope{main = (true)--[[@as AstMain]]} -- prevent assert
   -- Lua emits _ENV as if it's a local in the parent scope
   -- of the file. I'll probably change this one day to be
   -- the first upval of the parent scope, since load()
@@ -292,6 +292,7 @@ end
 
 local get_main_position
 do
+  ---@type table<AstNode, fun(node: AstNode):Position>
   local getter_lut = {
     ["env_scope"] = function(node)
       error("node_type 'env_scope' is purely fake and therefore has no main position")
@@ -419,6 +420,8 @@ do
       return node.body.first and get_main_position(node.body.first.value)
     end,
   }
+  ---@param node AstNode
+  ---@return Position
   function ast.get_main_position(node)
     return getter_lut[node.node_type](node)
   end

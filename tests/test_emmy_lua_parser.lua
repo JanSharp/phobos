@@ -97,6 +97,7 @@ do
   function parse_type(text, do_not_check_for_trailing_space_consumption)
     local result, errors = parse_type_internal(text, do_not_check_for_trailing_space_consumption)
     assert.equals(nil, errors[1], "EmmyLua syntax errors")
+    ---@cast result -?
     assert.contents_equals(new_pos(1, 21), result.start_position, "start_position")
     assert.contents_equals(new_pos(1, 20 + #text), result.stop_position, "stop_position")
     return result

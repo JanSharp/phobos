@@ -135,7 +135,7 @@ function serializer:write_uint_space_optimized(value)
 end
 
 do
-  local double_start, double_end = string.dump(load("return 523123.123145345"))
+  local double_start, double_end = string.dump(load("return 523123.123145345")--[[@as function]])
     :find("\54\208\25\126\204\237\31\65")
   if not double_start then
     util.debug_abort("Unable to set up double to bytes conversion.")
@@ -152,7 +152,8 @@ do
     elseif double_cache[value] then
       self:write_raw(double_cache[value], 8)
     else
-      local double_str = string.dump(load(string.format("return %a", value))):sub(double_start, double_end)
+      local double_str = string.dump(load(string.format("return %a", value))--[[@as function]])
+        :sub(double_start, double_end)
       double_cache[value] = double_str
       self:write_raw(double_str, 8)
     end
@@ -341,7 +342,7 @@ function deserializer:read_uint_space_optimized()
 end
 
 do
-  local dumped = string.dump(load("return 523123.123145345"))
+  local dumped = string.dump(load("return 523123.123145345")--[[@as function]])
   local double_start, double_end = dumped:find("\54\208\25\126\204\237\31\65")
   if double_start == nil then
     util.debug_abort("Unable to set up bytes to double conversion")
@@ -359,6 +360,7 @@ do
       if not double_func then
         util.debug_abort("Unable to deserialize double, see inner error: "..err)
       end
+      ---@cast double_func -?
       local success, result = pcall(double_func)
       if not success then
         util.debug_abort("Unable to deserialize double, see inner error: "..result)

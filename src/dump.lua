@@ -26,7 +26,7 @@ end
 
 local dump_double
 do
-  local s , e = string.dump(load[[return 523123.123145345]])
+  local s , e = string.dump(load([[return 523123.123145345]])--[[@as function]])
                       :find("\3\54\208\25\126\204\237\31\65")
   if s == nil then
     error("Unable to set up double to bytes conversion")
@@ -44,7 +44,7 @@ do
     elseif double_cache[d] then
       return double_cache[d]
     else
-      local double_str = string.dump(load(([[return %a]]):format(d))):sub(s,e)
+      local double_str = string.dump(load(([[return %a]]):format(d))--[[@as function]]):sub(s,e)
       double_cache[d] = double_str
       return double_str
     end
