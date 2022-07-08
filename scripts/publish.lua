@@ -52,6 +52,7 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
   },
 })
 if not args then util.abort() end
+---@cast args -?
 if args.help then return end
 
 local function run(...)
@@ -127,14 +128,14 @@ end
 -- run all tests (currently testing is very crude, so just `tests/compile_test.lua`)
 if not args.skip_tests then
   print("Running tests")
-  local success, err = pcall(loadfile("tests/main.lua"), table.unpack{
+  local success, err = pcall(util.assert(loadfile("tests/main.lua")), table.unpack{
     "--print-failed",
     "--print-stacktrace",
   })
   if not success then
     util.abort("Tests failed")
   end
-  success, err = pcall(loadfile("tests/compile_test.lua"), table.unpack{
+  success, err = pcall(util.assert(loadfile("tests/compile_test.lua")), table.unpack{
     "--test-disassembler",
     "--ensure-clean",
     "--test-formatter",
@@ -155,6 +156,7 @@ if not version_str then
   util.abort("Unable to get version from info.json")
 end
 local version = changelog_util.parse_version(version_str)
+---@cast version -?
 if version_str ~= changelog_util.print_version(version) then
   util.abort("Version "..version_str.." has leading 0s. It should be "..changelog_util.print_version(version))
 end

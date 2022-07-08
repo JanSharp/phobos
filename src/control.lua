@@ -66,7 +66,7 @@ local function phobos_command(args, silent, measured)
   end
 
   local max_errors_shown = 8
-  local profiler = measured and game.create_profiler() or nil
+  local profiler = (measured and game.create_profiler() or nil)--[[@as table]]
   local ast, parser_errors = parser(args.parameter, args.parameter)
   if parser_errors[1] then
     print_msg(error_code_util.get_message_for_list(parser_errors, "syntax errors", max_errors_shown))

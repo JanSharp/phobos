@@ -5,6 +5,9 @@ local api_util = require("api_util")
 local util = require("util")
 
 ---@class PhobosProfilesInternal : PhobosProfiles
+---@field internal table
+
+---@type PhobosProfilesInternal
 local phobos_profiles = {
   internal = {
     all_profiles = {},
@@ -85,7 +88,7 @@ end
 function phobos_profiles.parse_extra_args(extra_args, config)
   ---@diagnostic disable-next-line:redefined-local
   return phobos_profiles.custom_parse_extra_args(extra_args, function(extra_args)
-    local args, err_or_index = arg_parser.parse(extra_args, config)
+    local args, err_or_index = arg_parser.parse--[[@as fun(a,b):table?,string?]](extra_args, config)
     if not args or args.help then
       if args then
         -- set it to nil if it was an index, making it an error message or nil

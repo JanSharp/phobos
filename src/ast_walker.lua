@@ -48,6 +48,7 @@ end
 -- and probably should
 -- but for now it's a nice validation that all the node_types are correct
 -- ... unit tests where are you?!
+---@type table<AstExpression, fun(node: AstExpression, context: AstWalkerContext)>
 local exprs = {
   ---@param node AstLocalReference
   local_ref = function(node, context)
@@ -97,10 +98,10 @@ local exprs = {
     ---@type AstListField|AstRecordField
     for _, field in ipairs(node.fields) do
       if field.type == "list" then
-        -- ---@narrow field AstListField
+        ---@cast field AstListField
         walk_exp(field.value, context)
       else
-        -- ---@narrow field AstRecordField
+        ---@cast field AstRecordField
         walk_exp(field.key, context)
         walk_exp(field.value, context)
       end
@@ -151,6 +152,7 @@ local function walk_elseblock(elseblock, context)
 end
 
 -- same here, empty functions could and should be removed
+---@type table<AstStatement, fun(node: AstStatement, context: AstWalkerContext)>
 local stats = {
   ---@param node AstEmpty
   empty = function(node, context)

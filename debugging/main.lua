@@ -206,7 +206,7 @@ local function compile(filename)
 
     success, err = pcall(require("jump_linker"), main)
     if not success then print(err) goto finish end
-    if err[1] then
+    if err--[[@as table]][1] then
       error(error_code_util.get_message_for_list(err, "syntax errors"))
     end
 

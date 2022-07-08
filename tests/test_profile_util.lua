@@ -47,6 +47,7 @@ local function get_compile_options(filename, index)
       ..(index and ("' (index "..index..")") or "'").."."
     )
   end
+  ---@cast options -?
   return options
 end
 
@@ -212,7 +213,7 @@ do
   end
 
   ---@param filename string @ used to evaluate source and output args
-  ---@param params IncludeParams
+  ---@param params IncludeParams?
   local function include_file(filename, params)
     params = params or {}
     params.profile = profile
@@ -224,7 +225,7 @@ do
   end
 
   ---@param dir string @ used to evaluate source and output args
-  ---@param params IncludeParams
+  ---@param params IncludeParams?
   local function include_dir(dir, params)
     params = params or {}
     params.profile = profile
@@ -235,7 +236,7 @@ do
     return params
   end
 
-  ---@param params IncludeCopyParams
+  ---@param params IncludeCopyParams?
   local function include_copy(path, params)
     params = params or {}
     params.profile = profile
@@ -245,7 +246,7 @@ do
     return params
   end
 
-  ---@param params IncludeDeleteParams
+  ---@param params IncludeDeleteParams?
   local function include_delete(path, params)
     params = params or {}
     params.profile = profile
@@ -265,12 +266,12 @@ do
       return params
     end
 
-    ---@param params ExcludeParams
+    ---@param params ExcludeParams?
     function exclude_file(path, params)
       return exclude("src/"..path.._pho, params)
     end
 
-    ---@param params ExcludeParams
+    ---@param params ExcludeParams?
     function exclude_dir(path, params)
       return exclude("src/"..path, params)
     end

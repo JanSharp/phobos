@@ -8,84 +8,6 @@ local keywords = util.invert{
   "while", "goto",
 }
 
----@alias TokenType
----| '"blank"'
----| '"comment"'
----| '"string"'
----| '"number"'
----| '"ident"' @ identifier
----| '"eof"' @ not created in the tokenizer, but created and used by the parser
----| '"invalid"'
----
----| '"+"'
----| '"*"'
----| '"/"'
----| '"%"'
----| '"^"'
----| '"#"'
----| '";"'
----| '","'
----| '"("'
----| '")"'
----| '"{"'
----| '"}"'
----| '"]"'
----| '"["'
----| '"<"'
----| '"<="'
----| '"="'
----| '"=="'
----| '">"'
----| '">="'
----| '"-"'
----| '"~="'
----| '"::"'
----| '":"'
----| '"..."'
----| '".."'
----| '"."'
----keywords:
----| '"and"'
----| '"break"'
----| '"do"'
----| '"else"'
----| '"elseif"'
----| '"end"'
----| '"false"'
----| '"for"'
----| '"function"'
----| '"if"'
----| '"in"'
----| '"local"'
----| '"nil"'
----| '"not"'
----| '"or"'
----| '"repeat"'
----| '"return"'
----| '"then"'
----| '"true"'
----| '"until"'
----| '"while"'
----| '"goto"'
-
----@class Token
----@field token_type TokenType
----@field index number
----@field line number
----@field column number
----for `blank`, `comment`, `string`, `number`, `ident` and `invalid` tokens\
----"blank" tokens shall never contain `\n` in the middle of their value\
----"comment" tokens with `not src_is_block_str` do not contain trailing `\n`
----@field value string|number
----@field src_is_block_str boolean @ for `string` and `comment` tokens
----@field src_quote string @ for non block `string` tokens
----@field src_value string @ for non block `string` and `number` tokens
----@field src_has_leading_newline boolean @ for block `string` and `comment` tokens
----@field src_pad string @ the `=` chain for block `string` and `comment` tokens
----@field leading Token[] @ `blank` and `comment` tokens before this token. Set and used by the parser
----for `invalid` tokens
----@field error_code_insts ErrorCodeInstance[]
-
 ---@param token_type TokenType
 ---@param index number
 ---@param line number
@@ -106,9 +28,9 @@ local function add_error_code_inst(token, inst)
 end
 
 ---@param str string
----@param index number
+---@param index integer
 ---@param next_char string
----@return number
+---@return integer
 ---@return Token
 local function peek_equals(str,index,next_char,line,column)
   if str:sub(index+1,index+1) == "=" then
@@ -140,6 +62,12 @@ local escape_sequence_lut = {
   -- ["\r"] = "\r", ["\n"] = "\n", -- \r and \n are handled separately
 }
 
+---@param str string
+---@param index integer
+---@param quote "\""|"'"
+---@param state TokenizeState
+---@return integer
+---@return Token
 local function read_string(str,index,quote,state)
   local token = new_token("string",index,state.line,index - state.line_offset)
 
@@ -285,6 +213,11 @@ end
 
 local block_string_open_bracket_pattern = "^%[(=*)%["
 
+---@param str string
+---@param index integer
+---@param state TokenizeState
+---@return integer
+---@return Token
 local function read_block_string(str,index,state)
   local _,open_end,pad = str:find(block_string_open_bracket_pattern,index)
   if not pad then
@@ -374,11 +307,16 @@ local function try_read_number_part(str, index, state, num_pattern, start_prefix
     end
     local token = new_token("number",index,state.line,index - state.line_offset)
     token.src_value = str:sub(num_start,num_end)
-    token.value = tonumber(token.src_value)
+    token.value = tonumber(token.src_value)--[[@as number]]
     return true, num_end+1,token
   end
 end
 
+---@param str string
+---@param index integer
+---@param state TokenizeState
+---@return integer?
+---@return Token?
 local function try_read_number(str, index, state)
   local success, result_end, token = try_read_number_part(str, index, state, "%x", "0[xX]", "[pP]")
   if success then
@@ -407,6 +345,11 @@ local function try_read_number(str, index, state)
   end
 end
 
+---@param invalid_char string
+---@param index integer
+---@param state TokenizeState
+---@return integer
+---@return Token
 local function simple_invalid_token(invalid_char, index, state)
   local token = new_token("invalid",index,state.line,index - state.line_offset)
   token.value = invalid_char
@@ -421,9 +364,9 @@ local function simple_invalid_token(invalid_char, index, state)
 end
 
 ---@param state TokenizeState
----@param index number
----@return number
----@return Token
+---@param index integer
+---@return integer?
+---@return Token?
 local function next_token(state,index)
   if not index then index = 1 end
   local str = state.str
@@ -528,6 +471,7 @@ end
 
 ---@class TokenizeState
 ---@field str string
+---@field source string
 ---@field line integer
 ---@field line_offset integer @ the exact index of the last newline
 ---@field prev_line integer|nil
@@ -537,7 +481,7 @@ end
 ---@param source? string @ if provided it is used for the `source` field of error code instances
 ---@return fun(state: TokenizeState, index: integer|nil): integer|nil, Token next_token
 ---@return TokenizeState state
----@return number|nil index
+---@return integer? index
 local function tokenize(str, source)
   local index
   local state = {

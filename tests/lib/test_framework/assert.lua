@@ -3,6 +3,7 @@ local deep_compare = require("deep_compare")
 local pretty_print = require("pretty_print").pretty_print
 
 local print_full_data_on_error_default = false
+---@param value boolean
 local function set_print_full_data_on_error_default(value)
   print_full_data_on_error_default = value
 end
@@ -10,8 +11,10 @@ local function get_print_full_data_on_error_default()
   return print_full_data_on_error_default
 end
 
+---@type (fun(msg:string?):string?)[]
 local err_msg_handlers = {}
 
+---@param handler fun(msg: string?):string?
 local function push_err_msg_handler(handler)
   err_msg_handlers[#err_msg_handlers+1] = handler
 end
@@ -20,6 +23,8 @@ local function pop_err_msg_handler()
   err_msg_handlers[#err_msg_handlers] = nil
 end
 
+---@param err string
+---@param msg string?
 local function add_msg(err, msg)
   -- start at the inner most handler first which was the last one added,
   -- which also means it is the inner most scope
@@ -29,6 +34,8 @@ local function add_msg(err, msg)
   return err..(msg and (": "..msg) or ".")
 end
 
+---@param value any
+---@param msg string?
 local function assert(value, msg)
   if not value then
     error(add_msg("assertion failed", msg))
@@ -36,6 +43,9 @@ local function assert(value, msg)
   return value
 end
 
+---@param expected any
+---@param got any
+---@param msg string?
 local function equals(expected, got, msg)
   -- also test for nan
   if got ~= expected and (got == got or expected == expected) then
@@ -43,6 +53,9 @@ local function equals(expected, got, msg)
   end
 end
 
+---@param expected any
+---@param got any
+---@param msg string?
 local function not_equals(expected, got, msg)
   -- also tests for nan
   if got == expected or (got ~= got and expected ~= expected) then
@@ -62,7 +75,10 @@ local function get_ref_locations(locations, side)
     or ("\n"..side.." none")
 end
 
----@param options ContentsEqualsOptions
+---@param expected any
+---@param got any
+---@param msg string?
+---@param options ContentsEqualsOptions?
 local function contents_equals(expected, got, msg, options)
   options = options or {}
   local equal, difference = deep_compare.deep_compare(
@@ -148,6 +164,10 @@ local function contents_equals(expected, got, msg, options)
   end
 end
 
+---@param expected_pattern string
+---@param got_func function @ function that's expected to error
+---@param msg string?
+---@param plain boolean?
 local function errors(expected_pattern, got_func, msg, plain)
   local stacktrace
   local success, err = xpcall(got_func, function(err)

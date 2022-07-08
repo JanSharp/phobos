@@ -237,6 +237,7 @@ return {
   write_file = write_file,
   copy = copy,
   move = move,
+  delete_file = delete_file,
   symlink = symlink,
   exists = exists,
   enumerate = enumerate,

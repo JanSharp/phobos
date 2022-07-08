@@ -97,6 +97,7 @@ do
   function parse_type(text, do_not_check_for_trailing_space_consumption)
     local result, errors = parse_type_internal(text, do_not_check_for_trailing_space_consumption)
     assert.equals(nil, errors[1], "EmmyLua syntax errors")
+    ---@cast result -?
     assert.contents_equals(new_pos(1, 21), result.start_position, "start_position")
     assert.contents_equals(new_pos(1, 20 + #text), result.stop_position, "stop_position")
     return result
@@ -847,7 +848,7 @@ do
       local got = parse_type(text)
       assert.contents_equals(new_type{
         type_type = "literal",
-        value = "hello world",
+        value = text,
       }, got)
     end
 
@@ -857,10 +858,6 @@ do
 
     scope:add_test("literal type using \"", function()
       test_literal('"hello world"')
-    end)
-
-    scope:add_test("literal type using `", function()
-      test_literal("`hello world`")
     end)
   end
 

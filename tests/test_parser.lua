@@ -21,8 +21,9 @@ local prevent_assert = nodes.new_invalid{
 }
 local fake_main
 
+---@return {}?
 local function empty_table_or_nil()
-  return assert.custom_comparator({{}}, true)
+  return assert.custom_comparator({{}}, true)--[[@as {}?]]
 end
 
 local function make_fake_main()
@@ -1620,7 +1621,7 @@ do
             -- have to do this afterwards such that the unexpected expression
             -- is the first in the invalid nodes list
             -- since it cones first in the file
-            invalid.consumed_nodes[1].args[1] = new_invalid(
+            invalid.consumed_nodes[1]--[[@as AstCall]].args[1] = new_invalid(
               nil,
               unexpected_token, -- at '\1'
               nil,
@@ -2086,7 +2087,7 @@ do
             concat_src_paren_wrappers = assert.custom_comparator({
               {},
               {{}, {}},
-            }, true),
+            }, true)--[[@as {}|{[1]: {}, [2]: {}}?]],
           }
           expr.exp_list[2] = next_true_node()
           expr.op_tokens[2] = next_token_node()
@@ -2175,7 +2176,7 @@ do
             concat_src_paren_wrappers = assert.custom_comparator({
               {},
               {{}},
-            }, true),
+            }, true)--[[@as {}|{[1]: {}, [2]: {}}?]],
           }
           return expr
         end

@@ -1,6 +1,7 @@
 
 local serpent = require("lib.serpent")
 
+---@type table<string, fun(value:any):string>
 local custom_pretty_printers = {}
 
 local function pretty_print(value, serpent_opts)

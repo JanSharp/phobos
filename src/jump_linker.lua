@@ -108,7 +108,7 @@ local function link(func)
             local local_stat = latest_new_local_stat
             local local_ref = local_stat.node_type == "localfunc" and local_stat.name
               or local_stat.node_type == "localstat" and local_stat.lhs[#local_stat.lhs]
-              or error("Impossible `local_stat.node_type` '"..local_stat.node_type.."'.")
+              or error("Impossible `local_stat.node_type` '"..local_stat.node_type.."'.")--[[@as AstLocalReference]]
             go.label_is_in_scope_but_jump_is_invalid = true
             add_error(
               func,

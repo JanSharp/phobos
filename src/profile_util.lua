@@ -546,7 +546,7 @@ local function process_include(include_def, collection)
       end
       -- "" matches everything, don't waste time processing all of this
       if not source_path_is_file and include_def.filename_pattern ~= "" and included then
-        included = ("/"..relative_entry_path:str()):find(include_def.filename_pattern)
+        included = ("/"..relative_entry_path:str()):find(include_def.filename_pattern)--[[@as boolean]]
       end
       if included then
         include_file(relative_entry_path, source_path_is_file)

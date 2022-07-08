@@ -55,6 +55,8 @@ local function decode(text)
     if not version then
       error("Expected version on line "..line)
     end
+    ---@cast version -?
+    ---@cast end_pos -?
     i = end_pos
     return version
   end

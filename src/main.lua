@@ -66,6 +66,7 @@ phobos_profiles.internal.main_help_config = help_config
 local arg_strings = {...}
 local args, last_arg_index = arg_parser.parse_and_print_on_error_or_help(arg_strings, args_config, help_config)
 if not args then util.abort() end
+---@cast args -?
 if args.help then return end
 
 if args.version then
@@ -94,11 +95,11 @@ end
 sandbox_util.enable_phobos_require()
 local profiles_context = compile_util.new_context()
 for _, profiles_path in ipairs(args.profile_files) do
-  local main_chunk = assert(load(compile_util.compile({
+  local main_chunk = assert(load(util.assert(compile_util.compile({
     source_name = "@?",
     filename = profiles_path:str(),
     accept_bytecode = true,
-  }, profiles_context), nil, "b"))
+  }, profiles_context)), nil, "b"))
   phobos_profiles.internal.current_profile_file = profiles_path:str()
   phobos_profiles.internal.current_root_dir = profiles_path:sub(1, -2):to_fully_qualified():str()
   -- TODO: add the current root directory to package.path, [...]
