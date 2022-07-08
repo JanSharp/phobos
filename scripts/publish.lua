@@ -51,6 +51,7 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
   },
 })
 if not args then return end
+---@cast args -?
 
 local function escape_arg(arg)
   return '"'..arg:gsub("[$`\"\\]", "\\%0")..'"'
@@ -120,7 +121,7 @@ end
 -- run all tests (currently testing is very crude, so just `tests/compile_test.lua`)
 if not args.skip_tests then
   print("Running tests")
-  local success, err = pcall(loadfile("tests/compile_test.lua"), table.unpack{
+  local success, err = pcall(assert(loadfile("tests/compile_test.lua")), table.unpack{
     "--test-disassembler",
     -- "--ensure-clean", -- see compile_test.lua about performance problems
     "--test-formatter",
@@ -146,6 +147,7 @@ if not version_str then
   error("Unable to get version from info.json")
 end
 local version = changelog_util.parse_version(version_str)
+---@cast version -?
 if version_str ~= changelog_util.print_version(version) then
   error("Version "..version_str.." has leading 0s. It should be "..changelog_util.print_version(version))
 end

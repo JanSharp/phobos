@@ -3,6 +3,7 @@ local deep_compare = require("deep_compare")
 local pretty_print = require("pretty_print")
 
 local print_full_data_on_error_default = false
+---@param value boolean
 local function set_print_full_data_on_error_default(value)
   print_full_data_on_error_default = value
 end
@@ -10,22 +11,32 @@ local function get_print_full_data_on_error_default()
   return print_full_data_on_error_default
 end
 
+---@param err string
+---@param msg string?
 local function add_msg(err, msg)
   return err..(msg and ": "..msg or ".")
 end
 
+---@param value any
+---@param msg string?
 local function assert(value, msg)
   if not value then
     error(add_msg("assertion failed", msg))
   end
 end
 
+---@param expected any
+---@param got any
+---@param msg string?
 local function equals(expected, got, msg)
   if got ~= expected then
     error(add_msg("expected "..pretty_print(expected)..", got "..pretty_print(got), msg))
   end
 end
 
+---@param expected any
+---@param got any
+---@param msg string?
 local function not_equals(expected, got, msg)
   if got == expected then
     error(add_msg("expected not "..pretty_print(got), msg))
@@ -56,7 +67,10 @@ local function get_ref_locations(locations, side)
     or ("\n"..side.." none")
 end
 
----@param options ContentsEqualsOptions
+---@param expected any
+---@param got any
+---@param msg string?
+---@param options ContentsEqualsOptions?
 local function contents_equals(expected, got, msg, options)
   options = options or {}
   local equal, difference = deep_compare.deep_compare(
@@ -142,6 +156,9 @@ local function contents_equals(expected, got, msg, options)
   end
 end
 
+---@param expected_pattern string
+---@param got_func function @ function that's expected to error
+---@param msg string?
 local function errors(expected_pattern, got_func, msg)
   local success, err = pcall(got_func)
   if success then

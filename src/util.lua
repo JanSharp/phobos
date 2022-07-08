@@ -100,5 +100,4 @@ return {
   replace_table = replace_table,
   shallow_copy = shallow_copy,
   copy = copy,
-
 }

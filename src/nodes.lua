@@ -32,7 +32,7 @@ end
 -- base nodes
 
 ---@class AstPositionParams
----@field position Token|AstTokenNode|nil
+---@field position Position
 
 ---@class AstStatementBaseParams
 
@@ -142,9 +142,6 @@ function nodes.new_functiondef(params)
   node.eof_token = params.eof_token
   return node
 end
-
----@class AstTokenParams : Token
----@field index nil @ overridden to `nil`
 
 ---@param params AstTokenParams
 function nodes.new_token(params)

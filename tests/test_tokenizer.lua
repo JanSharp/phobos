@@ -462,7 +462,10 @@ do
                 message_args = assert.do_not_compare_flag,
                 source = test_source,
                 -- same here
-                position = {line = assert.do_not_compare_flag, column = assert.do_not_compare_flag},
+                position = {
+                  line = assert.do_not_compare_flag--[[@as integer?]],
+                  column = assert.do_not_compare_flag--[[@as integer?]],
+                },
               }
             end
             token.error_code_insts = {

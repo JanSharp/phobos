@@ -1,4 +1,8 @@
 
+---@diagnostic disable
+
+-- NOTE: why does this file still exist? It's horribly broken and outdated
+
 local ast_walker = require("ast_walker")
 
 local on_open = {

@@ -1,5 +1,94 @@
 
 --------------------------------------------------
+-- general stuff:
+
+---@class Position
+---@field line integer?
+---@field column integer?
+---@field index nil @ -- TODO: maybe do add the index to all AstTokenNodes
+
+--------------------------------------------------
+-- tokens stuff:
+
+---@alias TokenType
+---| '"blank"'
+---| '"comment"'
+---| '"string"'
+---| '"number"'
+---| '"ident"' @ identifier
+---| '"eof"' @ not created in the tokenizer, but created and used by the parser
+---| '"invalid"'
+---
+---| '"+"'
+---| '"*"'
+---| '"/"'
+---| '"%"'
+---| '"^"'
+---| '"#"'
+---| '";"'
+---| '","'
+---| '"("'
+---| '")"'
+---| '"{"'
+---| '"}"'
+---| '"]"'
+---| '"["'
+---| '"<"'
+---| '"<="'
+---| '"="'
+---| '"=="'
+---| '">"'
+---| '">="'
+---| '"-"'
+---| '"~="'
+---| '"::"'
+---| '":"'
+---| '"..."'
+---| '".."'
+---| '"."'
+---keywords:
+---| '"and"'
+---| '"break"'
+---| '"do"'
+---| '"else"'
+---| '"elseif"'
+---| '"end"'
+---| '"false"'
+---| '"for"'
+---| '"function"'
+---| '"if"'
+---| '"in"'
+---| '"local"'
+---| '"nil"'
+---| '"not"'
+---| '"or"'
+---| '"repeat"'
+---| '"return"'
+---| '"then"'
+---| '"true"'
+---| '"until"'
+---| '"while"'
+---| '"goto"'
+
+---@class AstTokenParams : Position
+---@field token_type TokenType
+---for `blank`, `comment`, `string`, `number`, `ident` and `invalid` tokens\
+---"blank" tokens shall never contain `\n` in the middle of their value\
+---"comment" tokens with `not src_is_block_str` do not contain trailing `\n`
+---@field value string|number
+---@field src_is_block_str boolean @ for `string` and `comment` tokens
+---@field src_quote string @ for non block `string` tokens
+---@field src_value string @ for non block `string` and `number` tokens
+---@field src_has_leading_newline boolean @ for block `string` and `comment` tokens
+---@field src_pad string @ the `=` chain for block `string` and `comment` tokens
+---@field leading Token[] @ `blank` and `comment` tokens before this token. Set and used by the parser
+---for `invalid` tokens
+---@field error_code_insts ErrorCodeInstance[]
+
+---@class Token : AstTokenParams
+---@field index integer
+
+--------------------------------------------------
 -- ast stuff:
 
 ---@alias AstNodeType
@@ -52,10 +141,8 @@
 ---however even those those these value are optional,
 ---them being omitted means stripped/missing debug info\
 ---it should also be expected that only some of them could be `nil`
----@class AstNode
+---@class AstNode : Position
 ---@field node_type AstNodeType
----@field line integer|nil
----@field column integer|nil
 ---@field leading Token[]|nil @ `"blank"` and `"comment"` tokens
 
 ---uses line, column and leading\
@@ -92,7 +179,7 @@
 ---@field scope AstScope
 
 ---@class AstScope : AstNode
----@field parent_scope AstScope|nil @ `nil` for the top level scope, the main function
+---@field parent_scope AstScope @ `nil` for AstENVScope (very top level)
 ---@field child_scopes AstScope[]
 ---@field body AstStatementList
 ---@field locals AstLocalDef[]
@@ -383,7 +470,7 @@
 ---@class AstField
 ---@field type '"rec"'|'"list"'
 
----@class AstRecordField
+---@class AstRecordField : AstField
 ---@field type '"rec"'
 ---to represent a literal identifier this is
 ---a string expression with `src_is_ident == true`
@@ -393,7 +480,7 @@
 ---@field key_close_token AstTokenNode|nil @ `]` node_type if the key is using it
 ---@field eq_token AstTokenNode @ position for the `settable` instruction
 
----@class AstListField
+---@class AstListField : AstField
 ---@field type '"list"'
 ---@field value AstExpression
 
@@ -434,24 +521,26 @@
 ---@field scope AstScope
 ---i think this means it is defined at the start of
 ---the block and lasts for the entire block
----@field whole_block boolean|nil
----@field start_at AstStatement|nil
----@field start_offset '0'|'1'|nil @ `0` for "start before/at", `1` for "start after"
+---@field whole_block boolean?
+---@field start_at AstStatement?
+---@field start_offset (0|1)? @ `0` for "start before/at", `1` for "start after"
 ---@field child_defs AstUpvalDef[]
 ---@field refs AstLocalReference[] @ all local references referring to this local
 ---when true this did not exist in source, but
 ---was added because methods implicitly have the `self` parameter
----@field src_is_method_self boolean|nil
+---@field src_is_method_self boolean?
 
----@class AstMain : AstFunctionDef, AstStatement
+---NOTE: inheriting AstScope even though AstFunctionDef already inherits it [...]
+---because sumneko.lua `3.4.2` otherwise thinks AstMain isn't an AstScope
+---@class AstMain : AstFunctionDef, AstStatement, AstScope
 ---@field parent_scope AstENVScope
----@field is_main 'true'
----@field is_method 'false'
----@field line '0'
----@field column '0'
----@field end_line '0'
----@field end_column '0'
----@field is_vararg 'true'
+---@field is_main true
+---@field is_method false
+---@field line 0
+---@field column 0
+---@field end_line 0
+---@field end_column 0
+---@field is_vararg true
 ---if the first character of the parsed string is `#` then this contains
 ---the first line terminated by `\n` exclusive, but inclusive `#`
 ---@field shebang_line string|nil
@@ -459,6 +548,7 @@
 
 ---@class AstENVScope : AstScope
 ---@field node_type '"env_scope"'
+---@field parent_scope nil @ overridden
 ---@field main AstMain
 ---@field body AstStatementList @ always empty
 ---@field locals AstLocalDef[] @ always exactly 1 `whole_block = true` local with the name `_ENV`
@@ -507,10 +597,8 @@
 ---@field reg_in_parent_func ILRegister|nil @ used if `parent_type == "local"`
 ---@field child_upvals ILUpval[]
 
----@class ILPosition
----@field leading Token[]
----@field line number
----@field column number
+---technically most `ILPosition`s are tokens and therefore most of them have `leading` but it's not used atm
+---@alias ILPosition Position
 
 ---@alias ILInstructionType
 ---| '"move"'
@@ -625,6 +713,14 @@
 ---@field upvals ILUpval[]
 ---@field param_regs ILRegister[]
 ---@field is_vararg boolean
+---@field temp ILFunctionTemp
+
+---@class ILFunctionTemp
+---@field local_reg_lut table<AstLocalDef, ILRegister>
+---@field upval_def_lut  table<AstUpvalDef, ILUpval>
+---@field break_jump_lut table<AstBreakStat, ILJump>
+---@field label_inst_lut table<AstLabel, ILLabel>
+---@field goto_inst_lut table<AstGotoStat, ILJump>
 
 --------------------------------------------------
 -- generated/bytecode stuff:
@@ -679,7 +775,7 @@
 ---@field reduce_if_not_zero OpcodeReduceIfNotZero
 ---@field next_op OpcodeNextOpcode|nil
 
----@class Instruction
+---@class Instruction : Position
 ---@field op Opcode
 ---@field a integer
 ---@field b integer
@@ -687,9 +783,8 @@
 ---@field ax integer
 ---@field bx integer
 ---@field sbx integer
----@field line integer|nil
----@field column integer|nil @ stored in Phobos debug symbols
----@field source string|nil @ stored in Phobos debug symbols
+---@field column integer? @ stored in Phobos debug symbols (overridden just for the comment)
+---@field source string? @ stored in Phobos debug symbols
 
 ---@alias CompiledConstant AstString|AstNumber|AstBoolean|AstNil
 
@@ -708,10 +803,10 @@
 ---@field name string
 ---@field in_stack boolean
 ---used when `in_stack` is `false`. index of the parent upval for bytecode
----@field upval_idx number|nil
+---@field upval_idx integer?
 ---used when `in_stack` is `true`.
 ---register index of the local variable at the time of creating the closure
----@field local_idx number|nil
+---@field local_idx integer?
 
 ---@class CompiledFunc
 ---@field line_defined integer|nil

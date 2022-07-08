@@ -165,11 +165,6 @@ add_error_code(
 ---@field message_param_count integer
 ---@field location_str_is_inside_message boolean
 
----@class SourcePosition
----@field line integer
----@field column integer
----@field index nil @ -- TODO: maybe do add the index to all AstTokenNodes
-
 ---@class ErrorCodeInstanceParams
 ---@field error_code ErrorCode
 ---@field message_args? string[]
@@ -177,9 +172,9 @@ add_error_code(
 ---Will be concatenated as is to the end of the message if provided
 ---@field location_str? string
 ---@field source string @ function source
----@field start_position SourcePosition @ inclusive
----@field stop_position SourcePosition @ inclusive
----@field position SourcePosition @ when provided sets both start and stop position
+---@field start_position Position? @ inclusive
+---@field stop_position Position? @ inclusive
+---@field position Position? @ when provided sets both start and stop position
 
 ---@class ErrorCodeInstance
 ---@field error_code ErrorCode
@@ -188,8 +183,8 @@ add_error_code(
 ---Will be concatenated as is to the end of the message if provided
 ---@field location_str? string
 ---@field source string @ function source
----@field start_position SourcePosition @ inclusive
----@field stop_position SourcePosition @ inclusive
+---@field start_position Position? @ inclusive
+---@field stop_position Position? @ inclusive
 
 local function get_position(position)
   return position and {

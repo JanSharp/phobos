@@ -286,10 +286,14 @@ local function get_last_used_position(func)
   return func.instructions[#func.instructions] and func.instructions[#func.instructions].position
 end
 
+---@param expr AstLocalReference
+---@param func ILFunction
 local function find_local(expr, func)
   return assert(func.temp.local_reg_lut[expr.reference_def])
 end
 
+---@param expr AstUpvalReference
+---@param func ILFunction
 local function find_upval(expr, func)
   return assert(func.temp.upval_def_lut[expr.reference_def])
 end
@@ -302,7 +306,8 @@ local function local_or_fetch(expr, func)
   if expr.node_type == "local_ref" then
     return find_local(expr, func)
   else
-    return generate_expr(expr, func)
+    -- TODO: can generate_expr actually result in `nil` here?
+    return generate_expr(expr, func)--[[@as ILRegister]]
   end
 end
 
@@ -564,8 +569,8 @@ do
         position = expr.open_token,
         result_reg = table_reg,
         -- TODO: the array and hash size should be evaluated differently
-        array_size = prevent_assert, -- set later
-        hash_size = prevent_assert, -- set later
+        array_size = prevent_assert--[[@as integer]], -- set later
+        hash_size = prevent_assert--[[@as integer]], -- set later
       }
       add_inst(func, new_table_inst)
 
@@ -1105,11 +1110,15 @@ do
   end
 end
 
+---@param functiondef AstFunctionDef
+---@param parent_func ILFunction?
+---@return ILFunction
 function generate_functiondef(functiondef, parent_func)
   if not functiondef.is_main then
     assert(parent_func, "`parent_func` can only be omitted if the given functiondef is a main chunk")
   end
 
+  ---@type ILFunction
   local func = {
     parent_func = parent_func,
     inner_functions = {},
@@ -1139,6 +1148,7 @@ function generate_functiondef(functiondef, parent_func)
     func.upvals[i] = il_upval
     func.temp.upval_def_lut[upval] = il_upval
     if upval.parent_def.def_type == "upval" then
+      ---@cast parent_func -?
       il_upval.parent_type = "upval"
       local parent_upval = parent_func.temp.upval_def_lut[upval.parent_def]
       func.upvals[i].parent_upval = parent_upval
@@ -1147,7 +1157,8 @@ function generate_functiondef(functiondef, parent_func)
       -- this will actually only ever happen for the main chunk, but I like this test better
       -- I think it is more explicit and descriptive
       il_upval.parent_type = "env"
-    else
+    else -- upval.parent_def.def_type == "local" (and it is not the _ENV "local")
+      ---@cast parent_func -?
       il_upval.parent_type = "local"
       func.upvals[i].reg_in_parent_func = parent_func.temp.local_reg_lut[upval.parent_def]
     end

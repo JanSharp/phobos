@@ -220,10 +220,10 @@ local function format(main)
       ---@type AstListField|AstRecordField
       for i, field in ipairs(node.fields) do
         if field.type == "list" then
-          -- ---@narrow field AstListField
+          ---@cast field AstListField
           add_exp(field.value)
         else
-          -- ---@narrow field AstRecordField
+          ---@cast field AstRecordField
           ---@diagnostic disable-next-line: undefined-field
           if field.key.node_type == "string" and field.key.src_is_ident then
             add_exp(field.key)
@@ -291,6 +291,7 @@ local function format(main)
     end
   end
 
+  ---@type table<AstStatement|AstTestBlock|AstElseBlock, fun(node: AstStatement|AstTestBlock|AstElseBlock)>
   local stats = {
     ---@param node AstEmpty
     empty = function(node)
@@ -440,7 +441,7 @@ local function format(main)
     end,
   }
 
-  ---@param node AstStatement
+  ---@param node AstStatement|AstTestBlock|AstElseBlock
   function add_stat(node)
     stats[node.node_type](node)
   end
@@ -449,7 +450,7 @@ local function format(main)
   function add_scope(node)
     local stat = node.body.first
     while stat do
-      add_stat(stat)
+      add_stat(stat--[[@as AstStatement]])
       stat = stat.next
     end
   end

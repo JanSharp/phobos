@@ -258,7 +258,7 @@ local header_length = #phobos_consts.lua_header_str
 
 local to_double
 do
-  local dumped = string.dump(load[[return 523123.123145345]])
+  local dumped = string.dump(load([[return 523123.123145345]])--[[@as function]])
   local s, e = dumped:find("\3\54\208\25\126\204\237\31\65")
   if s == nil then
     error("Unable to set up bytes to double conversion")

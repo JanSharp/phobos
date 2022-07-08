@@ -24,7 +24,7 @@ local do_not_compare_flag = {"do_not_compare_flag"}
 local custom_comparators_lut = setmetatable({}, {__mode = "k"})
 local custom_comparators_allow_nil = setmetatable({}, {__mode = "k"})
 
----@param comparator table<any, boolean>|fun(other:any, other_is_left:boolean):boolean, string, any @
+---@param comparator any[]|fun(other:any, other_is_left:boolean):boolean, string, any @
 ---If it is a table, all keys are considered to be possible correct values on the other side.
 ---If any given value does not exist in this given table by directly indexing it, a deep compare will
 ---be performed on every possible value and it only fails if all given values do not match.
@@ -100,9 +100,6 @@ do
           other_is_left = other_is_left,
         }
         return false
-      end
-      if comparator[other] then
-        return true
       end
       local differences = {}
       for _, value_to_compare in ipairs(comparator) do
