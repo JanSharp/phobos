@@ -193,7 +193,7 @@ function fake_lfs.currentdir()
 end
 
 ---replace the lfs upvalue for all Path functions
----@param replace_with '"real"'|'"fake"'
+---@param replace_with "real"|"fake"
 local function replace_path_lfs_upvalue(replace_with)
   local dummy_upval_idx
   local value_to_replace

@@ -117,7 +117,7 @@ end
 
 ---@class ILBinopParams : ILInstParamsBase
 ---@field result_reg ILRegister
----@field op AstBinOpOp|'".."'
+---@field op AstBinOpOp|".."
 ---@field left_ptr ILPointer
 ---@field right_ptr ILPointer
 

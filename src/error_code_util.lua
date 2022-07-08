@@ -289,7 +289,7 @@ local function get_message(error_code_inst)
   )..((not error_code_inst.error_code.location_str_is_inside_message) and error_code_inst.location_str or "")
 end
 
----@param errors_label string|'"syntax errors"'|'"EmmyLua syntax errors"' @
+---@param errors_label string|"syntax errors"|"EmmyLua syntax errors" @
 ---type annotations are suggested strings
 local function get_message_for_list(error_code_insts, errors_label, max_errors_shown)
   if error_code_insts[1] then
