@@ -233,13 +233,15 @@ local on_close = {
   binop = function(node)
     fold_binop[node.op](node)
   end,
+  ---@param node AstConcat
   concat = function(node)
     -- combine adjacent number or string
     local new_exp_list = {}
-    local combining = {}
-    local combining_pos
+    local combining = {} ---@type (string|number)[]
+    local combining_pos ---@type Position
     for _,sub in ipairs(node.exp_list) do
       if sub.node_type == "string" or sub.node_type == "number" then
+        ---@cast sub AstString|AstNumber
         if not combining[1] then
           combining_pos = {line = sub.line, column = sub.column}
         end
@@ -249,20 +251,18 @@ local on_close = {
           new_exp_list[#new_exp_list+1] = {
             node_type = "string",
             line = combining_pos.line, column = combining_pos.column,
-            value = combining[1],
-            folded = true
+            value = tostring(combining[1]),
+            folded = true,
           }
           combining = {}
-          combining_pos = nil
         elseif #combining > 1 then
           new_exp_list[#new_exp_list+1] = {
             node_type = "string",
             line = combining_pos.line, column = combining_pos.column,
             value = table.concat(combining),
-            folded = true
+            folded = true,
           }
           combining = {}
-          combining_pos = nil
           node.folded = true
         end
         new_exp_list[#new_exp_list+1] = sub
@@ -272,15 +272,15 @@ local on_close = {
       new_exp_list[#new_exp_list+1] = {
         node_type = "string",
         line = combining_pos.line, column = combining_pos.column,
-        value = combining[1],
-        folded = true
+        value = tostring(combining[1]),
+        folded = true,
       }
     elseif #combining > 1 then
       new_exp_list[#new_exp_list+1] = {
         node_type = "string",
         line = combining_pos.line, column = combining_pos.column,
         value = table.concat(combining),
-        folded = true
+        folded = true,
       }
       node.folded = true
     end

@@ -8,6 +8,7 @@ local io_util = require("io_util")
 
 local io_util_copy = util.shallow_copy(io_util)
 
+---only `nil` when unhooked or when `new_fs` was never called
 ---@type VirtualFileSystem
 local fs
 
@@ -192,7 +193,7 @@ function fake_lfs.currentdir()
 end
 
 ---replace the lfs upvalue for all Path functions
----@param replace_with '"real"'|'"fake"'
+---@param replace_with "real"|"fake"
 local function replace_path_lfs_upvalue(replace_with)
   local dummy_upval_idx
   local value_to_replace
@@ -239,7 +240,7 @@ end
 
 ---reverts all replaced functions
 local function unhook()
-  fs = nil
+  fs = (nil)--[[@as VirtualFileSystem]]
   replace_path_lfs_upvalue("real")
   replace_io_util(io_util_copy)
 end

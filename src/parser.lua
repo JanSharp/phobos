@@ -81,8 +81,10 @@ local function new_error_code_inst(params)
   }
 end
 
+---@param invalid AstInvalidNode
+---@param consumed_node AstNode
 local function add_consumed_node(invalid, consumed_node)
-  if not (consumed_node.node_type == "token" and consumed_node.token_type == "eof") then
+  if not (consumed_node.node_type == "token" and consumed_node--[[@as AstTokenNode]].token_type == "eof") then
     invalid.consumed_nodes[#invalid.consumed_nodes+1] = consumed_node
   end
 end
@@ -275,7 +277,7 @@ local function rec_field(scope)
   if token.token_type == "ident" then
     field.key = nodes.new_string{
       position = token,
-      value = token.value,
+      value = token.value--[[@as string]],
       src_is_ident = true,
     }
     next_token()
@@ -383,11 +385,9 @@ end
 local function functiondef(function_token, scope, is_method)
   -- body -> `(` param_list `)`  block END
   local parent_functiondef = scope
-  -- ---@narrow scope AstScope|AstFunctionDef
   while parent_functiondef.node_type ~= "functiondef" do
     parent_functiondef = parent_functiondef.parent_scope
   end
-  -- ---@narrow scope AstFunctionDef
   local node = nodes.new_functiondef{
     parent_scope = scope,
     source = source,
@@ -457,7 +457,7 @@ local function func_args(node, scope)
     ["string"] = function()
       local string_node = nodes.new_string{
         position = token,
-        value = token.value,
+        value = token.value--[[@as string]],
         src_is_block_str = token.src_is_block_str,
         src_quote = token.src_quote,
         src_value = token.src_value,
@@ -504,9 +504,11 @@ local function primary_exp(scope)
       close_paren_token = close_paren_token,
     }
     if ex.node_type == "concat" then
+      ---@cast ex AstConcat
       init_concat_src_paren_wrappers(ex)
       ex.concat_src_paren_wrappers[1][#ex.concat_src_paren_wrappers[1]+1] = wrapper
     else
+      ---@cast ex AstExpression
       ex.src_paren_wrappers = ex.src_paren_wrappers or {}
       ex.src_paren_wrappers[#ex.src_paren_wrappers+1] = wrapper
     end
@@ -554,7 +556,7 @@ local suffixed_lut = {
     else
       node.suffix = nodes.new_string{
         position = ident,
-        value = ident.value,
+        value = ident.value--[[@as string]],
         src_is_ident = true,
       }
     end
@@ -586,7 +588,7 @@ local suffixed_lut = {
     else
       node.suffix = nodes.new_string{
         position = ident,
-        value = ident.value,
+        value = ident.value--[[@as string]],
         src_is_ident = true,
       }
     end
@@ -624,14 +626,14 @@ local simple_lut = {
   ["number"] = function(scope)
     return nodes.new_number{
       position = token,
-      value = token.value,
+      value = token.value--[[@as number]],
       src_value = token.src_value,
     }
   end,
   ["string"] = function(scope)
     return nodes.new_string{
       position = token,
-      value = token.value,
+      value = token.value--[[@as string]],
       src_is_block_str = token.src_is_block_str,
       src_quote = token.src_quote,
       src_value = token.src_value,
@@ -776,10 +778,10 @@ local function sub_expr(limit, scope)
   while prio and prio.left > limit do
     local op_token = new_token_node()
     next_token() -- consume `binop`
-    ---@type AstExpression|AstConcat
     local right_node, next_op = sub_expr(prio.right, scope)
     if binop == ".." then
       if right_node.node_type == "concat" then
+        ---@cast right_node AstConcat
         -- needs to init before adding the node to the exp_list so that the
         -- insert of another concat_src_paren_wrappers doesn't make the list too long
         init_concat_src_paren_wrappers(right_node)
@@ -867,16 +869,18 @@ end
 
 --- Label Statement
 ---@param scope AstScope
----@return AstLabel
+---@return AstLabel|AstInvalidNode
 local function label_stat(scope)
   local open_token = new_token_node()
   next_token() -- skip "::"
   local name_token = new_token_node()
   local ident = assert_ident()
   if is_invalid(ident) then
+    ---@cast ident AstInvalidNode
     add_consumed_node(ident, open_token)
     return ident
   end
+  ---@cast ident Token
   local prev_label = scope.labels[ident.value]
   if prev_label then
     local invalid = syntax_error(new_error_code_inst{
@@ -899,7 +903,7 @@ local function label_stat(scope)
   else
     -- storing the value both in `name` and `name_token.value`
     local node = nodes.new_label{
-      name = ident.value,
+      name = ident.value--[[@as string]],
       open_token = open_token,
       name_token = name_token,
       close_token = assert_next("::") or new_token_node(true),
@@ -953,9 +957,10 @@ end
 
 --- Numeric For Statement
 --- `fornum -> NAME = exp1,exp1[,exp1] DO block`
----@param first_name AstTokenNode
+---@param first_name Token
 ---@param scope AstScope
 ---@return AstForNum
+---@return boolean
 local function for_num(first_name, scope)
   -- currently the only place calling for_num is for_stat which will only call
   -- this function if the current token is '=', but we're handling invalid anyway
@@ -998,12 +1003,14 @@ end
 
 --- Generic For Statement
 --- `forlist -> NAME {,NAME} IN exp_list DO block`
----@param first_name AstTokenNode
+---@param first_name Token
 ---@param scope AstScope
 ---@return AstForList
+---@return boolean
 local function for_list(first_name, scope)
   local name_local, name_ref = ast.create_local(first_name, scope)
   name_local.whole_block = true
+  ---@type AstExpression[]
   local name_list = {name_ref}
   local node = nodes.new_forlist{
     parent_scope = scope,
@@ -1016,13 +1023,13 @@ local function for_list(first_name, scope)
     node.comma_tokens[#node.comma_tokens+1] = new_token_node(true)
     local ident = assert_ident()
     if is_invalid(ident) then
-      name_list[#name_list+1] = ident
+      name_list[#name_list+1] = ident--[[@as AstExpression]]
       -- if it's an 'in' then basically just ignore the extra comma and continue with this node
       if token.token_type ~= "in" then
         return node, true
       end
     else
-      node.locals[#node.locals+1], name_list[#name_list+1] = ast.create_local(ident, scope)
+      node.locals[#node.locals+1], name_list[#name_list+1] = ast.create_local(ident--[[@as Token]], scope)
       node.locals[#node.locals].whole_block = true
     end
   end
@@ -1044,15 +1051,17 @@ end
 --- For Statement
 --- `for_stat -> FOR (fornum | forlist) END`
 ---@param scope AstScope
----@return Token
+---@return AstForNum|AstForList|AstInvalidNode
 local function for_stat(scope)
   local for_token = new_token_node()
   next_token() -- skip FOR
   local first_ident = assert_ident()
   if is_invalid(first_ident) then
+    ---@cast first_ident AstInvalidNode
     add_consumed_node(first_ident, for_token)
     return first_ident
   end
+  ---@cast first_ident Token
   local t = token.token_type
   local node
   local is_partially_invalid
@@ -1100,7 +1109,7 @@ end
 local function if_stat(scope)
   -- ifstat -> IF condition THEN block {ELSEIF condition THEN block} [ELSE block] END
   local ifs = {}
-  local invalid = false
+  local invalid ---@type boolean?
   repeat
     ifs[#ifs+1], invalid = test_then_block(scope)
   until token.token_type ~= "elseif" or invalid
@@ -1126,13 +1135,13 @@ local function local_func(local_token, function_token, scope)
   local ident = assert_ident()
   local name_local, name_ref
   if is_invalid(ident) then
-    name_ref = ident
+    name_ref = ident--[[@as AstInvalidNode]]
   else
-    name_local, name_ref = ast.create_local(ident, scope)
+    name_local, name_ref = ast.create_local(ident--[[@as Token]], scope)
     scope.locals[#scope.locals+1] = name_local
   end
   local node = nodes.new_localfunc{
-    name = name_ref,
+    name = name_ref--[[@as AstLocalReference]],
     func_def = prevent_assert,
     local_token = local_token,
   }
@@ -1164,10 +1173,10 @@ local function local_stat(local_token, scope)
   repeat
     local ident = assert_ident()
     if is_invalid(ident) then
-      node.lhs[#node.lhs+1] = ident
+      node.lhs[#node.lhs+1] = ident--[[@as AstLocalReference]]
       break
     else
-      local_defs[#local_defs+1], node.lhs[#node.lhs+1] = ast.create_local(ident, scope)
+      local_defs[#local_defs+1], node.lhs[#node.lhs+1] = ast.create_local(ident--[[@as Token]], scope)
       local_defs[#local_defs].start_at = node
       local_defs[#local_defs].start_offset = 1
     end
@@ -1192,7 +1201,7 @@ local function func_name(scope)
 
   local ident = assert_ident()
   if is_invalid(ident) then
-    return false, ident
+    return false, ident--[[@as AstInvalidNode]]
   end
   local name = ast.resolve_ref_at_end(scope, ident.value, ident)
 
@@ -1214,10 +1223,12 @@ local function func_stat(scope)
   next_token() -- skip FUNCTION
   local is_method, name = func_name(scope)
   if is_invalid(name) then
+    ---@cast name AstInvalidNode
     -- using table.insert?! disgusting!! but we have to put the token first
     table.insert(name.consumed_nodes, 1, function_token)
     return name
   end
+  ---@cast name AstExpression
   return nodes.new_funcstat{
     name = name,
     func_def = functiondef(function_token, scope, is_method),
@@ -1341,13 +1352,13 @@ local statement_lut = {
     local name_token = new_token_node()
     local target_ident = assert_ident()
     if is_invalid(target_ident) then
-      add_consumed_node(target_ident, goto_token)
+      add_consumed_node(target_ident--[[@as AstInvalidNode]], goto_token)
       return target_ident
     else
       -- storing the value both in `target_name` and `target_token.value`
       return nodes.new_gotostat{
         goto_token = goto_token,
-        target_name = target_ident.value,
+        target_name = target_ident.value--[[@as string]],
         target_token = name_token,
       }
     end
@@ -1443,19 +1454,19 @@ local function parse(text,source_name)
   -- which was caught by pcall the current token might still be eof which would cause
   -- this parse call to do literally nothing
   -- errors should be impossible in the parse function, but there can always be bugs
-  token = nil
+  token = (nil)--[[@as Token]]
   next_token()
   local main = main_func()
 
   -- have to reset token, otherwise the next parse call will think its already reached the end
-  token = nil
+  token = (nil)--[[@as Token]]
   -- clear these references to not hold on to memory
   local result_error_code_insts = error_code_insts
   error_code_insts = nil
   invalid_token_invalid_node_lut = nil
   source = nil
   prevent_assert = nil
-  prev_token = nil
+  prev_token = (nil)--[[@as Token]]
   token_iter_state = nil
   -- with token_iter_state cleared, next_token and peek_token
   -- don't really have any other big upvals, so no need to clear them

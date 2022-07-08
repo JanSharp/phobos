@@ -131,6 +131,10 @@ local function debug_print(msg)
   print(msg and (magenta..msg..reset))
 end
 
+---@param text string
+---@param i integer?
+---@return table?
+---@return integer?
 local function parse_version(text, i)
   local major_str, minor_str, patch_str, end_pos = text:match("^(%d+)%.(%d+)%.(%d+)()", i)
   if not major_str then

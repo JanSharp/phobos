@@ -22,7 +22,7 @@ do
 
   local function setup_new_fs()
     virtual_io_util.new_fs()
-    fs = nil
+    fs = (nil)--[[@as VirtualFileSystem]]
     ---cSpell:ignore nups
     for i = 1, debug.getinfo(virtual_io_util.new_fs, "u").nups do
       local _, upval_value = debug.getupvalue(virtual_io_util.new_fs, i)
@@ -151,7 +151,7 @@ do
 
   do
     local function assert_target_file(prev_modification)
-      local got = fs:exists("/bar")
+      local got = fs:exists("/bar")---@type boolean|string
       assert.equals(true, got, "target file existence")
       got = fs:get_entry_type("/bar", true)
       assert.equals("file", got, "target file entry type")

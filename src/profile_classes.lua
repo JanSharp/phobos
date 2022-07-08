@@ -3,31 +3,31 @@
 
 ---@class IncludeInCompilationDef : IncludeParams
 ---@field profile nil @ no longer in the table
----@field type '"include"'
+---@field type "include"
 
 ---@class ExcludeInCompilationDef : ExcludeParams
 ---@field profile nil @ no longer in the table
----@field type '"exclude"'
+---@field type "exclude"
 
 ---@alias IncludeOrExcludeCopyDef IncludeInCopyDef|ExcludeInCopyDef
 
 ---@class IncludeInCopyDef : IncludeCopyParams
 ---@field profile nil @ no longer in the table
----@field type '"include"'
+---@field type "include"
 
 ---@class ExcludeInCopyDef : ExcludeCopyParams
 ---@field profile nil @ no longer in the table
----@field type '"exclude"'
+---@field type "exclude"
 
 ---@alias IncludeOrExcludeDeleteDef IncludeInDeleteDef|ExcludeInDeleteDef
 
 ---@class IncludeInDeleteDef : IncludeDeleteParams
 ---@field profile nil @ no longer in the table
----@field type '"include"'
+---@field type "include"
 
 ---@class ExcludeInDeleteDef : ExcludeDeleteParams
 ---@field profile nil @ no longer in the table
----@field type '"exclude"'
+---@field type "exclude"
 
 ---@class PhobosProfile : NewProfileParams
 ---@field include_exclude_definitions IncludeOrExcludeInCompilationDef[]

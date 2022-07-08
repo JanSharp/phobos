@@ -8,7 +8,7 @@ local function new_sandbox()
   -- keep package as a reference because the vast majority of it
   -- only works if the real _ENV is modified
   local real_package = package
-  package = nil
+  package = nil ---@diagnostic disable-line: assign-type-mismatch
   local env = util.copy(_ENV)
   package = real_package
   env.package = real_package
@@ -33,7 +33,7 @@ local function enable_phobos_require()
       local paths = {}
       for path_str in package.path:gmatch("[^%"..template_separator.."]+") do
         local path = Path.new(path_str)
-        path = path:sub(1, -2) / (path:filename()..".pho")
+        path = (path:sub(1, -2) / (path:filename()..".pho"))--[[@as Path]]
         paths[#paths+1] = path:str()
       end
       pho_path = table.concat(paths, template_separator)

@@ -8,12 +8,16 @@ local opcodes = opcode_util.opcodes
 ----------------------------------------------------------------------
 local generate_code
 do
+  ---@param func CompiledFunc
+  ---@return integer?
   local function get_last_used_line(func)
     return (#func.instructions > 0)
       and func.instructions[#func.instructions].line
       or nil
   end
 
+  ---@param func CompiledFunc
+  ---@return integer?
   local function get_last_used_column(func)
     return (#func.instructions > 0)
       and func.instructions[#func.instructions].column
@@ -498,7 +502,7 @@ do
           jump_if_true = (expr.op == "or") ~= node.inverted
 
           local jump_here_target = create_jump_target()
-          local left = create_expr(expr.left, node.inverted, node.force_bool_result)
+          local left = create_expr(expr.left, node.inverted, node.force_bool_result) ---@type table?
 
           while left and is_branchy(left.expr) do
             local real_expr, not_count = get_real_expr(left.expr)
@@ -699,7 +703,7 @@ do
       local leave_jump_target = create_jump_target()
       leave_jump_target.is_main = true
 
-      local last_expr = create_expr(node, false, false)
+      local last_expr = create_expr(node, false, false) ---@type table?
       repeat
         last_expr = generate_test_chain(last_expr, chain, func, jump_if_true, leave_jump_target, store_result)
       until not last_expr
@@ -1560,7 +1564,7 @@ do
 
     ---@param stat AstRetStat
     retstat = function(stat,func)
-      local first_reg = 0
+      local first_reg = 0 ---@type 0|table
       local temp_regs = {}
       local num_results = 0
       local is_tail_call = false
