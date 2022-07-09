@@ -261,6 +261,19 @@ local function intersect_ranges(left_ranges, right_ranges)
   return combine_ranges(left_ranges, right_ranges, intersect_range_type)
 end
 
+local function exclude_range_type(left_type, right_type)
+  if left_type == right_type or right_type == range_type.everything then return range_type.nothing end
+  if right_type == range_type.nothing then return left_type end
+  if left_type == range_type.everything then
+    return right_type == range_type.integral and range_type.non_integral or range_type.integral
+  end
+  return left_type
+end
+
+local function exclude_ranges(left_ranges, right_ranges)
+  return combine_ranges(left_ranges, right_ranges, exclude_range_type)
+end
+
 return {
   range_type = range_type,
   range_type_str_lut = range_type_str_lut,
@@ -278,4 +291,6 @@ return {
   ranges_equal = ranges_equal,
   intersect_range_type = intersect_range_type,
   intersect_ranges = intersect_ranges,
+  exclude_range_type = exclude_range_type,
+  exclude_ranges = exclude_ranges,
 }

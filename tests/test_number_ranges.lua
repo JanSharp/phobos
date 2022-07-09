@@ -901,4 +901,76 @@ do
       }, got)
     end)
   end
+
+  do
+    local exclude_range_type_scope = main_scope:new_scope("exclude_range_type")
+
+    local function add_test(name, func)
+      exclude_range_type_scope:add_test(name, func)
+    end
+
+    local exclude_range_type = number_ranges.exclude_range_type
+    local type_str_lut = number_ranges.range_type_str_lut
+
+    for _, data in ipairs{
+      {base = range_type.nothing, other = range_type.nothing, result = range_type.nothing},
+      {base = range_type.nothing, other = range_type.everything, result = range_type.nothing},
+      {base = range_type.nothing, other = range_type.integral, result = range_type.nothing},
+      {base = range_type.nothing, other = range_type.non_integral, result = range_type.nothing},
+      {base = range_type.everything, other = range_type.nothing, result = range_type.everything},
+      {base = range_type.everything, other = range_type.everything, result = range_type.nothing},
+      {base = range_type.everything, other = range_type.integral, result = range_type.non_integral},
+      {base = range_type.everything, other = range_type.non_integral, result = range_type.integral},
+      {base = range_type.integral, other = range_type.nothing, result = range_type.integral},
+      {base = range_type.integral, other = range_type.everything, result = range_type.nothing},
+      {base = range_type.integral, other = range_type.integral, result = range_type.nothing},
+      {base = range_type.integral, other = range_type.non_integral, result = range_type.integral},
+      {base = range_type.non_integral, other = range_type.nothing, result = range_type.non_integral},
+      {base = range_type.non_integral, other = range_type.everything, result = range_type.nothing},
+      {base = range_type.non_integral, other = range_type.integral, result = range_type.non_integral},
+      {base = range_type.non_integral, other = range_type.non_integral, result = range_type.nothing},
+    }
+    do
+      add_test("exclude_range_type "..type_str_lut[data.base].." and "..type_str_lut[data.other], function()
+        local got = exclude_range_type(data.base, data.other)
+        assert.equals(data.result, got)
+      end)
+    end
+  end
+
+  do
+    local exclude_ranges_scope = main_scope:new_scope("exclude_ranges")
+
+    local function add_test(name, func)
+      exclude_ranges_scope:add_test(name, func)
+    end
+
+    local exclude_ranges = number_ranges.exclude_ranges
+
+    -- |--<--<-<-->>
+    -- |--<-<---<->>
+    add_test("exclude_ranges (if union_ranges work, this also works)", function()
+      local left_ranges = {
+        inc(-1/0),
+        inc(2, range_type.integral),
+        inc(5, range_type.everything),
+        exc(7),
+      }
+      local right_ranges = {
+        inc(-1/0),
+        inc(2, range_type.integral),
+        inc(4, range_type.non_integral),
+        exc(8),
+      }
+      local got = exclude_ranges(left_ranges, right_ranges)
+      assert.contents_equals({
+        inc(-1/0),
+        inc(2, range_type.nothing),
+        inc(4, range_type.integral),
+        inc(5, range_type.integral),
+        exc(7),
+        exc(8),
+      }, got)
+    end)
+  end
 end
