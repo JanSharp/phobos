@@ -615,11 +615,13 @@
 
 ---@class ILType
 ---@field type_flags ILTypeFlags @ bit field
----@field number_ranges ILTypeNumberRanges?
+---@field number_ranges ILTypeNumberRanges? @ -- TODO: make ranges non nullable when the flag is set
 ---@field string_ranges ILTypeNumberRanges? @ restriction on strings, like tostring-ed numbers
 ---@field string_values string[]? @ nil means no restriction - any string
 ---@field boolean_value boolean?
 ---@field function_prototypes ILFunction[]?
+---TODO: this being `nil` means "any identity", which means an empty type actually requires an empty array.
+---I'm pretty sure this is handled incorrectly for most type operations
 ---@field identities ILTypeIdentity[]?
 ---@field table_classes ILClass[]? @ union of classes
 ---@field userdata_classes ILClass[]? @ union of classes with metatables for full userdata objects
