@@ -178,7 +178,7 @@ local function classes_equal(left_classes, right_classes)
 end
 
 do
-  ---does not care about `inferred_flags`
+  ---does not care about `inferred_flags` nor `ILClass.inferred`
   ---@param left_type ILType
   ---@param right_type ILType
   function equals(left_type, right_type)
@@ -315,6 +315,9 @@ do
     return result
   end
 
+  ---TODO: doesn't handle `ILClass.inferred` properly because the data structure doesn't support it. [...]
+  ---what should happen is that a class can be flagged as both inferred and not inferred at the same time [...]
+  ---without the class being in the list of classes twice
   function union(left_type, right_type)
     local result = new_type{
       type_flags = bit32.bor(left_type.type_flags, right_type.type_flags),
@@ -473,6 +476,9 @@ do
     end
   end
 
+  ---TODO: doesn't handle `ILClass.inferred` properly because the data structure doesn't support it. [...]
+  ---what should happen is that a class can be flagged as both inferred and not inferred at the same time [...]
+  ---without the class being in the list of classes twice
   function intersect(left_type, right_type)
     local result = new_type{
       type_flags = bit32.band(left_type.type_flags, right_type.type_flags),
@@ -542,7 +548,7 @@ do
     return true
   end
 
-  ---does not care about `inferred_flags`
+  ---does not care about `inferred_flags` nor `ILClass.inferred`
   function contains(left_type, right_type)
     local type_flags = right_type.type_flags
     -- do the right flags contain flags that the left flags don't?
@@ -678,6 +684,9 @@ do
 
   local everything_ranges = {number_ranges.inclusive(-1/0), number_ranges.range_type.everything}
 
+  ---TODO: doesn't handle `ILClass.inferred` properly because the data structure doesn't support it. [...]
+  ---what should happen is that a class can be flagged as both inferred and not inferred at the same time [...]
+  ---without the class being in the list of classes twice
   ---@param base_type ILType
   ---@param other_type ILType
   ---@return ILType
