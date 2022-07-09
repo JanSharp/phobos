@@ -973,4 +973,29 @@ do
       }, got)
     end)
   end
+
+  do
+    local utilities_scope = main_scope:new_scope("utilities")
+
+    local function add_test(name, func)
+      utilities_scope:add_test(name, func)
+    end
+
+    local is_empty = number_ranges.is_empty
+
+    add_test("is_empty true", function()
+      local got = is_empty{inc(-1/0)}
+      assert.equals(true, got)
+    end)
+
+    add_test("is_empty false because of range_type", function()
+      local got = is_empty{inc(-1/0, range_type.integral)}
+      assert.equals(false, got)
+    end)
+
+    add_test("is_empty false because of point count", function()
+      local got = is_empty{inc(-1/0), inc(1, range_type.integral), exc(1)}
+      assert.equals(false, got)
+    end)
+  end
 end

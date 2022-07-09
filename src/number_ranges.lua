@@ -282,6 +282,10 @@ local function exclude_ranges(left_ranges, right_ranges)
   return combine_ranges(left_ranges, right_ranges, exclude_range_type)
 end
 
+local function is_empty(ranges)
+  return not ranges[2] and ranges[1].range_type == range_type.nothing
+end
+
 return {
   range_type = range_type,
   range_type_str_lut = range_type_str_lut,
@@ -301,4 +305,5 @@ return {
   intersect_ranges = intersect_ranges,
   exclude_range_type = exclude_range_type,
   exclude_ranges = exclude_ranges,
+  is_empty = is_empty,
 }
