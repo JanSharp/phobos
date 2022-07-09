@@ -276,20 +276,19 @@ do
   local function union_classes(left_classes, right_classes)
     -- if one of them is nil the result will also be nil
     if not left_classes or not right_classes then return nil end
-    left_classes = copy_classes(left_classes)
+    local result = copy_classes(left_classes)
     local visited_left_index_lut = {}
-    local left_count = #left_classes
     for _, right_class in ipairs(right_classes) do
-      for left_index = 1, left_count do
+      for left_index = 1, #left_classes do
         if not visited_left_index_lut[left_index] and class_equals(left_classes[left_index], right_class) then
           visited_left_index_lut[left_index] = true
           goto found_match
         end
       end
-      left_count = left_count + 1
-      left_classes[left_count] = copy_class(right_class)
+      result[#result+1] = copy_class(right_class)
       ::found_match::
     end
+    return result
   end
 
   -- NOTE: very similar to shallow_list_union, just id comparison is different
