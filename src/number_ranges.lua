@@ -74,6 +74,14 @@ local function get_range_type(point)
   return point.range_type
 end
 
+---FIXME: there are several edge cases normalize is not accounting for which will cause issues [...]
+---when combined with the other ranges functions. Such edge cases are related to ranges that are [...]
+---so short that they are better described as `integral` or `non_integral` than `everything`. [...]
+---There is also a good chance that the current combine and contains functions do not account [...]
+---for similar edge cases, however I believe that once normalize is fixed they would be fixed as well [...]
+---since they are intended to run on normalized ranges. The only downside is that at that point it is [...]
+---required to normalize ranges after doing literally anything to them, which means all the other [...]
+---ranges functions should just normalize their result before returning
 local function normalize(ranges)
   local prev_type = get_range_type(ranges[1])
   local target_index = 2
