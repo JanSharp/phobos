@@ -15,10 +15,13 @@ local every_flag = 255
 
 ---@class ILTypeParams
 ---@field type_flags ILTypeFlags
+---@field inferred_flags ILTypeFlags
 
 ---@param params ILTypeParams
 ---@return ILType
 local function new_type(params)
+  params.type_flags = params.type_flags or 0
+  params.inferred_flags = params.inferred_flags or 0
   return params--[[@as ILType]]
 end
 
@@ -79,6 +82,7 @@ do
   function copy_type(type)
     local result = new_type{
       type_flags = type.type_flags,
+      inferred_flags = type.inferred_flags,
       number_ranges = type.number_ranges and number_ranges.copy_ranges(type.number_ranges),
       string_ranges = type.string_ranges and number_ranges.copy_ranges(type.string_ranges),
       string_values = util.optional_shallow_copy(type.string_values),
@@ -174,6 +178,7 @@ local function classes_equal(left_classes, right_classes)
 end
 
 do
+  ---does not care about `inferred_flags`
   ---@param left_type ILType
   ---@param right_type ILType
   function equals(left_type, right_type)
@@ -311,7 +316,10 @@ do
   end
 
   function union(left_type, right_type)
-    local result = new_type{type_flags = bit32.bor(left_type.type_flags, right_type.type_flags)}
+    local result = new_type{
+      type_flags = bit32.bor(left_type.type_flags, right_type.type_flags),
+      inferred_flags = bit32.bor(left_type.inferred_flags, right_type.inferred_flags),
+    }
     local base, do_merge
     base, do_merge = get_types_to_combine(left_type, right_type, nil_flag)
     if do_merge then
@@ -466,7 +474,10 @@ do
   end
 
   function intersect(left_type, right_type)
-    local result = new_type{type_flags = bit32.band(left_type.type_flags, right_type.type_flags)}
+    local result = new_type{
+      type_flags = bit32.band(left_type.type_flags, right_type.type_flags),
+      inferred_flags = bit32.band(left_type.inferred_flags, right_type.inferred_flags),
+    }
     local type_flags = result.type_flags
     if bit32.band(type_flags, nil_flag) ~= 0 then
       -- nothing to do
@@ -531,6 +542,7 @@ do
     return true
   end
 
+  ---does not care about `inferred_flags`
   function contains(left_type, right_type)
     local type_flags = right_type.type_flags
     -- do the right flags contain flags that the left flags don't?
@@ -670,7 +682,8 @@ do
   ---@param other_type ILType
   ---@return ILType
   function exclude(base_type, other_type)
-    local result = new_type{type_flags = base_type.type_flags}
+    -- TODO: how to handle excluding an inferred type from a non inferred type?
+    local result = new_type{type_flags = base_type.type_flags, inferred_flags = base_type.inferred_flags}
     local type_flags_to_check = bit32.band(base_type.type_flags, other_type.type_flags)
     if bit32.band(type_flags_to_check, nil_flag) ~= 0 then
       result.type_flags = result.type_flags - nil_flag
@@ -678,6 +691,7 @@ do
     if bit32.band(type_flags_to_check, boolean_flag) ~= 0 then
       if other_type.boolean_value == nil or base_type.boolean_value == other_type.boolean_value then
         result.type_flags = result.type_flags - boolean_flag
+        result.inferred_flags = bit32.band(result.inferred_flags, bit32.bnot(boolean_flag))
       else
         result.boolean_value = base_type.boolean_value
       end
@@ -688,6 +702,7 @@ do
       local result_number_ranges = number_ranges.exclude_ranges(base_ranges, other_ranges)
       if number_ranges.is_empty(result_number_ranges) then
         result.type_flags = result.type_flags - number_flag
+        result.inferred_flags = bit32.band(result.inferred_flags, bit32.bnot(number_flag))
       else
         result.number_ranges = result_number_ranges
       end
@@ -701,6 +716,7 @@ do
         and string_values and not string_values[1]
       then
         result.type_flags = result.type_flags - string_flag
+        result.inferred_flags = bit32.band(result.inferred_flags, bit32.bnot(string_flag))
       else
         result.string_ranges = string_ranges
         result.string_values = string_values
@@ -710,6 +726,7 @@ do
       local function_prototypes = list_exclude(base_type.function_prototypes, other_type.function_prototypes)
       if function_prototypes and not function_prototypes[1] then
         result.type_flags = result.type_flags - function_flag
+        result.inferred_flags = bit32.band(result.inferred_flags, bit32.bnot(function_flag))
       else
         result.function_prototypes = function_prototypes
       end
@@ -718,6 +735,7 @@ do
       local table_classes = exclude_classes(base_type.table_classes, other_type.table_classes)
       if table_classes and not table_classes[1] then
         result.type_flags = result.type_flags - table_flag
+        result.inferred_flags = bit32.band(result.inferred_flags, bit32.bnot(table_flag))
       else
         result.table_classes = table_classes
       end
@@ -732,6 +750,7 @@ do
         and light_userdata_prototypes and not light_userdata_prototypes[1]
       then
         result.type_flags = result.type_flags - userdata_flag
+        result.inferred_flags = bit32.band(result.inferred_flags, bit32.bnot(userdata_flag))
       else
         result.userdata_classes = userdata_classes
         result.light_userdata_prototypes = light_userdata_prototypes
@@ -739,6 +758,7 @@ do
     end
     if bit32.band(type_flags_to_check, thread_flag) ~= 0 then
       result.type_flags = result.type_flags - thread_flag
+      result.inferred_flags = bit32.band(result.inferred_flags, bit32.bnot(thread_flag))
     end
     result.identities = identity_list_exclude(base_type.identities, other_type.identities)
     return result

@@ -616,6 +616,8 @@
 ---TODO: add some way to represent `NaN`
 ---@class ILType
 ---@field type_flags ILTypeFlags @ bit field
+---bit field. Will never contain `table`. `userdata` only affects `light_userdata_prototypes`
+---@field inferred_flags ILTypeFlags
 ---@field number_ranges ILTypeNumberRanges? @ -- TODO: make ranges non nullable when the flag is set
 ---@field string_ranges ILTypeNumberRanges? @ restriction on strings, like tostring-ed numbers
 ---@field string_values string[]? @ nil means no restriction - any string
