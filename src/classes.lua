@@ -613,6 +613,7 @@
 ---| 64 @ userdata
 ---| 128 @ thread
 
+---TODO: add some way to represent `NaN`
 ---@class ILType
 ---@field type_flags ILTypeFlags @ bit field
 ---@field number_ranges ILTypeNumberRanges? @ -- TODO: make ranges non nullable when the flag is set
