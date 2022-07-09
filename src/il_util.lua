@@ -595,6 +595,157 @@ do
   end
 end
 
+local exclude
+do
+  ---@generic T
+  ---@param base_list T[]?
+  ---@param other_list T[]?
+  ---@return T[]?
+  local function list_exclude(base_list, other_list)
+    if not other_list then return nil end
+    if not base_list then
+      -- NOTE: the type system cannot represent an inverted set of values
+      return nil
+    end
+    local id_lut = {}
+    for _, value in ipairs(other_list) do
+      id_lut[value] = true
+    end
+    local result = {}
+    for _, value in ipairs(base_list) do
+      if not id_lut[value] then
+        result[#result+1] = value
+      end
+    end
+    return result
+  end
+
+  ---@param base_identities ILTypeIdentity[]?
+  ---@param other_identities ILTypeIdentity[]?
+  local function identity_list_exclude(base_identities, other_identities)
+    if not other_identities then return nil end
+    if not base_identities then
+      -- NOTE: the type system cannot represent an inverted set of values
+      return nil
+    end
+    local id_lut = {}
+    for _, id in ipairs(other_identities) do
+      id_lut[id.id] = true
+    end
+    local result = {}
+    for _, id in ipairs(base_identities) do
+      if not id_lut[id.id] then
+        result[#result+1] = id
+      end
+    end
+    return result
+  end
+
+  ---@param base_classes ILClass[]?
+  ---@param other_classes ILClass[]?
+  local function exclude_classes(base_classes, other_classes)
+    if not other_classes then return nil end
+    if not base_classes then
+      -- NOTE: the type system cannot represent an inverted set of values
+      return nil
+    end
+    local result = {}
+    -- every left side that isn't found on the right side needs to be kept
+    local visited_other_index_lut = {}
+    for _, base_class in ipairs(base_classes) do
+      for other_index = 1, #other_classes do
+        if not visited_other_index_lut[other_index] and class_equals(base_class, other_classes[other_index]) then
+          visited_other_index_lut[other_index] = true
+          goto found_match
+        end
+      end
+      result[#result+1] = copy_class(base_class)
+      ::found_match::
+    end
+    return result
+  end
+
+  local everything_ranges = {number_ranges.inclusive(-1/0), number_ranges.range_type.everything}
+
+  ---@param base_type ILType
+  ---@param other_type ILType
+  ---@return ILType
+  function exclude(base_type, other_type)
+    local result = new_type{type_flags = base_type.type_flags}
+    local type_flags_to_check = bit32.band(base_type.type_flags, other_type.type_flags)
+    if bit32.band(type_flags_to_check, nil_flag) ~= 0 then
+      result.type_flags = result.type_flags - nil_flag
+    end
+    if bit32.band(type_flags_to_check, boolean_flag) ~= 0 then
+      if other_type.boolean_value == nil or base_type.boolean_value == other_type.boolean_value then
+        result.type_flags = result.type_flags - boolean_flag
+      else
+        result.boolean_value = base_type.boolean_value
+      end
+    end
+    if bit32.band(type_flags_to_check, number_flag) ~= 0 then
+      local base_ranges = base_type.number_ranges or everything_ranges
+      local other_ranges = base_type.number_ranges or everything_ranges
+      local result_number_ranges = number_ranges.exclude_ranges(base_ranges, other_ranges)
+      if number_ranges.is_empty(result_number_ranges) then
+        result.type_flags = result.type_flags - number_flag
+      else
+        result.number_ranges = result_number_ranges
+      end
+    end
+    if bit32.band(type_flags_to_check, string_flag) ~= 0 then
+      local base_ranges = base_type.string_ranges or everything_ranges
+      local other_ranges = base_type.string_ranges or everything_ranges
+      local string_ranges = number_ranges.exclude_ranges(base_ranges, other_ranges)
+      local string_values = list_exclude(base_type.string_values, other_type.string_values)
+      if number_ranges.is_empty(string_ranges)
+        and string_values and not string_values[1]
+      then
+        result.type_flags = result.type_flags - string_flag
+      else
+        result.string_ranges = string_ranges
+        result.string_values = string_values
+      end
+    end
+    if bit32.band(type_flags_to_check, function_flag) ~= 0 then
+      local function_prototypes = list_exclude(base_type.function_prototypes, other_type.function_prototypes)
+      if function_prototypes and not function_prototypes[1] then
+        result.type_flags = result.type_flags - function_flag
+      else
+        result.function_prototypes = function_prototypes
+      end
+    end
+    if bit32.band(type_flags_to_check, table_flag) ~= 0 then
+      local table_classes = exclude_classes(base_type.table_classes, other_type.table_classes)
+      if table_classes and not table_classes[1] then
+        result.type_flags = result.type_flags - table_flag
+      else
+        result.table_classes = table_classes
+      end
+    end
+    if bit32.band(type_flags_to_check, userdata_flag) ~= 0 then
+      local userdata_classes = exclude_classes(base_type.userdata_classes, other_type.userdata_classes)
+      local light_userdata_prototypes = list_exclude(
+        base_type.light_userdata_prototypes,
+        other_type.light_userdata_prototypes
+      )
+      if userdata_classes and not userdata_classes[1]
+        and light_userdata_prototypes and not light_userdata_prototypes[1]
+      then
+        result.type_flags = result.type_flags - userdata_flag
+      else
+        result.userdata_classes = userdata_classes
+        result.light_userdata_prototypes = light_userdata_prototypes
+      end
+    end
+    if bit32.band(type_flags_to_check, thread_flag) ~= 0 then
+      result.type_flags = result.type_flags - thread_flag
+    end
+    result.identities = identity_list_exclude(base_type.identities, other_type.identities)
+    return result
+  end
+end
+
 local function has_all_flags(type_flags, other_flags)
   return bit32.band(type_flags, other_flags) == other_flags
 end
@@ -603,7 +754,6 @@ local function has_any_flags(type_flags, other_flags)
   return bit32.band(type_flags, other_flags) ~= 0
 end
 
--- TODO: exclude?
 -- TODO: range utilities
 
 local type_indexing
@@ -708,6 +858,7 @@ return {
   union = union,
   intersect = intersect,
   contains = contains,
+  exclude = exclude,
   has_all_flags = has_all_flags,
   has_any_flags = has_any_flags,
   class_indexing = class_indexing,
