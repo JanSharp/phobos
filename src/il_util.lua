@@ -93,6 +93,7 @@ do
     result.identities = copy_identities(type.identities)
     result.table_classes = copy_classes(type.table_classes)
     result.userdata_classes = copy_classes(type.userdata_classes)
+    return result
   end
 
   function copy_types(types)
