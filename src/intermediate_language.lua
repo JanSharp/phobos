@@ -106,14 +106,14 @@ end
 ---@class ILSetListParams : ILInstParamsBase
 ---@field table_reg ILRegister
 ---@field start_index integer
----@field value_ptrs ILPointer[] @ The last one can be an `ILVarargRegister`
+---@field right_ptrs ILPointer[] @ The last one can be an `ILVarargRegister`
 
 ---@param params ILSetListParams
 local function new_set_list(params)
   local inst = new_inst(params, "set_list")
   inst.table_reg = assert_reg(params, "table_reg")
   inst.start_index = assert_field(params, "start_index")
-  inst.value_ptrs = assert_field(params, "value_ptrs")
+  inst.right_ptrs = assert_field(params, "right_ptrs")
   return inst
 end
 
@@ -590,7 +590,7 @@ do
       add_inst(func, new_table_inst)
 
       local set_list_start_index = 1
-      local value_ptrs = {}
+      local right_ptrs = {}
       local instruction_before_set_list
       local function generate_set_list(position)
         ill.insert_after(
@@ -601,11 +601,11 @@ do
             position = position or instruction_before_set_list.position,
             table_reg = table_reg,
             start_index = set_list_start_index,
-            value_ptrs = value_ptrs,
+            right_ptrs = right_ptrs,
           }
         )
         set_list_start_index = set_list_start_index + consts.fields_per_flush
-        value_ptrs = {}
+        right_ptrs = {}
       end
 
       for i, field in ipairs(expr.fields) do
@@ -619,7 +619,7 @@ do
           end
           array_size = array_size + 1
           instruction_before_set_list = func.instructions.last
-          value_ptrs[array_size - set_list_start_index + 1] = value_ptr
+          right_ptrs[array_size - set_list_start_index + 1] = value_ptr
           if is_last_field or (array_size % consts.fields_per_flush) == 0 then
             generate_set_list(expr.comma_tokens and expr.comma_tokens[i])
           end
@@ -634,7 +634,7 @@ do
         end
       end
 
-      if value_ptrs[1] then
+      if right_ptrs[1] then
         generate_set_list()
       end
 

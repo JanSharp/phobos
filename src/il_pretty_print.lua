@@ -85,7 +85,7 @@ local instruction_label_getter_lut = {
     return "SETTABLE", get_reg(inst.table_reg, context).."["..get_ptr(inst.key_ptr, context).."] := "..get_ptr(inst.right_ptr, context)
   end,
   ["set_list"] = function(inst, context)
-    return "SETLIST", get_reg(inst.table_reg, context).."["..inst.start_index..", ..."..(inst.value_ptrs[#inst.value_ptrs].ptr_type == "vararg" and "" or (", "..(inst.start_index + #inst.value_ptrs - 1))).."] := "..get_list(get_ptr, inst.value_ptrs, context)
+    return "SETLIST", get_reg(inst.table_reg, context).."["..inst.start_index..", ..."..(inst.right_ptrs[#inst.right_ptrs].ptr_type == "vararg" and "" or (", "..(inst.start_index + #inst.right_ptrs - 1))).."] := "..get_list(get_ptr, inst.right_ptrs, context)
   end,
   ["new_table"] = function(inst, context)
     return "NEWTABLE", get_reg(inst.result_reg, context).." := {} size("..inst.array_size..", "..inst.hash_size..")"

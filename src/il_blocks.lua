@@ -67,7 +67,7 @@ do
     end,
     ["set_list"] = function(data, inst)
       visit_reg(data, inst, inst.table_reg)
-      visit_ptr_list(data, inst, inst.value_ptrs)
+      visit_ptr_list(data, inst, inst.right_ptrs)
     end,
     ["new_table"] = function(data, inst)
       visit_reg(data, inst, inst.result_reg)

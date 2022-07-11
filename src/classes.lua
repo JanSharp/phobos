@@ -730,7 +730,7 @@
 ---@field inst_type "set_list"
 ---@field table_reg ILRegister
 ---@field start_index integer
----@field value_ptrs ILPointer[] @ The last one can be an `ILVarargRegister`
+---@field right_ptrs ILPointer[] @ The last one can be an `ILVarargRegister`
 
 ---@class ILNewTable : ILInstruction
 ---@field inst_type "new_table"
