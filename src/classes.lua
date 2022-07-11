@@ -699,92 +699,92 @@
 ---@class ILState
 ---@field reg_types table<ILRegister, ILType>
 
----@class ILMove
+---@class ILMove : ILInstruction
 ---@field inst_type "move"
 ---@field result_reg ILRegister
 ---@field right_ptr ILPointer
 
----@class ILGetUpval
+---@class ILGetUpval : ILInstruction
 ---@field inst_type "get_upval"
 ---@field result_reg ILRegister
 ---@field upval ILUpval
 
----@class ILSetUpval
+---@class ILSetUpval : ILInstruction
 ---@field inst_type "set_upval"
 ---@field upval ILUpval
 ---@field right_ptr ILPointer
 
----@class ILGetTable
+---@class ILGetTable : ILInstruction
 ---@field inst_type "get_table"
 ---@field result_reg ILRegister
 ---@field table_reg ILRegister
 ---@field key_ptr ILPointer
 
----@class ILSetTable
+---@class ILSetTable : ILInstruction
 ---@field inst_type "set_table"
 ---@field table_reg ILRegister
 ---@field key_ptr ILPointer
 ---@field right_ptr ILPointer
 
----@class ILSetList
+---@class ILSetList : ILInstruction
 ---@field inst_type "set_list"
 ---@field table_reg ILRegister
 ---@field start_index integer
 ---@field value_ptrs ILPointer[] @ The last one can be an `ILVarargRegister`
 
----@class ILNewTable
+---@class ILNewTable : ILInstruction
 ---@field inst_type "new_table"
 ---@field result_reg ILRegister
 ---@field array_size integer
 ---@field hash_size integer
 
----@class ILBinop
+---@class ILBinop : ILInstruction
 ---@field inst_type "binop"
 ---@field result_reg ILRegister
 ---@field op ILBinOpOpBase|".." @ note the absence of "and" and "or", but presence of ".."
 ---@field left_ptr ILPointer
 ---@field right_ptr ILPointer
 
----@class ILUnop
+---@class ILUnop : ILInstruction
 ---@field inst_type "unop"
 ---@field result_reg ILRegister
 ---@field op AstUnOpOp
 ---@field right_ptr ILPointer
 
----@class ILLabel
+---@class ILLabel : ILInstruction
 ---@field inst_type "label"
 ---@field name string|nil
 
----@class ILJump
+---@class ILJump : ILInstruction
 ---@field inst_type "jump"
 ---@field label ILLabel
 
----@class ILTest
+---@class ILTest : ILInstruction
 ---@field inst_type "test"
 ---@field label ILLabel
 ---@field condition_ptr ILPointer
 ---@field jump_if_true boolean
 
----@class ILCall
+---@class ILCall : ILInstruction
 ---@field inst_type "call"
 ---@field func_reg ILRegister
 ---@field arg_ptrs ILPointer[] @ The last one can be an `ILVarargRegister`
 ---@field result_regs ILRegister[] @ The last one can be an `ILVarargRegister`
 
----@class ILRet
+---@class ILRet : ILInstruction
 ---@field inst_type "ret"
 ---@field ptrs ILPointer[] @ The last one can be an `ILVarargRegister`
 
----@class ILClosure
+---@class ILClosure : ILInstruction
 ---@field inst_type "closure"
 ---@field result_reg ILRegister
 ---@field func ILFunction
 
----@class ILVararg
+---@class ILVararg : ILInstruction
 ---@field inst_type "vararg"
 ---@field result_regs ILRegister[] @ The last one can be an `ILVarargRegister`
 
----@class ILScoping
+---@class ILScoping : ILInstruction
 ---@field inst_type "scoping"
 ---@field regs ILRegister[]
 
