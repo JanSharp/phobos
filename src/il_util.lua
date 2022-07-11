@@ -785,9 +785,10 @@ end
 
 -- TODO: range utilities
 
+local invalid_index_base_flags = nil_flag + boolean_flag + number_flag + function_flag + thread_flag
+
 local type_indexing
 local class_indexing
-
 do
   local __index_key_type = new_type{
     type_flags = string_flag,
@@ -833,8 +834,7 @@ do
   function type_indexing(base_type, index_type, do_rawget)
     local err
     do
-      local all_invalid_flags = nil_flag + boolean_flag + number_flag + function_flag + thread_flag
-      local invalid_flags = bit32.band(base_type.type_flags, all_invalid_flags)
+      local invalid_flags = bit32.band(base_type.type_flags, invalid_index_base_flags)
       if invalid_flags ~= 0 then
         err = error_code_util.new_error_code{
           error_code = error_code_util.codes.ts_invalid_index_base_type,
@@ -866,6 +866,91 @@ do
   end
 end
 
+local type_new_indexing
+local class_new_indexing
+do
+  local __newindex_key_type = new_type{
+    type_flags = string_flag,
+    string_ranges = {number_ranges.inclusive(-1/0)},
+    string_values = {"__newindex"},
+  }
+
+  ---@param classes ILClass[]
+  ---@param key_type ILType
+  ---@param value_type ILType
+  ---@param do_rawset boolean
+  function class_new_indexing(classes, key_type, value_type, do_rawset)
+    for _, class in ipairs(classes) do
+      if class.inferred then
+        -- TODO: add the key_type and value_type to the class
+      else
+        local found_key_type = new_type{type_flags = 0}
+        for _, kvp in ipairs(class.kvps) do -- TODO: handle nil kvps
+          local overlap = intersect(key_type, kvp.key_type)
+          if overlap.type_flags ~= 0 then
+            if not contains(kvp.value_type, value_type) then
+              util.debug_print("-- TODO: warn about assigning invalid value_type")
+            end
+            found_key_type = union(found_key_type, overlap)
+            if equals(found_key_type, key_type) then
+              goto found_whole_key_type
+            end
+          end
+        end
+        if not do_rawset and class.metatable then
+          local __newindex_value_type = class_indexing(class.metatable, __newindex_key_type, true)
+          local value_type_flags = __newindex_value_type.type_flags
+          if has_all_flags(value_type_flags, function_flag) then
+            util.debug_print("-- TODO: validate `__newindex` function signatures.")
+            -- TODO: this function call could modify the entire current state which must be tracked somehow
+            goto found_whole_key_type
+          end
+          if has_any_flags(value_type_flags, bit32.bnot(function_flag)) then
+            util.debug_print("-- TODO: probably warn about invalid `__newindex` value type.")
+          end
+        end
+        util.debug_print("-- TODO: warn about assigning using invalid key_type")
+        ::found_whole_key_type::
+      end
+    end
+  end
+
+  function type_new_indexing(base_type, key_type, value_type, do_rawset)
+    local err
+    do
+      local invalid_flags = bit32.band(base_type.type_flags, invalid_index_base_flags)
+      if invalid_flags ~= 0 then
+        err = error_code_util.new_error_code{
+          error_code = error_code_util.codes.ts_invalid_index_base_type,
+          message_args = {string.format("%x", invalid_flags)}, -- TODO: format flags as a meaningful string
+        }
+      end
+    end
+    if bit32.band(base_type.type_flags, string_flag) then
+      util.debug_print("-- TODO: newindex into strings might be possible with a '__newindex', \z
+        but it's a really dumb thing to do so this should probably warn regardless. To handle it \z
+        properly we need an understanding of globals to check if '_ENV.string` has a '__newindex'."
+      )
+    end
+    local result_type = copy_type(base_type)
+    if bit32.band(base_type.type_flags, table_flag) ~= 0 then
+      if base_type.table_classes then
+        class_new_indexing(result_type.table_classes, key_type, value_type, do_rawset)
+      end
+    end
+    if bit32.band(base_type.type_flags, userdata_flag) ~= 0 then
+      if do_rawset and not base_type.userdata_classes or base_type.userdata_classes[1] then
+        util.debug_print("-- TODO: rawset on a userdata class is an error I'm pretty sure.")
+      end
+      -- TODO: how to detect light userdata? indexing into light userdata is an error to my knowledge
+      if not do_rawset and base_type.userdata_classes then
+        class_new_indexing(result_type.userdata_classes, key_type, value_type, false)
+      end
+    end
+    return result_type
+  end
+end
+
 return {
   nil_flag = nil_flag,
   boolean_flag = boolean_flag,
@@ -892,4 +977,6 @@ return {
   has_any_flags = has_any_flags,
   class_indexing = class_indexing,
   type_indexing = type_indexing,
+  class_new_indexing = class_new_indexing,
+  type_new_indexing = type_new_indexing,
 }
