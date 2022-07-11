@@ -39,6 +39,12 @@ local function clear_table(t)
   end
 end
 
+local function clear_array(t)
+  for i = #t, 1, -1 do
+    t[i] = nil
+  end
+end
+
 local function replace_table(target, new_data)
   clear_table(target)
   for k, v in pairs(new_data) do
@@ -291,6 +297,7 @@ return {
   floating_byte_to_number = floating_byte_to_number,
   invert = invert,
   clear_table = clear_table,
+  clear_array = clear_array,
   replace_table = replace_table,
   shallow_copy = shallow_copy,
   optional_shallow_copy = optional_shallow_copy,

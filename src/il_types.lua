@@ -93,6 +93,9 @@ local modify_post_state_func_lut = {
       -- TODO: validate that the key used is actually valid for this class
     end
   end,
+  ["set_list"] = function(data, inst)
+    -- TODO: impl set_list
+  end,
   ["new_table"] = function(data, inst)
     -- TODO: this would end up completely disallowing any gets/sets with this table because it's empty
     set_type(inst.post_state, inst.result_reg, new_empty_table())

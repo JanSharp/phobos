@@ -114,53 +114,56 @@ end
 
 local generate_inst_lut = {
   ["move"] = function(data, inst)
-    error("-- TODO: not implemented")
+    util.debug_abort("-- TODO: not implemented")
   end,
   ["get_upval"] = function(data, inst)
-    error("-- TODO: not implemented")
+    util.debug_abort("-- TODO: not implemented")
   end,
   ["set_upval"] = function(data, inst)
-    error("-- TODO: not implemented")
+    util.debug_abort("-- TODO: not implemented")
   end,
   ["get_table"] = function(data, inst)
-    error("-- TODO: not implemented")
+    util.debug_abort("-- TODO: not implemented")
   end,
   ["set_table"] = function(data, inst)
-    error("-- TODO: not implemented")
+    util.debug_abort("-- TODO: not implemented")
+  end,
+  ["set_list"] = function(data, inst)
+    util.debug_abort("-- TODO: not implemented")
   end,
   ["new_table"] = function(data, inst)
-    error("-- TODO: not implemented")
+    util.debug_abort("-- TODO: not implemented")
   end,
   ["binop"] = function(data, inst)
-    error("-- TODO: not implemented")
+    util.debug_abort("-- TODO: not implemented")
   end,
   ["unop"] = function(data, inst)
-    error("-- TODO: not implemented")
+    util.debug_abort("-- TODO: not implemented")
   end,
   ["label"] = function(data, inst)
-    error("-- TODO: not implemented")
+    util.debug_abort("-- TODO: not implemented")
   end,
   ["jump"] = function(data, inst)
-    error("-- TODO: not implemented")
+    util.debug_abort("-- TODO: not implemented")
   end,
   ["test"] = function(data, inst)
-    error("-- TODO: not implemented")
+    util.debug_abort("-- TODO: not implemented")
   end,
   ["call"] = function(data, inst)
-    error("-- TODO: not implemented")
+    util.debug_abort("-- TODO: not implemented")
   end,
   ["ret"] = function(data, inst)
     if inst.ptrs[1] then
-      error("-- TODO: not implemented")
+      util.debug_abort("-- TODO: not implemented")
     else
       add_stat(data, inst, opcodes["return"], {a = 0, b = 1})
     end
   end,
   ["closure"] = function(data, inst)
-    error("-- TODO: not implemented")
+    util.debug_abort("-- TODO: not implemented")
   end,
   ["vararg"] = function(data, inst)
-    error("-- TODO: not implemented")
+    util.debug_abort("-- TODO: not implemented")
   end,
   ["scoping"] = function(data, inst)
     -- no op
@@ -191,9 +194,9 @@ local function make_bytecode_func(data)
   data.result = result
   for i, upval in ipairs(func.upvals) do
     if upval.parent_type == "local" then
-      error("-- TODO: not implemented")
+      util.debug_abort("-- TODO: not implemented")
     elseif upval.parent_type == "upval" then
-      error("-- TODO: not implemented")
+      util.debug_abort("-- TODO: not implemented")
     elseif upval.parent_type == "env" then
       result.upvals[i] = {
         index = 0,

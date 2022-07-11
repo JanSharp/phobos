@@ -672,6 +672,7 @@
 ---| "set_upval"
 ---| "get_table"
 ---| "set_table"
+---| "set_list"
 ---| "new_table"
 ---| "binop"
 ---| "unop"
@@ -723,8 +724,13 @@
 ---@field inst_type "set_table"
 ---@field table_reg ILRegister
 ---@field key_ptr ILPointer
----Can be a `ILVarargRegister` at which point `key_ptr` must be an integer constant >= 1
 ---@field right_ptr ILPointer
+
+---@class ILSetList
+---@field inst_type "set_list"
+---@field table_reg ILRegister
+---@field start_index integer
+---@field value_ptrs ILPointer[] @ The last one can be an `ILVarargRegister`
 
 ---@class ILNewTable
 ---@field inst_type "new_table"

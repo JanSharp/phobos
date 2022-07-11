@@ -2,6 +2,8 @@
 local ast = require("ast_util")
 local nodes = require("nodes")
 local ill = require("indexed_linked_list")
+local util = require("util")
+local consts = require("constants")
 
 ---same as in parser
 local prevent_assert = {prevent_assert = true}
@@ -90,7 +92,6 @@ end
 ---@class ILSetTableParams : ILInstParamsBase
 ---@field table_reg ILRegister
 ---@field key_ptr ILPointer
----Can be a `ILVarargRegister` at which point `key_ptr` has to be an integer constant >= 1
 ---@field right_ptr ILPointer
 
 ---@param params ILSetTableParams
@@ -99,6 +100,20 @@ local function new_set_table(params)
   inst.table_reg = assert_reg(params, "table_reg")
   inst.key_ptr = assert_ptr(params, "key_ptr")
   inst.right_ptr = assert_ptr(params, "right_ptr")
+  return inst
+end
+
+---@class ILSetListParams : ILInstParamsBase
+---@field table_reg ILRegister
+---@field start_index integer
+---@field value_ptrs ILPointer[] @ The last one can be an `ILVarargRegister`
+
+---@param params ILSetListParams
+local function new_set_list(params)
+  local inst = new_inst(params, "set_list")
+  inst.table_reg = assert_reg(params, "table_reg")
+  inst.start_index = assert_field(params, "start_index")
+  inst.value_ptrs = assert_field(params, "value_ptrs")
   return inst
 end
 
@@ -560,6 +575,7 @@ do
       -- but if anybody currently relies on the normal behavior... Idk, that's just weird.
       -- but to preserve the fact that Phobos can compile regular Lua without any different behavior
       -- this should actually default to the normal, weird behavior
+      local use_same_behavior_as_lua = true
 
       local table_reg = new_reg()
       local array_size = 0
@@ -573,21 +589,40 @@ do
       }
       add_inst(func, new_table_inst)
 
+      local set_list_start_index = 1
+      local value_ptrs = {}
+      local instruction_before_set_list
+      local function generate_set_list(position)
+        ill.insert_after(
+          use_same_behavior_as_lua
+            and func.instructions.last
+            or instruction_before_set_list,
+          new_set_list{
+            position = position or instruction_before_set_list.position,
+            table_reg = table_reg,
+            start_index = set_list_start_index,
+            value_ptrs = value_ptrs,
+          }
+        )
+        set_list_start_index = set_list_start_index + consts.fields_per_flush
+        value_ptrs = {}
+      end
+
       for i, field in ipairs(expr.fields) do
         if field.type == "list" then
-          local right_ptr
-          if i == #expr.fields and ast.is_vararg_node(field.value) then
-            right_ptr = generate_expr(field.value, func, -1)
+          local value_ptr
+          local is_last_field = i == #expr.fields
+          if is_last_field and ast.is_vararg_node(field.value) then
+            value_ptr = generate_expr(field.value, func, -1)
           else
-            right_ptr = const_or_local_or_fetch(field.value, func)
+            value_ptr = const_or_local_or_fetch(field.value, func)
           end
           array_size = array_size + 1
-          add_inst(func, new_set_table{
-            position = expr.comma_tokens and expr.comma_tokens[i] or get_last_used_position(func),
-            table_reg = table_reg,
-            key_ptr = new_number(array_size),
-            right_ptr = right_ptr,
-          })
+          instruction_before_set_list = func.instructions.last
+          value_ptrs[array_size - set_list_start_index + 1] = value_ptr
+          if is_last_field or (array_size % consts.fields_per_flush) == 0 then
+            generate_set_list(expr.comma_tokens and expr.comma_tokens[i])
+          end
         else
           hash_size = hash_size + 1
           add_inst(func, new_set_table{
@@ -597,6 +632,10 @@ do
             right_ptr = const_or_local_or_fetch(field.value, func),
           })
         end
+      end
+
+      if value_ptrs[1] then
+        generate_set_list()
       end
 
       new_table_inst.array_size = array_size
