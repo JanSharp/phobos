@@ -22,7 +22,7 @@ do
 
   local function visit_ptr(data, inst, ptr)
     if ptr.ptr_type == "reg" then
-      visit_reg_list(data, inst, ptr)
+      visit_reg(data, inst, ptr)
     end
   end
 
@@ -48,15 +48,19 @@ do
       visit_reg(data, inst, inst.table_reg)
     end,
     ["set_table"] = function(data, inst)
-      visit_reg(data, inst, inst.result_reg)
+      visit_reg(data, inst, inst.table_reg)
       visit_ptr(data, inst, inst.key_ptr)
       visit_ptr(data, inst, inst.right_ptr)
     end,
+    ["set_list"] = function(data, inst)
+      visit_reg(data, inst, inst.table_reg)
+      visit_ptr_list(data, inst, inst.value_ptrs) -- must be in order
+    end,
     ["new_table"] = function(data, inst)
-      visit_reg(data, inst, inst.result_reg)
+      visit_reg(data, inst, inst.result_reg) -- has to be at the top of the stack
     end,
     ["binop"] = function(data, inst)
-      visit_reg(data, inst, inst.result_reg)
+      visit_reg(data, inst, inst.result_reg) -- has to be at the top of the stack if this is a concat
       visit_ptr(data, inst, inst.left_ptr)
       visit_ptr(data, inst, inst.right_ptr)
     end,
@@ -73,17 +77,17 @@ do
     end,
     ["call"] = function(data, inst)
       visit_reg(data, inst, inst.func_reg)
-      visit_ptr_list(data, inst, inst.arg_ptrs)
-      visit_reg_list(data, inst, inst.result_regs)
+      visit_ptr_list(data, inst, inst.arg_ptrs) -- must be in order right above func_reg
+      visit_reg_list(data, inst, inst.result_regs) -- must be in order right above func_reg
     end,
     ["ret"] = function(data, inst)
-      visit_ptr_list(data, inst, inst.ptrs)
+      visit_ptr_list(data, inst, inst.ptrs) -- must be in order
     end,
     ["closure"] = function(data, inst)
-      visit_reg(data, inst, inst.result_reg)
+      visit_reg(data, inst, inst.result_reg) -- has to be at the top of the stack
     end,
     ["vararg"] = function(data, inst)
-      visit_reg_list(data, inst, inst.result_regs)
+      visit_reg_list(data, inst, inst.result_regs) -- must be in order
     end,
     ["scoping"] = function(data, inst)
       visit_reg_list(data, inst, inst.regs)
