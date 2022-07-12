@@ -113,7 +113,7 @@ local function new_set_list(params)
   local inst = new_inst(params, "set_list")
   inst.table_reg = assert_reg(params, "table_reg")
   inst.start_index = assert_field(params, "start_index")
-  inst.right_ptrs = assert_field(params, "right_ptrs")
+  inst.right_ptrs = params.right_ptrs or {}
   return inst
 end
 
@@ -131,9 +131,21 @@ local function new_new_table(params)
   return inst
 end
 
+---@class ILConcatParams : ILInstParamsBase
+---@field result_reg ILRegister
+---@field right_ptrs ILPointer[]
+
+---@param params ILConcatParams
+local function new_concat(params)
+  local inst = new_inst(params, "concat")
+  inst.result_reg = assert_reg(params, "result_reg")
+  inst.right_ptrs = params.right_ptrs or {}
+  return inst
+end
+
 ---@class ILBinopParams : ILInstParamsBase
 ---@field result_reg ILRegister
----@field op AstBinOpOp|".."
+---@field op AstBinOpOp
 ---@field left_ptr ILPointer
 ---@field right_ptr ILPointer
 
@@ -142,7 +154,7 @@ local function new_binop(params)
   local inst = new_inst(params, "binop")
   inst.result_reg = assert_reg(params, "result_reg")
   inst.op = assert_field(params, "op")
-  assert(params.op ~= "and" and params.op ~= "or",
+  util.debug_assert(params.op ~= "and" and params.op ~= "or",
     "Use jumps for '"..params.op.."' ('and' and 'or') binops in IL"
   )
   inst.left_ptr = assert_ptr(params, "left_ptr")
@@ -514,20 +526,17 @@ do
         return reg
       end
     end,
+    ---@param expr AstConcat
     ["concat"] = function(expr, func)
-      local left_ptr = const_or_local_or_fetch(expr.exp_list[1], func)
-      for i = 2, #expr.exp_list do
-        local result_reg = new_reg()
-        add_inst(func, new_binop{
-          position = expr.op_tokens and expr.op_tokens[i - 1],
-          result_reg = result_reg,
-          left_ptr = left_ptr,
-          op = "..",
-          right_ptr = const_or_local_or_fetch(expr.exp_list[i], func),
-        })
-        left_ptr = result_reg
-      end
-      return left_ptr
+      local reg = new_reg()
+      local right_ptrs = {}
+      generate_expr_list(expr.exp_list, func, #expr.exp_list, right_ptrs, true)
+      add_inst(func, new_concat{
+        position = expr.op_tokens and expr.op_tokens[#expr.op_tokens],
+        result_reg = reg,
+        right_ptrs = right_ptrs,
+      })
+      return reg
     end,
     ["number"] = make_generate_const_expr(new_number),
     ["string"] = make_generate_const_expr(new_string),

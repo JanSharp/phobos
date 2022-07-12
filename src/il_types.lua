@@ -100,6 +100,10 @@ local modify_post_state_func_lut = {
     -- TODO: this would end up completely disallowing any gets/sets with this table because it's empty
     set_type(inst.post_state, inst.result_reg, new_empty_table())
   end,
+  ["concat"] = function(data, inst)
+    -- TODO: impl concat
+    set_type(inst.post_state, inst.result_reg, il.new_type{type_flags = il.string_flag})
+  end,
   ["binop"] = function(data, inst)
     if il.is_logical_binop(inst) then
       -- TODO: check if the result value can be determined at this point already

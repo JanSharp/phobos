@@ -60,12 +60,12 @@ local function get_label_label(label, context)
   return label_label
 end
 
-local function get_list(getter, list, context)
+local function get_list(getter, list, context, separator)
   local out = {}
   for i, ptr in ipairs(list) do
     out[i] = getter(ptr, context)
   end
-  return table.concat(out, ", ")
+  return table.concat(out, separator or ", ")
 end
 
 local instruction_label_getter_lut = {
@@ -89,6 +89,9 @@ local instruction_label_getter_lut = {
   end,
   ["new_table"] = function(inst, context)
     return "NEWTABLE", get_reg(inst.result_reg, context).." := {} size("..inst.array_size..", "..inst.hash_size..")"
+  end,
+  ["concat"] = function(inst, context)
+    return "CONCAT", get_reg(inst.result_reg, context).." := "..get_list(get_ptr, inst.right_ptrs, context, "..")
   end,
   ["binop"] = function(inst, context)
     return "BINOP", get_reg(inst.result_reg, context).." := "..get_ptr(inst.left_ptr, context).." "..inst.op.." "..get_ptr(inst.right_ptr, context)

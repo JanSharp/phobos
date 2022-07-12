@@ -674,6 +674,7 @@
 ---| "set_table"
 ---| "set_list"
 ---| "new_table"
+---| "concat"
 ---| "binop"
 ---| "unop"
 ---| "label"
@@ -738,10 +739,15 @@
 ---@field array_size integer
 ---@field hash_size integer
 
+---@class ILConcat : ILInstruction
+---@field inst_type "concat"
+---@field result_reg ILRegister
+---@field right_ptrs ILPointer[]
+
 ---@class ILBinop : ILInstruction
 ---@field inst_type "binop"
 ---@field result_reg ILRegister
----@field op ILBinOpOpBase|".." @ note the absence of "and" and "or", but presence of ".."
+---@field op ILBinOpOpBase @ note the absence of "and" and "or"
 ---@field left_ptr ILPointer
 ---@field right_ptr ILPointer
 

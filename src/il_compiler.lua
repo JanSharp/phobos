@@ -59,6 +59,10 @@ do
     ["new_table"] = function(data, inst)
       visit_reg(data, inst, inst.result_reg) -- has to be at the top of the stack
     end,
+    ["concat"] = function(data, inst)
+      visit_reg(data, inst, inst.result_reg) -- has to be at the top of the stack
+      visit_ptr_list(data, inst, inst.right_ptrs) -- must be in order right above result_reg
+    end,
     ["binop"] = function(data, inst)
       visit_reg(data, inst, inst.result_reg) -- has to be at the top of the stack if this is a concat
       visit_ptr(data, inst, inst.left_ptr)
@@ -136,6 +140,9 @@ local generate_inst_lut = {
     util.debug_abort("-- TODO: not implemented")
   end,
   ["new_table"] = function(data, inst)
+    util.debug_abort("-- TODO: not implemented")
+  end,
+  ["concat"] = function(data, inst)
     util.debug_abort("-- TODO: not implemented")
   end,
   ["binop"] = function(data, inst)

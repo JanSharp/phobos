@@ -72,6 +72,10 @@ do
     ["new_table"] = function(data, inst)
       visit_reg(data, inst, inst.result_reg)
     end,
+    ["concat"] = function(data, inst)
+      visit_reg(data, inst, inst.result_reg)
+      visit_ptr_list(data, inst, inst.right_ptrs)
+    end,
     ["binop"] = function(data, inst)
       visit_reg(data, inst, inst.result_reg)
       visit_ptr(data, inst, inst.left_ptr)
