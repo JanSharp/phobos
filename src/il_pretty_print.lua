@@ -10,12 +10,10 @@ local function get_reg(reg, context)
     context.reg_label_lut[reg] = label
     return label
   end
-  if reg.ptr_type == "reg" then
-    return make_label("R", reg.name)
-  elseif reg.ptr_type == "vararg" then
+  if reg.is_vararg then
     return make_label("VAR")
   else
-    error(reg.ptr_type and ("unknown ptr_type '"..reg.ptr_type.."'") or "invalid nil ptr_type")
+    return make_label("R", reg.name)
   end
 end
 
@@ -85,7 +83,7 @@ local instruction_label_getter_lut = {
     return "SETTABLE", get_reg(inst.table_reg, context).."["..get_ptr(inst.key_ptr, context).."] := "..get_ptr(inst.right_ptr, context)
   end,
   ["set_list"] = function(inst, context)
-    return "SETLIST", get_reg(inst.table_reg, context).."["..inst.start_index..", ..."..(inst.right_ptrs[#inst.right_ptrs].ptr_type == "vararg" and "" or (", "..(inst.start_index + #inst.right_ptrs - 1))).."] := "..get_list(get_ptr, inst.right_ptrs, context)
+    return "SETLIST", get_reg(inst.table_reg, context).."["..inst.start_index..", ..."..(inst.right_ptrs[#inst.right_ptrs].is_vararg and "" or (", "..(inst.start_index + #inst.right_ptrs - 1))).."] := "..get_list(get_ptr, inst.right_ptrs, context)
   end,
   ["new_table"] = function(inst, context)
     return "NEWTABLE", get_reg(inst.result_reg, context).." := {} size("..inst.array_size..", "..inst.hash_size..")"

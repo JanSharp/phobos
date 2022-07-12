@@ -9,7 +9,7 @@ local consts = require("constants")
 local prevent_assert = {prevent_assert = true}
 
 local function is_reg(ptr)
-  return ptr.ptr_type == "reg" or ptr.ptr_type == "vararg"
+  return ptr.ptr_type == "reg"
 end
 
 local function is_const(ptr)
@@ -273,11 +273,13 @@ end
 local function new_reg(name)
   local ptr = new_ptr("reg")
   ptr.name = name
+  ptr.is_vararg = false
   return ptr
 end
 
 local function new_vararg_reg()
-  local ptr = new_ptr("vararg")
+  local ptr = new_ptr("reg")
+  ptr.is_vararg = true
   return ptr
 end
 

@@ -27,10 +27,11 @@ end
 local function make_type_from_ptr(state, ptr)
   return (({
     ["reg"] = function()
-      return il.copy_type(get_type(state, ptr))
-    end,
-    ["vararg"] = function()
-      util.debug_abort("-- TODO: I hate vararg.")
+      if ptr.is_vararg then
+        util.debug_abort("-- TODO: I hate vararg.")
+      else
+        return il.copy_type(get_type(state, ptr))
+      end
     end,
     ["number"] = function()
       if ptr.value ~= ptr.value then

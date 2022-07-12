@@ -559,7 +559,6 @@
 
 ---@alias ILPointerType
 ---| "reg"
----| "vararg"
 ---| "number"
 ---| "string"
 ---| "boolean"
@@ -571,12 +570,14 @@
 ---@class ILRegister : ILPointer
 ---@field ptr_type "reg"
 ---@field name string|nil
+---@field is_vararg boolean
 ---post IL generation data
 ---@field start_at ILInstruction
 ---@field stop_at ILInstruction
 
 ---@class ILVarargRegister : ILRegister
----@field ptr_type "vararg"
+---@field name nil
+---@field is_vararg true
 
 ---@class ILNumber : ILPointer
 ---@field ptr_type "number"
