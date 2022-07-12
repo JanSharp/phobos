@@ -574,6 +574,8 @@
 ---post IL generation data
 ---@field start_at ILInstruction
 ---@field stop_at ILInstruction
+---@field total_get_count integer
+---@field total_set_count integer
 
 ---@class ILVarargRegister : ILRegister
 ---@field name nil

@@ -9,7 +9,7 @@ local util = require("util")
 
 local unsafe = true
 local print_progress = true
-local use_regular_lua_compiler = true
+local use_regular_lua_compiler = false
 local use_phobos_compiler = true
 local use_il = true
 local do_create_inline_iife = false
@@ -251,10 +251,15 @@ local function compile(filename)
       end)
       if not success then print(err) goto finish end
 
-      -- local compiled
-      -- success, compiled = pcall(require("il_compiler"), il)
-      -- if not success then print(compiled) goto finish end
-      -- add_func_to_lines("ILR", compiled)
+      local compiled
+      success, compiled = pcall(require("il_compiler"), il)
+      if not success then print(compiled) goto finish end
+      add_func_to_lines("ILR", compiled)
+      for i, reg in ipairs(il.all_regs) do
+        print((reg.is_vararg and "VAR" or "R").."("..i..(reg.name and ("|"..reg.name) or "")
+          ..", get: "..(reg.total_get_count or "?")..", set: "..(reg.total_set_count or "?")..")"
+        )
+      end
     end
 
     if do_fold_const then

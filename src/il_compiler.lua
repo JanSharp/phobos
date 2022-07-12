@@ -4,110 +4,113 @@ local util = require("util")
 local opcode_util = require("opcode_util")
 local opcodes = opcode_util.opcodes
 
-local step_one
+local determine_reg_usage
 do
-  local function visit_reg(data, inst, reg)
-    if not reg.start_at then
-      reg.start_at = inst
-      data.all_regs[#data.all_regs+1] = reg
+  local get = true
+  local set = false
+  local both = nil
+
+  local function visit_reg(data, inst, reg, get_set)
+    reg.total_get_count = reg.total_get_count or 0
+    reg.total_set_count = reg.total_set_count or 0
+    if get_set ~= set then
+      reg.total_get_count = reg.total_get_count + 1
     end
-    reg.stop_at = inst
+    if get_set ~= get then
+      reg.total_set_count = reg.total_set_count + 1
+    end
   end
 
-  local function visit_reg_list(data, inst, regs)
+  local function visit_reg_list(data, inst, regs, get_set)
     for _, reg in ipairs(regs) do
-      visit_reg(data, inst, reg)
+      visit_reg(data, inst, reg, get_set)
     end
   end
 
-  local function visit_ptr(data, inst, ptr)
+  local function visit_ptr(data, inst, ptr, get_set)
     if ptr.ptr_type == "reg" then
-      visit_reg(data, inst, ptr)
+      visit_reg(data, inst, ptr, get_set)
     end
   end
 
-  local function visit_ptr_list(data, inst, ptrs)
+  local function visit_ptr_list(data, inst, ptrs, get_set)
     for _, ptr in ipairs(ptrs) do
-      visit_ptr(data, inst, ptr)
+      visit_ptr(data, inst, ptr, get_set)
     end
   end
 
-  local reg_liveliness_lut = {
+  local visitor_lut = {
     ["move"] = function(data, inst)
-      visit_reg(data, inst, inst.result_reg)
-      visit_ptr(data, inst, inst.right_ptr)
+      visit_reg(data, inst, inst.result_reg, set)
+      visit_ptr(data, inst, inst.right_ptr, get)
     end,
     ["get_upval"] = function(data, inst)
-      visit_reg(data, inst, inst.result_reg)
+      visit_reg(data, inst, inst.result_reg, set)
     end,
     ["set_upval"] = function(data, inst)
-      visit_ptr(data, inst, inst.right_ptr)
+      visit_ptr(data, inst, inst.right_ptr, get)
     end,
     ["get_table"] = function(data, inst)
-      visit_reg(data, inst, inst.result_reg)
-      visit_reg(data, inst, inst.table_reg)
+      visit_reg(data, inst, inst.result_reg, set)
+      visit_reg(data, inst, inst.table_reg, get)
     end,
     ["set_table"] = function(data, inst)
-      visit_reg(data, inst, inst.table_reg)
-      visit_ptr(data, inst, inst.key_ptr)
-      visit_ptr(data, inst, inst.right_ptr)
+      visit_reg(data, inst, inst.table_reg, get)
+      visit_ptr(data, inst, inst.key_ptr, get)
+      visit_ptr(data, inst, inst.right_ptr, get)
     end,
     ["set_list"] = function(data, inst)
-      visit_reg(data, inst, inst.table_reg)
-      visit_ptr_list(data, inst, inst.right_ptrs) -- must be in order
+      visit_reg(data, inst, inst.table_reg, get)
+      visit_ptr_list(data, inst, inst.right_ptrs, get) -- must be in order
     end,
     ["new_table"] = function(data, inst)
-      visit_reg(data, inst, inst.result_reg) -- has to be at the top of the stack
+      visit_reg(data, inst, inst.result_reg, set) -- has to be at the top of the stack
     end,
     ["concat"] = function(data, inst)
-      visit_reg(data, inst, inst.result_reg) -- has to be at the top of the stack
-      visit_ptr_list(data, inst, inst.right_ptrs) -- must be in order right above result_reg
+      visit_reg(data, inst, inst.result_reg, set) -- has to be at the top of the stack
+      visit_ptr_list(data, inst, inst.right_ptrs, get) -- must be in order right above result_reg
     end,
     ["binop"] = function(data, inst)
-      visit_reg(data, inst, inst.result_reg) -- has to be at the top of the stack if this is a concat
-      visit_ptr(data, inst, inst.left_ptr)
-      visit_ptr(data, inst, inst.right_ptr)
+      visit_reg(data, inst, inst.result_reg, set) -- has to be at the top of the stack if this is a concat
+      visit_ptr(data, inst, inst.left_ptr, get)
+      visit_ptr(data, inst, inst.right_ptr, get)
     end,
     ["unop"] = function(data, inst)
-      visit_ptr(data, inst, inst.result_reg)
-      visit_ptr(data, inst, inst.right_ptr)
+      visit_ptr(data, inst, inst.result_reg, set)
+      visit_ptr(data, inst, inst.right_ptr, get)
     end,
     ["label"] = function(data, inst)
     end,
     ["jump"] = function(data, inst)
     end,
     ["test"] = function(data, inst)
-      visit_ptr(data, inst, inst.condition_ptr)
+      visit_ptr(data, inst, inst.condition_ptr, get)
     end,
     ["call"] = function(data, inst)
-      visit_reg(data, inst, inst.func_reg)
-      visit_ptr_list(data, inst, inst.arg_ptrs) -- must be in order right above func_reg
-      visit_reg_list(data, inst, inst.result_regs) -- must be in order right above func_reg
+      visit_reg(data, inst, inst.func_reg, get)
+      visit_ptr_list(data, inst, inst.arg_ptrs, get) -- must be in order right above func_reg
+      visit_reg_list(data, inst, inst.result_regs, set) -- must be in order right above func_reg
     end,
     ["ret"] = function(data, inst)
-      visit_ptr_list(data, inst, inst.ptrs) -- must be in order
+      visit_ptr_list(data, inst, inst.ptrs, get) -- must be in order
     end,
     ["closure"] = function(data, inst)
-      visit_reg(data, inst, inst.result_reg) -- has to be at the top of the stack
+      visit_reg(data, inst, inst.result_reg, set) -- has to be at the top of the stack
     end,
     ["vararg"] = function(data, inst)
-      visit_reg_list(data, inst, inst.result_regs) -- must be in order
+      visit_reg_list(data, inst, inst.result_regs, set) -- must be in order
     end,
     ["scoping"] = function(data, inst)
-      visit_reg_list(data, inst, inst.regs)
+      visit_reg_list(data, inst, inst.regs, both)
     end,
   }
 
-  function step_one(data)
-    data.all_regs = {}
-    do
-      local inst = data.func.instructions.first
-      while inst do
-        reg_liveliness_lut[inst.inst_type](data, inst)
-        inst = inst.next
-      end
+  function determine_reg_usage(data)
+    local inst = data.func.instructions.first
+    while inst do
+      visitor_lut[inst.inst_type](data, inst)
+      inst = inst.next
     end
-    -- TODO: ok, now what
   end
 end
 
@@ -223,8 +226,8 @@ end
 local function compile(func)
   local data = {func = func}
   make_bytecode_func(data)
-  -- step_one(data)
-  generate(data)
+  determine_reg_usage(data)
+  -- generate(data)
   return data.result
 end
 
