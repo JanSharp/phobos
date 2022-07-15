@@ -34,7 +34,7 @@ do
 
   local function visit_ptr(data, inst, ptr)
     if ptr.ptr_type == "reg" then
-      visit_reg_list(data, inst, ptr)
+      visit_reg(data, inst, ptr)
     end
   end
 
