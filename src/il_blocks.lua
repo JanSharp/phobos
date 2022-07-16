@@ -129,39 +129,55 @@ end
 local eval_live_regs
 do
   function eval_live_regs(data)
-    local start_at_lut = {}
-    local stop_at_lut = {}
+    local start_at_list_lut = {}
+    local start_at_lut_lut = {}
+    local stop_at_list_lut = {}
+    local stop_at_lut_lut = {}
     for _, reg in ipairs(data.all_regs) do
-      local list = start_at_lut[reg.start_at]
+      local list = start_at_list_lut[reg.start_at]
+      local lut
       if not list then
         list = {}
-        start_at_lut[reg.start_at] = list
+        start_at_list_lut[reg.start_at] = list
+        lut = {}
+        start_at_lut_lut[reg.start_at] = lut
+      else
+        lut = start_at_lut_lut[reg.start_at]
       end
       list[#list+1] = reg
-      -- using a lut instead of a list for stop_at
-      local lut = stop_at_lut[reg.stop_at]
-      if not lut then
+      lut[reg] = true
+      -- copy paste
+      list = stop_at_list_lut[reg.stop_at]
+      if not list then
+        list = {}
+        stop_at_list_lut[reg.stop_at] = list
         lut = {}
-        stop_at_lut[reg.stop_at] = lut
+        stop_at_lut_lut[reg.stop_at] = lut
+      else
+        lut = stop_at_lut_lut[reg.stop_at]
       end
+      list[#list+1] = reg
       lut[reg] = true
     end
+
     local live_regs = {}
     local inst = data.func.instructions.first
     while inst do
       inst.live_regs = live_regs
       -- starting at this instruction, add them to live_regs for this instruction
-      local list = start_at_lut[inst]
+      local list = start_at_list_lut[inst]
       if list then
         inst.regs_start_at_list = list
+        inst.regs_start_at_lut = start_at_lut_lut[inst]
         for _, reg in ipairs(list) do
           live_regs[#live_regs+1] = reg
         end
       end
       live_regs = util.shallow_copy(live_regs)
       -- stopping at this instruction, remove them from live_regs for the next instruction
-      local lut = stop_at_lut[inst]
+      local lut = stop_at_lut_lut[inst]
       if lut then
+        inst.regs_stop_at_list = stop_at_list_lut[inst]
         inst.regs_stop_at_lut = lut
         local i = 1
         local j = 1

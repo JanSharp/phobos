@@ -694,8 +694,10 @@
 ---@field position ILPosition|nil
 ---post IL generation data
 ---@field block ILBlock
----@field regs_start_at_list ILRegister[]|nil
----@field regs_stop_at_lut table<ILRegister, boolean>|nil
+---@field regs_start_at_list ILRegister[]?
+---@field regs_start_at_lut table<ILRegister, boolean>?
+---@field regs_stop_at_list ILRegister[]?
+---@field regs_stop_at_lut table<ILRegister, boolean>?
 ---@field live_regs ILRegister[]
 ---@field pre_state ILState
 ---@field post_state ILState
