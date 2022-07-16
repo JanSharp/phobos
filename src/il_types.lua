@@ -106,13 +106,13 @@ local modify_post_state_func_lut = {
     set_type(inst.post_state, inst.result_reg, il.new_type{type_flags = il.string_flag})
   end,
   ["binop"] = function(data, inst)
-    if il.is_logical_binop(inst) then
-      -- TODO: check if the result value can be determined at this point already
-      set_type(inst.post_state, inst.result_reg, il.new_type{type_flags = il.boolean_flag})
-    else
+    -- if il.is_logical_binop(inst) then
+    --   -- TODO: check if the result value can be determined at this point already
+    --   set_type(inst.post_state, inst.result_reg, il.new_type{type_flags = il.boolean_flag})
+    -- else
       -- TODO: this can be improved by a lot now
       set_type(inst.post_state, inst.result_reg, il.new_type{type_flags = il.every_flag})
-    end
+    -- end
   end,
   ["unop"] = function(data, inst)
     if inst.op == "not" then
