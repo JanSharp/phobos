@@ -132,10 +132,12 @@
     "upval",
     "upvals",
     "upvalue",
+    "upvalues",
     "userdata",
     "valignore",
     "valtypeignore",
     "vararg",
+    "varargs",
     "whilestat"
   ],
   "cSpell.enableFiletypes": [

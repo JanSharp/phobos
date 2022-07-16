@@ -23,8 +23,71 @@ local function if_not_zero_reduce_by(amount)
   return {reduce_if_not_zero = amount}
 end
 
-local next_id = 0
+---cSpell:ignore KPROTO
+
+---Notes:\
+---(*) In OP_CALL, if (B == 0) then B = top. If (C == 0), then `top` is
+---set to last_result+1, so next open instruction (OP_CALL, OP_RETURN,
+---OP_SETLIST) may use `top`.
+---
+---(*) In OP_VARARG, if (B == 0) then use actual number of varargs and
+---set top (like in OP_CALL with C == 0).
+---
+---(*) In OP_RETURN, if (B == 0) then return up to `top`.
+---
+---(*) In OP_SETLIST, if (B == 0) then B = `top`; if (C == 0) then next
+---'instruction' is EXTRAARG(real C).
+---
+---(*) In OP_LOADKX, the next 'instruction' is always EXTRAARG.
+---
+---(*) For comparisons, A specifies what condition the test should accept
+---(true or false).
+---
+---(*) All `skips` (pc++) assume that next instruction is a jump.
+---@class OpcodeUtilOpcodes
+---@field move     Opcode @ (A, B)     |  R(A) := R(B)
+---@field loadk    Opcode @ (A, Bx)    |  R(A) := Kst(Bx)
+---@field loadkx   Opcode @ (A,)       |  R(A) := Kst(extra arg)
+---@field loadbool Opcode @ (A, B, C)  |  R(A) := (Bool)B; if (C) pc++
+---@field loadnil  Opcode @ (A, B)     |  R(A), R(A+1), ..., R(A+B) := nil
+---@field getupval Opcode @ (A, B)     |  R(A) := UpValue[B]
+---@field gettabup Opcode @ (A, B, C)  |  R(A) := UpValue[B][RK(C)]
+---@field gettable Opcode @ (A, B, C)  |  R(A) := R(B)[RK(C)]
+---@field settabup Opcode @ (A, B, C)  |  UpValue[A][RK(B)] := RK(C)
+---@field setupval Opcode @ (A, B)     |  UpValue[B] := R(A)
+---@field settable Opcode @ (A, B, C)  |  R(A)[RK(B)] := RK(C)
+---@field newtable Opcode @ (A, B, C)  |  R(A) := {} (size = B,C)
+---@field self     Opcode @ (A, B, C)  |  R(A+1) := R(B); R(A) := R(B)[RK(C)]
+---@field add      Opcode @ (A, B, C)  |  R(A) := RK(B) + RK(C)
+---@field sub      Opcode @ (A, B, C)  |  R(A) := RK(B) - RK(C)
+---@field mul      Opcode @ (A, B, C)  |  R(A) := RK(B) * RK(C)
+---@field div      Opcode @ (A, B, C)  |  R(A) := RK(B) / RK(C)
+---@field mod      Opcode @ (A, B, C)  |  R(A) := RK(B) % RK(C)
+---@field pow      Opcode @ (A, B, C)  |  R(A) := RK(B) ^ RK(C)
+---@field unm      Opcode @ (A, B)     |  R(A) := -R(B)
+---@field not      Opcode @ (A, B)     |  R(A) := not R(B)
+---@field len      Opcode @ (A, B)     |  R(A) := length of R(B)
+---@field concat   Opcode @ (A, B, C)  |  R(A) := R(B).. ... ..R(C)
+---@field jmp      Opcode @ (A, sBx)   |  pc+=sBx; if (A) close all upvalues >= R(A) + 1
+---@field eq       Opcode @ (A, B, C)  |  if ((RK(B) == RK(C)) ~= A) then pc++
+---@field lt       Opcode @ (A, B, C)  |  if ((RK(B) <  RK(C)) ~= A) then pc++
+---@field le       Opcode @ (A, B, C)  |  if ((RK(B) <= RK(C)) ~= A) then pc++
+---@field test     Opcode @ (A, C)     |  if not (R(A) <=> C) then pc++
+---@field testset  Opcode @ (A, B, C)  |  if (R(B) <=> C) then R(A) := R(B) else pc++
+---@field call     Opcode @ (A, B, C)  |  R(A), ... ,R(A+C-2) := R(A)(R(A+1), ... ,R(A+B-1))
+---@field tailcall Opcode @ (A, B, C)  |  return R(A)(R(A+1), ... ,R(A+B-1))
+---@field return   Opcode @ (A, B)     |  return R(A), ... ,R(A+B-2) (see note)
+---@field forloop  Opcode @ (A, sBx)   |  R(A)+=R(A+2); if R(A) <?= R(A+1) then { pc+=sBx; R(A+3)=R(A) }
+---@field forprep  Opcode @ (A, sBx)   |  R(A)-=R(A+2); pc+=sBx
+---@field tforcall Opcode @ (A, C)     |  R(A+3), ... ,R(A+2+C) := R(A)(R(A+1), R(A+2));
+---@field tforloop Opcode @ (A, sBx)   |  if R(A+1) ~= nil then { R(A)=R(A+1); pc += sBx }
+---@field setlist  Opcode @ (A, B, C)  |  R(A)[(C-1)*FPF+i] := R(A+i), 1 <= i <= B
+---@field closure  Opcode @ (A, Bx)    |  R(A) := closure(KPROTO[Bx])
+---@field vararg   Opcode @ (A, B)     |  R(A), R(A+1), ..., R(A+B-2) = vararg
+---@field extraarg Opcode @ (Ax)       |  extra (larger) argument for previous opcode
 local opcodes = {}
+
+local next_id = 0
 local opcodes_by_id = {}
 local function op(name, params, special)
   local reduce_if_not_zero = {}
