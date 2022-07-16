@@ -153,18 +153,65 @@ local function add_first(self, value)
   return node
 end
 
----@class ILLNode
+---@class ILLNodeBase
+---@field list IndexedLinkedListBase @ back reference
+---@field index integer @ non sequential but ordered index
+---@field prev ILLNodeBase? @ `nil` if this is the first node
+---@field next ILLNodeBase? @ `nil` if this is the last node
+
+---@class IntrusiveILLNode : ILLNodeBase
+---@field list IntrusiveIndexedLinkedList @ back reference
+---@field prev IntrusiveILLNode? @ `nil` if this is the first node
+---@field next IntrusiveILLNode? @ `nil` if this is the last node
+
+---@class ILLNode : ILLNodeBase
 ---@field list IndexedLinkedList @ back reference
 ---@field value any
----@field index integer @ non sequential but ordered index
----@field prev ILLNode|nil @ `nil` if this is the first node
----@field next ILLNode|nil @ `nil` if this is the last node
+---@field prev ILLNode? @ `nil` if this is the first node
+---@field next ILLNode? @ `nil` if this is the last node
 
----@class IndexedLinkedList
+---@class IndexedLinkedListBase
+---@field intrusive boolean
 ---@field count integer @ if 0, `first` and `last` are `nil`
----@field first ILLNode|nil
----@field last ILLNode|nil
+---@field first ILLNodeBase?
+---@field last ILLNodeBase?
+---@field lookup table<integer, ILLNodeBase> @ indexed by `ILLNodeBase.index`
+
+---@class IntrusiveIndexedLinkedList : IndexedLinkedListBase
+---@field intrusive true
+---@field first IntrusiveILLNode?
+---@field last IntrusiveILLNode?
+---@field lookup table<integer, IntrusiveILLNode> @ indexed by `IntrusiveILLNode.index`
+
+---@class IndexedLinkedList : IndexedLinkedListBase
+---@field intrusive false
+---@field first ILLNode?
+---@field last ILLNode?
 ---@field lookup table<integer, ILLNode> @ indexed by `ILLNode.index`
+
+---cSpell:ignore jank
+-- An attempt at using generics. God they are jank and 3/4 things that I tested
+-- and I wanted to use them for are simply broken
+
+-- ---list: back reference\
+-- ---index: non sequential but ordered index\
+-- ---prev: `nil` if this is the first node\
+-- ---next: `nil` if this is the last node
+-- ---@class IntrusiveILLNode<T> : { list: IntrusiveIndexedLinkedList<T>, index: integer, prev: T?, next: T? }
+
+-- ---count: if 0, `first` and `last` are `nil`\
+-- ---lookup: indexed by `IntrusiveILLNode.index`
+-- ---@class IntrusiveIndexedLinkedList<T> : { count: integer, first: T?, last: T?, lookup: table<integer, T> }
+
+-- ---list: back reference\
+-- ---index: non sequential but ordered index\
+-- ---prev: `nil` if this is the first node\
+-- ---next: `nil` if this is the last node
+-- ---@class ILLNode<T> : { list: IndexedLinkedList<T>, value: T, index: integer, prev: ILLNode<T>?, next: ILLNode<T>? }
+
+-- ---count: if 0, `first` and `last` are `nil`\
+-- ---lookup: indexed by `ILLNode.index`
+-- ---@class IndexedLinkedList<T> : { count: integer, first: ILLNode<T>?, last: ILLNode<T>?, lookup: table<integer, ILLNode<T>> }
 
 function ill.new(intrusive)
   return {

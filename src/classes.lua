@@ -689,7 +689,7 @@
 ---| "vararg"
 ---| "scoping"
 
----@class ILInstruction
+---@class ILInstruction : IntrusiveILLNode<ILInstruction>
 ---@field inst_type ILInstructionType
 ---@field position ILPosition|nil
 ---post IL generation data
