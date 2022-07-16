@@ -899,7 +899,7 @@
 ---@alias CompiledConstant AstString|AstNumber|AstBoolean|AstNil
 
 ---@class CompiledRegister
----@field reg integer @ **zero based** index of the register
+---@field index integer @ **zero based** index of the register
 ---@field name string @ this name is for from start_at until stop_at
 ---@field start_at integer @ **one based including**
 ---@field stop_at integer @ **one based including**
