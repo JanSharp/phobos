@@ -576,6 +576,8 @@
 ---@field stop_at ILInstruction
 ---@field total_get_count integer
 ---@field total_set_count integer
+---@field temporary boolean?
+---@field current_reg ILCompiledRegister
 
 ---@class ILVarargRegister : ILRegister
 ---@field name nil
@@ -887,14 +889,16 @@
 ---@field reduce_if_not_zero OpcodeReduceIfNotZero
 ---@field next_op OpcodeNextOpcode|nil
 
----@class Instruction : Position
----@field op Opcode
+---@class InstructionArguments
 ---@field a integer
 ---@field b integer
 ---@field c integer
 ---@field ax integer
 ---@field bx integer
 ---@field sbx integer
+
+---@class Instruction : InstructionArguments, Position
+---@field op Opcode
 ---@field column integer? @ stored in Phobos debug symbols (overridden just for the comment)
 ---@field source string? @ stored in Phobos debug symbols
 
