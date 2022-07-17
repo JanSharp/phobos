@@ -769,16 +769,24 @@
 ---@class ILLabel : ILInstruction
 ---@field inst_type "label"
 ---@field name string|nil
+---temp compilation data
+---@field target_inst ILCompiledInstruction @ the instruction jumps to this label will jump to
 
 ---@class ILJump : ILInstruction
 ---@field inst_type "jump"
 ---@field label ILLabel
+---temp compilation data\
+---the jmp instruction that needs its `sbx` set after `inst_index`es have been evaluated
+---@field jump_inst ILCompiledInstruction
 
 ---@class ILTest : ILInstruction
 ---@field inst_type "test"
 ---@field label ILLabel
 ---@field condition_ptr ILPointer
 ---@field jump_if_true boolean
+---temp compilation data\
+---the jmp instruction that needs its `sbx` set after `inst_index`es have been evaluated
+---@field jump_inst ILCompiledInstruction
 
 ---@class ILCall : ILInstruction
 ---@field inst_type "call"

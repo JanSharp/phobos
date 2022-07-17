@@ -150,8 +150,11 @@ do
   ---@param position Position
   ---@param op Opcode
   ---@param args InstructionArguments
+  ---@return ILCompiledInstruction inst
   local function add_new_inst(data, position, op, args)
-    add_inst(data, new_inst(data, position, op, args))
+    local inst = new_inst(data, position, op, args)
+    add_inst(data, inst)
+    return inst
   end
 
   ---@param data ILCompilerData
@@ -159,8 +162,11 @@ do
   ---@param position Position
   ---@param op Opcode
   ---@param args InstructionArguments
+  ---@return ILCompiledInstruction inserted_inst
   local function insert_new_inst(data, inst, position, op, args)
-    insert_inst(data, inst, new_inst(data, position, op, args))
+    local inserted_inst = new_inst(data, position, op, args)
+    insert_inst(data, inst, inserted_inst)
+    return inserted_inst
   end
 
   ---@param data ILCompilerData
@@ -560,7 +566,32 @@ do
         const_or_ref_or_load_ptr_post(data, inst.position, inst.left_ptr, left)
         const_or_ref_or_load_ptr_post(data, inst.position, inst.right_ptr, right)
       else
-        util.debug_abort("-- TODO: logical binops")
+        -- remember, generated from back to front
+        add_new_inst(data, inst.position, opcodes.loadbool, {
+          a = inst.result_reg.current_reg.reg_index,
+          b = 0,
+          c = 0,
+        })
+        add_new_inst(data, inst.position, opcodes.loadbool, {
+          a = inst.result_reg.current_reg.reg_index,
+          b = 1,
+          c = 1,
+        })
+        add_new_inst(data, inst.position, opcodes.jmp, {
+          a = 0,
+          sbx = 1,
+        })
+        -- order matters, back to front
+        local right = const_or_ref_or_load_ptr_pre(data, inst.position, inst.right_ptr)
+        local left = const_or_ref_or_load_ptr_pre(data, inst.position, inst.left_ptr)
+        add_new_inst(data, inst.position, logical_binop_lut[inst.op], {
+          a = (logical_invert_lut[inst.op] and 1 or 0)--[[@as integer]],
+          b = get_const_or_reg_arg(left),
+          c = get_const_or_reg_arg(right),
+        })
+        -- order matters, top down
+        const_or_ref_or_load_ptr_post(data, inst.position, inst.left_ptr, left)
+        const_or_ref_or_load_ptr_post(data, inst.position, inst.right_ptr, right)
       end
       return inst.prev
     end,
@@ -574,14 +605,37 @@ do
       ref_or_load_ptr_post(data, inst.position, inst.right_ptr, right_reg)
       return inst.prev
     end,
+    ---@param inst ILLabel
     ["label"] = function(data, inst)
-      util.debug_abort("-- TODO: not implemented")
+      inst.target_inst = get_first_inst(data)
+      return inst.prev
     end,
+    ---@param inst ILJump
     ["jump"] = function(data, inst)
-      util.debug_abort("-- TODO: not implemented")
+      inst.jump_inst = add_new_inst(data, inst.position, opcodes.jmp, {
+        a = 0,
+        -- set after all instructions have been generated - once `inst_index`es have been evaluated
+        sbx = (nil)--[[@as integer]],
+      })
+      data.all_jumps[#data.all_jumps+1] = inst
+      return inst.prev
     end,
+    ---@param inst ILTest
     ["test"] = function(data, inst)
-      util.debug_abort("-- TODO: not implemented")
+      -- remember, generated from back to front, so the jump comes "first"
+      inst.jump_inst = add_new_inst(data, inst.position, opcodes.jmp, {
+        a = 0,
+        -- set after all instructions have been generated - once `inst_index`es have been evaluated
+        sbx = (nil)--[[@as integer]],
+      })
+      data.all_jumps[#data.all_jumps+1] = inst
+      local condition_reg = ref_or_load_ptr_pre(data, inst.condition_ptr)
+      add_new_inst(data, inst.position, opcodes.test, {
+        a = condition_reg.reg_index,
+        c = inst.jump_if_true and 1 or 0,
+      })
+      ref_or_load_ptr_post(data, inst.position, inst.condition_ptr, condition_reg)
+      return inst.prev
     end,
     ["call"] = function(data, inst)
       util.debug_abort("-- TODO: not implemented")
@@ -678,6 +732,7 @@ end
 ---@field compiled_instructions IntrusiveIndexedLinkedList
 ---@field compiled_registers ILCompiledRegister[]
 ---@field constant_lut table<number|string|boolean, integer>
+---@field all_jumps (ILJump|ILTest)[]
 
 ---@param func ILFunction
 local function compile(func)
@@ -689,6 +744,7 @@ local function compile(func)
   data.compiled_instructions = ill.new(true)
   data.compiled_registers = {}
   data.constant_lut = {}
+  data.all_jumps = {}
   generate(data)
 
   do
@@ -701,6 +757,7 @@ local function compile(func)
       compiled_inst = compiled_inst.next
     end
   end
+
   for _, reg in ipairs(data.compiled_registers) do
     ---@cast reg ILCompiledRegister|CompiledRegister
     reg.index = reg.reg_index
@@ -709,6 +766,10 @@ local function compile(func)
     reg.stop_at = reg.stop_at and (reg.stop_at.inst_index - 1) or (#data.result.instructions)
   end
   data.result.debug_registers = data.compiled_registers
+
+  for _, inst in ipairs(data.all_jumps) do
+    inst.jump_inst.sbx = inst.label.target_inst.inst_index - inst.jump_inst.inst_index - 1
+  end
 
   for i, inner_func in ipairs(func.inner_functions) do
     inner_func.closure_index = nil -- cleaning up as we go
