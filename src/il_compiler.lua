@@ -515,8 +515,18 @@ do
       const_or_ref_or_load_ptr_post(data, inst.position, inst.key_ptr, key)
       return inst.prev
     end,
+    ---@param inst ILSetTable
     ["set_table"] = function(data, inst)
-      util.debug_abort("-- TODO: not implemented")
+      local key = const_or_ref_or_load_ptr_pre(data, inst.position, inst.key_ptr)
+      local right = const_or_ref_or_load_ptr_pre(data, inst.position, inst.right_ptr)
+      add_new_inst(data, inst.position, opcodes.settable, {
+        a = inst.table_reg.current_reg.reg_index,
+        b = get_const_or_reg_arg(key),
+        c = get_const_or_reg_arg(right),
+      })
+      const_or_ref_or_load_ptr_post(data, inst.position, inst.right_ptr, right)
+      const_or_ref_or_load_ptr_post(data, inst.position, inst.key_ptr, key)
+      return inst.prev
     end,
     ["set_list"] = function(data, inst)
       util.debug_abort("-- TODO: not implemented")
