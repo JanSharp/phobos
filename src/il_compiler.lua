@@ -513,8 +513,16 @@ do
     ["set_list"] = function(data, inst)
       util.debug_abort("-- TODO: not implemented")
     end,
+    ---@param inst ILNewTable
     ["new_table"] = function(data, inst)
-      util.debug_abort("-- TODO: not implemented")
+      local reg = ensure_is_top_reg_pre(data, inst.result_reg.current_reg)
+      add_new_inst(data, inst.position, opcodes.newtable, {
+        a = reg.reg_index,
+        b = util.number_to_floating_byte(inst.array_size),
+        c = util.number_to_floating_byte(inst.hash_size),
+      })
+      ensure_is_top_reg_post(data, inst.position, inst.result_reg.current_reg, reg)
+      return inst.prev
     end,
     ["concat"] = function(data, inst)
       util.debug_abort("-- TODO: not implemented")
