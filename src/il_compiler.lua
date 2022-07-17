@@ -625,6 +625,10 @@ end
 local function make_bytecode_func(data)
   local func = data.func
   local result = {
+    line_defined = func.defined_position and func.defined_position.line,
+    column_defined = func.defined_position and func.defined_position.column,
+    last_line_defined = func.last_defined_position and func.last_defined_position.line,
+    last_column_defined = func.last_defined_position and func.last_defined_position.column,
     num_params = #func.param_regs,
     is_vararg = func.is_vararg,
     max_stack_size = 2, -- min 2

@@ -1226,6 +1226,8 @@ function generate_functiondef(functiondef, parent_func)
     param_regs = {},
     is_vararg = functiondef.is_vararg,
     source = functiondef.source,
+    defined_position = functiondef.function_token,
+    last_defined_position = functiondef.end_token,
   }
 
   if parent_func then

@@ -810,7 +810,9 @@
 ---@field upvals ILUpval[]
 ---@field param_regs ILRegister[]
 ---@field is_vararg boolean
----@field source string|nil
+---@field source string?
+---@field defined_position Position? @ usually the position of the `function_token`
+---@field last_defined_position Position? @ usually the position of the `end_token`
 ---post IL generation data
 ---@field all_regs ILRegister[]
 ---@field blocks ILBlock[] @ intrusive ILL
