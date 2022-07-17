@@ -137,8 +137,8 @@ local modify_post_state_func_lut = {
   ["ret"] = function(data, inst)
   end,
   ["closure"] = function(data, inst)
-    util.debug_abort("-- TODO: func type with identity")
-    set_type(inst.post_state, inst.result_reg, il.new_literal_function{func = inst.func})
+    -- util.debug_abort("-- TODO: func type with identity")
+    set_type(inst.post_state, inst.result_reg, il.new_type{type_flags = il.function_flag})
   end,
   ["vararg"] = function(data, inst)
   end,

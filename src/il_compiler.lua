@@ -287,6 +287,30 @@ do
     end
   end
 
+  ---@param data ILCompilerData
+  ---@param reg ILCompiledRegister
+  ---@return ILCompiledRegister top_reg
+  local function ensure_is_top_reg_pre(data, reg)
+    if reg.reg_index >= data.local_reg_count - 1 then
+      return reg
+    else
+      return create_new_temp_reg(data)
+    end
+  end
+
+  ---@param data ILCompilerData
+  ---@param initial_reg ILCompiledRegister
+  ---@param top_reg ILCompiledRegister
+  local function ensure_is_top_reg_post(data, position, initial_reg, top_reg)
+    if top_reg ~= initial_reg then
+      add_new_inst(data, position, opcodes.move, {
+        a = initial_reg.reg_index,
+        b = top_reg.reg_index,
+      })
+      stop_reg(data, top_reg)
+    end
+  end
+
   local function add_constant(data, ptr)
     -- TODO: what does this mean: [...]
     -- unless const table is too big, then fetch into temporary (and emit warning: const table too large)
@@ -462,11 +486,23 @@ do
       end
       return inst.prev
     end,
+    ---@param inst ILGetUpval
     ["get_upval"] = function(data, inst)
-      util.debug_abort("-- TODO: not implemented")
+      add_new_inst(data, inst.position, opcodes.getupval, {
+        a = inst.result_reg.current_reg.reg_index,
+        b = inst.upval.upval_index,
+      })
+      return inst.prev
     end,
+    ---@param inst ILSetUpval
     ["set_upval"] = function(data, inst)
-      util.debug_abort("-- TODO: not implemented")
+      local right_reg = ref_or_load_ptr_pre(data, inst.right_ptr)
+      add_new_inst(data, inst.position, opcodes.setupval, {
+        a = right_reg.reg_index,
+        b = inst.upval.upval_index,
+      })
+      ref_or_load_ptr_post(data, inst.position, inst.right_ptr, right_reg)
+      return inst.prev
     end,
     ["get_table"] = function(data, inst)
       util.debug_abort("-- TODO: not implemented")
@@ -532,8 +568,15 @@ do
       end
       return inst.prev
     end,
+    ---@param inst ILClosure
     ["closure"] = function(data, inst)
-      util.debug_abort("-- TODO: not implemented")
+      local reg = ensure_is_top_reg_pre(data, inst.result_reg.current_reg)
+      add_new_inst(data, inst.position, opcodes.closure, {
+        a = reg.reg_index,
+        bx = inst.func.closure_index,
+      })
+      ensure_is_top_reg_post(data, inst.position, inst.result_reg.current_reg, reg)
+      return inst.prev
     end,
     ["vararg"] = function(data, inst)
       util.debug_abort("-- TODO: not implemented")
@@ -552,6 +595,7 @@ do
   end
 end
 
+---@param data ILCompilerData
 local function make_bytecode_func(data)
   local func = data.func
   local result = {
@@ -567,10 +611,21 @@ local function make_bytecode_func(data)
   }
   data.result = result
   for i, upval in ipairs(func.upvals) do
+    upval.upval_index = i - 1 -- **zero based** temporary
     if upval.parent_type == "local" then
-      util.debug_abort("-- TODO: not implemented")
+      result.upvals[i] = {
+        index = 0,
+        name = upval.name,
+        in_stack = true,
+        local_idx = upval.reg_in_parent_func.current_reg.reg_index,
+      }
     elseif upval.parent_type == "upval" then
-      util.debug_abort("-- TODO: not implemented")
+      result.upvals[i] = {
+        index = 0,
+        name = upval.name,
+        in_stack = false,
+        local_idx = upval.parent_upval.upval_index,
+      }
     elseif upval.parent_type == "env" then
       result.upvals[i] = {
         index = 0,
@@ -579,6 +634,9 @@ local function make_bytecode_func(data)
         local_idx = 0,
       }
     end
+  end
+  for i, inner_func in ipairs(func.inner_functions) do
+    inner_func.closure_index = i - 1 -- **zero based**
   end
 end
 
@@ -602,6 +660,7 @@ local function compile(func)
   data.compiled_registers = {}
   data.constant_lut = {}
   generate(data)
+
   do
     local compiled_inst = data.compiled_instructions.first
     local result_instructions = data.result.instructions
@@ -620,6 +679,15 @@ local function compile(func)
     reg.stop_at = reg.stop_at and (reg.stop_at.inst_index - 1) or (#data.result.instructions)
   end
   data.result.debug_registers = data.compiled_registers
+
+  for i, inner_func in ipairs(func.inner_functions) do
+    inner_func.closure_index = nil -- cleaning up as we go
+    data.result.inner_functions[i] = compile(inner_func)
+  end
+  for _, upval in ipairs(func.upvals) do
+    upval.upval_index = nil
+  end
+
   return data.result
 end
 

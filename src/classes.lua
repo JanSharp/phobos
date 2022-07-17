@@ -604,6 +604,8 @@
 ---@field parent_upval ILUpval|nil @ used if `parent_type == "upval"`
 ---@field reg_in_parent_func ILRegister|nil @ used if `parent_type == "local"`
 ---@field child_upvals ILUpval[]
+---temp compilation data
+---@field upval_index integer @ **zero based** needed for instructions using upvals
 
 ---technically most `ILPosition`s are tokens and therefore most of them have `leading` but it's not used atm
 ---@alias ILPosition Position
@@ -813,6 +815,8 @@
 ---@field all_regs ILRegister[]
 ---@field blocks ILBlock[] @ intrusive ILL
 ---@field temp ILFunctionTemp
+---temp compilation data
+---@field closure_index integer @ **zero based** needed for closure instructions to know the function index
 
 ---@class ILBlock
 ---@field source_links ILBlockLink[] @ blocks flowing into this block
