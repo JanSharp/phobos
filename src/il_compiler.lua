@@ -95,8 +95,14 @@ do
     ["ret"] = function(data, inst)
       visit_ptr_list(data, inst, inst.ptrs, get) -- must be in order
     end,
+    ---@param inst ILClosure
     ["closure"] = function(data, inst)
       visit_reg(data, inst, inst.result_reg, set) -- has to be at the top of the stack
+      for _, upval in ipairs(inst.func.upvals) do
+        if upval.parent_type == "local" then
+          upval.reg_in_parent_func.captured_as_upval = true
+        end
+      end
     end,
     ["vararg"] = function(data, inst)
       visit_reg_list(data, inst, inst.result_regs, set) -- must be in order
@@ -210,7 +216,9 @@ do
   local function stop_reg(data, reg)
     data.local_reg_count = data.local_reg_count - 1
     if reg.reg_index ~= data.local_reg_count then
-      util.debug_abort("-- TODO: handle register shifting")
+      util.debug_abort(
+        "-- TODO: handle register shifting. Note that shifting of registers captured as upvalues is forbidden."
+      )
     end
     reg.start_at = get_first_inst(data)
     data.compiled_registers[#data.compiled_registers+1] = reg
@@ -277,10 +285,22 @@ do
       local reg_count = #regs
       if reg_count == 0 then return end
       sort_regs()
-      for i = reg_count, 1, -1 do
-        regs[i].current_reg = create_compiled_reg(data, data.local_reg_count + i - 1, regs[i].name)
-        regs[i].temp_sort_index = nil
+      local reg_index_to_close_upvals_from
+      for i = 1, reg_count do
+        local reg = regs[i]
         regs[i] = nil
+        reg.current_reg = create_compiled_reg(data, data.local_reg_count + i - 1, reg.name)
+        reg.temp_sort_index = nil
+        if reg.captured_as_upval and not reg_index_to_close_upvals_from then
+          reg_index_to_close_upvals_from = reg.current_reg.reg_index
+        end
+      end
+      -- do this after all regs have been created - all regs are alive - for nice and clean debug symbols
+      if reg_index_to_close_upvals_from then
+        add_new_inst(data, inst.position, opcodes.jmp, {
+          a = reg_index_to_close_upvals_from + 1,
+          sbx = 0,
+        })
       end
       data.local_reg_count = data.local_reg_count + reg_count
     end
@@ -479,6 +499,20 @@ do
     ["not"] = opcodes["not"],
   }
 
+  ---@param inst ILJump|ILTest
+  local function get_a_for_jump(inst)
+    local regs_still_alive_lut = {}
+    for _, reg in ipairs(inst.label.live_regs) do
+      regs_still_alive_lut[reg] = true
+    end
+    for _, reg in ipairs(inst.live_regs) do
+      if reg.captured_as_upval and not regs_still_alive_lut[reg] then
+        return reg.current_reg.reg_index + 1
+      end
+    end
+    return 0
+  end
+
   generate_inst_lut = {
     ---@param inst ILMove
     ["move"] = function(data, inst)
@@ -613,7 +647,7 @@ do
     ---@param inst ILJump
     ["jump"] = function(data, inst)
       inst.jump_inst = add_new_inst(data, inst.position, opcodes.jmp, {
-        a = 0,
+        a = get_a_for_jump(inst),
         -- set after all instructions have been generated - once `inst_index`es have been evaluated
         sbx = (nil)--[[@as integer]],
       })
@@ -624,7 +658,7 @@ do
     ["test"] = function(data, inst)
       -- remember, generated from back to front, so the jump comes "first"
       inst.jump_inst = add_new_inst(data, inst.position, opcodes.jmp, {
-        a = 0,
+        a = get_a_for_jump(inst),
         -- set after all instructions have been generated - once `inst_index`es have been evaluated
         sbx = (nil)--[[@as integer]],
       })

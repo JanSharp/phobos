@@ -577,6 +577,7 @@
 ---@field total_get_count integer
 ---@field total_set_count integer
 ---@field temporary boolean?
+---@field captured_as_upval boolean?
 ---@field current_reg ILCompiledRegister
 
 ---@class ILVarargRegister : ILRegister
