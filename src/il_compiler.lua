@@ -100,6 +100,7 @@ do
       visit_reg(data, inst, inst.result_reg, set) -- has to be at the top of the stack
       for _, upval in ipairs(inst.func.upvals) do
         if upval.parent_type == "local" then
+          visit_reg(data, inst, upval.reg_in_parent_func, get)
           upval.reg_in_parent_func.captured_as_upval = true
         end
       end
