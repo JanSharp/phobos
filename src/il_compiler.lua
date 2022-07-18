@@ -72,7 +72,7 @@ do
       visit_ptr_list(data, inst, inst.right_ptrs, get) -- must be in order right above result_reg
     end,
     ["binop"] = function(data, inst)
-      visit_reg(data, inst, inst.result_reg, set) -- has to be at the top of the stack if this is a concat
+      visit_reg(data, inst, inst.result_reg, set)
       visit_ptr(data, inst, inst.left_ptr, get)
       visit_ptr(data, inst, inst.right_ptr, get)
     end,
