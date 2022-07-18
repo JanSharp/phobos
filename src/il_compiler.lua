@@ -217,7 +217,8 @@ do
     data.local_reg_count = data.local_reg_count - 1
     if reg.reg_index ~= data.local_reg_count then
       util.debug_abort(
-        "-- TODO: handle register shifting. Note that shifting of registers captured as upvalues is forbidden."
+        "Attempt to close a register that is not at top.\n\z
+        TODO: handle register shifting. Note that shifting of registers captured as upvalues is forbidden."
       )
     end
     reg.start_at = get_first_inst(data)
@@ -338,7 +339,7 @@ do
   end
 
   local function add_constant(data, ptr)
-    -- TODO: what does this mean: [...]
+    -- NOTE: what does this mean: [...]
     -- unless const table is too big, then fetch into temporary (and emit warning: const table too large)
     -- (comment was from justarandomgeek originally in the binop function)
 
