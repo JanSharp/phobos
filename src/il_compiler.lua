@@ -11,6 +11,7 @@ do
   local set = false
   local both = nil
 
+  ---@param reg ILRegister
   local function visit_reg(data, inst, reg, get_set)
     reg.total_get_count = reg.total_get_count or 0
     reg.total_set_count = reg.total_set_count or 0
@@ -19,6 +20,10 @@ do
     end
     if get_set ~= get then
       reg.total_set_count = reg.total_set_count + 1
+    end
+    reg.temporary = reg.total_get_count <= 1 and reg.total_set_count <= 1
+    if reg.is_vararg and not reg.temporary then
+      util.debug_abort("Malformed vararg register. Vararg registers must only be set once and used once.")
     end
   end
 
@@ -234,22 +239,10 @@ do
 
     local regs = {} ---@type ILRegisterWithTempSortIndex[]
 
-    local function determine_temporary(reg)
-      if reg.temporary == nil then
-        if reg.total_get_count == 0 or reg.total_set_count == 0 then
-          util.debug_abort("Ill formed register with get or set counts == 0.")
-        end
-        reg.temporary = reg.total_get_count == 1 and reg.total_set_count == 1
-      end
-    end
-
     local function fill_regs_using_regs_list(list)
       for _, reg in ipairs(list) do
-        -- determine_temporary(reg)
-        -- if not reg.temporary then
-          reg.temp_sort_index = #regs + 1
-          regs[reg.temp_sort_index] = reg
-        -- end
+        reg.temp_sort_index = #regs + 1
+        regs[reg.temp_sort_index] = reg
       end
     end
 
