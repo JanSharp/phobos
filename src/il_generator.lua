@@ -308,7 +308,7 @@ end
 
 local generate_expr
 local generate_stat
-local generate_functiondef
+local generate_il_func
 
 local function get_last_used_position(func)
   return func.instructions.last and func.instructions.last.position
@@ -577,7 +577,7 @@ do
       add_inst(func, new_closure{
         position = expr.func_def.function_token,
         result_reg = reg,
-        func = generate_functiondef(expr.func_def, func),
+        func = generate_il_func(expr.func_def, func),
       })
       return reg
     end,
@@ -1017,7 +1017,7 @@ do
       add_inst(func, new_closure{
         position = stat.func_def.function_token,
         result_reg = reg,
-        func = generate_functiondef(stat.func_def, func),
+        func = generate_il_func(stat.func_def, func),
       })
     end,
     ["label"] = function(stat, func)
@@ -1205,7 +1205,7 @@ end
 ---@param functiondef AstFunctionDef
 ---@param parent_func ILFunction?
 ---@return ILFunction
-function generate_functiondef(functiondef, parent_func)
+function generate_il_func(functiondef, parent_func)
   if not functiondef.is_main then
     assert(parent_func, "`parent_func` can only be omitted if the given functiondef is a main chunk")
   end
@@ -1289,4 +1289,4 @@ function generate_functiondef(functiondef, parent_func)
   return func
 end
 
-return generate_functiondef
+return generate_il_func

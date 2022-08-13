@@ -212,7 +212,7 @@ local function compile(filename)
 
     if use_il then
       local il
-      success, il = pcall(require("intermediate_language"), main)
+      success, il = pcall(require("il_generator"), main)
       if not success then print(il) goto finish end
 
       success, err = pcall(require("il_blocks"), il)
