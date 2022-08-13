@@ -3,6 +3,316 @@ local util = require("util")
 local number_ranges = require("number_ranges")
 local error_code_util = require("error_code_util")
 
+----------------------------------------------------------------------------------------------------
+-- instructions
+----------------------------------------------------------------------------------------------------
+
+local function is_reg(ptr)
+  return ptr.ptr_type == "reg"
+end
+
+local function is_const(ptr)
+  return not is_reg(ptr)
+end
+
+local function assert_field(params, field_name)
+  return assert(params[field_name], "missing field '"..field_name.."'")
+end
+
+local function assert_reg(params, field_name)
+  local field = assert_field(params, field_name)
+  assert(is_reg(field), "field '"..field_name.."' must be a register")
+  return field
+end
+
+local function assert_ptr(params, field_name)
+  local field = assert_field(params, field_name)
+  assert(field.ptr_type, "field '"..field_name.."' must be a pointer")
+  return field
+end
+
+---@class ILInstParamsBase
+---@field position ILPosition
+
+local function new_inst(params, inst_type)
+  return {inst_type = inst_type, position = params.position}
+end
+
+---@class ILMoveParams : ILInstParamsBase
+---@field result_reg ILRegister
+---@field right_ptr ILPointer
+
+---@param params ILMoveParams
+local function new_move(params)
+  local inst = new_inst(params, "move")
+  inst.result_reg = assert_reg(params, "result_reg")
+  inst.right_ptr = assert_ptr(params, "right_ptr")
+  return inst
+end
+
+---@class ILGetUpvalParams : ILInstParamsBase
+---@field result_reg ILRegister
+---@field upval ILUpval
+
+---@param params ILGetUpvalParams
+local function new_get_upval(params)
+  local inst = new_inst(params, "get_upval")
+  inst.result_reg = assert_reg(params, "result_reg")
+  inst.upval = assert_field(params, "upval")
+  return inst
+end
+
+---@class ILSetUpvalParams : ILInstParamsBase
+---@field upval ILUpval
+---@field right_ptr ILPointer
+
+---@param params ILSetUpvalParams
+local function new_set_upval(params)
+  local inst = new_inst(params, "set_upval")
+  inst.upval = assert_field(params, "upval")
+  inst.right_ptr = assert_ptr(params, "right_ptr")
+  return inst
+end
+
+---@class ILGetTableParams : ILInstParamsBase
+---@field result_reg ILRegister
+---@field table_reg ILRegister
+---@field key_ptr ILPointer
+
+---@param params ILGetTableParams
+local function new_get_table(params)
+  local inst = new_inst(params, "get_table")
+  inst.result_reg = assert_reg(params, "result_reg")
+  inst.table_reg = assert_reg(params, "table_reg")
+  inst.key_ptr = assert_ptr(params, "key_ptr")
+  return inst
+end
+
+---@class ILSetTableParams : ILInstParamsBase
+---@field table_reg ILRegister
+---@field key_ptr ILPointer
+---@field right_ptr ILPointer
+
+---@param params ILSetTableParams
+local function new_set_table(params)
+  local inst = new_inst(params, "set_table")
+  inst.table_reg = assert_reg(params, "table_reg")
+  inst.key_ptr = assert_ptr(params, "key_ptr")
+  inst.right_ptr = assert_ptr(params, "right_ptr")
+  return inst
+end
+
+---@class ILSetListParams : ILInstParamsBase
+---@field table_reg ILRegister
+---@field start_index integer
+---@field right_ptrs ILPointer[] @ The last one can be an `ILVarargRegister`
+
+---@param params ILSetListParams
+local function new_set_list(params)
+  local inst = new_inst(params, "set_list")
+  inst.table_reg = assert_reg(params, "table_reg")
+  inst.start_index = assert_field(params, "start_index")
+  inst.right_ptrs = params.right_ptrs or {}
+  return inst
+end
+
+---@class ILNewTableParams : ILInstParamsBase
+---@field result_reg ILRegister
+---@field array_size integer|nil
+---@field hash_size integer|nil
+
+---@param params ILNewTableParams
+local function new_new_table(params)
+  local inst = new_inst(params, "new_table")
+  inst.result_reg = assert_reg(params, "result_reg")
+  inst.array_size = params.array_size or 0
+  inst.hash_size = params.hash_size or 0
+  return inst
+end
+
+---@class ILConcatParams : ILInstParamsBase
+---@field result_reg ILRegister
+---@field right_ptrs ILPointer[]
+
+---@param params ILConcatParams
+local function new_concat(params)
+  local inst = new_inst(params, "concat")
+  inst.result_reg = assert_reg(params, "result_reg")
+  inst.right_ptrs = params.right_ptrs or {}
+  return inst
+end
+
+---@class ILBinopParams : ILInstParamsBase
+---@field result_reg ILRegister
+---@field op AstBinOpOp
+---@field left_ptr ILPointer
+---@field right_ptr ILPointer
+
+---@param params ILBinopParams
+local function new_binop(params)
+  local inst = new_inst(params, "binop")
+  inst.result_reg = assert_reg(params, "result_reg")
+  inst.op = assert_field(params, "op")
+  util.debug_assert(params.op ~= "and" and params.op ~= "or",
+    "Use jumps for '"..params.op.."' ('and' and 'or') binops in IL"
+  )
+  inst.left_ptr = assert_ptr(params, "left_ptr")
+  inst.right_ptr = assert_ptr(params, "right_ptr")
+  return inst
+end
+
+---@class ILUnopParams : ILInstParamsBase
+---@field result_reg ILRegister
+---@field op AstUnOpOp
+---@field right_ptr ILPointer
+
+---@param params ILUnopParams
+local function new_unop(params)
+  local inst = new_inst(params, "unop")
+  inst.result_reg = assert_reg(params, "result_reg")
+  inst.op = assert_field(params, "op")
+  inst.right_ptr = assert_ptr(params, "right_ptr")
+  return inst
+end
+
+---@class ILLabelParams : ILInstParamsBase
+---@field name string|nil
+
+---@param params ILLabelParams
+local function new_label(params)
+  local inst = new_inst(params, "label")
+  inst.name = params.name
+  return inst
+end
+
+---@class ILJumpParams : ILInstParamsBase
+---@field label ILLabel
+
+---@param params ILJumpParams
+local function new_jump(params)
+  local inst = new_inst(params, "jump")
+  inst.label = assert_field(params, "label")
+  return inst
+end
+
+---@class ILTestParams : ILInstParamsBase
+---@field label ILLabel
+---@field condition_ptr ILPointer
+---@field jump_if_true boolean|nil
+
+---@param params ILTestParams
+local function new_test(params)
+  local inst = new_inst(params, "test")
+  inst.label = assert_field(params, "label")
+  inst.condition_ptr = assert_ptr(params, "condition_ptr")
+  inst.jump_if_true = params.jump_if_true or false
+  return inst
+end
+
+---@class ILCallParams : ILInstParamsBase
+---@field func_reg ILRegister
+---@field arg_ptrs ILPointer[]|nil @ The last one can be an `ILVarargRegister`
+---@field result_regs ILRegister[]|nil @ The last one can be an `ILVarargRegister`
+
+---@param params ILCallParams
+local function new_call(params)
+  local inst = new_inst(params, "call")
+  inst.func_reg = assert_reg(params, "func_reg")
+  inst.arg_ptrs = params.arg_ptrs or {}
+  inst.result_regs = params.result_regs or {}
+  return inst
+end
+
+---@class ILRetParams : ILInstParamsBase
+---@field ptrs ILPointer[]|nil @ The last one can be an `ILVarargRegister`
+
+---@param params ILRetParams
+local function new_ret(params)
+  local inst = new_inst(params, "ret")
+  inst.ptrs = params.ptrs or {}
+  return inst
+end
+
+---@class ILClosureParams : ILInstParamsBase
+---@field result_reg ILRegister
+---@field func ILFunction
+
+---@param params ILClosureParams
+local function new_closure(params)
+  local inst = new_inst(params, "closure")
+  inst.result_reg = assert_reg(params, "result_reg")
+  inst.func = assert_field(params, "func")
+  return inst
+end
+
+---@class ILVarargParams : ILInstParamsBase
+---@field result_regs ILRegister[]|nil @ The last one can be an `ILVarargRegister`
+
+---@param params ILVarargParams
+local function new_vararg(params)
+  local inst = new_inst(params, "vararg")
+  inst.result_regs = params.result_regs or {}
+  return inst
+end
+
+---@class ILScopingParams : ILInstParamsBase
+---@field regs ILRegister[]
+
+---@param params ILScopingParams
+local function new_scoping(params)
+  local inst = new_inst(params, "scoping")
+  inst.regs = params.regs or {}
+  return inst
+end
+
+----------------------------------------------------------------------------------------------------
+-- pointers
+----------------------------------------------------------------------------------------------------
+
+local function new_ptr(ptr_type)
+  return {ptr_type = ptr_type}
+end
+
+local function new_reg(name)
+  local ptr = new_ptr("reg")
+  ptr.name = name
+  ptr.is_vararg = false
+  return ptr
+end
+
+local function new_vararg_reg()
+  local ptr = new_ptr("reg")
+  ptr.is_vararg = true
+  return ptr
+end
+
+local function new_number(value)
+  local ptr = new_ptr("number")
+  ptr.value = assert(value)
+  return ptr
+end
+
+local function new_string(value)
+  local ptr = new_ptr("string")
+  ptr.value = assert(value)
+  return ptr
+end
+
+local function new_boolean(value)
+  local ptr = new_ptr("boolean")
+  ptr.value = assert(value ~= nil)
+  return ptr
+end
+
+local function new_nil()
+  local ptr = new_ptr("nil")
+  return ptr
+end
+
+----------------------------------------------------------------------------------------------------
+-- types
+----------------------------------------------------------------------------------------------------
+
 local nil_flag = 1
 local boolean_flag = 2
 local number_flag = 4
@@ -952,6 +1262,39 @@ do
 end
 
 return {
+
+  -- instructions
+
+  new_move = new_move,
+  new_get_upval = new_get_upval,
+  new_set_upval = new_set_upval,
+  new_get_table = new_get_table,
+  new_set_table = new_set_table,
+  new_set_list = new_set_list,
+  new_new_table = new_new_table,
+  new_concat = new_concat,
+  new_binop = new_binop,
+  new_unop = new_unop,
+  new_label = new_label,
+  new_jump = new_jump,
+  new_test = new_test,
+  new_call = new_call,
+  new_ret = new_ret,
+  new_closure = new_closure,
+  new_vararg = new_vararg,
+  new_scoping = new_scoping,
+
+  -- pointers
+
+  new_reg = new_reg,
+  new_vararg_reg = new_vararg_reg,
+  new_number = new_number,
+  new_string = new_string,
+  new_boolean = new_boolean,
+  new_nil = new_nil,
+
+  -- types
+
   nil_flag = nil_flag,
   boolean_flag = boolean_flag,
   number_flag = number_flag,

@@ -2,309 +2,11 @@
 local ast = require("ast_util")
 local nodes = require("nodes")
 local ill = require("indexed_linked_list")
-local util = require("util")
 local consts = require("constants")
+local il = require("il_util")
 
 ---same as in parser
 local prevent_assert = {prevent_assert = true}
-
-local function is_reg(ptr)
-  return ptr.ptr_type == "reg"
-end
-
-local function is_const(ptr)
-  return not is_reg(ptr)
-end
-
-local function assert_field(params, field_name)
-  return assert(params[field_name], "missing field '"..field_name.."'")
-end
-
-local function assert_reg(params, field_name)
-  local field = assert_field(params, field_name)
-  assert(is_reg(field), "field '"..field_name.."' must be a register")
-  return field
-end
-
-local function assert_ptr(params, field_name)
-  local field = assert_field(params, field_name)
-  assert(field.ptr_type, "field '"..field_name.."' must be a pointer")
-  return field
-end
-
----@class ILInstParamsBase
----@field position ILPosition
-
-local function new_inst(params, inst_type)
-  return {inst_type = inst_type, position = params.position}
-end
-
----@class ILMoveParams : ILInstParamsBase
----@field result_reg ILRegister
----@field right_ptr ILPointer
-
----@param params ILMoveParams
-local function new_move(params)
-  local inst = new_inst(params, "move")
-  inst.result_reg = assert_reg(params, "result_reg")
-  inst.right_ptr = assert_ptr(params, "right_ptr")
-  return inst
-end
-
----@class ILGetUpvalParams : ILInstParamsBase
----@field result_reg ILRegister
----@field upval ILUpval
-
----@param params ILGetUpvalParams
-local function new_get_upval(params)
-  local inst = new_inst(params, "get_upval")
-  inst.result_reg = assert_reg(params, "result_reg")
-  inst.upval = assert_field(params, "upval")
-  return inst
-end
-
----@class ILSetUpvalParams : ILInstParamsBase
----@field upval ILUpval
----@field right_ptr ILPointer
-
----@param params ILSetUpvalParams
-local function new_set_upval(params)
-  local inst = new_inst(params, "set_upval")
-  inst.upval = assert_field(params, "upval")
-  inst.right_ptr = assert_ptr(params, "right_ptr")
-  return inst
-end
-
----@class ILGetTableParams : ILInstParamsBase
----@field result_reg ILRegister
----@field table_reg ILRegister
----@field key_ptr ILPointer
-
----@param params ILGetTableParams
-local function new_get_table(params)
-  local inst = new_inst(params, "get_table")
-  inst.result_reg = assert_reg(params, "result_reg")
-  inst.table_reg = assert_reg(params, "table_reg")
-  inst.key_ptr = assert_ptr(params, "key_ptr")
-  return inst
-end
-
----@class ILSetTableParams : ILInstParamsBase
----@field table_reg ILRegister
----@field key_ptr ILPointer
----@field right_ptr ILPointer
-
----@param params ILSetTableParams
-local function new_set_table(params)
-  local inst = new_inst(params, "set_table")
-  inst.table_reg = assert_reg(params, "table_reg")
-  inst.key_ptr = assert_ptr(params, "key_ptr")
-  inst.right_ptr = assert_ptr(params, "right_ptr")
-  return inst
-end
-
----@class ILSetListParams : ILInstParamsBase
----@field table_reg ILRegister
----@field start_index integer
----@field right_ptrs ILPointer[] @ The last one can be an `ILVarargRegister`
-
----@param params ILSetListParams
-local function new_set_list(params)
-  local inst = new_inst(params, "set_list")
-  inst.table_reg = assert_reg(params, "table_reg")
-  inst.start_index = assert_field(params, "start_index")
-  inst.right_ptrs = params.right_ptrs or {}
-  return inst
-end
-
----@class ILNewTableParams : ILInstParamsBase
----@field result_reg ILRegister
----@field array_size integer|nil
----@field hash_size integer|nil
-
----@param params ILNewTableParams
-local function new_new_table(params)
-  local inst = new_inst(params, "new_table")
-  inst.result_reg = assert_reg(params, "result_reg")
-  inst.array_size = params.array_size or 0
-  inst.hash_size = params.hash_size or 0
-  return inst
-end
-
----@class ILConcatParams : ILInstParamsBase
----@field result_reg ILRegister
----@field right_ptrs ILPointer[]
-
----@param params ILConcatParams
-local function new_concat(params)
-  local inst = new_inst(params, "concat")
-  inst.result_reg = assert_reg(params, "result_reg")
-  inst.right_ptrs = params.right_ptrs or {}
-  return inst
-end
-
----@class ILBinopParams : ILInstParamsBase
----@field result_reg ILRegister
----@field op AstBinOpOp
----@field left_ptr ILPointer
----@field right_ptr ILPointer
-
----@param params ILBinopParams
-local function new_binop(params)
-  local inst = new_inst(params, "binop")
-  inst.result_reg = assert_reg(params, "result_reg")
-  inst.op = assert_field(params, "op")
-  util.debug_assert(params.op ~= "and" and params.op ~= "or",
-    "Use jumps for '"..params.op.."' ('and' and 'or') binops in IL"
-  )
-  inst.left_ptr = assert_ptr(params, "left_ptr")
-  inst.right_ptr = assert_ptr(params, "right_ptr")
-  return inst
-end
-
----@class ILUnopParams : ILInstParamsBase
----@field result_reg ILRegister
----@field op AstUnOpOp
----@field right_ptr ILPointer
-
----@param params ILUnopParams
-local function new_unop(params)
-  local inst = new_inst(params, "unop")
-  inst.result_reg = assert_reg(params, "result_reg")
-  inst.op = assert_field(params, "op")
-  inst.right_ptr = assert_ptr(params, "right_ptr")
-  return inst
-end
-
----@class ILLabelParams : ILInstParamsBase
----@field name string|nil
-
----@param params ILLabelParams
-local function new_label(params)
-  local inst = new_inst(params, "label")
-  inst.name = params.name
-  return inst
-end
-
----@class ILJumpParams : ILInstParamsBase
----@field label ILLabel
-
----@param params ILJumpParams
-local function new_jump(params)
-  local inst = new_inst(params, "jump")
-  inst.label = assert_field(params, "label")
-  return inst
-end
-
----@class ILTestParams : ILInstParamsBase
----@field label ILLabel
----@field condition_ptr ILPointer
----@field jump_if_true boolean|nil
-
----@param params ILTestParams
-local function new_test(params)
-  local inst = new_inst(params, "test")
-  inst.label = assert_field(params, "label")
-  inst.condition_ptr = assert_ptr(params, "condition_ptr")
-  inst.jump_if_true = params.jump_if_true or false
-  return inst
-end
-
----@class ILCallParams : ILInstParamsBase
----@field func_reg ILRegister
----@field arg_ptrs ILPointer[]|nil @ The last one can be an `ILVarargRegister`
----@field result_regs ILRegister[]|nil @ The last one can be an `ILVarargRegister`
-
----@param params ILCallParams
-local function new_call(params)
-  local inst = new_inst(params, "call")
-  inst.func_reg = assert_reg(params, "func_reg")
-  inst.arg_ptrs = params.arg_ptrs or {}
-  inst.result_regs = params.result_regs or {}
-  return inst
-end
-
----@class ILRetParams : ILInstParamsBase
----@field ptrs ILPointer[]|nil @ The last one can be an `ILVarargRegister`
-
----@param params ILRetParams
-local function new_ret(params)
-  local inst = new_inst(params, "ret")
-  inst.ptrs = params.ptrs or {}
-  return inst
-end
-
----@class ILClosureParams : ILInstParamsBase
----@field result_reg ILRegister
----@field func ILFunction
-
----@param params ILClosureParams
-local function new_closure(params)
-  local inst = new_inst(params, "closure")
-  inst.result_reg = assert_reg(params, "result_reg")
-  inst.func = assert_field(params, "func")
-  return inst
-end
-
----@class ILVarargParams : ILInstParamsBase
----@field result_regs ILRegister[]|nil @ The last one can be an `ILVarargRegister`
-
----@param params ILVarargParams
-local function new_vararg(params)
-  local inst = new_inst(params, "vararg")
-  inst.result_regs = params.result_regs or {}
-  return inst
-end
-
----@class ILScopingParams : ILInstParamsBase
----@field regs ILRegister[]
-
----@param params ILScopingParams
-local function new_scoping(params)
-  local inst = new_inst(params, "scoping")
-  inst.regs = params.regs or {}
-  return inst
-end
-
-local function new_ptr(ptr_type)
-  return {ptr_type = ptr_type}
-end
-
-local function new_reg(name)
-  local ptr = new_ptr("reg")
-  ptr.name = name
-  ptr.is_vararg = false
-  return ptr
-end
-
-local function new_vararg_reg()
-  local ptr = new_ptr("reg")
-  ptr.is_vararg = true
-  return ptr
-end
-
-local function new_number(value)
-  local ptr = new_ptr("number")
-  ptr.value = assert(value)
-  return ptr
-end
-
-local function new_string(value)
-  local ptr = new_ptr("string")
-  ptr.value = assert(value)
-  return ptr
-end
-
-local function new_boolean(value)
-  local ptr = new_ptr("boolean")
-  ptr.value = assert(value ~= nil)
-  return ptr
-end
-
-local function new_nil()
-  local ptr = new_ptr("nil")
-  return ptr
-end
 
 local generate_expr
 local generate_stat
@@ -343,16 +45,16 @@ local function const_or_local_or_fetch(expr, func)
   if ast.is_const_node(expr) then
     return ({
       ["number"] = function()
-        return new_number(expr.value)
+        return il.new_number(expr.value)
       end,
       ["string"] = function()
-        return new_string(expr.value)
+        return il.new_string(expr.value)
       end,
       ["boolean"] = function()
-        return new_boolean(expr.value)
+        return il.new_boolean(expr.value)
       end,
       ["nil"] = function()
-        return new_nil()
+        return il.new_nil()
       end,
     })[expr.node_type]()
   else
@@ -412,7 +114,7 @@ local function jump_here(jumps, func, label_position)
     end
   end
   if not label then
-    label = add_inst(func, new_label{position = label_position})
+    label = add_inst(func, il.new_label{position = label_position})
   end
   for _, jump in ipairs(jumps) do
     jump.label = label
@@ -422,8 +124,8 @@ end
 do
   local function make_generate_const_expr(right_ptr_constructor)
     return function(expr, func)
-      local reg = new_reg()
-      add_inst(func, new_move{
+      local reg = il.new_reg()
+      add_inst(func, il.new_move{
         position = expr,
         result_reg = reg,
         right_ptr = right_ptr_constructor(expr.value),
@@ -435,12 +137,12 @@ do
   local function create_result_regs(num_results, regs)
     local result_regs = {}
     if num_results == -1 then
-      local reg = new_vararg_reg()
+      local reg = il.new_vararg_reg()
       result_regs[#result_regs+1] = reg
       regs[#regs+1] = reg
     else
       for i = 1, num_results do
-        local reg = new_reg()
+        local reg = il.new_reg()
         result_regs[i] = reg
         regs[#regs+1] = reg
       end
@@ -462,8 +164,8 @@ do
 
   local exprs = {
     ["local_ref"] = function(expr, func)
-      local reg = new_reg()
-      add_inst(func, new_move{
+      local reg = il.new_reg()
+      add_inst(func, il.new_move{
         position = expr,
         result_reg = reg,
         right_ptr = find_local(expr, func),
@@ -471,8 +173,8 @@ do
       return reg
     end,
     ["upval_ref"] = function(expr, func)
-      local reg = new_reg()
-      add_inst(func, new_get_upval{
+      local reg = il.new_reg()
+      add_inst(func, il.new_get_upval{
         position = expr,
         result_reg = reg,
         upval = find_upval(expr, func),
@@ -480,8 +182,8 @@ do
       return reg
     end,
     ["index"] = function(expr, func)
-      local reg = new_reg()
-      add_inst(func, new_get_table{
+      local reg = il.new_reg()
+      add_inst(func, il.new_get_table{
         position = ast.get_main_position(expr),
         result_reg = reg,
         table_reg = local_or_fetch(expr.ex, func),
@@ -490,8 +192,8 @@ do
       return reg
     end,
     ["unop"] = function(expr, func)
-      local reg = new_reg()
-      add_inst(func, new_unop{
+      local reg = il.new_reg()
+      add_inst(func, il.new_unop{
         position = expr.op_token,
         result_reg = reg,
         op = expr.op,
@@ -502,14 +204,14 @@ do
     ["binop"] = function(expr, func)
       if expr.op == "and" or expr.op == "or" then
         local reg = generate_expr(expr.left, func)
-        local jump = add_inst(func, new_test{
+        local jump = add_inst(func, il.new_test{
           condition_ptr = reg,
           position = expr.op_token,
           jump_if_true = expr.op == "or",
           label = prevent_assert,
         })
         -- should directly assign to `reg`, but the IL generator currently does not have this capability
-        add_inst(func, new_move{
+        add_inst(func, il.new_move{
           position = expr.op_token,
           result_reg = reg,
           right_ptr = const_or_local_or_fetch(expr.right, func),
@@ -517,8 +219,8 @@ do
         jump_here({jump}, func, expr.op_token)
         return reg
       else
-        local reg = new_reg()
-        add_inst(func, new_binop{
+        local reg = il.new_reg()
+        add_inst(func, il.new_binop{
           position = expr.op_token,
           result_reg = reg,
           left_ptr = const_or_local_or_fetch(expr.left, func),
@@ -530,31 +232,31 @@ do
     end,
     ---@param expr AstConcat
     ["concat"] = function(expr, func)
-      local reg = new_reg()
+      local reg = il.new_reg()
       local right_ptrs = {}
       generate_expr_list(expr.exp_list, func, #expr.exp_list, right_ptrs, true)
-      add_inst(func, new_concat{
+      add_inst(func, il.new_concat{
         position = expr.op_tokens and expr.op_tokens[#expr.op_tokens],
         result_reg = reg,
         right_ptrs = right_ptrs,
       })
       return reg
     end,
-    ["number"] = make_generate_const_expr(new_number),
-    ["string"] = make_generate_const_expr(new_string),
+    ["number"] = make_generate_const_expr(il.new_number),
+    ["string"] = make_generate_const_expr(il.new_string),
     ["nil"] = function(expr, func, num_results, regs)
       -- this could be changed to not be a multiple result node
       for _ = 1, num_results do
-        local reg = new_reg()
-        add_inst(func, new_move{
+        local reg = il.new_reg()
+        add_inst(func, il.new_move{
           position = expr,
           result_reg = reg,
-          right_ptr = new_nil(),
+          right_ptr = il.new_nil(),
         })
         regs[#regs+1] = reg
       end
     end,
-    ["boolean"] = make_generate_const_expr(new_boolean),
+    ["boolean"] = make_generate_const_expr(il.new_boolean),
     ["vararg"] = function(expr, func, num_results, regs)
       -- TODO: vararg really is just a weird kind of move... so what if it was just a move?
       if expr.force_single_result then
@@ -564,7 +266,7 @@ do
       if num_results == 0 then
         return
       end
-      add_inst(func, new_vararg{
+      add_inst(func, il.new_vararg{
         position = expr,
         result_regs = create_result_regs(num_results, regs),
       })
@@ -573,8 +275,8 @@ do
       end
     end,
     ["func_proto"] = function(expr, func)
-      local reg = new_reg()
-      add_inst(func, new_closure{
+      local reg = il.new_reg()
+      add_inst(func, il.new_closure{
         position = expr.func_def.function_token,
         result_reg = reg,
         func = generate_il_func(expr.func_def, func),
@@ -588,10 +290,10 @@ do
       -- this should actually default to the normal, weird behavior
       local use_same_behavior_as_lua = true
 
-      local table_reg = new_reg()
+      local table_reg = il.new_reg()
       local array_size = 0
       local hash_size = 0
-      local new_table_inst = new_new_table{
+      local new_table_inst = il.new_new_table{
         position = expr.open_token,
         result_reg = table_reg,
         -- TODO: the array and hash size should be evaluated differently
@@ -608,7 +310,7 @@ do
           use_same_behavior_as_lua
             and func.instructions.last
             or instruction_before_set_list,
-          new_set_list{
+          il.new_set_list{
             position = position or instruction_before_set_list.position,
             table_reg = table_reg,
             start_index = set_list_start_index,
@@ -636,7 +338,7 @@ do
           end
         else
           hash_size = hash_size + 1
-          add_inst(func, new_set_table{
+          add_inst(func, il.new_set_table{
             position = field.eq_token,
             table_reg = table_reg,
             key_ptr = const_or_local_or_fetch(field.key, func),
@@ -662,10 +364,10 @@ do
       local func_reg
       local arg_ptrs = {}
       if expr.is_selfcall then
-        func_reg = new_reg()
+        func_reg = il.new_reg()
         local self_reg = local_or_fetch(expr.ex, func)
         arg_ptrs[1] = self_reg
-        add_inst(func, new_get_table{
+        add_inst(func, il.new_get_table{
           position = expr.colon_token,
           result_reg = func_reg,
           table_reg = self_reg,
@@ -677,7 +379,7 @@ do
 
       generate_expr_list(expr.args, func, -1, arg_ptrs, true)
 
-      add_inst(func, new_call{
+      add_inst(func, il.new_call{
         position = get_position_for_call_instruction(expr),
         func_reg = func_reg,
         arg_ptrs = arg_ptrs,
@@ -729,7 +431,7 @@ local function add_scoping_for_scope_locals(scope, func)
     regs[i] = func.temp.local_reg_lut[local_def]
   end
   if regs[1] then
-    add_inst(func, new_scoping{
+    add_inst(func, il.new_scoping{
       position = get_last_used_position(func),
       regs = regs,
     })
@@ -756,7 +458,7 @@ end
 
 do
   local function generate_test(condition, func, jump_if_true)
-    local test = add_inst(func, new_test{
+    local test = add_inst(func, il.new_test{
       position = ast.get_main_position(condition),
       condition_ptr = const_or_local_or_fetch(condition, func),
       jump_if_true = jump_if_true,
@@ -787,7 +489,7 @@ do
         jump_here(failure_jumps, func, testblock.if_token)
         failure_jumps[1] = generate_test(testblock.condition, func, false)
         generate_scope(testblock, func)
-        leave_jumps[#leave_jumps+1] = add_inst(func, new_jump{
+        leave_jumps[#leave_jumps+1] = add_inst(func, il.new_jump{
           position = get_last_used_position(func),
           label = prevent_assert,
         })
@@ -803,10 +505,10 @@ do
     -- ["elseblock"] = function(stat, func)
     -- end,
     ["whilestat"] = function(stat, func)
-      local start_label = add_inst(func, new_label{position = stat.do_token})
+      local start_label = add_inst(func, il.new_label{position = stat.do_token})
       local failure_jump = generate_test(stat.condition, func, false)
       generate_scope(stat, func)
-      add_inst(func, new_jump{
+      add_inst(func, il.new_jump{
         position = stat.end_token,
         label = start_label,
       })
@@ -827,53 +529,53 @@ do
       limit_reg.name = "(for limit)"
       step_reg.name = "(for step)"
 
-      local start_label = add_inst(func, new_label{position = stat.for_token})
+      local start_label = add_inst(func, il.new_label{position = stat.for_token})
       local leave_jumps = {}
 
-      local temp_reg = new_reg()
-      add_inst(func, new_binop{
+      local temp_reg = il.new_reg()
+      add_inst(func, il.new_binop{
         position = stat.for_token,
         result_reg = temp_reg,
         left_ptr = step_reg,
         op = ">",
-        right_ptr = new_number(0),
+        right_ptr = il.new_number(0),
       })
-      local step_comp_jump = add_inst(func, new_test{
+      local step_comp_jump = add_inst(func, il.new_test{
         position = stat.for_token,
         condition_ptr = temp_reg,
         jump_if_true = true,
         label = prevent_assert,
       })
 
-      temp_reg = new_reg()
-      add_inst(func, new_binop{
+      temp_reg = il.new_reg()
+      add_inst(func, il.new_binop{
         position = stat.for_token,
         result_reg = temp_reg,
         left_ptr = index_reg,
         op = ">=",
         right_ptr = limit_reg,
       })
-      leave_jumps[#leave_jumps+1] = add_inst(func, new_test{
+      leave_jumps[#leave_jumps+1] = add_inst(func, il.new_test{
         position = stat.for_token,
         condition_ptr = temp_reg,
         jump_if_true = false,
         label = prevent_assert,
       })
-      local jump_to_block = add_inst(func, new_jump{
+      local jump_to_block = add_inst(func, il.new_jump{
         position = stat.for_token,
         label = prevent_assert,
       })
 
       jump_here({step_comp_jump}, func, stat.for_token)
-      temp_reg = new_reg()
-      add_inst(func, new_binop{
+      temp_reg = il.new_reg()
+      add_inst(func, il.new_binop{
         position = stat.for_token,
         result_reg = temp_reg,
         left_ptr = index_reg,
         op = "<=",
         right_ptr = limit_reg,
       })
-      leave_jumps[#leave_jumps+1] = add_inst(func, new_test{
+      leave_jumps[#leave_jumps+1] = add_inst(func, il.new_test{
         position = stat.for_token,
         condition_ptr = temp_reg,
         jump_if_true = false,
@@ -881,9 +583,9 @@ do
       })
 
       jump_here({jump_to_block}, func, stat.for_token)
-      local local_reg = new_reg(stat.var.name)
+      local local_reg = il.new_reg(stat.var.name)
       set_local_reg(stat.var, local_reg, func)
-      add_inst(func, new_move{
+      add_inst(func, il.new_move{
         position = stat.eq_token,
         result_reg = local_reg,
         right_ptr = index_reg,
@@ -891,20 +593,20 @@ do
 
       generate_scope(stat, func)
 
-      add_inst(func, new_binop{
+      add_inst(func, il.new_binop{
         position = stat.do_token,
         result_reg = index_reg,
         left_ptr = index_reg,
         op = "+",
         right_ptr = step_reg,
       })
-      add_inst(func, new_jump{
+      add_inst(func, il.new_jump{
         position = stat.do_token,
         label = start_label,
       })
 
       -- prevent internal regs from going out of scope too early
-      add_inst(func, new_scoping{
+      add_inst(func, il.new_scoping{
         position = stat.end_token,
         regs = {
           index_reg,
@@ -926,37 +628,37 @@ do
       state_reg.name = "(for state)"
       control_reg.name = "(for control)"
 
-      local start_label = add_inst(func, new_label{position = stat.do_token})
+      local start_label = add_inst(func, il.new_label{position = stat.do_token})
 
       local local_regs = {}
       for i, local_ref in ipairs(stat.name_list) do
-        local_regs[i] = new_reg(local_ref.name)
+        local_regs[i] = il.new_reg(local_ref.name)
         set_local_reg(local_ref, local_regs[i], func)
       end
 
-      add_inst(func, new_call{
+      add_inst(func, il.new_call{
         position = stat.in_token,
         result_regs = local_regs,
         func_reg = generator_reg,
         arg_ptrs = {state_reg, control_reg},
       })
 
-      local temp_reg = new_reg()
-      add_inst(func, new_binop{
+      local temp_reg = il.new_reg()
+      add_inst(func, il.new_binop{
         position = stat.in_token,
         result_reg = temp_reg,
         left_ptr = local_regs[1],
         op = "==",
-        right_ptr = new_nil(),
+        right_ptr = il.new_nil(),
       })
-      local leave_jump = add_inst(func, new_test{
+      local leave_jump = add_inst(func, il.new_test{
         position = stat.in_token,
         condition_ptr = temp_reg,
         jump_if_true = true,
         label = prevent_assert,
       })
 
-      add_inst(func, new_move{
+      add_inst(func, il.new_move{
         position = stat.in_token,
         result_reg = control_reg,
         right_ptr = local_regs[1],
@@ -964,13 +666,13 @@ do
 
       generate_scope(stat, func)
 
-      add_inst(func, new_jump{
+      add_inst(func, il.new_jump{
         position = stat.end_token,
         label = start_label,
       })
 
       -- prevent internal regs from going out of scope too early
-      add_inst(func, new_scoping{
+      add_inst(func, il.new_scoping{
         position = stat.end_token,
         regs = {generator_reg, state_reg, control_reg},
       })
@@ -979,7 +681,7 @@ do
       breaks_jump_here(stat, func, stat.end_token)
     end,
     ["repeatstat"] = function(stat, func)
-      local start_label = add_inst(func, new_label{position = stat.repeat_token})
+      local start_label = add_inst(func, il.new_label{position = stat.repeat_token})
       generate_scope(stat, func, nil, function()
         -- the condition is in the post_block callback in order for
         -- all locals in the scope to stay alive until past the condition
@@ -1012,16 +714,16 @@ do
       end
     end,
     ["localfunc"] = function(stat, func)
-      local reg = new_reg(stat.name.name)
+      local reg = il.new_reg(stat.name.name)
       set_local_reg(stat.name, reg, func)
-      add_inst(func, new_closure{
+      add_inst(func, il.new_closure{
         position = stat.func_def.function_token,
         result_reg = reg,
         func = generate_il_func(stat.func_def, func),
       })
     end,
     ["label"] = function(stat, func)
-      local label_inst = add_inst(func, new_label{
+      local label_inst = add_inst(func, il.new_label{
         position = stat.name_token,
         name = stat.name,
       })
@@ -1036,20 +738,20 @@ do
     ["retstat"] = function(stat, func)
       local ptrs = {}
       generate_expr_list(stat.exp_list, func, -1, ptrs, true)
-      add_inst(func, new_ret{
+      add_inst(func, il.new_ret{
         position = stat.return_token,
         ptrs = ptrs,
       })
     end,
     ["breakstat"] = function(stat, func)
-      local inst = add_inst(func, new_jump{
+      local inst = add_inst(func, il.new_jump{
         position = stat.break_token,
         label = prevent_assert,
       })
       func.temp.break_jump_lut[stat] = inst
     end,
     ["gotostat"] = function(stat, func)
-      local jump = add_inst(func, new_jump{
+      local jump = add_inst(func, il.new_jump{
         position = stat.goto_token,
         label = prevent_assert,
       })
@@ -1086,7 +788,7 @@ do
       end
 
       local function generate_settable(left, lhs_expr, right_reg)
-        add_inst(func, new_set_table{
+        add_inst(func, il.new_set_table{
           position = ast.get_main_position(lhs_expr),
           table_reg = left.table_reg,
           key_ptr = left.key_ptr,
@@ -1095,7 +797,7 @@ do
       end
 
       local function generate_setupval(left, lhs_expr, right_ptr)
-        add_inst(func, new_set_upval{
+        add_inst(func, il.new_set_upval{
           position = lhs_expr,
           upval = find_upval(lhs_expr, func),
           right_ptr = right_ptr,
@@ -1110,7 +812,7 @@ do
             generate_settable(left, stat.lhs[i], right_reg)
           elseif left.type == "local" then
             if move_last_local or i ~= num_lhs then
-              add_inst(func, new_move{
+              add_inst(func, il.new_move{
                 position = stat.lhs[i],
                 result_reg = left.reg,
                 right_ptr = right_reg,
@@ -1152,7 +854,7 @@ do
           local reg = const_or_local_or_fetch(last_expr, func)
           generate_settable(last_left, stat.lhs[#stat.lhs], reg)
         elseif last_left.type == "local" then
-          add_inst(func, new_move{
+          add_inst(func, il.new_move{
             position = ast.get_main_position(last_expr),
             result_reg = last_left.reg,
             right_ptr = const_or_local_or_fetch(last_expr, func),
@@ -1184,11 +886,11 @@ do
     ["loopstat"] = function(stat, func)
       local start_label
       if stat.do_jump_back then
-        start_label = add_inst(func, new_label{position = stat.open_token})
+        start_label = add_inst(func, il.new_label{position = stat.open_token})
       end
       generate_scope(stat, func)
       if stat.do_jump_back then
-        add_inst(func, new_jump{
+        add_inst(func, il.new_jump{
           position = stat.close_token,
           label = start_label,
         })
@@ -1261,18 +963,18 @@ function generate_il_func(functiondef, parent_func)
 
   -- special handling for methods because self is not in the params list
   if functiondef.is_method then
-    func.param_regs[1] = new_reg("self")
+    func.param_regs[1] = il.new_reg("self")
     func.temp.local_reg_lut[functiondef.locals[1]] = func.param_regs[1]
   end
   local param_offset = functiondef.is_method and 1 or 0
   for i, param in ipairs(functiondef.params) do
-    func.param_regs[i + param_offset] = new_reg(param.name)
+    func.param_regs[i + param_offset] = il.new_reg(param.name)
     set_local_reg(param, func.param_regs[i + param_offset], func)
   end
 
   -- all parameters have to be in scope from the beginning because they are automatically set by Lua
   if func.param_regs[1] then
-    add_inst(func, new_scoping{
+    add_inst(func, il.new_scoping{
       position = not functiondef.is_main and functiondef.function_token or nil,
       regs = func.param_regs, -- using a reference to the same table!
     })
@@ -1283,7 +985,7 @@ function generate_il_func(functiondef, parent_func)
   -- self does have a local so it gets included in the scope's SCOPING instruction
 
   -- as per usual, an extra return for good measure
-  add_inst(func, new_ret{position = functiondef.end_token or get_last_used_position(func)})
+  add_inst(func, il.new_ret{position = functiondef.end_token or get_last_used_position(func)})
 
   func.temp = nil
   return func
