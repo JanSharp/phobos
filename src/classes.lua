@@ -641,8 +641,8 @@
 -- TODO: what do threads even look like and what data do I need to represent a group of them?
 
 ---@class ILClass
----@field kvps? ILClassKvp[]|nil @ `nil` if this class is for a (full) userdata object
----@field metatable? ILClass|nil
+---@field kvps ILClassKvp[]? @ `nil` if this class is for a (full) userdata object
+---@field metatable ILClass?
 ---@field inferred boolean?
 
 ---@class ILClassKvp
