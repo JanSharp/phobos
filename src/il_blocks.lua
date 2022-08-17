@@ -204,23 +204,22 @@ do
   -- so it's handled in the loop down below
   local block_ends = util.invert{"jump", "test", "ret"}
   local function create_block(data, inst)
-    -- non intrusive because the instructions are already in an intrusive indexed linked list
-    local instructions = ill.new()
     local block = {
       source_links = {},
-      instructions = instructions,
+      start_inst = inst,
       target_links = {},
     }
-    ill.append(instructions, inst)
     inst.block = block
+    local stop_inst = inst
     while not block_ends[inst.inst_type] do
       inst = inst.next
       if not inst or inst.inst_type == "label" then
         break
       end
-      ill.append(instructions, inst)
+      stop_inst = inst
       inst.block = block
     end
+    block.stop_inst = stop_inst
     return block
   end
 
@@ -231,7 +230,7 @@ do
     while inst do
       local block = create_block(data, inst)
       ill.append(blocks, block)
-      inst = block.instructions.last.value.next
+      inst = block.stop_inst.next
     end
   end
 end
@@ -246,7 +245,7 @@ do
       -- I'm not sure how to detect if it is a loop otherwise, but since this is 99% of the time correct
       -- it's good enough. Besides, a jump being marked as a loop even though it isn't doesn't cause harm
       -- while a jump that is a loop not being marked as a loop does cause harm
-      is_loop = target_block.instructions.first.value.index < source_block.instructions.first.value.index,
+      is_loop = target_block.start_inst.index < source_block.start_inst.index,
     }
     source_block.target_links[#source_block.target_links+1] = link
     target_block.source_links[#target_block.source_links+1] = link
@@ -254,7 +253,7 @@ do
   end
 
   local function create_links_for_block(data, block)
-    local last_inst = block.instructions.last.value
+    local last_inst = block.stop_inst
     local function assert_next()
       util.debug_assert(last_inst.next, "The next instruction of the last instruction of a block \z
         where the last instruction in the block is not a 'ret' or 'jump' instruction should be \z

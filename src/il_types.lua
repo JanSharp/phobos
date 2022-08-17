@@ -153,16 +153,14 @@ local function new_state()
 end
 
 local function walk_block(data, block)
-  local inst_node = block.instructions.first
-  local inst
-  while inst_node do
+  local inst = block.start_inst
+  local prev_inst
+  repeat
     local pre_state
-    if inst then -- inst is still prev inst
-      pre_state = inst.post_state
-      inst = inst_node.value
+    if prev_inst then
+      pre_state = prev_inst.post_state
       inst.pre_state = pre_state
     else -- first iteration
-      inst = inst_node.value
       if block.is_main_entry_block then
         pre_state = new_state()
         inst.pre_state = pre_state
@@ -188,8 +186,9 @@ local function walk_block(data, block)
         set_type(post_state, reg, il.copy_type(reg_type))
       end
     end
-    inst_node = inst_node.next
-  end
+    prev_inst = inst
+    inst = inst.next
+  until inst == block.stop_inst.next
 end
 
 local function resolve_types(func)

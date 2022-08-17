@@ -831,7 +831,8 @@
 
 ---@class ILBlock
 ---@field source_links ILBlockLink[] @ blocks flowing into this block
----@field instructions ILInstruction[] @ ILL
+---@field start_inst ILInstruction @ the first instruction in this block
+---@field stop_inst ILInstruction @ the last instruction in this block
 ---@field is_main_entry_block boolean
 ---@field target_links ILBlockLink[] @ blocks this block can flow to
 
