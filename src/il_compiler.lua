@@ -4,126 +4,13 @@ local util = require("util")
 local opcode_util = require("opcode_util")
 local opcodes = opcode_util.opcodes
 local ill = require("indexed_linked_list")
+local il = require("il_util")
 
-local determine_reg_usage
-do
-  local get = true
-  local set = false
-  local both = nil
-
-  ---@param reg ILRegister
-  local function visit_reg(data, inst, reg, get_set)
-    reg.total_get_count = reg.total_get_count or 0
-    reg.total_set_count = reg.total_set_count or 0
-    if get_set ~= set then
-      reg.total_get_count = reg.total_get_count + 1
-    end
-    if get_set ~= get then
-      reg.total_set_count = reg.total_set_count + 1
-    end
-    reg.temporary = reg.total_get_count <= 1 and reg.total_set_count <= 1
-    if reg.is_vararg and not reg.temporary then
-      util.debug_abort("Malformed vararg register. Vararg registers must only be set once and used once.")
-    end
-  end
-
-  local function visit_reg_list(data, inst, regs, get_set)
-    for _, reg in ipairs(regs) do
-      visit_reg(data, inst, reg, get_set)
-    end
-  end
-
-  local function visit_ptr(data, inst, ptr, get_set)
-    if ptr.ptr_type == "reg" then
-      visit_reg(data, inst, ptr, get_set)
-    end
-  end
-
-  local function visit_ptr_list(data, inst, ptrs, get_set)
-    for _, ptr in ipairs(ptrs) do
-      visit_ptr(data, inst, ptr, get_set)
-    end
-  end
-
-  local visitor_lut = {
-    ["move"] = function(data, inst)
-      visit_reg(data, inst, inst.result_reg, set)
-      visit_ptr(data, inst, inst.right_ptr, get)
-    end,
-    ["get_upval"] = function(data, inst)
-      visit_reg(data, inst, inst.result_reg, set)
-    end,
-    ["set_upval"] = function(data, inst)
-      visit_ptr(data, inst, inst.right_ptr, get)
-    end,
-    ["get_table"] = function(data, inst)
-      visit_reg(data, inst, inst.result_reg, set)
-      visit_reg(data, inst, inst.table_reg, get)
-    end,
-    ["set_table"] = function(data, inst)
-      visit_reg(data, inst, inst.table_reg, get)
-      visit_ptr(data, inst, inst.key_ptr, get)
-      visit_ptr(data, inst, inst.right_ptr, get)
-    end,
-    ["set_list"] = function(data, inst)
-      visit_reg(data, inst, inst.table_reg, get)
-      visit_ptr_list(data, inst, inst.right_ptrs, get) -- must be in order
-    end,
-    ["new_table"] = function(data, inst)
-      visit_reg(data, inst, inst.result_reg, set) -- has to be at the top of the stack
-    end,
-    ["concat"] = function(data, inst)
-      visit_reg(data, inst, inst.result_reg, set) -- has to be at the top of the stack
-      visit_ptr_list(data, inst, inst.right_ptrs, get) -- must be in order right above result_reg
-    end,
-    ["binop"] = function(data, inst)
-      visit_reg(data, inst, inst.result_reg, set)
-      visit_ptr(data, inst, inst.left_ptr, get)
-      visit_ptr(data, inst, inst.right_ptr, get)
-    end,
-    ["unop"] = function(data, inst)
-      visit_ptr(data, inst, inst.result_reg, set)
-      visit_ptr(data, inst, inst.right_ptr, get)
-    end,
-    ["label"] = function(data, inst)
-    end,
-    ["jump"] = function(data, inst)
-    end,
-    ["test"] = function(data, inst)
-      visit_ptr(data, inst, inst.condition_ptr, get)
-    end,
-    ["call"] = function(data, inst)
-      visit_reg(data, inst, inst.func_reg, get)
-      visit_ptr_list(data, inst, inst.arg_ptrs, get) -- must be in order right above func_reg
-      visit_reg_list(data, inst, inst.result_regs, set) -- must be in order right above func_reg
-    end,
-    ["ret"] = function(data, inst)
-      visit_ptr_list(data, inst, inst.ptrs, get) -- must be in order
-    end,
-    ---@param inst ILClosure
-    ["closure"] = function(data, inst)
-      visit_reg(data, inst, inst.result_reg, set) -- has to be at the top of the stack
-      for _, upval in ipairs(inst.func.upvals) do
-        if upval.parent_type == "local" then
-          visit_reg(data, inst, upval.reg_in_parent_func, get)
-          upval.reg_in_parent_func.captured_as_upval = true
-        end
-      end
-    end,
-    ["vararg"] = function(data, inst)
-      visit_reg_list(data, inst, inst.result_regs, set) -- must be in order
-    end,
-    ["scoping"] = function(data, inst)
-      visit_reg_list(data, inst, inst.regs, both)
-    end,
-  }
-
-  function determine_reg_usage(data)
-    local inst = data.func.instructions.first
-    while inst do
-      visitor_lut[inst.inst_type](data, inst)
-      inst = inst.next
-    end
+local function determine_reg_usage(data)
+  local inst = data.func.instructions.first
+  while inst do
+    il.determine_reg_usage_for_inst(inst)
+    inst = inst.next
   end
 end
 

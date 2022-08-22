@@ -2,6 +2,7 @@
 local util = require("util")
 local number_ranges = require("number_ranges")
 local error_code_util = require("error_code_util")
+local ill = require("indexed_linked_list")
 
 ----------------------------------------------------------------------------------------------------
 -- instructions
@@ -1261,6 +1262,462 @@ do
   end
 end
 
+----------------------------------------------------------------------------------------------------
+-- il blocks
+----------------------------------------------------------------------------------------------------
+
+local function new_block(start_inst, stop_inst)
+  return {
+    source_links = {},
+    start_inst = start_inst,
+    stop_inst = stop_inst,
+    target_links = {},
+  }
+end
+
+local function create_link(source_block, target_block)
+  local link = {
+    source_block = source_block,
+    target_block = target_block,
+    -- backwards jumps are 99% of the time a loop
+    -- I'm not sure how to detect if it is a loop otherwise, but since this is 99% of the time correct
+    -- it's good enough. Besides, a jump being marked as a loop even though it isn't doesn't cause harm
+    -- while a jump that is a loop not being marked as a loop does cause harm
+    is_loop = target_block.start_inst.index < source_block.start_inst.index,
+  }
+  source_block.target_links[#source_block.target_links+1] = link
+  target_block.source_links[#target_block.source_links+1] = link
+  return link
+end
+
+local function create_links_for_block(block)
+  local last_inst = block.stop_inst
+  local function assert_next()
+    util.debug_assert(last_inst.next, "The next instruction of the last instruction of a block \z
+      where the last instruction in the block is not a 'ret' or 'jump' instruction should be \z
+      impossible to be nil."
+    )
+  end
+  local inst_type = last_inst.inst_type
+  if inst_type == "jump" then
+    create_link(block, last_inst.label.block)
+  elseif inst_type == "test" then
+    assert_next()
+    create_link(block, last_inst.next.block)
+    create_link(block, last_inst.label.block)
+  elseif inst_type == "ret" then
+    -- doesn't link to anything
+  else -- anything else just continues to the next block
+    assert_next()
+    create_link(block, last_inst.next.block)
+  end
+end
+
+local block_ends = util.invert{"jump", "test", "ret"}
+---@param inst ILInstruction
+local function normalize_blocks_for_inst(inst)
+  -- determine if we can connect with the block of the previous instruction
+  local can_use_prev_block = inst.prev and not block_ends[inst.prev.inst_type] and inst.inst_type ~= "label"
+  -- determine if we can connect with the block of the next instruction
+  local can_use_next_block = inst.next and not block_ends[inst.inst_type] and inst.next.inst_type ~= "label"
+  -- determine if we have to split a block due to this insertion
+  if can_use_prev_block then
+    inst.block = inst.prev.block
+    if inst.block.stop_inst == inst.prev then
+      inst.block.stop_inst = inst
+    end
+    return
+  end
+  if can_use_next_block then
+    inst.block = inst.next.block
+    inst.block.start_inst = inst
+    return
+  end
+  -- can't use either of them, create new block
+  local block = new_block(inst, inst)
+  if inst.prev then
+    ill.insert_after(inst.prev.block, block)
+  elseif inst.next then
+    ill.insert_before(inst.next.block, block)
+  else
+    util.debug_abort("It's currently impossible for an ILFunction to not have any instructions \z
+      which means an instruction without prev and without next is impossible."
+    )
+  end
+  -- deal with source_links
+  if inst.prev then
+    if inst.prev.inst_type ~= "jump" and inst.prev.inst_type ~= "ret" then
+      local prev_link_to_next = inst.prev.block.target_links[1]
+      prev_link_to_next.target_block = block
+      -- `next` is guaranteed to exist because `create_links_for_block`
+      -- asserts as much during the creation of blocks
+      local next_source_links = inst.next.block.source_links
+      for i = 1, #next_source_links do
+        if next_source_links[i] == prev_link_to_next then
+          next_source_links[i] = next_source_links[#next_source_links]
+          next_source_links[#next_source_links] = nil
+          break
+        end
+      end
+    end
+  else -- `not inst.prev`
+    block.is_main_entry_block = true
+    if inst.next then
+      inst.next.block.is_main_entry_block = nil
+    end
+  end
+  create_links_for_block(block)
+end
+
+----------------------------------------------------------------------------------------------------
+-- il registers
+----------------------------------------------------------------------------------------------------
+
+local visit_regs_for_inst
+do
+  local get = 1
+  local set = 2
+  local get_and_set = 3
+
+  local visit_reg
+
+  local function visit_reg_list(data, inst, regs, get_set)
+    for _, reg in ipairs(regs) do
+      visit_reg(data, inst, reg, get_set)
+    end
+  end
+
+  local function visit_ptr(data, inst, ptr, get_set)
+    if ptr.ptr_type == "reg" then
+      visit_reg(data, inst, ptr, get_set)
+    end
+  end
+
+  local function visit_ptr_list(data, inst, ptrs, get_set)
+    for _, ptr in ipairs(ptrs) do
+      visit_ptr(data, inst, ptr, get_set)
+    end
+  end
+
+  local visitor_lut = {
+    ["move"] = function(data, inst)
+      visit_reg(data, inst, inst.result_reg, set)
+      visit_ptr(data, inst, inst.right_ptr, get)
+    end,
+    ["get_upval"] = function(data, inst)
+      visit_reg(data, inst, inst.result_reg, set)
+    end,
+    ["set_upval"] = function(data, inst)
+      visit_ptr(data, inst, inst.right_ptr, get)
+    end,
+    ["get_table"] = function(data, inst)
+      visit_reg(data, inst, inst.result_reg, set)
+      visit_reg(data, inst, inst.table_reg, get)
+    end,
+    ["set_table"] = function(data, inst)
+      visit_reg(data, inst, inst.table_reg, get)
+      visit_ptr(data, inst, inst.key_ptr, get)
+      visit_ptr(data, inst, inst.right_ptr, get)
+    end,
+    ["set_list"] = function(data, inst)
+      visit_reg(data, inst, inst.table_reg, get)
+      visit_ptr_list(data, inst, inst.right_ptrs, get) -- must be in order
+    end,
+    ["new_table"] = function(data, inst)
+      visit_reg(data, inst, inst.result_reg, set) -- has to be at the top of the stack
+    end,
+    ["concat"] = function(data, inst)
+      visit_reg(data, inst, inst.result_reg, set) -- has to be at the top of the stack
+      visit_ptr_list(data, inst, inst.right_ptrs, get) -- must be in order right above result_reg
+    end,
+    ["binop"] = function(data, inst)
+      visit_reg(data, inst, inst.result_reg, set)
+      visit_ptr(data, inst, inst.left_ptr, get)
+      visit_ptr(data, inst, inst.right_ptr, get)
+    end,
+    ["unop"] = function(data, inst)
+      visit_ptr(data, inst, inst.result_reg, set)
+      visit_ptr(data, inst, inst.right_ptr, get)
+    end,
+    ["label"] = function(data, inst)
+    end,
+    ["jump"] = function(data, inst)
+    end,
+    ["test"] = function(data, inst)
+      visit_ptr(data, inst, inst.condition_ptr, get)
+    end,
+    ["call"] = function(data, inst)
+      visit_reg(data, inst, inst.func_reg, get)
+      visit_ptr_list(data, inst, inst.arg_ptrs, get) -- must be in order right above func_reg
+      visit_reg_list(data, inst, inst.result_regs, set) -- must be in order right above func_reg
+    end,
+    ["ret"] = function(data, inst)
+      visit_ptr_list(data, inst, inst.ptrs, get) -- must be in order
+    end,
+    ---@param inst ILClosure
+    ["closure"] = function(data, inst)
+      visit_reg(data, inst, inst.result_reg, set) -- has to be at the top of the stack
+      for _, upval in ipairs(inst.func.upvals) do
+        if upval.parent_type == "local" then
+          visit_reg(data, inst, upval.reg_in_parent_func, get)
+          upval.reg_in_parent_func.captured_as_upval = true
+        end
+      end
+    end,
+    ["vararg"] = function(data, inst)
+      visit_reg_list(data, inst, inst.result_regs, set) -- must be in order
+    end,
+    ["scoping"] = function(data, inst)
+      visit_reg_list(data, inst, inst.regs, get_and_set)
+    end,
+  }
+
+  -- ---@param visit_ptr fun(data: T, inst: ILInstruction, ptr: ILPointer, get_set: 1|2|3)
+
+  ---@generic T
+  ---@param inst ILInstruction
+  ---@param visit_reg_func fun(data: T, inst: ILInstruction, reg: ILRegister, get_set: 1|2|3)
+  ---@param data T
+  function visit_regs_for_inst(data, inst, visit_reg_func)
+    visit_reg = visit_reg_func
+    visitor_lut[inst.inst_type](data, inst)
+  end
+end
+
+local eval_start_stop_for_all_regs
+do
+  local function visit_reg(data, inst, reg)
+    if not reg.start_at then
+      reg.start_at = inst
+      data.all_regs[#data.all_regs+1] = reg
+    end
+    reg.stop_at = inst
+  end
+
+  function eval_start_stop_for_all_regs(data)
+    data.all_regs = {}
+    local inst = data.func.instructions.first
+    while inst do
+      visit_regs_for_inst(data, inst, visit_reg)
+      inst = inst.next
+    end
+  end
+end
+
+local eval_start_stop_for_regs_for_inst
+do
+  local function visit_reg(data, inst, reg)
+    if not reg.start_at or inst.index < reg.start_at.index then
+      if reg.start_at then
+        for i = 1, #inst.regs_start_at_list do
+          if inst.regs_start_at_list[i] == reg then
+            table.remove(inst.regs_start_at_list, i)
+            break
+          end
+        end
+        inst.regs_start_at_lut[reg] = nil
+      end
+      reg.start_at = inst
+      inst.regs_start_at_list = inst.regs_start_at_list or {}
+      inst.regs_start_at_list[#inst.regs_start_at_list+1] = reg
+      inst.regs_start_at_lut = inst.regs_start_at_lut or {}
+      inst.regs_start_at_lut[reg] = true
+    end
+
+    if not reg.stop_at or inst.index > reg.stop_at.index then
+      if reg.stop_at then
+        for i = 1, #inst.regs_stop_at_list do
+          if inst.regs_stop_at_list[i] == reg then
+            table.remove(inst.regs_stop_at_list, i)
+            break
+          end
+        end
+        inst.regs_stop_at_lut[reg] = nil
+      end
+      reg.stop_at = inst
+      inst.regs_stop_at_list = inst.regs_stop_at_list or {}
+      inst.regs_stop_at_list[#inst.regs_stop_at_list+1] = reg
+      inst.regs_stop_at_lut = inst.regs_stop_at_lut or {}
+      inst.regs_stop_at_lut[reg] = true
+    end
+
+    -- TODO: live_regs
+    -- TODO: pre_state
+    -- TODO: post_state
+  end
+
+  function eval_start_stop_for_regs_for_inst(inst)
+    visit_regs_for_inst(nil, inst, visit_reg)
+  end
+end
+
+local eval_live_regs
+do
+  function eval_live_regs(data)
+    local start_at_list_lut = {}
+    local start_at_lut_lut = {}
+    local stop_at_list_lut = {}
+    local stop_at_lut_lut = {}
+    for _, reg in ipairs(data.all_regs) do
+      local list = start_at_list_lut[reg.start_at]
+      local lut
+      if not list then
+        list = {}
+        start_at_list_lut[reg.start_at] = list
+        lut = {}
+        start_at_lut_lut[reg.start_at] = lut
+      else
+        lut = start_at_lut_lut[reg.start_at]
+      end
+      list[#list+1] = reg
+      lut[reg] = true
+      -- copy paste
+      list = stop_at_list_lut[reg.stop_at]
+      if not list then
+        list = {}
+        stop_at_list_lut[reg.stop_at] = list
+        lut = {}
+        stop_at_lut_lut[reg.stop_at] = lut
+      else
+        lut = stop_at_lut_lut[reg.stop_at]
+      end
+      list[#list+1] = reg
+      lut[reg] = true
+    end
+
+    local live_regs = {}
+    local inst = data.func.instructions.first
+    while inst do
+      inst.live_regs = live_regs
+      -- starting at this instruction, add them to live_regs for this instruction
+      local list = start_at_list_lut[inst]
+      if list then
+        inst.regs_start_at_list = list
+        inst.regs_start_at_lut = start_at_lut_lut[inst]
+        for _, reg in ipairs(list) do
+          live_regs[#live_regs+1] = reg
+        end
+      end
+      live_regs = util.shallow_copy(live_regs)
+      -- stopping at this instruction, remove them from live_regs for the next instruction
+      local lut = stop_at_lut_lut[inst]
+      if lut then
+        inst.regs_stop_at_list = stop_at_list_lut[inst]
+        inst.regs_stop_at_lut = lut
+        local i = 1
+        local j = 1
+        local c = #live_regs
+        while i <= c do
+          local reg = live_regs[i]
+          live_regs[i] = nil
+          if not lut[reg] then -- if it's not stopping it's still alive
+            live_regs[j] = reg
+            j = j + 1
+          end
+          i = i + 1
+        end
+      end
+      inst = inst.next
+    end
+  end
+end
+
+local determine_reg_usage_for_inst
+do
+  local get = 1
+  local set = 2
+  local get_and_set = 3
+
+  ---@param reg ILRegister
+  local function visit_reg(inst, reg, get_set)
+    reg.total_get_count = reg.total_get_count or 0
+    reg.total_set_count = reg.total_set_count or 0
+    if get_set ~= set then
+      reg.total_get_count = reg.total_get_count + 1
+    end
+    if get_set ~= get then
+      reg.total_set_count = reg.total_set_count + 1
+    end
+    reg.temporary = reg.total_get_count <= 1 and reg.total_set_count <= 1
+    if reg.is_vararg and not reg.temporary then
+      util.debug_abort("Malformed vararg register. Vararg registers must only be set once and used once.")
+    end
+  end
+
+  function determine_reg_usage_for_inst(inst)
+    visit_regs_for_inst(nil, inst, visit_reg)
+  end
+end
+
+----------------------------------------------------------------------------------------------------
+-- il modifications
+----------------------------------------------------------------------------------------------------
+
+-- when inserting instructions ensure that the following is updated:
+-- - [x] func.instructions
+-- - [x] func.blocks
+-- - [ ] think about inserting closures
+-- - [x] inst.block
+-- - [x] inst.regs_start_at_list
+-- - [x] inst.regs_start_at_lut
+-- - [x] inst.regs_stop_at_list
+-- - [x] inst.regs_stop_at_lut
+-- - [ ] inst.live_regs
+-- - [ ] inst.pre_state
+-- - [ ] inst.post_state
+-- - [x] reg.start_at
+-- - [x] reg.stop_at
+-- - [x] reg.total_get_count
+-- - [x] reg.total_set_count
+-- - [x] reg.temporary
+--
+-- - [ ] reg.captured_as_upval
+-- - [ ] reg.current_reg
+
+---@param inst ILInstruction
+---@param inserted_inst ILInstruction
+---@return ILInstruction
+local function insert_after_inst(inst, inserted_inst)
+  ill.insert_after(inst, inserted_inst)
+  normalize_blocks_for_inst(inserted_inst)
+  eval_start_stop_for_regs_for_inst(inserted_inst)
+  determine_reg_usage_for_inst(inserted_inst)
+  return inserted_inst
+end
+
+---@param inst ILInstruction
+---@param inserted_inst ILInstruction
+---@return ILInstruction
+local function insert_before_inst(inst, inserted_inst)
+  ill.insert_before(inst, inserted_inst)
+  normalize_blocks_for_inst(inserted_inst)
+  eval_start_stop_for_regs_for_inst(inserted_inst)
+  determine_reg_usage_for_inst(inserted_inst)
+  return inserted_inst
+end
+
+---@param func ILFunction
+---@param inserted_inst ILInstruction
+---@return ILInstruction
+local function prepend_inst(func, inserted_inst)
+  ill.prepend(func.instructions, inserted_inst)
+  normalize_blocks_for_inst(inserted_inst)
+  eval_start_stop_for_regs_for_inst(inserted_inst)
+  determine_reg_usage_for_inst(inserted_inst)
+  return inserted_inst
+end
+
+---@param func ILFunction
+---@param inserted_inst ILInstruction
+---@return ILInstruction
+local function append_inst(func, inserted_inst)
+  ill.append(func.instructions, inserted_inst)
+  normalize_blocks_for_inst(inserted_inst)
+  eval_start_stop_for_regs_for_inst(inserted_inst)
+  determine_reg_usage_for_inst(inserted_inst)
+  return inserted_inst
+end
+
 return {
 
   -- instructions
@@ -1322,4 +1779,24 @@ return {
   type_indexing = type_indexing,
   class_new_indexing = class_new_indexing,
   type_new_indexing = type_new_indexing,
+
+  -- il blocks
+
+  new_block = new_block,
+  create_links_for_block = create_links_for_block,
+  normalize_blocks_for_inst = normalize_blocks_for_inst,
+
+  -- il registers
+
+  eval_start_stop_for_all_regs = eval_start_stop_for_all_regs,
+  eval_start_stop_for_regs_for_inst = eval_start_stop_for_regs_for_inst,
+  eval_live_regs = eval_live_regs,
+  determine_reg_usage_for_inst = determine_reg_usage_for_inst,
+
+  -- il modifications
+
+  insert_after_inst = insert_after_inst,
+  insert_before_inst = insert_before_inst,
+  prepend_inst = prepend_inst,
+  append_inst = append_inst,
 }

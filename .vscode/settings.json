@@ -150,4 +150,5 @@
     // custom
     "**/debugging/minimal-no-base-mod",
   ],
+  "editor.rulers": [110],
 }

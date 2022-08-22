@@ -695,6 +695,8 @@
 ---| "scoping"
 
 ---@class ILInstruction : IntrusiveILLNode<ILInstruction>
+---@field prev ILInstruction? @ (overridden because generics don't work) `nil` if this is the first node
+---@field next ILInstruction? @ (overridden because generics don't work) `nil` if this is the last node
 ---@field inst_type ILInstructionType
 ---@field position ILPosition|nil
 ---post IL generation data
@@ -823,7 +825,6 @@
 ---@field defined_position Position? @ usually the position of the `function_token`
 ---@field last_defined_position Position? @ usually the position of the `end_token`
 ---post IL generation data
----@field all_regs ILRegister[]
 ---@field blocks ILBlock[] @ intrusive ILL
 ---@field temp ILFunctionTemp
 ---temp compilation data
@@ -846,7 +847,7 @@
 
 ---@class ILFunctionTemp
 ---@field local_reg_lut table<AstLocalDef, ILRegister>
----@field upval_def_lut  table<AstUpvalDef, ILUpval>
+---@field upval_def_lut table<AstUpvalDef, ILUpval>
 ---@field break_jump_lut table<AstBreakStat, ILJump>
 ---@field label_inst_lut table<AstLabel, ILLabel>
 ---@field goto_inst_lut table<AstGotoStat, ILJump>

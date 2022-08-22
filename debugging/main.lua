@@ -255,11 +255,11 @@ local function compile(filename)
       success, compiled = pcall(require("il_compiler"), il)
       if not success then print(compiled) goto finish end
       add_func_to_lines("ILR", compiled)
-      for i, reg in ipairs(il.all_regs) do
-        print((reg.is_vararg and "VAR" or "R").."("..i..(reg.name and ("|"..reg.name) or "")
-          ..", get: "..(reg.total_get_count or "?")..", set: "..(reg.total_set_count or "?")..")"
-        )
-      end
+      -- for i, reg in ipairs(il.all_regs) do
+      --   print((reg.is_vararg and "VAR" or "R").."("..i..(reg.name and ("|"..reg.name) or "")
+      --     ..", get: "..(reg.total_get_count or "?")..", set: "..(reg.total_set_count or "?")..")"
+      --   )
+      -- end
     end
 
     if do_fold_const then
