@@ -575,7 +575,9 @@
 ---@field start_at ILInstruction
 ---@field stop_at ILInstruction
 ---@field total_get_count integer
+---@field get_insts ILInstruction[]
 ---@field total_set_count integer
+---@field set_insts ILInstruction[]
 ---@field temporary boolean?
 ---@field captured_as_upval boolean?
 ---@field current_reg ILCompiledRegister

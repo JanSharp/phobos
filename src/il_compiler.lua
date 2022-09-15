@@ -556,9 +556,20 @@ do
     ["call"] = function(data, inst)
       util.debug_abort("-- TODO: not implemented")
     end,
+    ---@param inst ILRet
     ["ret"] = function(data, inst)
       if inst.ptrs[1] then
         util.debug_abort("-- TODO: not implemented")
+        -- for _, ptr in ipairs(inst.ptrs) do
+        --   if ptr.ptr_type == "reg" then
+        --     ---@cast ptr ILRegister
+        --     for i = #ptr.set_insts, 1, -1 do
+        --       if ptr.set_insts[i].index < inst.index then
+
+        --       end
+        --     end
+        --   end
+        -- end
       else
         add_new_inst(data, inst.position, opcodes["return"], {a = 0, b = 1})
       end
@@ -583,9 +594,112 @@ do
     end,
   }
 
+  local add_and_extend_regs
+
+  ---@param data ILCompilerData
+  ---@param inst ILInstruction
+  ---@param ptrs ILPointer[]
+  local function add_and_extend_regs_for_list(data, inst, ptrs)
+    -- only contains entries for pointers that are temporary registers
+    local setting_insts = {}
+    for i, ptr in ipairs(ptrs) do
+      if ptr.ptr_type == "reg" and (ptr--[[@as ILRegister]]).temporary then
+        ---@cast ptr ILRegister
+        for j = #ptr.set_insts, 1, -1 do
+          if ptr.set_insts[j].index < inst.index then
+            setting_insts[i] = ptr.set_insts[j]
+            goto done
+          end
+        end
+        util.debug_abort("Register for register list is not getting set before \z
+          the instruction requiring it to be set."
+        ) -- TODO: add more debug info
+        ::done::
+      end
+    end
+
+    local lowest_index
+    for i = #ptrs, 1, -1 do
+      local ptr = ptrs[i]
+      if ptr.ptr_type == "reg" then
+        ---@cast ptr ILRegister
+        if ptr.temporary then
+          if not lowest_index then
+            lowest_index = setting_insts[i].index
+            goto continue
+          end
+          if setting_insts[i].index > lowest_index then
+            -- TODO: only insert moves for instructions that must output to the top of the stack
+            -- insert move right after this temp reg is set
+
+          end
+        else
+        end
+        ::continue::
+      end
+    end
+  end
+
+  local add_and_extend_regs_lut = {
+    ["move"] = function(data, inst)
+    end,
+    ["get_upval"] = function(data, inst)
+    end,
+    ["set_upval"] = function(data, inst)
+    end,
+    ["get_table"] = function(data, inst)
+    end,
+    ["set_table"] = function(data, inst)
+    end,
+    ["set_list"] = function(data, inst)
+    end,
+    ["new_table"] = function(data, inst)
+    end,
+    ["concat"] = function(data, inst)
+    end,
+    ["binop"] = function(data, inst)
+    end,
+    ["unop"] = function(data, inst)
+    end,
+    ["label"] = function(data, inst)
+    end,
+    ["jump"] = function(data, inst)
+    end,
+    ["test"] = function(data, inst)
+    end,
+    ["call"] = function(data, inst)
+    end,
+    ["ret"] = function(data, inst)
+      add_and_extend_regs_for_list(data, inst, inst.ptrs)
+    end,
+    ["closure"] = function(data, inst)
+    end,
+    ["vararg"] = function(data, inst)
+    end,
+    ["scoping"] = function(data, inst)
+    end,
+  }
+
+  function add_and_extend_regs(data, inst)
+    if inst.did_resolve_regs then return end
+    add_and_extend_regs_lut[inst.inst_type](data, inst)
+    inst.did_resolve_regs = true
+  end
+
+  local insts_with_register_lists_lut = util.invert{
+    "concat",
+    "call",
+    "ret",
+    "vararg",
+  }
+
   function generate(data)
     local inst = data.func.instructions.last
     while inst do
+      if insts_with_register_lists_lut[inst.inst_type] then
+        data.requesting_inst = inst
+        add_and_extend_regs(data, inst)
+      end
       inst = generate_inst(data, inst)
     end
   end
