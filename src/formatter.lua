@@ -120,6 +120,9 @@ local function format(main)
   ---@param node AstFunctionDef|AstMain
   local function add_functiondef(node, add_name)
     if node.is_main then
+      if main.shebang_line then
+        add(main.shebang_line)
+      end
       add_scope(node)
       add_leading(node.eof_token)
     else

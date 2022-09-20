@@ -1371,6 +1371,7 @@ end
 
 local function main_func()
   local main = ast.new_main(source)
+  main.shebang_line = token_iter_state.shebang_line
   stat_list(main)
   -- this will only fail either if there previously were syntax errors or an early return
   local invalid = assert_next("eof")

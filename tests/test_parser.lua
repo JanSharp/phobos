@@ -3013,6 +3013,14 @@ do
     end
   )
 
+  add_test(
+    "shebang stored in AstMain",
+    "#!/usr/bin/env lua",
+    function()
+      fake_main.shebang_line = "#!/usr/bin/env lua"
+    end
+  )
+
   -- TODO: test 'eof' with leading
   -- TODO: test 'return' ending the current block
 

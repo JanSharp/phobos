@@ -22,6 +22,8 @@ local function test(str, expected_tokens)
   if expected_tokens[i + 1] then
     error("expected "..#expected_tokens.." tokens, got "..i)
   end
+  -- literally just for shebang_line testing
+  return state
 end
 
 ---cSpell:ignore inext
@@ -99,9 +101,15 @@ do
 
     for _, tab in ipairs{basic_tokens, keywords} do
       for _, token_type in ipairs(tab) do
-        scope:add_test("token '"..token_type.."'", function()
-          test(token_type, {new_token(token_type, 1, 1, 1)})
-        end)
+        if token_type == "#" then
+          scope:add_test("token '#' (with blank before it, otherwise it would be a shebang)", function()
+            test(" #", {new_token("blank", 1, 1, 1, " "), new_token("#", 2, 1, 2)})
+          end)
+        else
+          scope:add_test("token '"..token_type.."'", function()
+            test(token_type, {new_token(token_type, 1, 1, 1)})
+          end)
+        end
       end
     end
 
@@ -701,6 +709,27 @@ do
         new_token("blank", 5, 1, 2, "\n"),
         new_token(";", 6, 2, 1),
       })
+    end)
+
+    scope:add_test("read shebang", function()
+      local state = test("#!/usr/bin/env lua\n;", {
+        new_token("blank", 19, 1, 1, "\n"),
+        new_token(";", 20, 2, 1),
+      })
+      assert.equals("#!/usr/bin/env lua", state.shebang_line, "state.shebang_line")
+    end)
+
+    scope:add_test("read shebang followed by eof", function()
+      local state = test("#!/usr/bin/env lua", {})
+      assert.equals("#!/usr/bin/env lua", state.shebang_line, "state.shebang_line")
+    end)
+
+    scope:add_test("skip UTF8 BOM and read shebang", function()
+      local state = test("\xef\xbb\xbf#!/usr/bin/env lua\n;", {
+        new_token("blank", 22, 1, 1, "\n"),
+        new_token(";", 23, 2, 1),
+      })
+      assert.equals("#!/usr/bin/env lua", state.shebang_line, "state.shebang_line")
     end)
 
     scope:add_test("number plus ident '0foo'", function()

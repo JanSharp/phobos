@@ -476,6 +476,8 @@ end
 ---@field line_offset integer @ the exact index of the last newline
 ---@field prev_line integer|nil
 ---@field prev_line_offset integer|nil
+---see AstMain description for more info
+---@field shebang_line string|nil
 
 ---@param str string
 ---@param source? string @ if provided it is used for the `source` field of error code instances
@@ -495,7 +497,14 @@ local function tokenize(str, source)
     index = 4
   end
   ---cSpell:ignore skipcomment, lauxlib
-  -- TODO: what is this about skipcomment in lauxlib.c
+  -- does the same thing as skipcomment in lauxlib.c
+  if str:find("^#", index) then -- first line is a comment (Unix exec. file)?
+    -- read first line and skip parsing it
+    local comment, stop = str:match("([^\n]+)()", index)
+    state.shebang_line = comment
+    state.line_offset = stop - 1
+    index = stop
+  end
   return next_token,state,index
 end
 
