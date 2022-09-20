@@ -2,7 +2,7 @@
 ---@type LFS
 local lfs = require("lfs")
 local Path = require("lib.LuaPath.path")
-Path.use_forward_slash_as_main_separator_on_windows()
+Path.set_main_separator("/")
 
 local function find_lua_source_files()
   local filenames = {}

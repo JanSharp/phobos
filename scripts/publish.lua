@@ -2,7 +2,7 @@
 ---@type LFS
 local lfs = require("lfs")
 local Path = require("lib.LuaPath.path")
-Path.use_forward_slash_as_main_separator_on_windows()
+Path.set_main_separator("/")
 local arg_parser = require("lib.LuaArgParser.arg_parser")
 local io_util = require("io_util")
 local changelog_util = require("scripts.changelog_util")

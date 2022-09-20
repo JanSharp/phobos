@@ -3,7 +3,7 @@ local arg_parser = require("lib.LuaArgParser.arg_parser")
 local Path = require("lib.LuaPath.path")
 ---@type LFS
 local lfs = require("lfs")
-Path.use_forward_slash_as_main_separator_on_windows()
+Path.set_main_separator("/")
 local build_profile_arg_provider = require("build_profile_arg_provider")
 arg_parser.register_type(Path.arg_parser_path_type_def)
 arg_parser.register_type(build_profile_arg_provider.arg_parser_build_profile_type_def)
