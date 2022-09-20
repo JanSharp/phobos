@@ -19,3 +19,39 @@ and each entry in `--source` would require a matching one in `--output` which mu
 
 maybe option to copy files from source to output during compilation
 this is unlikely however because it is more part of a build script than a compiler
+<<<<<<< HEAD
+=======
+
+redundant op_test optimization
+
+
+very loosely related to phobos:
+what I use for setting up to and compiling all factorio mods for testing and fun:
+unix-like systems specific:
+
+shell docs stuff and how to stop running shell sub processes or whatever they're called
+https://pubs.opengroup.org/onlinepubs/9699919799/
+https://unix.stackexchange.com/questions/48425/how-to-stop-the-loop-bash-script-in-terminal
+https://unix.stackexchange.com/questions/19816/where-can-i-find-official-posix-and-unix-documentation
+
+extracting all factorio mods
+```shell
+target=/mnt/big/phobos_temp/extracted
+rm -r "$target"
+mkdir "$target"
+for file in /mnt/big/data/FactorioModsManager/Mods_1.1/*; do
+  name=${file##*/}
+  unzip $file "*.lua" -d "$target/${name%.*}"
+done
+```
+
+-- TODO: copy launch scripts into build outputs, as well as the lua and c library binaries into a bin folder in the output, which means the builds will actually be complete (the upside) but will already be platform specific (the downside). Since we'd already be doing this, it might be worth considering a build configuration specifically for the library version of phobos, that way all builds would be representative of what goes into the published packages... which would also include copying the thumbnail, readme, docs, licenses and so on... yea idk, might still exclude those and keep that logic in the publish script. it's reasonable enough
+
+when adding anything other than errors as error codes - so infos or warnings - expose severity to build profiles
+
+think of types like rules where each rule just applies one more restriction on an inner type, which is a rule. The inner most type is therefore always `any`.
+
+have an understanding of units for numbers. m/s (speed) * s (time) = m (distance) for example
+>>>>>>> 50c0cbf (Remove `stat_elem`)
+
+have an understanding of units for numbers. m/s (speed) * s (time) = m (distance) for example

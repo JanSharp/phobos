@@ -35,24 +35,20 @@ end
 ---@field position Token|AstTokenNode|nil
 
 ---@class AstStatementBaseParams
----@field stat_elem ILLNode<nil,AstStatement>
 
 ---@param params AstStatementBaseParams
 local function stat_base(node, params)
   assert(node)
-  node.stat_elem = assert_params_field(params, "stat_elem")
   return node
 end
 
 ---@class AstExpressionBaseParams
----@field stat_elem ILLNode<nil,AstStatement>
 ---@field force_single_result boolean|nil
 ---@field src_paren_wrappers AstParenWrapper[]|nil
 
 ---@param params AstExpressionBaseParams
 local function expr_base(node, params)
   assert(node)
-  node.stat_elem = assert_params_field(params, "stat_elem")
   node.force_single_result = params.force_single_result or false
   node.src_paren_wrappers = params.src_paren_wrappers
   return node
@@ -68,7 +64,7 @@ end
 ---@param params AstScopeBaseParams
 local function scope_base(node, params)
   assert(node)
-  node.body = params.body or ill.new()
+  node.body = params.body or ill.new(true)
   node.body.scope = node.body.scope or node
   node.parent_scope = params.parent_scope
   node.child_scopes = params.child_scopes or {}
@@ -100,16 +96,17 @@ end
 -- special
 
 ---@class AstEnvScopeParams : AstScopeBaseParams
+---@field main AstMain
 
 ---@param params AstEnvScopeParams
 function nodes.new_env_scope(params)
   local node = new_node("env_scope")
   scope_base(node, params)
+  node.main = assert_params_field(params, "main")
   return node
 end
 
 ---@class AstFunctionDefParams : AstScopeBaseParams
----@field stat_elem ILLNode<nil,AstStatement>
 ---@field source string
 ---@field is_method boolean|nil
 ---@field func_protos AstFunctionDef[]|nil
@@ -129,7 +126,6 @@ end
 function nodes.new_functiondef(params)
   local node = new_node("functiondef")
   scope_base(node, params)
-  node.stat_elem = assert_params_field(params, "stat_elem")
   node.source = assert_params_field(params, "source")
   node.is_method = params.is_method or false
   node.func_protos = params.func_protos or {}

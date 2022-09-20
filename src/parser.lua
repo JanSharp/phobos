@@ -27,8 +27,7 @@ local err_pos_token
 ---only used by labels, it's simply just an extra node that's going to be added
 ---for 1 statement parse call. In other words: this is for when a statement has to
 ---add 2 nodes to the statement list instead of 1\
----**Important:** The extra_node cannot use `stat_elem` of any kind, so it's really just
----for special nodes like invalid nodes
+---this really just for special nodes like invalid nodes
 local extra_node
 
 local token_iter_state
@@ -237,13 +236,9 @@ local function stat_list(scope)
     elseif token.token_type == "return" then
       stop = true
     end
-    ast.append_stat(scope, function(stat_elem)
-      return statement(scope, stat_elem)
-    end)
+    ast.append_stat(scope, statement(scope))
     if extra_node then
-      ast.append_stat(scope, function()
-        return extra_node
-      end)
+      ast.append_stat(scope, extra_node)
       extra_node = nil
     end
     if stop then
@@ -257,10 +252,10 @@ end
 ---@return AstExpression
 ---@return AstTokenNode open_token @ `[` token
 ---@return AstTokenNode close_token @ `]` token
-local function index_expr(scope, stat_elem)
+local function index_expr(scope)
   local open_token = new_token_node()
   next_token()
-  local e = expr(scope, stat_elem)
+  local e = expr(scope)
   local close_token = assert_match(open_token, "]") or new_token_node(true)
   return e, open_token, close_token
 end
@@ -268,25 +263,24 @@ end
 --- Table Constructor record field
 ---@param scope AstScope
 ---@return AstRecordField
-local function rec_field(scope, stat_elem)
+local function rec_field(scope)
   local field = {type = "rec"}
   if token.token_type == "ident" then
     field.key = nodes.new_string{
-      stat_elem = stat_elem,
       position = token,
       value = token.value,
       src_is_ident = true,
     }
     next_token()
   else
-    field.key, field.key_open_token, field.key_close_token = index_expr(scope, stat_elem)
+    field.key, field.key_open_token, field.key_close_token = index_expr(scope)
   end
   field.eq_token = assert_next("=") or new_token_node(true)
   if is_invalid(field.eq_token) then
     -- value should never be nil
     field.value = prevent_assert
   else
-    field.value = expr(scope, stat_elem)
+    field.value = expr(scope)
   end
   return field
 end
@@ -294,26 +288,26 @@ end
 --- Table Constructor list field
 ---@param scope AstScope
 ---@return AstListField
-local function list_field(scope, stat_elem)
-  return {type = "list", value = expr(scope, stat_elem)}
+local function list_field(scope)
+  return {type = "list", value = expr(scope)}
 end
 
 --- Table Constructor field
 --- `field -> list_field | rec_field`
 ---@param scope AstScope
 ---@return AstField
-local function field(scope, stat_elem)
+local function field(scope)
   return (({
     ["ident"] = function()
       local peek_tok = peek_token()
       if peek_tok.token_type ~= "=" then
-        return list_field(scope, stat_elem)
+        return list_field(scope)
       else
-        return rec_field(scope, stat_elem)
+        return rec_field(scope)
       end
     end,
     ["["] = rec_field,
-  })[token.token_type] or list_field)(scope, stat_elem)
+  })[token.token_type] or list_field)(scope)
 end
 
 --- Table Constructor
@@ -321,15 +315,14 @@ end
 --- `sep -> ',' | ';'`
 ---@param scope AstScope
 ---@return AstConstructor
-local function constructor(scope, stat_elem)
+local function constructor(scope)
   local node = nodes.new_constructor{
-    stat_elem = stat_elem,
     open_token = new_token_node(),
     comma_tokens = {},
   }
   assert(assert_next("{") == nil, "Do not call 'constructor' if the current token is not '{'.")
   while token.token_type ~= "}" do
-    node.fields[#node.fields+1] = field(scope, stat_elem)
+    node.fields[#node.fields+1] = field(scope)
     if test_next(",") or test_next(";") then
       node.comma_tokens[#node.comma_tokens+1] = new_token_node(true)
     else
@@ -343,7 +336,7 @@ end
 --- Function Definition Parameter List
 ---@param scope AstFunctionDef
 ---@return AstLocalReference[]
-local function par_list(scope, stat_elem)
+local function par_list(scope)
   -- param_list -> [ param { ',' param } ]
   local params = {}
   if token.token_type == ")" then
@@ -352,7 +345,7 @@ local function par_list(scope, stat_elem)
   while true do
     if test_next("ident") then
       local param_def
-      param_def, params[#params+1] = ast.create_local(prev_token, scope, stat_elem)
+      param_def, params[#params+1] = ast.create_local(prev_token, scope)
       param_def.whole_block = true
       scope.locals[#scope.locals+1] = param_def
     elseif token.token_type == "..." then
@@ -380,7 +373,7 @@ end
 ---@param scope AstScope|AstFunctionDef
 ---@param is_method boolean Insert the extra first parameter `self`
 ---@return AstFunctionDef
-local function functiondef(function_token, scope, is_method, stat_elem)
+local function functiondef(function_token, scope, is_method)
   -- body -> `(` param_list `)`  block END
   local parent_functiondef = scope
   -- ---@narrow scope AstScope|AstFunctionDef
@@ -389,7 +382,6 @@ local function functiondef(function_token, scope, is_method, stat_elem)
   end
   -- ---@narrow scope AstFunctionDef
   local node = nodes.new_functiondef{
-    stat_elem = stat_elem,
     parent_scope = scope,
     source = source,
     is_method = is_method,
@@ -398,7 +390,7 @@ local function functiondef(function_token, scope, is_method, stat_elem)
   -- add to parent before potential early returns
   parent_functiondef.func_protos[#parent_functiondef.func_protos+1] = node
   if is_method then
-    local self_local = ast.create_local_def("self", node)
+    local self_local = ast.new_local_def("self", node)
     self_local.whole_block = true
     self_local.src_is_method_self = true
     node.locals[1] = self_local
@@ -408,7 +400,7 @@ local function functiondef(function_token, scope, is_method, stat_elem)
   if is_invalid(node.open_paren_token) then
     return node
   end
-  node.params = par_list(node, stat_elem)
+  node.params = par_list(node)
   -- if par list was invalid but the current token is `")"` then just continue
   -- because there is a good chance there merely was a trailing comma in the par list
   if node.params[1] and is_invalid(node.params[#node.params]) and token.token_type ~= ")" then
@@ -427,12 +419,12 @@ end
 ---@param scope AstScope
 ---@return AstExpression[] expression_list
 ---@return AstTokenNode[] comma_tokens @ length is `#expression_list - 1`
-local function exp_list(scope, stat_elem)
-  local el = {expr(scope, stat_elem)}
+local function exp_list(scope)
+  local el = {expr(scope)}
   local comma_tokens = {}
   while test_next(",") do
     comma_tokens[#comma_tokens+1] = new_token_node(true)
-    el[#el+1] = expr(scope, stat_elem)
+    el[#el+1] = expr(scope)
   end
   return el, comma_tokens
 end
@@ -441,7 +433,7 @@ end
 ---@param node AstCall
 ---@param scope AstScope
 ---@return AstExpression[]
-local function func_args(node, scope, stat_elem)
+local function func_args(node, scope)
   return (({
     ["("] = function()
       node.open_paren_token = new_token_node()
@@ -451,13 +443,12 @@ local function func_args(node, scope, stat_elem)
         next_token()
         return {}
       end
-      local el, comma_tokens = exp_list(scope, stat_elem)
+      local el, comma_tokens = exp_list(scope)
       node.close_paren_token = assert_match(node.open_paren_token, ")") or new_token_node(true)
       return el, comma_tokens
     end,
     ["string"] = function()
       local string_node = nodes.new_string{
-        stat_elem = stat_elem,
         position = token,
         value = token.value,
         src_is_block_str = token.src_is_block_str,
@@ -470,7 +461,7 @@ local function func_args(node, scope, stat_elem)
       return {string_node}, {}
     end,
     ["{"] = function()
-      return {(constructor(scope, stat_elem))}, {}
+      return {(constructor(scope))}, {}
     end,
   })[token.token_type] or function()
     return {syntax_error(new_error_code_inst{
@@ -489,7 +480,7 @@ end
 --- Primary Expression
 ---@param scope AstScope
 ---@return AstExpression
-local function primary_exp(scope, stat_elem)
+local function primary_exp(scope)
   if test_next("(") then
     local open_paren_token = new_token_node(true)
     --TODO: compact lambda here:
@@ -498,7 +489,7 @@ local function primary_exp(scope, stat_elem)
     --  followed by `,` is multiple args, finish list then `=> expr`
     --  followed by `)` `=>` is single arg, expect `expr_list`
     --  followed by `)` or anything else is expr of inner, current behavior
-    local ex = expr(scope, stat_elem)
+    local ex = expr(scope)
     local close_paren_token = assert_match(open_paren_token, ")") or new_token_node(true)
     ex.force_single_result = true
     local wrapper = {
@@ -515,7 +506,7 @@ local function primary_exp(scope, stat_elem)
     return ex
   elseif token.token_type == "ident" then
     local ident = assert_ident() -- can't be invalid
-    return ast.get_ref(scope, stat_elem, ident.value, ident)
+    return ast.get_ref(scope, nil, ident.value, ident)
   else
     if token.token_type == "invalid" then
       add_consumed_node(last_invalid_node, new_token_node())
@@ -533,19 +524,17 @@ local function primary_exp(scope, stat_elem)
   end
 end
 
-local function new_regular_call(ex, scope, stat_elem)
+local function new_regular_call(ex, scope)
   local node = nodes.new_call{
-    stat_elem = stat_elem,
     ex = ex,
   }
-  node.args, node.args_comma_tokens = func_args(node, scope, stat_elem)
+  node.args, node.args_comma_tokens = func_args(node, scope)
   return node
 end
 
 local suffixed_lut = {
-  ["."] = function(ex, scope, stat_elem)
+  ["."] = function(ex, scope)
     local node = nodes.new_index{
-      stat_elem = stat_elem,
       ex = ex,
       dot_token = new_token_node(),
       suffix = prevent_assert,
@@ -556,7 +545,6 @@ local suffixed_lut = {
       node.suffix = ident
     else
       node.suffix = nodes.new_string{
-        stat_elem = stat_elem,
         position = ident,
         value = ident.value,
         src_is_ident = true,
@@ -564,18 +552,16 @@ local suffixed_lut = {
     end
     return node
   end,
-  ["["] = function(ex, scope, stat_elem)
+  ["["] = function(ex, scope)
     local node = nodes.new_index{
-      stat_elem = stat_elem,
       ex = ex,
       suffix = prevent_assert,
     }
-    node.suffix, node.suffix_open_token, node.suffix_close_token = index_expr(scope, stat_elem)
+    node.suffix, node.suffix_open_token, node.suffix_close_token = index_expr(scope)
     return node
   end,
-  [":"] = function(ex, scope, stat_elem)
+  [":"] = function(ex, scope)
     local node = nodes.new_call{
-      stat_elem = stat_elem,
       is_selfcall = true,
       ex = ex,
       colon_token = new_token_node(),
@@ -591,13 +577,12 @@ local suffixed_lut = {
       end
     else
       node.suffix = nodes.new_string{
-        stat_elem = stat_elem,
         position = ident,
         value = ident.value,
         src_is_ident = true,
       }
     end
-    node.args, node.args_comma_tokens = func_args(node, scope, stat_elem)
+    node.args, node.args_comma_tokens = func_args(node, scope)
     return node
   end,
   ["("] = new_regular_call,
@@ -608,17 +593,17 @@ local suffixed_lut = {
 --- Suffixed Expression
 ---@param scope AstScope
 ---@return AstExpression
-local function suffixed_exp(scope, stat_elem)
+local function suffixed_exp(scope)
   -- suffixed_exp ->
   --   primary_exp { '.' NAME | '[' exp ']' | ':' NAME func_args | func_args }
   --TODO: safe chaining adds optional '?' in front of each suffix
-  local ex = primary_exp(scope, stat_elem)
+  local ex = primary_exp(scope)
   local should_break = false
   while ex.node_type ~= "invalid" do
     ex = ((suffixed_lut)[token.token_type] or function(ex)
       should_break = true
       return ex
-    end)(ex, scope, stat_elem)
+    end)(ex, scope)
     if should_break then
       break
     end
@@ -628,17 +613,15 @@ end
 
 ---value is set outside, for all of them
 local simple_lut = {
-  ["number"] = function(scope, stat_elem)
+  ["number"] = function(scope)
     return nodes.new_number{
-      stat_elem = stat_elem,
       position = token,
       value = token.value,
       src_value = token.src_value,
     }
   end,
-  ["string"] = function(scope, stat_elem)
+  ["string"] = function(scope)
     return nodes.new_string{
-      stat_elem = stat_elem,
       position = token,
       value = token.value,
       src_is_block_str = token.src_is_block_str,
@@ -648,27 +631,24 @@ local simple_lut = {
       src_pad = token.src_pad,
     }
   end,
-  ["nil"] = function(scope, stat_elem)
+  ["nil"] = function(scope)
     return nodes.new_nil{
-      stat_elem = stat_elem,
       position = token,
     }
   end,
-  ["true"] = function(scope, stat_elem)
+  ["true"] = function(scope)
     return nodes.new_boolean{
-      stat_elem = stat_elem,
       position = token,
       value = true,
     }
   end,
-  ["false"] = function(scope, stat_elem)
+  ["false"] = function(scope)
     return nodes.new_boolean{
-      stat_elem = stat_elem,
       position = token,
       value = false,
     }
   end,
-  ["..."] = function(scope, stat_elem)
+  ["..."] = function(scope)
     while scope.node_type ~= "functiondef" do
       scope = scope.parent_scope
     end
@@ -680,7 +660,6 @@ local simple_lut = {
       return invalid
     end
     return nodes.new_vararg{
-      stat_elem = stat_elem,
       position = token,
     }
   end,
@@ -690,24 +669,23 @@ local simple_lut = {
 ---can result in invalid nodes
 ---@param scope AstScope
 ---@return AstExpression
-local function simple_exp(scope, stat_elem)
+local function simple_exp(scope)
   -- simple_exp -> NUMBER | STRING | NIL | TRUE | FALSE | ... |
   --              constructor | FUNCTION body | suffixed_exp
   if simple_lut[token.token_type] then
-    local node = simple_lut[token.token_type](scope, stat_elem)
+    local node = simple_lut[token.token_type](scope)
     next_token() --consume it
     return node
   end
 
   if token.token_type == "{" then
-    return constructor(scope, stat_elem)
+    return constructor(scope)
   elseif test_next("function") then
     return nodes.new_func_proto{
-      stat_elem = stat_elem,
-      func_def = functiondef(new_token_node(true), scope, false, stat_elem),
+      func_def = functiondef(new_token_node(true), scope, false),
     }
   else
-    return suffixed_exp(scope, stat_elem)
+    return suffixed_exp(scope)
   end
 end
 
@@ -769,21 +747,20 @@ local binop_prio = {
 ---@param scope AstScope
 ---@return AstExpression completed
 ---@return string next_op
-local function sub_expr(limit, scope, stat_elem)
+local function sub_expr(limit, scope)
   local node
   do
     local prio = unop_prio[token.token_type]
     if prio then
       node = nodes.new_unop{
-        stat_elem = stat_elem,
         op = token.token_type,
         op_token = new_token_node(),
         ex = prevent_assert,
       }
       next_token() -- consume unop
-      node.ex = sub_expr(prio, scope, stat_elem)
+      node.ex = sub_expr(prio, scope)
     else
-      node = simple_exp(scope, stat_elem)
+      node = simple_exp(scope)
     end
   end
   local binop = token.token_type
@@ -792,7 +769,7 @@ local function sub_expr(limit, scope, stat_elem)
     local op_token = new_token_node()
     next_token() -- consume `binop`
     ---@type AstExpression|AstConcat
-    local right_node, next_op = sub_expr(prio.right, scope, stat_elem)
+    local right_node, next_op = sub_expr(prio.right, scope)
     if binop == ".." then
       if right_node.node_type == "concat" then
         -- needs to init before adding the node to the exp_list so that the
@@ -812,7 +789,6 @@ local function sub_expr(limit, scope, stat_elem)
       else
         local left_node = node
         node = nodes.new_concat{
-          stat_elem = stat_elem,
           exp_list = {left_node, right_node},
           op_tokens = {op_token},
         }
@@ -820,7 +796,6 @@ local function sub_expr(limit, scope, stat_elem)
     else
       local left_node = node
       node = nodes.new_binop{
-        stat_elem = stat_elem,
         left = left_node,
         op = binop,
         right = right_node,
@@ -836,8 +811,8 @@ end
 --- Expression
 ---@param scope AstScope
 ---@return AstExpression completed
-function expr(scope, stat_elem)
-  return (sub_expr(0, scope, stat_elem))
+function expr(scope)
+  return (sub_expr(0, scope))
 end
 
 --- Assignment Statement
@@ -845,7 +820,7 @@ end
 ---@param lhs_comma_tokens AstTokenNode[]
 ---@param scope AstScope
 ---@return AstAssignment
-local function assignment(lhs, lhs_comma_tokens, state_for_unexpected_expressions, scope, stat_elem)
+local function assignment(lhs, lhs_comma_tokens, state_for_unexpected_expressions, scope)
   if lhs[#lhs].force_single_result or lhs[#lhs].node_type == "call" then
     -- insert the syntax error at the correct location
     -- (so the order of syntax errors is in the same order as they appeared in the file)
@@ -860,25 +835,23 @@ local function assignment(lhs, lhs_comma_tokens, state_for_unexpected_expression
     lhs_comma_tokens[#lhs_comma_tokens+1] = new_token_node(true)
     local first_token = token
     local initial_error_code_insts_count = get_error_code_insts_count()
-    lhs[#lhs+1] = suffixed_exp(scope, stat_elem)
+    lhs[#lhs+1] = suffixed_exp(scope)
     -- TODO: disallow `(exp)` (so force single result expressions) and `exp()` (call expressions)
     return assignment(
       lhs,
       lhs_comma_tokens,
       {position = first_token, error_code_insts_count = initial_error_code_insts_count},
-      scope,
-      stat_elem
+      scope
     )
   else
     local invalid = assert_next("=")
     local node = nodes.new_assignment{
-      stat_elem = stat_elem,
       eq_token = invalid or new_token_node(true),
       lhs = lhs,
       lhs_comma_tokens = lhs_comma_tokens,
     }
     if not invalid then
-      node.rhs, node.rhs_comma_tokens = exp_list(scope, stat_elem)
+      node.rhs, node.rhs_comma_tokens = exp_list(scope)
     end
     return node
   end
@@ -887,7 +860,7 @@ end
 --- Label Statement
 ---@param scope AstScope
 ---@return AstLabel
-local function label_stat(scope, stat_elem)
+local function label_stat(scope)
   local open_token = new_token_node()
   next_token() -- skip "::"
   local name_token = new_token_node()
@@ -918,7 +891,6 @@ local function label_stat(scope, stat_elem)
   else
     -- storing the value both in `name` and `name_token.value`
     local node = nodes.new_label{
-      stat_elem = stat_elem,
       name = ident.value,
       open_token = open_token,
       name_token = name_token,
@@ -933,15 +905,14 @@ end
 --- `whilestat -> WHILE condition DO block END`
 ---@param scope AstScope
 ---@return AstWhileStat
-local function while_stat(scope, stat_elem)
+local function while_stat(scope)
   local node = nodes.new_whilestat{
-    stat_elem = stat_elem,
     parent_scope = scope,
     while_token = new_token_node(),
     condition = prevent_assert,
   }
   next_token() -- skip WHILE
-  node.condition = expr(node, stat_elem)
+  node.condition = expr(node)
   local invalid = assert_next("do")
   node.do_token = invalid or new_token_node(true)
   if invalid then
@@ -956,9 +927,8 @@ end
 --- `repeatstat -> REPEAT block UNTIL condition`
 ---@param scope AstScope
 ---@return AstRepeatStat
-local function repeat_stat(scope, stat_elem)
+local function repeat_stat(scope)
   local node = nodes.new_repeatstat{
-    stat_elem = stat_elem,
     parent_scope = scope,
     repeat_token = new_token_node(),
     condition = prevent_assert,
@@ -968,17 +938,7 @@ local function repeat_stat(scope, stat_elem)
   local invalid = assert_match(node.repeat_token, "until")
   node.until_token = invalid or new_token_node(true)
   if not invalid then
-    -- HACK: making a fake stat_elem that isn't actually in an ill [...]
-    -- this causes problems everywhere that is using the stat_elem of an expression,
-    -- since it is usually guaranteed that value, prev and next are all non-nil,
-    -- plus that the element actually exists in the ill and it's lookup
-    node.condition = expr(node, {
-      list = node.body,
-      value = nil,
-      index = 1/0,
-      prev = nil,
-      next = nil,
-    })
+    node.condition = expr(node)
   end
   return node
 end
@@ -988,15 +948,14 @@ end
 ---@param first_name AstTokenNode
 ---@param scope AstScope
 ---@return AstForNum
-local function for_num(first_name, scope, stat_elem)
+local function for_num(first_name, scope)
   -- TODO: check this when doing IL: the scope of this is wrong imo... but I'm not sure.
-  local var_local, var_ref = ast.create_local(first_name, scope, stat_elem)
+  local var_local, var_ref = ast.create_local(first_name, scope)
   var_local.whole_block = true
   -- currently the only place calling for_num is for_stat which will only call
   -- this function if the current token is '=', but we're handling invalid anyway
   local invalid = assert_next("=")
   local node = nodes.new_fornum{
-    stat_elem = stat_elem,
     parent_scope = scope,
     var = var_ref,
     locals = {var_local},
@@ -1007,17 +966,17 @@ local function for_num(first_name, scope, stat_elem)
   if invalid then
     return node, true
   end
-  node.start = expr(scope, stat_elem)
+  node.start = expr(scope)
   invalid = assert_next(",")
   node.first_comma_token = invalid or new_token_node(true)
   if invalid then
     return node, true
   end
-  node.stop = expr(scope, stat_elem)
+  node.stop = expr(scope)
   node.step = nil
   if test_next(",") then
     node.second_comma_token = new_token_node(true)
-    node.step = expr(scope, stat_elem)
+    node.step = expr(scope)
   end
   invalid = assert_next("do")
   node.do_token = invalid or new_token_node(true)
@@ -1033,12 +992,11 @@ end
 ---@param first_name AstTokenNode
 ---@param scope AstScope
 ---@return AstForList
-local function for_list(first_name, scope, stat_elem)
-  local name_local, name_ref = ast.create_local(first_name, scope, stat_elem)
+local function for_list(first_name, scope)
+  local name_local, name_ref = ast.create_local(first_name, scope)
   name_local.whole_block = true
   local name_list = {name_ref}
   local node = nodes.new_forlist{
-    stat_elem = stat_elem,
     parent_scope = scope,
     name_list = name_list,
     locals = {name_local},
@@ -1055,7 +1013,7 @@ local function for_list(first_name, scope, stat_elem)
         return node, true
       end
     else
-      node.locals[#node.locals+1], name_list[#name_list+1] = ast.create_local(ident, scope, stat_elem)
+      node.locals[#node.locals+1], name_list[#name_list+1] = ast.create_local(ident, scope)
       node.locals[#node.locals].whole_block = true
     end
   end
@@ -1064,7 +1022,7 @@ local function for_list(first_name, scope, stat_elem)
   if invalid then
     return node, true
   end
-  node.exp_list, node.exp_list_comma_tokens = exp_list(scope, stat_elem)
+  node.exp_list, node.exp_list_comma_tokens = exp_list(scope)
   invalid = assert_next("do")
   node.do_token = invalid or new_token_node(true)
   if invalid then
@@ -1078,7 +1036,7 @@ end
 --- `for_stat -> FOR (fornum | forlist) END`
 ---@param scope AstScope
 ---@return Token
-local function for_stat(scope, stat_elem)
+local function for_stat(scope)
   local for_token = new_token_node()
   next_token() -- skip FOR
   local first_ident = assert_ident()
@@ -1090,9 +1048,9 @@ local function for_stat(scope, stat_elem)
   local node
   local is_partially_invalid
   if t == "=" then
-    node, is_partially_invalid = for_num(first_ident, scope, stat_elem)
+    node, is_partially_invalid = for_num(first_ident, scope)
   elseif t == "," or t == "in" then
-    node, is_partially_invalid = for_list(first_ident, scope, stat_elem)
+    node, is_partially_invalid = for_list(first_ident, scope)
   else
     local invalid = syntax_error(new_error_code_inst{
       error_code = error_code_util.codes.expected_eq_comma_or_in,
@@ -1109,19 +1067,18 @@ local function for_stat(scope, stat_elem)
 end
 
 
-local function test_then_block(scope, stat_elem)
+local function test_then_block(scope)
   -- test_then_block -> [IF | ELSEIF] condition THEN block
   --TODO: [IF | ELSEIF] ( condition | name_list '=' exp_list  [';' condition] ) THEN block
   -- if first token is ident, and second is ',' or '=', use if-init, else original parse
   -- if no condition in if-init, first name/expr is used
   local node = nodes.new_testblock{
-    stat_elem = stat_elem,
     parent_scope = scope,
     if_token = new_token_node(),
     condition = prevent_assert,
   }
   next_token() -- skip IF or ELSEIF
-  node.condition = expr(node, stat_elem)
+  node.condition = expr(node)
   local invalid = assert_next("then")
   node.then_token = invalid or new_token_node(true)
   if invalid then
@@ -1131,24 +1088,22 @@ local function test_then_block(scope, stat_elem)
   return node
 end
 
-local function if_stat(scope, stat_elem)
+local function if_stat(scope)
   -- ifstat -> IF condition THEN block {ELSEIF condition THEN block} [ELSE block] END
   local ifs = {}
   local invalid = false
   repeat
-    ifs[#ifs+1], invalid = test_then_block(scope, stat_elem)
+    ifs[#ifs+1], invalid = test_then_block(scope)
   until token.token_type ~= "elseif" or invalid
   local elseblock
   if not invalid and test_next("else") then
     elseblock = nodes.new_elseblock{
-      stat_elem = stat_elem,
       parent_scope = scope,
       else_token = new_token_node(true),
     }
     stat_list(elseblock)
   end
   local node = nodes.new_ifstat{
-    stat_elem = stat_elem,
     ifs = ifs,
     elseblock = elseblock,
   }
@@ -1158,17 +1113,16 @@ local function if_stat(scope, stat_elem)
   return node
 end
 
-local function local_func(local_token, function_token, scope, stat_elem)
+local function local_func(local_token, function_token, scope)
   local ident = assert_ident()
   local name_local, name_ref
   if is_invalid(ident) then
     name_ref = ident
   else
-    name_local, name_ref = ast.create_local(ident, scope, stat_elem)
+    name_local, name_ref = ast.create_local(ident, scope)
     scope.locals[#scope.locals+1] = name_local
   end
   local node = nodes.new_localfunc{
-    stat_elem = stat_elem,
     name = name_ref,
     func_def = prevent_assert,
     local_token = local_token,
@@ -1177,14 +1131,13 @@ local function local_func(local_token, function_token, scope, stat_elem)
     name_local.start_at = node
     name_local.start_offset = 0
   end
-  node.func_def = functiondef(function_token, scope, false, stat_elem)
+  node.func_def = functiondef(function_token, scope, false)
   return node
 end
 
-local function local_stat(local_token, scope, stat_elem)
+local function local_stat(local_token, scope)
   -- stat -> LOCAL NAME {',' NAME} ['=' exp_list]
   local node = nodes.new_localstat{
-    stat_elem = stat_elem,
     local_token = local_token,
     lhs_comma_tokens = {},
   }
@@ -1202,7 +1155,7 @@ local function local_stat(local_token, scope, stat_elem)
       node.lhs[#node.lhs+1] = ident
       break
     else
-      local_defs[#local_defs+1], node.lhs[#node.lhs+1] = ast.create_local(ident, scope, stat_elem)
+      local_defs[#local_defs+1], node.lhs[#node.lhs+1] = ast.create_local(ident, scope)
       local_defs[#local_defs].start_at = node
       local_defs[#local_defs].start_offset = 1
     end
@@ -1210,7 +1163,7 @@ local function local_stat(local_token, scope, stat_elem)
   -- just continue even if it was invalid, because an '=' token would just be another syntax error
   if test_next("=") then
     node.eq_token = new_token_node(true)
-    node.rhs, node.rhs_comma_tokens = exp_list(scope, stat_elem)
+    node.rhs, node.rhs_comma_tokens = exp_list(scope)
   end
   -- add the locals after the expression list has been parsed
   for _, name_local in ipairs(local_defs) do
@@ -1222,57 +1175,55 @@ end
 ---@param scope AstScope
 ---@return boolean
 ---@return AstExpression|AstInvalidNode name
-local function func_name(scope, stat_elem)
+local function func_name(scope)
   -- func_name -> NAME {'.' NAME} [':' NAME]
 
   local ident = assert_ident()
   if is_invalid(ident) then
     return false, ident
   end
-  local name = ast.get_ref(scope, stat_elem, ident.value, ident)
+  local name = ast.get_ref(scope, nil, ident.value, ident)
 
   while token.token_type == "." do
-    name = suffixed_lut["."](name, scope, stat_elem)
+    name = suffixed_lut["."](name, scope)
   end
 
   if token.token_type == ":" then
-    name = suffixed_lut["."](name, scope, stat_elem)
+    name = suffixed_lut["."](name, scope)
     return true, name
   end
 
   return false, name
 end
 
-local function func_stat(scope, stat_elem)
+local function func_stat(scope)
   -- funcstat -> FUNCTION func_name body
   local function_token = new_token_node()
   next_token() -- skip FUNCTION
-  local is_method, name = func_name(scope, stat_elem)
+  local is_method, name = func_name(scope)
   if is_invalid(name) then
     -- using table.insert?! disgusting!! but we have to put the token first
     table.insert(name.consumed_nodes, 1, function_token)
     return name
   end
   return nodes.new_funcstat{
-    stat_elem = stat_elem,
     name = name,
-    func_def = functiondef(function_token, scope, is_method, stat_elem),
+    func_def = functiondef(function_token, scope, is_method),
   }
 end
 
-local function expr_stat(scope, stat_elem)
+local function expr_stat(scope)
   -- stat -> func | assignment
   local first_token = token
   local initial_error_code_insts_count = get_error_code_insts_count()
-  local first_exp = suffixed_exp(scope, stat_elem)
+  local first_exp = suffixed_exp(scope)
   if token.token_type == "=" or token.token_type == "," then
     -- stat -> assignment
     return assignment(
       {first_exp},
       {},
       {position = first_token, error_code_insts_count = initial_error_code_insts_count},
-      scope,
-      stat_elem
+      scope
     )
   else
     -- stat -> func
@@ -1297,10 +1248,9 @@ local function expr_stat(scope, stat_elem)
   end
 end
 
-local function retstat(scope, stat_elem)
+local function retstat(scope)
   -- stat -> RETURN [exp_list] [';']
   local this_node = nodes.new_retstat{
-    stat_elem = stat_elem,
     return_token = new_token_node(),
   }
   next_token() -- skip "return"
@@ -1309,7 +1259,7 @@ local function retstat(scope, stat_elem)
   elseif token.token_type == ";" then
     -- also return no values
   else
-    this_node.exp_list, this_node.exp_list_comma_tokens = exp_list(scope, stat_elem)
+    this_node.exp_list, this_node.exp_list_comma_tokens = exp_list(scope)
   end
   if test_next(";") then
     this_node.semi_colon_token = new_token_node(true)
@@ -1318,23 +1268,21 @@ local function retstat(scope, stat_elem)
 end
 
 local statement_lut = {
-  [";"] = function(scope, stat_elem) -- stat -> ';' (empty statement)
+  [";"] = function(scope) -- stat -> ';' (empty statement)
     local node = nodes.new_empty{
-      stat_elem = stat_elem,
       semi_colon_token = new_token_node(),
     }
     next_token() -- skip
     return node
   end,
-  ["if"] = function(scope, stat_elem) -- stat -> ifstat
-    return if_stat(scope, stat_elem)
+  ["if"] = function(scope) -- stat -> ifstat
+    return if_stat(scope)
   end,
-  ["while"] = function(scope, stat_elem) -- stat -> whilestat
-    return while_stat(scope, stat_elem)
+  ["while"] = function(scope) -- stat -> whilestat
+    return while_stat(scope)
   end,
-  ["do"] = function(scope, stat_elem) -- stat -> DO block END
+  ["do"] = function(scope) -- stat -> DO block END
     local node = nodes.new_dostat{
-      stat_elem = stat_elem,
       parent_scope = scope,
       do_token = new_token_node(),
     }
@@ -1343,40 +1291,39 @@ local statement_lut = {
     node.end_token = assert_match(node.do_token, "end") or new_token_node(true)
     return node
   end,
-  ["for"] = function(scope, stat_elem) -- stat -> for_stat
-    return for_stat(scope, stat_elem)
+  ["for"] = function(scope) -- stat -> for_stat
+    return for_stat(scope)
   end,
-  ["repeat"] = function(scope, stat_elem) -- stat -> repeatstat
-    return repeat_stat(scope, stat_elem)
+  ["repeat"] = function(scope) -- stat -> repeatstat
+    return repeat_stat(scope)
   end,
-  ["function"] = function(scope, stat_elem) -- stat -> funcstat
-    return func_stat(scope, stat_elem)
+  ["function"] = function(scope) -- stat -> funcstat
+    return func_stat(scope)
   end,
-  ["local"] = function(scope, stat_elem) -- stat -> localstat
+  ["local"] = function(scope) -- stat -> localstat
     local local_token_node = new_token_node()
     next_token() -- skip "local"
     if test_next("function") then
-      return local_func(local_token_node, new_token_node(true), scope, stat_elem)
+      return local_func(local_token_node, new_token_node(true), scope)
     else
-      return local_stat(local_token_node, scope, stat_elem)
+      return local_stat(local_token_node, scope)
     end
   end,
-  ["::"] = function(scope, stat_elem) -- stat -> label
-    return label_stat(scope, stat_elem)
+  ["::"] = function(scope) -- stat -> label
+    return label_stat(scope)
   end,
-  ["return"] = function(scope, stat_elem) -- stat -> retstat
-    return retstat(scope, stat_elem)
+  ["return"] = function(scope) -- stat -> retstat
+    return retstat(scope)
   end,
 
-  ["break"] = function(scope, stat_elem) -- stat -> breakstat
+  ["break"] = function(scope) -- stat -> breakstat
     local this_tok = nodes.new_breakstat{
-      stat_elem = stat_elem,
       break_token = new_token_node(),
     }
     next_token() -- skip BREAK
     return this_tok
   end,
-  ["goto"] = function(scope, stat_elem) -- stat -> 'goto' NAME
+  ["goto"] = function(scope) -- stat -> 'goto' NAME
     local goto_token = new_token_node()
     next_token() -- skip GOTO
     local name_token = new_token_node()
@@ -1387,7 +1334,6 @@ local statement_lut = {
     else
       -- storing the value both in `target_name` and `target_token.value`
       return nodes.new_gotostat{
-        stat_elem = stat_elem,
         goto_token = goto_token,
         target_name = target_ident.value,
         target_token = name_token,
@@ -1395,8 +1341,8 @@ local statement_lut = {
     end
   end,
 }
-function statement(scope, stat_elem)
-  return (statement_lut[token.token_type] or expr_stat)(scope, stat_elem)
+function statement(scope)
+  return (statement_lut[token.token_type] or expr_stat)(scope)
 end
 
 
@@ -1406,13 +1352,11 @@ local function main_func()
   -- this will only fail either if there previously were syntax errors or an early return
   local invalid = assert_next("eof")
   if invalid then
-    ast.append_stat(main, function() return invalid end)
+    ast.append_stat(main, invalid)
     -- continue parsing the rest of the file as if it's part of the main body
     -- because the main body is the highest scope we got
     while not test_next("eof") do
-      ast.append_stat(main, function(stat_elem_2)
-        return statement(main, stat_elem_2)
-      end)
+      ast.append_stat(main, statement(main))
     end
   end
   main.eof_token = new_token_node()

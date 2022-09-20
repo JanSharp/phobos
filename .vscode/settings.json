@@ -51,6 +51,7 @@
     "funcs",
     "funcstat",
     "functiondef",
+    "functiondefs",
     "getmetatable",
     "gettabup",
     "getupval",

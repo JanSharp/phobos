@@ -18,13 +18,22 @@ local index_spacing = 2 ^ 4
 local ill = {}
 
 local function new_node(list, value, index, prev, next)
-  return {
-    list = list,
-    value = value,
-    index = index,
-    prev = prev,
-    next = next,
-  }
+  if list.intrusive then
+    value = value or {}
+    value.list = list
+    value.index = index
+    value.prev = prev
+    value.next = next
+    return value
+  else
+    return {
+      list = list,
+      value = value,
+      index = index,
+      prev = prev,
+      next = next,
+    }
+  end
 end
 
 local function re_index(self)
@@ -152,8 +161,9 @@ end
 ---@field last ILLNode|nil
 ---@field lookup table<integer, ILLNode> @ indexed by `ILLNode.index`
 
-function ill.new()
+function ill.new(intrusive)
   return {
+    intrusive = intrusive or false,
     count = 0,
     first = nil,
     last = nil,

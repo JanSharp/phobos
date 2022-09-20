@@ -337,7 +337,6 @@ local function generate_expr_list(expr_list, func, num_results, regs, allow_ptrs
   if num_results > 0 and num_expr == 0 then
     -- it wants results but there are no expressions to generate, so just generate nil
     generate_expr(nodes.new_nil{
-      stat_elem = prevent_assert,
       position = get_last_used_position(func),
     }, func, num_results, regs)
     return
@@ -645,7 +644,6 @@ do
         assert(regs)
         regs[#regs+1] = reg
         exprs["nil"](nodes.new_nil{
-          stat_elem = prevent_assert,
           position = get_last_used_position(func),
         }, func, num_results - 1, regs)
       elseif regs then
@@ -674,7 +672,7 @@ end
 local function generate_scope(scope, func)
   local stat = scope.body.first
   while stat do
-    generate_stat(stat.value, func)
+    generate_stat(stat, func)
     stat = stat.next
   end
 end
@@ -745,7 +743,6 @@ do
       local index_reg = generate_expr(stat.start, func)
       local limit_reg = generate_expr(stat.stop, func)
       local step_reg = generate_expr(stat.step or nodes.new_number{
-        stat_elem = prevent_assert,
         value = 1,
         position = get_last_used_position(func)
       }, func)
@@ -899,11 +896,9 @@ do
     end,
     ["funcstat"] = function(stat, func)
       generate_stat(nodes.new_assignment{
-        stat_elem = prevent_assert,
         lhs = {stat.name},
         rhs = {
           nodes.new_func_proto{
-            stat_elem = prevent_assert,
             func_def = stat.func_def,
           },
         },
@@ -912,7 +907,6 @@ do
     ["localstat"] = function(stat, func)
       local regs = {}
       generate_expr_list(stat.rhs or {nodes.new_nil{
-        stat_elem = prevent_assert,
         position = stat.lhs[1],
       }}, func, #stat.lhs, regs)
       for i, local_ref in ipairs(stat.lhs) do

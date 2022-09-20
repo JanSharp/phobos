@@ -264,10 +264,10 @@ do
     if pre_block then
       pre_block()
     end
-    local elem = scope.body.first
-    while elem do
-      generate_statement(elem.value,func)
-      elem = elem.next
+    local stat = scope.body.first
+    while stat do
+      generate_statement(stat, func)
+      stat = stat.next
     end
     if post_block then
       post_block()
@@ -1810,7 +1810,7 @@ do
     -- TODO: temp until it can be determined if the end of the function is reachable
     do
       local position = functiondef.body.last
-        and ast.get_main_position(functiondef.body.last.value)
+        and ast.get_main_position(functiondef.body.last)
       local line = get_last_used_line(func)
       if line and position and position.line > line then
         line = position.line

@@ -172,7 +172,7 @@ local on_open = {
 }
 
 local function create_inline_iife(main)
-  ast_walker.walk_scope(main, {on_open = on_open})
+  ast_walker.walk_scope(main, ast_walker.new_context(on_open, nil))
 end
 
 return create_inline_iife
