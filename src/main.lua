@@ -4,7 +4,7 @@ local very_start_time = os.clock()
 ---@type LFS
 local lfs = require("lfs")
 local Path = require("lib.LuaPath.path")
-Path.use_forward_slash_as_main_separator_on_windows()
+Path.set_main_separator("/")
 local arg_parser = require("lib.LuaArgParser.arg_parser")
 arg_parser.register_type(Path.arg_parser_path_type_def)
 local build_profile_arg_provider = require("build_profile_arg_provider")
@@ -189,6 +189,8 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
   },
 }, {label_length = 80 - 4 - 2 - 50})
 if not args then return end
+---@cast args -?
+if args.help then return end
 
 if args.version then
   print_version()

@@ -1,4 +1,6 @@
 
+local util = require("util")
+
 ---every `index_spacing`-th index will be used when prepending, appending or re-indexing\
 ---leaving a gap of `index_spacing - 1`\
 ---should always be a **power of 2** to create nicely split-able gaps\
@@ -20,6 +22,9 @@ local ill = {}
 local function new_node(list, value, index, prev, next)
   if list.intrusive then
     value = value or {}
+    if value.list then
+      util.debug_abort("Attempt to add the same table to some intrusive list multiple times.")
+    end
     value.list = list
     value.index = index
     value.prev = prev

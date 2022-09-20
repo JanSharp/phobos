@@ -8,84 +8,6 @@ local keywords = util.invert{
   "while", "goto",
 }
 
----@alias TokenType
----| '"blank"'
----| '"comment"'
----| '"string"'
----| '"number"'
----| '"ident"' @ identifier
----| '"eof"' @ not created in the tokenizer, but created and used by the parser
----| '"invalid"'
----
----| '"+"'
----| '"*"'
----| '"/"'
----| '"%"'
----| '"^"'
----| '"#"'
----| '";"'
----| '","'
----| '"("'
----| '")"'
----| '"{"'
----| '"}"'
----| '"]"'
----| '"["'
----| '"<"'
----| '"<="'
----| '"="'
----| '"=="'
----| '">"'
----| '">="'
----| '"-"'
----| '"~="'
----| '"::"'
----| '":"'
----| '"..."'
----| '".."'
----| '"."'
----keywords:
----| '"and"'
----| '"break"'
----| '"do"'
----| '"else"'
----| '"elseif"'
----| '"end"'
----| '"false"'
----| '"for"'
----| '"function"'
----| '"if"'
----| '"in"'
----| '"local"'
----| '"nil"'
----| '"not"'
----| '"or"'
----| '"repeat"'
----| '"return"'
----| '"then"'
----| '"true"'
----| '"until"'
----| '"while"'
----| '"goto"'
-
----@class Token
----@field token_type TokenType
----@field index number
----@field line number
----@field column number
----for `blank`, `comment`, `string`, `number`, `ident` and `invalid` tokens\
----"blank" tokens shall never contain `\n` in the middle of their value\
----"comment" tokens with `not src_is_block_str` do not contain trailing `\n`
----@field value string|number
----@field src_is_block_str boolean @ for `string` and `comment` tokens
----@field src_quote string @ for non block `string` tokens
----@field src_value string @ for non block `string` and `number` tokens
----@field src_has_leading_newline boolean @ for block `string` and `comment` tokens
----@field src_pad string @ the `=` chain for block `string` and `comment` tokens
----@field leading Token[] @ `blank` and `comment` tokens before this token. Set and used by the parser
----for `invalid` tokens
----@field error_code_insts ErrorCodeInstance[]
-
 ---@param token_type TokenType
 ---@param index number
 ---@param line number
@@ -106,9 +28,9 @@ local function add_error_code_inst(token, inst)
 end
 
 ---@param str string
----@param index number
+---@param index integer
 ---@param next_char string
----@return number
+---@return integer
 ---@return Token
 local function peek_equals(str,index,next_char,line,column)
   if str:sub(index+1,index+1) == "=" then
@@ -140,6 +62,12 @@ local escape_sequence_lut = {
   -- ["\r"] = "\r", ["\n"] = "\n", -- \r and \n are handled separately
 }
 
+---@param str string
+---@param index integer
+---@param quote "\""|"'"
+---@param state TokenizeState
+---@return integer
+---@return Token
 local function read_string(str,index,quote,state)
   local token = new_token("string",index,state.line,index - state.line_offset)
 
@@ -285,6 +213,11 @@ end
 
 local block_string_open_bracket_pattern = "^%[(=*)%["
 
+---@param str string
+---@param index integer
+---@param state TokenizeState
+---@return integer
+---@return Token
 local function read_block_string(str,index,state)
   local _,open_end,pad = str:find(block_string_open_bracket_pattern,index)
   if not pad then
@@ -348,71 +281,75 @@ local function read_block_string(str,index,state)
   end
 end
 
--- TODO: remove code duplication and double check if this can really read all formats of numbers
-local function try_read_number(str, index, state)
-  -- hex numbers: "0x%x*" followed by "%.%x+" followed by "[pP][+-]?%x+"
-  local hex_start,hex_end = str:find("^0[xX]%x*",index) -- "integer part"
-  if hex_start then
-    -- this basically means %x* didn't match anything
-    local omitted_integer_part = hex_start + 1 == hex_end
-    local _,fractional_end = str:find("^%.%x+",hex_end+1)
-    if fractional_end then
-      hex_end = fractional_end
-    elseif omitted_integer_part then
-      -- this actually only ever happens if the number is just 0x or 0X
-      local token = new_token("invalid",index,state.line,index - state.line_offset)
-      token.value = str:sub(hex_start,hex_end)
-      add_error_code_inst(token, error_code_util.new_error_code{
-        error_code = error_code_util.codes.malformed_number,
-        message_args = {token.value},
-        source = state.source,
-        -- start at the first char of the number
-        start_position = {line = state.line, column = hex_start - state.line_offset},
-        -- stop at the last char of the number
-        stop_position = {line = state.line, column = hex_end - state.line_offset},
-      })
-      return hex_end+1,token
-    else
-      -- consume trailing dot
-      _, fractional_end = str:find("^%.", hex_end + 1)
-      hex_end = fractional_end or hex_end
-    end
-    local exponent_start,exponent_end = str:find("^[pP][%-%+]?%x+",hex_end+1)
-    if exponent_start then
-      hex_end = exponent_end
-    end
-    local token = new_token("number",index,state.line,index - state.line_offset)
-    token.src_value = str:sub(hex_start,hex_end)
-    token.value = tonumber(token.src_value)
-    return hex_end+1,token
-  end
-
+---cSpell:ignore strtod
+-- just like Lua, using C99 the `strtod` format (https://en.cppreference.com/w/c/string/byte/strtof)
+-- except that the leading + and - are not allowed as well as nan and inf
+local function try_read_number_part(str, index, state, num_pattern, start_prefix, exponent_prefix)
   -- decimal numbers: "%d*" followed by "%.%d+" followed by "[eE][+-]?%d+"
-  local num_start,num_end = str:find("^%d*",index) -- "integer part"
+  -- "integer part"
+  local num_start,num_end,middle_pos = str:find("^"..start_prefix.."()"..num_pattern.."*",index)
   if num_start then
-    -- this basically means %d* didn't match anything
-    local omitted_integer_part = num_start > num_end
-    local _,fractional_end = str:find("^%.%d+",num_end+1)
+    -- this basically means `num_pattern*` didn't match anything
+    local omitted_integer_part = middle_pos > num_end
+    local _,fractional_end = str:find("^%."..num_pattern.."+",num_end+1)
     if fractional_end then
       num_end = fractional_end
     elseif omitted_integer_part then
-      return
+      return false
     else
       -- consume trailing dot
       _, fractional_end = str:find("^%.", num_end + 1)
       num_end = fractional_end or num_end
     end
-    local exponent_start,exponent_end = str:find("^[eE][%-%+]?%d+",num_end+1)
+    local exponent_start,exponent_end = str:find("^"..exponent_prefix.."[%-%+]?"..num_pattern.."+",num_end+1)
     if exponent_start then
       num_end = exponent_end
     end
     local token = new_token("number",index,state.line,index - state.line_offset)
     token.src_value = str:sub(num_start,num_end)
-    token.value = tonumber(token.src_value)
-    return num_end+1,token
+    token.value = tonumber(token.src_value)--[[@as number]]
+    return true, num_end+1,token
   end
 end
 
+---@param str string
+---@param index integer
+---@param state TokenizeState
+---@return integer?
+---@return Token?
+local function try_read_number(str, index, state)
+  local success, result_end, token = try_read_number_part(str, index, state, "%x", "0[xX]", "[pP]")
+  if success then
+    return result_end, token
+  end
+  if success == false then
+    -- this actually only ever happens if the number is just 0x or 0X
+    result_end = index + 1
+    token = new_token("invalid",index,state.line,index - state.line_offset)
+    token.value = str:sub(index, result_end)
+    add_error_code_inst(token, error_code_util.new_error_code{
+      error_code = error_code_util.codes.malformed_number,
+      message_args = {token.value},
+      source = state.source,
+      -- start at the first char of the number
+      start_position = {line = state.line, column = index - state.line_offset},
+      -- stop at the last char of the number
+      stop_position = {line = state.line, column = result_end - state.line_offset},
+    })
+    return result_end + 1, token
+  end
+
+  success, result_end, token = try_read_number_part(str, index, state, "%d", "", "[eE]")
+  if success then
+    return result_end, token
+  end
+end
+
+---@param invalid_char string
+---@param index integer
+---@param state TokenizeState
+---@return integer
+---@return Token
 local function simple_invalid_token(invalid_char, index, state)
   local token = new_token("invalid",index,state.line,index - state.line_offset)
   token.value = invalid_char
@@ -427,9 +364,9 @@ local function simple_invalid_token(invalid_char, index, state)
 end
 
 ---@param state TokenizeState
----@param index number
----@return number
----@return Token
+---@param index integer
+---@return integer?
+---@return Token?
 local function next_token(state,index)
   if not index then index = 1 end
   local str = state.str
@@ -534,6 +471,7 @@ end
 
 ---@class TokenizeState
 ---@field str string
+---@field source string
 ---@field line integer
 ---@field line_offset integer @ the exact index of the last newline
 ---@field prev_line integer|nil
@@ -545,7 +483,7 @@ end
 ---@param source? string @ if provided it is used for the `source` field of error code instances
 ---@return fun(state: TokenizeState, index: integer|nil): integer|nil, Token next_token
 ---@return TokenizeState state
----@return number|nil index
+---@return integer? index
 local function tokenize(str, source)
   local index
   local state = {

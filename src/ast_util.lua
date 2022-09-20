@@ -2,24 +2,16 @@
 local util = require("util")
 local nodes = require("nodes")
 local ill = require("indexed_linked_list")
+local stack = require("stack")
 
 local ast = {}
 
+---returns `(1/0)` if the local definition doesn't have a `start_at` field yet\
+---only really relevant when parsing localfunc, since references can be resolved
+---to the local before the statement has finished parsing
 function ast.get_start_index(local_def)
-  return local_def.start_at.index + local_def.start_offset
+  return local_def.start_at and (local_def.start_at.index + local_def.start_offset) or (1/0)
 end
-
--- -- TODO: docs
--- function ast.get_statement(node)
---   if node.node_type == "functiondef" then
---     if node.is_main or node.parent_statement.node_type == "repeatstat" then
---       return nil
---     end
---     return node.parent_statement
---   else
---     return node
---   end
--- end
 
 -- -- TODO: docs
 -- function ast.get_stat_index(stat)
@@ -42,10 +34,10 @@ end
 ---@return AstLocalDef def
 ---@return AstLocalReference ref
 function ast.create_local(ident_token, scope)
-  local local_def = ast.new_local_def(ident_token.value, scope)
+  local local_def = ast.new_local_def(ident_token.value--[[@as string]], scope)
   local ref = nodes.new_local_ref{
     position = ident_token,
-    name = ident_token.value,
+    name = ident_token.value--[[@as string]],
     reference_def = local_def,
   }
   local_def.refs[#local_def.refs+1] = ref
@@ -74,9 +66,17 @@ end
 do
   ---@param scope AstScope|AstFunctionDef
   ---@param name string
-  ---@param in_scope_at_index number
   ---@return AstLocalDef|AstUpvalDef|nil
-  local function try_get_def(scope, name, in_scope_at_index)
+  local function try_get_def(scope, stat_stack, name)
+    local current_stat
+    local in_scope_at_index
+    if stat_stack and not stack.is_empty(stat_stack) then
+      current_stat = stack.get_top(stat_stack)
+      in_scope_at_index = current_stat.index
+    else
+      in_scope_at_index = (1/0)
+    end
+
     local found_local_def
     local found_start_index
     for i = #scope.locals, 1, -1 do
@@ -85,8 +85,7 @@ do
         if local_def.whole_block then
           found_local_def = found_local_def or local_def
         else
-          -- HACK: this should check for the existence of a statement stack instead of in_scope_at_index
-          local start_index = in_scope_at_index == (1/0) and 0 or ast.get_start_index(local_def)
+          local start_index = ast.get_start_index(local_def)
           if start_index <= in_scope_at_index
             and ((not found_start_index) or start_index > found_start_index)
           then
@@ -110,7 +109,9 @@ do
 
     if scope.node_type ~= "env_scope" then
       assert(scope.parent_scope)
-      local def = try_get_def(scope.parent_scope, name, 1/0)
+      if current_stat then stack.pop() end
+      local def = try_get_def(scope.parent_scope, stat_stack, name)
+      if current_stat then stack.push(stat_stack, current_stat) end
       if def then
         if scope.upvals then
           return ast.create_upval_def(def, scope)
@@ -121,19 +122,20 @@ do
     end
   end
 
-  ---@param scope AstScope
-  ---@param statement AstStatement @
-  ---used to determine at which point the given name has to be in scope within the given scope
-  ---when `nil` it is assumed to be at the end of the given scope
+  ---The top of `stat_stack` is the statement within the `target_scope`\
+  ---The second-top one is the statement within the `target_scope.parent_scope`\
+  ---and so on
+  ---@param target_scope AstScope
+  ---@param stat_stack? AstStatement[] @ `nil` means "at the end of all scopes"
   ---@param name string
   ---@param node_for_position? AstNode
-  ---@return AstUpvalReference|AstLocalReference
-  function ast.get_ref(scope, statement, name, node_for_position) -- TODO: remove statement?
+  ---@return AstLocalReference|AstUpvalReference
+  function ast.resolve_ref(target_scope, stat_stack, name, node_for_position)
     node_for_position = node_for_position or {}
-    local def = try_get_def(scope, name, statement and statement.index or (1/0))
+    local def = try_get_def(target_scope, stat_stack, name)
     if def then
       -- `local_ref` or `upval_ref`
-      local ref = (def.def_type == "local" and nodes.new_local_ref or nodes.new_upval_ref){
+      local ref = (def.def_type == "local" and nodes.new_local_ref or nodes.new_upval_ref)--[[@as (fun(params: AstLocalReferenceParams):AstLocalReference)|(fun(params: AstUpvalReferenceParams):AstUpvalReference)]]{
         name = name,
         reference_def = def,
       }
@@ -149,12 +151,22 @@ do
     nodes.set_position(suffix, node_for_position)
 
     local node = nodes.new_index{
-      ex = ast.get_ref(scope, statement, "_ENV", node_for_position),
+      ex = ast.resolve_ref(target_scope, stat_stack, "_ENV", node_for_position),
       suffix = suffix,
       src_ex_did_not_exist = true,
     }
 
     return node
+  end
+
+  ---@param ast_walker_context AstWalkerContext
+  function ast.resolve_ref_with_context(ast_walker_context, name, node_for_position)
+    local scope = stack.get_top(ast_walker_context.scope_stack)
+    return ast.resolve_ref(scope, ast_walker_context.stat_stack, name, node_for_position)
+  end
+
+  function ast.resolve_ref_at_end(target_scope, name, node_for_position)
+    return ast.resolve_ref(target_scope, nil, name, node_for_position)
   end
 end
 
@@ -227,7 +239,7 @@ function ast.get_functiondef(scope)
 end
 
 function ast.new_main(source)
-  local env_scope = nodes.new_env_scope{main = true} -- prevent assert
+  local env_scope = nodes.new_env_scope{main = (true)--[[@as AstMain]]} -- prevent assert
   -- Lua emits _ENV as if it's a local in the parent scope
   -- of the file. I'll probably change this one day to be
   -- the first upval of the parent scope, since load()
@@ -280,6 +292,7 @@ end
 
 local get_main_position
 do
+  ---@type table<AstNode, fun(node: AstNode):Position>
   local getter_lut = {
     ["env_scope"] = function(node)
       error("node_type 'env_scope' is purely fake and therefore has no main position")
@@ -407,6 +420,8 @@ do
       return node.body.first and get_main_position(node.body.first.value)
     end,
   }
+  ---@param node AstNode
+  ---@return Position
   function ast.get_main_position(node)
     return getter_lut[node.node_type](node)
   end

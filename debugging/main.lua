@@ -4,7 +4,7 @@ local disassembler = require("disassembler")
 ---@type LFS
 local lfs = require("lfs")
 local Path = require("lib.LuaPath.path")
-Path.use_forward_slash_as_main_separator_on_windows()
+Path.set_main_separator("/")
 local error_code_util = require("error_code_util")
 
 local unsafe = true
@@ -208,7 +208,7 @@ local function compile(filename)
 
     success, err = pcall(require("jump_linker"), main)
     if not success then print(err) goto finish end
-    if err[1] then
+    if err--[[@as table]][1] then
       error(error_code_util.get_message_for_list(err, "syntax errors"))
     end
 

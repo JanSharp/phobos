@@ -59,6 +59,8 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
   },
 })
 if not args then return end
+---@cast args -?
+if args.help then return end
 
 local Path = require("lib.LuaPath.path")
 if not Path.new("temp"):exists() then
@@ -129,15 +131,9 @@ local function compile(filename)
   local text = file:read("*a")
   file:close()
 
-  local ast, invalid_nodes = parser(text, "@"..filename)
-  if invalid_nodes[1] then
-    local msgs = {}
-    for i, invalid_node in ipairs(invalid_nodes) do
-      msgs[i] = error_code_util.get_message(invalid_node.error_code_inst)
-    end
-    error((#invalid_nodes).." syntax errors in "
-      ..filename..":\n"..table.concat(msgs, "\n")
-    )
+  local ast, errors = parser(text, "@"..filename)
+  if errors[1] then
+    error(error_code_util.get_message_for_list(errors, "syntax errors in "..filename))
   end
 
   if args.test_formatter then

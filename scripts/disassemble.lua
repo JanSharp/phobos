@@ -5,7 +5,7 @@ local disassembler = require("disassembler")
 ---@type LFS
 local lfs = require("lfs")
 local Path = require("lib.LuaPath.path")
-Path.use_forward_slash_as_main_separator_on_windows()
+Path.set_main_separator("/")
 local constants = require("constants")
 
 if not Path.new("temp"):exists() then
