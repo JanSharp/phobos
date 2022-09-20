@@ -26,6 +26,7 @@
     "**/serpent.lua",
     "LICENSE.txt",
     "LICENSE_THIRD_PARTY.txt",
+    "debugging/minimal-no-base-mod",
   ],
   "cSpell.words": [
     "binop",
