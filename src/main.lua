@@ -190,6 +190,7 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
 }, {label_length = 80 - 4 - 2 - 50})
 if not args then return end
 ---@cast args -?
+if args.help then return end
 
 if args.version then
   print_version()

@@ -25,6 +25,8 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
   },
 })
 if not args then return end
+---@cast args -?
+if args.help then return end
 
 loadfile(assert(package.searchpath("main", package.path)))(table.unpack{
   "--source", "src",
