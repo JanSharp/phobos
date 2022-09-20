@@ -1,27 +1,47 @@
 
 local ill = require("indexed_linked_list")
+local stack = require("stack")
 
-local function dispatch(listeners, node, is_statement, context, list_elem)
+local function dispatch(listeners, node, context, is_statement)
   if listeners and listeners[node.node_type] then
-    listeners[node.node_type](node, context, is_statement, list_elem)
+    listeners[node.node_type](node, context, is_statement)
   end
 end
 
+---@class AstWalkerContext
+---called before walking a node
+---@field on_open fun(node: AstNode, context: AstWalkerContext, is_statement: boolean)|nil
+---called after walking a node
+---@field on_close fun(node: AstNode, context: AstWalkerContext, is_statement: boolean)|nil
+---@field node_stack AstNode[]
+---@field stat_stack AstStatement[]
+---@field scope_stack AstScope[]
+
+local function new_context(on_open, on_close)
+  return {
+    on_open = on_open,
+    on_close = on_close,
+    node_stack = stack.new_stack(),
+    stat_stack = stack.new_stack(),
+    scope_stack = stack.new_stack(),
+  }
+end
+
 local walk_stat
-local walk_scope
+local walk_scope_internal
 
 local walk_exp
 local walk_exp_list
 
 ---@param node AstCall
-local function call(node, context)
+local function walk_call(node, context)
   walk_exp(node.ex, context)
   walk_exp_list(node.args, context)
 end
 
 ---@param node AstFuncBase
 local function walk_func_base(node, context)
-  walk_scope(node.func_def, context)
+  walk_scope_internal(node.func_def, context)
 end
 
 -- all the empty functions could be removed from this
@@ -87,27 +107,47 @@ local exprs = {
     end
   end,
 
-  call = call,
+  call = walk_call,
 
   ---@param node AstInlineIIFE
   inline_iife = function(node, context)
-    walk_scope(node, context)
+    walk_scope_internal(node, context)
   end,
 }
 
 ---@param node AstExpression
 ---@param context AstWalkerContext
 function walk_exp(node, context)
-  dispatch(context.on_open, node, false, context)
+  stack.push(context.node_stack, node)
+  dispatch(context.on_open, node, context, false)
   exprs[node.node_type](node, context)
-  dispatch(context.on_close, node, false, context)
+  dispatch(context.on_close, node, context, false)
+  stack.pop(context.node_stack)
 end
 
 ---@param list AstExpression[]
+---@param context AstWalkerContext
 function walk_exp_list(list, context)
   for _, expr in ipairs(list) do
     walk_exp(expr, context)
   end
+end
+
+---@param testblock AstTestBlock
+---@param context AstWalkerContext
+local function walk_testblock(testblock, context)
+  stack.push(context.node_stack, testblock)
+  walk_exp(testblock.condition, context)
+  walk_scope_internal(testblock, context)
+  stack.pop(context.node_stack)
+end
+
+---@param elseblock AstElseBlock
+---@param context AstWalkerContext
+local function walk_elseblock(elseblock, context)
+  stack.push(context.node_stack, elseblock)
+  walk_scope_internal(elseblock, context)
+  stack.pop(context.node_stack)
 end
 
 -- same here, empty functions could and should be removed
@@ -117,30 +157,21 @@ local stats = {
   end,
   ---@param node AstIfStat
   ifstat = function(node, context)
-    for _, ifstat in ipairs(node.ifs) do
-      walk_stat(ifstat, context)
+    for _, testblock in ipairs(node.ifs) do
+      walk_testblock(testblock, context)
     end
     if node.elseblock then
-      walk_stat(node.elseblock, context)
+      walk_elseblock(node.elseblock, context)
     end
-  end,
-  ---@param node AstTestBlock
-  testblock = function(node, context)
-    walk_exp(node.condition, context)
-    walk_scope(node, context)
-  end,
-  ---@param node AstElseBlock
-  elseblock = function(node, context)
-    walk_scope(node, context)
   end,
   ---@param node AstWhileStat
   whilestat = function(node, context)
     walk_exp(node.condition, context)
-    walk_scope(node, context)
+    walk_scope_internal(node, context)
   end,
   ---@param node AstDoStat
   dostat = function(node, context)
-    walk_scope(node, context)
+    walk_scope_internal(node, context)
   end,
   ---@param node AstForNum
   fornum = function(node, context)
@@ -150,17 +181,17 @@ local stats = {
     if node.step then
       walk_exp(node.step, context)
     end
-    walk_scope(node, context)
+    walk_scope_internal(node, context)
   end,
   ---@param node AstForList
   forlist = function(node, context)
     walk_exp_list(node.name_list, context)
     walk_exp_list(node.exp_list, context)
-    walk_scope(node, context)
+    walk_scope_internal(node, context)
   end,
   ---@param node AstRepeatStat
   repeatstat = function(node, context)
-    walk_scope(node, context)
+    walk_scope_internal(node, context)
     walk_exp(node.condition, context)
   end,
   ---@param node AstFuncStat
@@ -201,7 +232,7 @@ local stats = {
     walk_exp_list(node.rhs, context)
   end,
 
-  call = call,
+  call = walk_call,
 
   ---@param node AstInlineIIFERetstat
   inline_iife_retstat = function(node, context)
@@ -211,50 +242,51 @@ local stats = {
   end,
   ---@param node AstDoStat
   loopstat = function(node, context)
-    walk_scope(node, context)
+    walk_scope_internal(node, context)
   end,
 }
 
 ---@param stat AstStatement
 ---@param context AstWalkerContext
----@param stat_elem ILLNode<nil,AstStatement>|nil
-function walk_stat(stat, context, stat_elem)
-  dispatch(context.on_open, stat, true, context, stat_elem)
-  if not stat_elem or ill.is_alive(stat_elem) then
+function walk_stat(stat, context)
+  stack.push(context.node_stack, stat)
+  stack.push(context.stat_stack, stat)
+  dispatch(context.on_open, stat, context, true)
+  if ill.is_alive(stat) then
     stats[stat.node_type](stat, context)
   end
-  dispatch(context.on_close, stat, true, context, stat_elem)
-  -- if stat_elem has been removed from the list, we must trust that
-  -- its `next` is still correctly pointing to the next element
-  -- this is ensured if the removal was the last operation on the statement list
+  dispatch(context.on_close, stat, context, true)
+  stack.pop(context.stat_stack)
+  stack.pop(context.node_stack)
+  -- If stat has been removed from the list we must trust that
+  -- its `next` is still correctly pointing to the next statement.
+  -- This is ensured if the removal was the last operation on the statement list.
+end
+
+function walk_scope_internal(node, context)
+  stack.push(context.scope_stack, node)
+  local stat = node.body.first
+  while stat do
+    walk_stat(stat, context)
+    stat = stat.next
+  end
+  stack.pop(context.scope_stack)
 end
 
 ---@param node AstScope
 ---@param context AstWalkerContext
-function walk_scope(node, context)
-  local prev_scope = context.scope
-  context.scope = node
-  local elem = node.body.first
-  while elem do
-    walk_stat(elem.value, context, elem)
-    elem = elem.next
-  end
-  context.scope = prev_scope
+local function walk_scope(node, context)
+  stack.push(context.node_stack, node)
+  walk_scope_internal(node, context)
+  stack.pop(context.node_stack)
 end
 
----@class AstWalkerContext
----the scope the statement or expression is in.\
----should only be `nil` when passing it to walk_scope, since that will then set the scope
----@field scope AstScope|nil
----called before walking a node
----`stat_elem` is `nil` for `testblock` and `elseblock` because those are not directly in a statement list
----@field on_open fun(node: AstNode, scope: AstScope, is_statement: boolean, stat_elem: ILLNode<nil,AstStatement>)|nil
----called after walking a node
----`stat_elem` is `nil` for `testblock` and `elseblock` because those are not directly in a statement list
----@field on_close fun(node: AstNode, scope: AstScope, is_statement: boolean, stat_elem: ILLNode<nil,AstStatement>)|nil
-
 return {
+  new_context = new_context,
   walk_scope = walk_scope,
+  walk_testblock = walk_testblock,
+  walk_elseblock = walk_elseblock,
   walk_stat = walk_stat,
   walk_exp = walk_exp,
+  walk_exp_list = walk_exp_list,
 }

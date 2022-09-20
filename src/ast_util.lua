@@ -6,16 +6,29 @@ local ill = require("indexed_linked_list")
 local ast = {}
 
 function ast.get_start_index(local_def)
-  return local_def.start_at.stat_elem.index + local_def.start_offset
+  return local_def.start_at.index + local_def.start_offset
 end
 
-function ast.get_stat_elem(node)
-  return node.stat_elem
-end
+-- -- TODO: docs
+-- function ast.get_statement(node)
+--   if node.node_type == "functiondef" then
+--     if node.is_main or node.parent_statement.node_type == "repeatstat" then
+--       return nil
+--     end
+--     return node.parent_statement
+--   else
+--     return node
+--   end
+-- end
+
+-- -- TODO: docs
+-- function ast.get_stat_index(stat)
+--   return stat and stat.index or (1/0)
+-- end
 
 ---@param name string
 ---@return AstLocalDef
-function ast.create_local_def(name, scope)
+function ast.new_local_def(name, scope)
   return {
     def_type = "local",
     name = name,
@@ -28,17 +41,34 @@ end
 ---@param ident_token Token
 ---@return AstLocalDef def
 ---@return AstLocalReference ref
-function ast.create_local(ident_token, scope, stat_elem)
-  local local_def = ast.create_local_def(ident_token.value, scope)
-
+function ast.create_local(ident_token, scope)
+  local local_def = ast.new_local_def(ident_token.value, scope)
   local ref = nodes.new_local_ref{
-    stat_elem = stat_elem,
     position = ident_token,
     name = ident_token.value,
     reference_def = local_def,
   }
-  -- TODO: deal with `refs`
+  local_def.refs[#local_def.refs+1] = ref
   return local_def, ref
+end
+
+function ast.create_upval_def(parent_def, target_scope)
+  local upval_def = {
+    def_type = "upval",
+    name = parent_def.name,
+    scope = target_scope,
+    parent_def = parent_def,
+    child_defs = {},
+    refs = {},
+  }
+  parent_def.child_defs[#parent_def.child_defs+1] = upval_def
+  if upval_def.name == "_ENV" then
+    -- always put _ENV first so that `load`'s mangling will be correct
+    table.insert(target_scope.upvals, 1, upval_def)
+  else
+    target_scope.upvals[#target_scope.upvals+1] = upval_def
+  end
+  return upval_def
 end
 
 do
@@ -55,7 +85,8 @@ do
         if local_def.whole_block then
           found_local_def = found_local_def or local_def
         else
-          local start_index = ast.get_start_index(local_def)
+          -- HACK: this should check for the existence of a statement stack instead of in_scope_at_index
+          local start_index = in_scope_at_index == (1/0) and 0 or ast.get_start_index(local_def)
           if start_index <= in_scope_at_index
             and ((not found_start_index) or start_index > found_start_index)
           then
@@ -79,25 +110,10 @@ do
 
     if scope.node_type ~= "env_scope" then
       assert(scope.parent_scope)
-      local def = try_get_def(scope.parent_scope, name, ast.get_stat_elem(scope).index)
+      local def = try_get_def(scope.parent_scope, name, 1/0)
       if def then
         if scope.upvals then
-          local new_def = {
-            def_type = "upval",
-            name = name,
-            scope = scope,
-            parent_def = def,
-            child_defs = {},
-            refs = {},
-          }
-          def.child_defs[#def.child_defs+1] = new_def
-          if name == "_ENV" then
-            -- always put _ENV first so that `load`'s mangling will be correct
-            table.insert(scope.upvals, 1, new_def)
-          else
-            scope.upvals[#scope.upvals+1] = new_def
-          end
-          return new_def
+          return ast.create_upval_def(def, scope)
         else
           return def
         end
@@ -106,19 +122,18 @@ do
   end
 
   ---@param scope AstScope
-  ---@param stat_elem ILLNode<nil,AstStatement> @
-  ---used for the reference nodes being created, and to determine
-  ---at which point the given name has to be in scope within the given scope
+  ---@param statement AstStatement @
+  ---used to determine at which point the given name has to be in scope within the given scope
+  ---when `nil` it is assumed to be at the end of the given scope
   ---@param name string
   ---@param node_for_position? AstNode
   ---@return AstUpvalReference|AstLocalReference
-  function ast.get_ref(scope, stat_elem, name, node_for_position)
+  function ast.get_ref(scope, statement, name, node_for_position) -- TODO: remove statement?
     node_for_position = node_for_position or {}
-    local def = try_get_def(scope, name, stat_elem.index)
+    local def = try_get_def(scope, name, statement and statement.index or (1/0))
     if def then
       -- `local_ref` or `upval_ref`
       local ref = (def.def_type == "local" and nodes.new_local_ref or nodes.new_upval_ref){
-        stat_elem = stat_elem,
         name = name,
         reference_def = def,
       }
@@ -128,15 +143,13 @@ do
     end
 
     local suffix = nodes.new_string{
-      stat_elem = stat_elem,
       value = name,
       src_is_ident = true,
     }
     nodes.set_position(suffix, node_for_position)
 
     local node = nodes.new_index{
-      stat_elem = stat_elem,
-      ex = ast.get_ref(scope, stat_elem, "_ENV", node_for_position),
+      ex = ast.get_ref(scope, statement, "_ENV", node_for_position),
       suffix = suffix,
       src_ex_did_not_exist = true,
     }
@@ -145,49 +158,91 @@ do
   end
 end
 
-do
-  local function call_callback(stat_elem, callback)
-    stat_elem.value = assert(callback(stat_elem), "The callback must return the created statement")
-    return stat_elem.value
-  end
+local function create_ref_to_local_or_upval_def(def)
+  return (def.def_type == "local" and nodes.new_local_ref or nodes.new_upval_ref){
+    name = def.name,
+    reference_def = def,
+  }
+end
 
-  function ast.prepend_stat(scope, callback)
-    return call_callback(ill.prepend(scope.body), callback)
+local function get_or_create_upval_def(parent_def, target_scope)
+  for _, upval in ipairs(target_scope.upvals) do
+    if upval.parent_def == parent_def then
+      return upval
+    end
   end
+  return ast.create_upval_def(parent_def, target_scope)
+end
 
-  function ast.append_stat(scope, callback)
-    return call_callback(ill.append(scope.body), callback)
+function ast.create_ref_to(local_def, target_scope)
+  local function get_def_recursive(scope)
+    while scope ~= local_def.scope do
+      if scope.node_type == "functiondef" then
+        local def = get_def_recursive(scope.parent_scope)
+        return get_or_create_upval_def(def, scope)
+      end
+      scope = scope.parent_scope
+    end
+    return local_def
   end
+  local def = get_def_recursive(target_scope)
+  local ref = create_ref_to_local_or_upval_def(def)
+  return ref
+end
 
-  function ast.insert_after_stat(stat, callback)
-    return call_callback(ill.insert_after(stat.stat_elem), callback)
-  end
+function ast.prepend_stat(scope, stat)
+  return ill.prepend(scope.body, stat)
+end
 
-  function ast.insert_before_stat(stat, callback)
-    return call_callback(ill.insert_before(stat.stat_elem), callback)
+function ast.append_stat(scope, stat)
+  return ill.append(scope.body, stat)
+end
+
+ast.insert_after_stat = ill.insert_after
+ast.insert_before_stat = ill.insert_before
+
+ast.remove_stat = ill.remove
+
+function ast.replace_stat(old, new)
+  local list = old.list
+  local index = old.index
+  local prev = old.prev
+  local next = old.next
+  util.replace_table(old, new)
+  old.list = list
+  old.index = index
+  old.prev = prev
+  old.next = next
+end
+
+function ast.get_parent_scope(scope, node_type)
+  while scope and scope.node_type ~= node_type do
+    scope = scope.parent_scope
   end
+  return scope
+end
+
+function ast.get_functiondef(scope)
+  return ast.get_parent_scope(scope, "functiondef")
 end
 
 function ast.new_main(source)
-  local env_scope = nodes.new_env_scope{}
+  local env_scope = nodes.new_env_scope{main = true} -- prevent assert
   -- Lua emits _ENV as if it's a local in the parent scope
   -- of the file. I'll probably change this one day to be
   -- the first upval of the parent scope, since load()
   -- clobbers the first upval anyway to be the new _ENV value
-  local def = ast.create_local_def("_ENV", env_scope)
+  local def = ast.new_local_def("_ENV", env_scope)
   def.whole_block = true
   env_scope.locals[1] = def
 
-  local main = ast.append_stat(env_scope, function(stat_elem)
-    local main = nodes.new_functiondef{
-      stat_elem = stat_elem,
-      is_main = true,
-      source = source,
-      parent_scope = env_scope,
-      is_vararg = true,
-    }
-    return main
-  end)
+  local main = nodes.new_functiondef{
+    is_main = true,
+    source = source,
+    parent_scope = env_scope,
+    is_vararg = true,
+  }
+  env_scope.main = main
   return main
 end
 

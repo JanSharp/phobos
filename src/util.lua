@@ -39,6 +39,48 @@ local function clear_table(t)
   end
 end
 
+local function replace_table(target, new_data)
+  clear_table(target)
+  for k, v in pairs(new_data) do
+    target[k] = v
+  end
+end
+
+local function shallow_copy(t)
+  local result = {}
+  for k, v in pairs(t) do
+    result[k] = v
+  end
+  local meta = getmetatable(t)
+  if meta then
+    setmetatable(result, meta)
+  end
+  return result
+end
+
+local function copy(t, copy_metatables)
+  local visited = {}
+  local function copy_recursive(value)
+    if type(value) ~= "table" then
+      return value
+    end
+    if visited[value] then
+      return visited[value]
+    end
+    local result = {}
+    visited[value] = result
+    for k, v in pairs(value) do
+      result[copy_recursive(k)] = copy_recursive(v)
+    end
+    local meta = getmetatable(value)
+    if meta then
+      setmetatable(result, copy_metatables and copy_recursive(meta) or meta)
+    end
+    return result
+  end
+  return copy_recursive(t)
+end
+
 --- Invert an array of keys to be a set of key=true
 ---@param t table<number,any>
 ---@return table<any,boolean>
@@ -55,4 +97,8 @@ return {
   floating_byte_to_number = floating_byte_to_number,
   invert = invert,
   clear_table = clear_table,
+  replace_table = replace_table,
+  shallow_copy = shallow_copy,
+  copy = copy,
+
 }

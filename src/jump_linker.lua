@@ -39,15 +39,15 @@ local function link(func)
     ---jump into the scope of said local which is not allowed.\
     ---this does of course not affect goto statements defined in lower levels,
     ---since they don't look for labels in the current body
-    local latest_new_local_stat_elem
+    local latest_new_local_stat
     ---used to pop all labels defined in the current body off the label_stack when leaving the body
     local label_stack_top = visible_label_count
 
-    local function walk_goto(elem, goto_stat)
+    local function walk_goto(stat, goto_stat)
       gotos[#gotos+1] = {
         stat = goto_stat,
         lowest_level = level,
-        lowest_level_stat_elem = elem,
+        lowest_level_stat = stat,
         label_is_in_scope_but_jump_is_invalid = nil,
       }
 
@@ -62,7 +62,7 @@ local function link(func)
       end
     end
 
-    local function walk_label(stat_elem, label_stat)
+    local function walk_label(stat, label_stat)
       label_stat.linked_gotos = {}
       visible_label_count = visible_label_count + 1
       label_stack[visible_label_count] = label_stat
@@ -79,13 +79,13 @@ local function link(func)
               return end_of_body
             end
             end_of_body = true
-            local elem = stat_elem.next
-            while elem do
-              if elem.value.node_type ~= "label" and elem.value.node_type ~= "empty" then
+            stat = stat.next
+            while stat do
+              if stat.node_type ~= "label" and stat.node_type ~= "empty" then
                 end_of_body = false
                 break
               end
-              elem = elem.next
+              stat = stat.next
             end
           end
           return end_of_body
@@ -98,14 +98,14 @@ local function link(func)
           and go.lowest_level == level
           and go.stat.target_name == label_stat.name
         then
-          if not latest_new_local_stat_elem
-            or go.lowest_level_stat_elem.index > latest_new_local_stat_elem.index
+          if not latest_new_local_stat
+            or go.lowest_level_stat.index > latest_new_local_stat.index
             or is_end_of_body()
           then
             go.stat.linked_label = label_stat
             label_stat.linked_gotos[#label_stat.linked_gotos+1] = go.stat
           else
-            local local_stat = latest_new_local_stat_elem.value
+            local local_stat = latest_new_local_stat
             local local_ref = local_stat.node_type == "localfunc" and local_stat.name
               or local_stat.node_type == "localstat" and local_stat.lhs[#local_stat.lhs]
               or error("Impossible `local_stat.node_type` '"..local_stat.node_type.."'.")
@@ -132,7 +132,7 @@ local function link(func)
       end
     end
 
-    local function walk_inner_body(stat_elem, inner_body)
+    local function walk_inner_body(stat, inner_body)
       local goto_count = #gotos
       walk_body(inner_body, level + 1)
       for i = goto_count + 1, #gotos do
@@ -141,38 +141,37 @@ local function link(func)
         -- however it also has to keep track of the lowest level a goto was ever in
         -- in order not to link gotos with labels that are on the same level but there
         -- was a step in the levels down in between the label and goto statements
-        gotos[i].lowest_level_stat_elem = stat_elem
+        gotos[i].lowest_level_stat = stat
         gotos[i].lowest_level = level
       end
     end
 
-    local elem = body.first
-    while elem do
-      local stat = elem.value
+    local stat = body.first
+    while stat do
       if stat.node_type == "gotostat" then
-        walk_goto(elem, stat)
+        walk_goto(stat, stat)
       elseif stat.node_type == "label" then
-        walk_label(elem, stat)
+        walk_label(stat, stat)
       elseif stat.node_type == "breakstat" then
-        walk_break(elem, stat)
+        walk_break(stat, stat)
       elseif loop_node_types[stat.node_type] then
         loop_count = loop_count + 1
         loop_stack[loop_count] = stat
-        walk_inner_body(elem, stat.body)
+        walk_inner_body(stat, stat.body)
         loop_count = loop_count - 1
       elseif stat.body then
-        walk_inner_body(elem, stat.body)
+        walk_inner_body(stat, stat.body)
       elseif stat.node_type == "ifstat" then
         for _, ifstat in ipairs(stat.ifs) do
-          walk_inner_body(elem, ifstat.body)
+          walk_inner_body(stat, ifstat.body)
         end
         if stat.elseblock then
-          walk_inner_body(elem, stat.elseblock.body)
+          walk_inner_body(stat, stat.elseblock.body)
         end
       elseif stat.node_type == "localstat" or stat.node_type == "localfunc" then
-        latest_new_local_stat_elem = elem
+        latest_new_local_stat = stat
       end
-      elem = elem.next
+      stat = stat.next
     end
 
     -- pop all new labels (from this body) off the stack.

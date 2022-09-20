@@ -2,12 +2,13 @@
 local ast_walker = require("ast_walker")
 local ill = require("indexed_linked_list")
 local ast = require("ast_util")
+local stack = require("stack")
 
 local remove_func_defs_in_scope
 do
   local function delete_func_base_node(node, context)
     -- save the ast walker some unnecessary work
-    node.func_def.body = ill.new()
+    node.func_def.body = ill.new(true)
     local func_def = context.parent_func_def
     for i, func_proto in ipairs(func_def.func_protos) do
       if func_proto == node.func_def then
@@ -27,7 +28,9 @@ do
   }
 
   function remove_func_defs_in_scope(parent_func_def, scope)
-    ast_walker.walk_scope(scope, {on_open = on_open, parent_func_def = parent_func_def})
+    local context = ast_walker.new_context(on_open)
+    context.parent_func_def = parent_func_def
+    ast_walker.walk_scope(scope, context)
   end
 end
 
@@ -42,14 +45,11 @@ local function convert_repeatstat(node, do_jump_back)
 end
 
 local on_open = {
-  whilestat = function(node, context, _, stat_elem)
+  whilestat = function(node)
     if ast.is_falsy(node.condition) then -- falsy
-      local func_def = context.scope
-      while func_def.node_type ~= "functiondef" do
-        func_def = func_def.parent_scope
-      end
+      local func_def = ast.get_functiondef(node) -- node/whilestat is a scope
       remove_func_defs_in_scope(func_def, node)
-      ill.remove(stat_elem) -- remove is the last operation on the ill
+      ast.remove_stat(node) -- remove is the last operation on the body
     elseif ast.is_const_node(node.condition) then -- truthy
       node.node_type = "loopstat"
       node.do_jump_back = true
@@ -70,11 +70,9 @@ local on_open = {
     end
   end,
 
-  ifstat = function(node, context, _, stat_elem)
-    local func_def = context.scope
-    while func_def.node_type ~= "functiondef" do
-      func_def = func_def.parent_scope
-    end
+  ifstat = function(node, context)
+    -- ifstat isn't a scope, get the top of the scope stack and search from there
+    local func_def = ast.get_functiondef(stack.get_top(context.scope_stack))
     local i = 1
     local c = #node.ifs
     while i <= c do
@@ -104,7 +102,7 @@ local on_open = {
         end
         testblock.then_token = nil
         testblock.end_token = node.end_token
-        ill.insert_after(stat_elem, testblock)
+        ast.insert_after_stat(node, testblock)
         break
       end
       i = i + 1
@@ -120,16 +118,16 @@ local on_open = {
           elseblock.else_token = nil
         end
         elseblock.end_token = node.end_token
-        stat_elem.value = elseblock -- replace
+        ast.replace_stat(node, elseblock)
       else
-        ill.remove(stat_elem) -- remove is the last operation on the ill
+        ast.remove_stat(node) -- remove is the last operation on the body
       end
     end
   end,
 }
 
 local function fold(main)
-  ast_walker.walk_scope(main, {on_open = on_open})
+  ast_walker.walk_scope(main, ast_walker.new_context(on_open, nil))
 end
 
 return fold

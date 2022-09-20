@@ -74,17 +74,13 @@
 ---can be any expression
 ---@field consumed_nodes AstNode[]|nil
 
----@class AstStatement : AstNode
----the element in the statement list of the scope this statement is in
----@field stat_elem ILLNode<nil,AstStatement>
+---@class AstStatement : AstNode, ILLNode
 
 ---@class AstParenWrapper
 ---@field open_paren_token AstTokenNode
 ---@field close_paren_token AstTokenNode
 
 ---@class AstExpression : AstNode
----the element in the statement list of the scope of the statement this expression is apart of
----@field stat_elem ILLNode<nil,AstStatement>
 ---should the expression be forced to evaluate to only one result
 ---caused by the expression being wrapped in `()`
 ---@field force_single_result boolean|nil
@@ -104,8 +100,6 @@
 
 ---@class AstFunctionDef : AstScope, AstNode
 ---@field node_type '"functiondef"'
----the element in the statement list of the scope of the statement this functiondef is somehow apart of
----@field stat_elem ILLNode<nil,AstStatement>
 ---@field is_main 'nil' @ overridden by AstMain to be `true`
 ---@field source string
 ---@field is_method boolean @ is it `function foo:bar() end`?
@@ -137,13 +131,13 @@
 ---@field elseblock AstElseBlock|nil
 ---@field end_token AstTokenNode
 
----@class AstTestBlock : AstStatement, AstScope
+---@class AstTestBlock : AstScope
 ---@field node_type '"testblock"'
 ---@field condition AstExpression
 ---@field if_token AstTokenNode @ for the first test block this is an `if` node_type, otherwise `elseif`
 ---@field then_token AstTokenNode @ position for the failure `jup` instruction
 
----@class AstElseBlock : AstStatement, AstScope
+---@class AstElseBlock : AstScope
 ---@field node_type '"elseblock"'
 ---@field else_token AstTokenNode
 
@@ -465,8 +459,8 @@
 
 ---@class AstENVScope : AstScope
 ---@field node_type '"env_scope"'
----always contains exactly 1 ILLNode, the AstMain functiondef. A bit hacky, but AstMain needed a `stat_elem`
----@field body AstStatementList
+---@field main AstMain
+---@field body AstStatementList @ always empty
 ---@field locals AstLocalDef[] @ always exactly 1 `whole_block = true` local with the name `_ENV`
 ---@field labels AstLabel[] @ always empty
 
