@@ -208,8 +208,10 @@ local output_dir = args.output_path
   or source_dir
 local temp_dir = args.temp_path:to_fully_qualified(working_dir):normalize()
 local injection_files = {}
-for i, inject_path in ipairs(args.inject_paths) do
-  injection_files[i] = inject_path:to_fully_qualified(working_dir):normalize()
+if args.inject_paths then
+  for i, inject_path in ipairs(args.inject_paths) do
+    injection_files[i] = inject_path:to_fully_qualified(working_dir):normalize()
+  end
 end
 
 if source_dir:attr("mode") ~= "directory" then
