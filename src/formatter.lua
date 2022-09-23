@@ -278,7 +278,7 @@ local function format(main)
         end
       end
       add_exp(node)
-      if separator_tokens[i] then
+      if separator_tokens and separator_tokens[i] then
         add_token(separator_tokens[i])
       end
     end

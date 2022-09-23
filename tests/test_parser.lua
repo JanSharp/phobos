@@ -8,9 +8,14 @@ local parser = require("parser")
 local ast = require("ast_util")
 local error_code_util = require("error_code_util")
 
+local stack = require("stack")
 local tutil = require("testing_util")
 local append_stat = ast.append_stat
 local test_source = tutil.test_source
+
+-- for formatter tests
+local jump_linker = require("jump_linker")
+local formatter = require("formatter")
 
 local prevent_assert = nodes.new_invalid{
   error_code_inst = error_code_util.new_error_code{
@@ -117,14 +122,32 @@ local function test_stat(str)
 end
 
 do
-  local main_scope = framework.scope:new_scope("parser")
+  local scope_stack = stack.new_stack()
+  local current_scope = framework.scope:new_scope("parser")
+  stack.push(scope_stack, current_scope)
+  local formatter_scope_stack = stack.new_stack()
+  local current_formatter_scope = framework.scope:new_scope("formatter (generated from parser tests)")
+  stack.push(formatter_scope_stack, current_formatter_scope)
 
-  local current_testing_scope = main_scope
+  local function push_scope(name)
+    current_scope = current_scope:new_scope(name)
+    stack.push(scope_stack, current_scope)
+    current_formatter_scope = current_formatter_scope:new_scope(name)
+    stack.push(formatter_scope_stack, current_formatter_scope)
+  end
+
+  local function pop_scope()
+    stack.pop(scope_stack)
+    current_scope = stack.get_top(scope_stack)
+    stack.pop(formatter_scope_stack)
+    current_formatter_scope = stack.get_top(formatter_scope_stack)
+  end
+
   local tokens
   local next_token
   local peek_next_token
   local function add_test(name, str, func)
-    current_testing_scope:add_test(name, function()
+    current_scope:add_test(name, function()
       before_each()
       tokens = get_tokens(str)
       local next_index = 1
@@ -137,6 +160,13 @@ do
       end
       func()
       test_stat(str)
+    end)
+
+    current_formatter_scope:add_test(name, function()
+      local parsed_ast = parser(str, "=("..name..")")
+      jump_linker(parsed_ast)
+      local result = formatter(parsed_ast)
+      assert.equals(str, result)
     end)
   end
 
@@ -213,8 +243,7 @@ do
   end
 
   do
-    local stat_scope = main_scope:new_scope("statements")
-    current_testing_scope = stat_scope
+    push_scope("statements")
 
     add_test(
       "empty",
@@ -1715,12 +1744,11 @@ do
     -- ensuring that all expressions are evaluated in the right scope is also not tested here
     -- it's tested later on
 
-    current_testing_scope = main_scope
+    pop_scope()
   end -- end statements
 
   do -- expressions
-    local expr_scope = main_scope:new_scope("expressions")
-    current_testing_scope = expr_scope
+    push_scope("expressions")
 
     local function append_repeatstat(get_expr_node, parent_scope)
       parent_scope = parent_scope or fake_main
@@ -1910,8 +1938,7 @@ do
     end
 
     do -- unop
-      local unop_scope = expr_scope:new_scope("unop")
-      current_testing_scope = unop_scope
+      push_scope("unop")
 
       local function add_unop_tests(unop_str)
         add_test_with_repeatstat(
@@ -1987,12 +2014,11 @@ do
       add_unop_tests("-")
       add_unop_tests("#")
 
-      current_testing_scope = expr_scope
+      pop_scope()
     end -- end unop
 
     do -- binop
-      local binop_scope = expr_scope:new_scope("binop")
-      current_testing_scope = binop_scope
+      push_scope("binop")
 
       for _, binop in ipairs(all_binops) do
         add_test_with_repeatstat(
@@ -2070,7 +2096,7 @@ do
         end
       end
 
-      current_testing_scope = expr_scope
+      pop_scope()
     end -- end binop
 
     do -- concat
@@ -2954,7 +2980,7 @@ do
       add_expression_list_test("true, true, true, true", 4)
     end -- end expression list
 
-    current_testing_scope = main_scope
+    pop_scope()
   end -- end expressions
 
   add_test(
