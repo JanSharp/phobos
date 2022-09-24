@@ -3,6 +3,7 @@ Version: 0.1.4
   Minor Features:
     - Add `--version` argument
     - Support files with a shebang
+    - Handle invalid nodes in the formatter
   Changes:
     - Emit null strings in bytecode wherever null is valid instead of falling back to ""
     - Replace `stat_elem` internally everywhere by using intrusive linked lists

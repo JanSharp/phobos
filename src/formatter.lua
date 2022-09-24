@@ -1,8 +1,4 @@
 
--- NOTE: this is not written with incomplete nodes in mind. It might work with most of them, but
--- for now consider that undefined behavior. _for now_.
--- I mean this entire file is not the most useful right now
-
 ---@param main AstMain
 local function format(main)
   local out = {}
