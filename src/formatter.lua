@@ -64,8 +64,13 @@ local function format(main)
     end
   end
 
+  ---@param token_node Token|AstTokenNode|AstInvalidNode
   function add_token(token_node)
     if not token_node then
+      return
+    end
+    if token_node.node_type == "invalid" then
+      add_invalid(token_node)
       return
     end
     if token_node.leading then
@@ -95,9 +100,23 @@ local function format(main)
     end
   end
 
-  function add_invalid(node)
+  local function add_invalid_without_wrappers(node)
     for _, consumed_node in ipairs(node.consumed_nodes) do
       add_node(consumed_node)
+    end
+  end
+
+  function add_invalid(node)
+    if node.force_single_result then
+      for i = #node.src_paren_wrappers, 1, -1 do
+        add_token(node.src_paren_wrappers[i].open_paren_token)
+      end
+      add_invalid_without_wrappers(node)
+      for i = 1, #node.src_paren_wrappers do
+        add_token(node.src_paren_wrappers[i].close_paren_token)
+      end
+    else
+      add_invalid_without_wrappers(node)
     end
   end
 
@@ -244,7 +263,7 @@ local function format(main)
 
     call = call,
 
-    invalid = add_invalid,
+    invalid = add_invalid_without_wrappers,
 
     ---@param node AstInlineIIFE
     inline_iife = function(node)

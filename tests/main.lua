@@ -40,6 +40,7 @@ assert.set_print_full_data_on_error_default(args.full_output)
 require("test_tokenizer")
 require("test_parser")
 require("test_jump_linker")
+require("test_formatter")
 
 -- TODO: next ones to test:
 -- ast_util
@@ -53,9 +54,9 @@ require("test_jump_linker")
 -- somehow test main.lua... not sure how I want to do that yet
 -- same for control.lua
 
--- compiler, dump, disassembler, formatter, intermediate_language, optimize/*
+-- compiler, dump, disassembler, intermediate_language, optimize/*
 -- won't be tested yet because chances of them changing drastically are high
--- even the test I've written so far are likely going change as I clean up the AST
+-- even the test I've written so far are likely going to change as I clean up the AST
 -- so for now, all of those steps we have have to hope that they "just work", which
 -- is obviously not the case. I'm certain there are bugs in there
 
