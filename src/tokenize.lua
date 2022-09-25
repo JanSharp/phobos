@@ -405,7 +405,11 @@ local function next_token(state,index)
         -- correct index and column
         token.index = index
         token.column = token.column - 2
-        token.token_type = "comment"
+        if token.token_type == "invalid" then
+          token.value = "--"..token.value
+        else
+          token.token_type = "comment"
+        end
         return next_index,token
       else
         local _,token_end,text = str:find("^([^\r\n]*)",index+2)

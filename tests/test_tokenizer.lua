@@ -191,6 +191,12 @@ do
         })
       end)
     end
+
+    scope:add_test("starting with '[===' which almost looks like a block comment", function()
+      local token = new_token("comment", 1, 1, 1, "[===")
+      token.src_is_block_str = nil
+      test("--[===", {token})
+    end)
   end
 
   do
@@ -612,6 +618,18 @@ do
         token,
         new_token(";", 7, 1, 7),
       })
+    end)
+
+    scope:add_test("invalid block comment", function()
+      local token = new_token("invalid", 1, 1, 1)
+      local str = "--[["
+      token.value = str
+      token.error_code_insts = {error_code_util.new_error_code{
+        error_code = error_code_util.codes.unterminated_block_string,
+        source = test_source,
+        position = {line = 1, column = #str + 1}
+      }}
+      test(str, {token})
     end)
   end
 
