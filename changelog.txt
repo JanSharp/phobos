@@ -12,6 +12,7 @@ Version: 0.1.4
     - Fix '(foo())' being a valid statement
     - Fix strings in invalid contexts generating invalid AstTokenNodes or failing assertions
     - Fix the local variable for 'fornum' being in the parent scope in the AST
+    - Fix unterminated block strings with leading newlines missing said newline in the invalid node
 ---------------------------------------------------------------------------------------------------
 Version: 0.1.3
 Date: 2022-02-17

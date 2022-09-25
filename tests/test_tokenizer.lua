@@ -587,7 +587,7 @@ do
         token.error_code_insts = {error_code_util.new_error_code{
           error_code = error_code_util.codes.unterminated_block_string,
           source = test_source,
-          position = {line = 1, column = #str + 1},
+          position = str:find("\n") and {line = 2, column = 2} or {line = 1, column = #str + 1},
         }}
         test(str, {token})
       end)
@@ -595,6 +595,8 @@ do
 
     add_unterminated_test("unterminated at eof", "[[;")
     add_unterminated_test("unterminated at eof right after start", "[[")
+    add_unterminated_test("unterminated at eof with padding", "[===[;")
+    add_unterminated_test("unterminated at eof with leading newline", "[[\n;")
   end
 
   do

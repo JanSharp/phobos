@@ -265,7 +265,7 @@ local function read_block_string(str,index,state)
       end
     elseif stop_char == "" then
       local token = new_token("invalid", index, token_line, token_col)
-      parts[1] = "["..pad.."["
+      parts[1] = "["..pad.."["..(has_leading_newline and "\n" or "")
       token.value = table.concat(parts)
       add_error_code_inst(token, error_code_util.new_error_code{
         error_code = error_code_util.codes.unterminated_block_string,
