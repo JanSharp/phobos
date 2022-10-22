@@ -265,7 +265,7 @@ local function read_block_string(str,index,state)
       end
     elseif stop_char == "" then
       local token = new_token("invalid", index, token_line, token_col)
-      parts[1] = "["..pad.."["
+      parts[1] = "["..pad.."["..(has_leading_newline and "\n" or "")
       token.value = table.concat(parts)
       add_error_code_inst(token, error_code_util.new_error_code{
         error_code = error_code_util.codes.unterminated_block_string,
@@ -405,7 +405,11 @@ local function next_token(state,index)
         -- correct index and column
         token.index = index
         token.column = token.column - 2
-        token.token_type = "comment"
+        if token.token_type == "invalid" then
+          token.value = "--"..token.value
+        else
+          token.token_type = "comment"
+        end
         return next_index,token
       else
         local _,token_end,text = str:find("^([^\r\n]*)",index+2)
@@ -476,6 +480,8 @@ end
 ---@field line_offset integer @ the exact index of the last newline
 ---@field prev_line integer|nil
 ---@field prev_line_offset integer|nil
+---see AstMain description for more info
+---@field shebang_line string|nil
 
 ---@param str string
 ---@param source? string @ if provided it is used for the `source` field of error code instances
@@ -495,7 +501,14 @@ local function tokenize(str, source)
     index = 4
   end
   ---cSpell:ignore skipcomment, lauxlib
-  -- TODO: what is this about skipcomment in lauxlib.c
+  -- does the same thing as skipcomment in lauxlib.c
+  if str:find("^#", index) then -- first line is a comment (Unix exec. file)?
+    -- read first line and skip parsing it
+    local comment, stop = str:match("([^\n]+)()", index)
+    state.shebang_line = comment
+    state.line_offset = stop - 1
+    index = stop
+  end
   return next_token,state,index
 end
 

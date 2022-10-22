@@ -11,9 +11,18 @@ Version: 0.2.0
 Version: 0.1.4
   Minor Features:
     - Add `--version` argument
+    - Support files with a shebang
+    - Handle invalid nodes in the formatter
+  Changes:
+    - Emit null strings in bytecode wherever null is valid instead of falling back to ""
+    - Replace `stat_elem` internally everywhere by using intrusive linked lists
   Bugfixes:
     - Fix 'lua.exe' not finding 'lua52.dll' because it was called 'lua.dll'
     - Fix '(foo())' being a valid statement
+    - Fix strings in invalid contexts generating invalid AstTokenNodes or failing assertions
+    - Fix the local variable for 'fornum' being in the parent scope in the AST
+    - Fix unterminated block strings with leading newlines missing said newline in the invalid node
+    - Fix unterminated block comments not emitting invalid nodes, so no syntax errors
 ---------------------------------------------------------------------------------------------------
 Version: 0.1.3
 Date: 2022-02-17

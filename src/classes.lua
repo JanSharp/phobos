@@ -544,6 +544,9 @@
 ---@field end_line 0
 ---@field end_column 0
 ---@field is_vararg true
+---if the first character of the parsed string is `#` then this contains
+---the first line terminated by `\n` exclusive, but inclusive `#`
+---@field shebang_line string|nil
 ---@field eof_token AstTokenNode @ to store trailing blank and comment tokens
 
 ---@class AstENVScope : AstScope

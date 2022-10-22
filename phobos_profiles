@@ -192,6 +192,10 @@ local function factorio_profile(params)
     output_path = ".",
   }
 
+  -- TODO: either change doc generation to not need the files in the output
+  -- or remove docs from teh mod entirely
+  copy_emmy_lua_docs(profile)
+
   apply_general_changes(profile)
   apply_factorio_specific_changes(profile)
 

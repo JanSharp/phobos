@@ -163,7 +163,7 @@ end
 
 -- get version_block from changelog.txt for that version
 print("Extracting version block for version "..version_str.." from changelog.txt")
-local changelog = io_util.read_file("changelog.txt")
+local changelog = changelog_util.decode(io_util.read_file("changelog.txt"))
 local current_version_block
 for _, version_block in ipairs(changelog) do
   if changelog_util.compare_version(version_block.version, version) then

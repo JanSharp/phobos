@@ -164,7 +164,12 @@ function nodes.new_token(params)
     ["string"] = function()
       node.value = assert_params_field(params, "value")
       node.src_is_block_str = params.src_is_block_str or false
-      node.src_value = assert_params_field(params, "src_value")
+      if node.src_is_block_str then
+        block_string_specific_fields()
+      else
+        node.src_quote = assert_params_field(params, "src_quote")
+        node.src_value = assert_params_field(params, "src_value")
+      end
     end,
     ["number"] = function()
       node.value = assert_params_field(params, "value")
