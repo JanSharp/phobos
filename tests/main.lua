@@ -65,6 +65,7 @@ require("test_virtual_io_util")
 require("test_tokenizer")
 require("test_parser")
 require("test_jump_linker")
+require("test_formatter")
 require("test_serialize")
 require("test_binary_serializer")
 require("test_emmy_lua_parser")
@@ -84,9 +85,9 @@ require("test_profile_util")
 -- somehow test main.lua... not sure how I want to do that yet
 -- same for control.lua
 
--- compiler, dump, disassembler, formatter, intermediate_language, optimize/*
+-- compiler, dump, disassembler, intermediate_language, optimize/*
 -- won't be tested yet because chances of them changing drastically are high
--- even the test I've written so far are likely going change as I clean up the AST
+-- even the test I've written so far are likely going to change as I clean up the AST
 -- so for now, all of those steps we have have to hope that they "just work", which
 -- is obviously not the case. I'm certain there are bugs in there
 
