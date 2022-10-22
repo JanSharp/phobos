@@ -1632,15 +1632,11 @@ do
   local function visit_reg(inst, reg, get_set)
     reg.total_get_count = reg.total_get_count or 0
     reg.total_set_count = reg.total_set_count or 0
-    reg.get_insts = reg.get_insts or {}
-    reg.set_insts = reg.set_insts or {}
     if get_set ~= set then
       reg.total_get_count = reg.total_get_count + 1
-      reg.get_insts[#reg.get_insts+1] = inst
     end
     if get_set ~= get then
       reg.total_set_count = reg.total_set_count + 1
-      reg.set_insts[#reg.set_insts+1] = inst
     end
     reg.temporary = reg.total_get_count <= 1 and reg.total_set_count <= 1
     if reg.is_vararg and not reg.temporary then
@@ -1672,9 +1668,7 @@ end
 -- - [x] reg.start_at
 -- - [x] reg.stop_at
 -- - [x] reg.total_get_count
--- - [ ] reg.get_insts
 -- - [x] reg.total_set_count
--- - [ ] reg.set_insts
 -- - [x] reg.temporary
 --
 -- - [ ] reg.captured_as_upval
