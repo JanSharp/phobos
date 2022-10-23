@@ -598,6 +598,10 @@ end
 ---@param data ILCompilerData
 local function make_bytecode_func(data)
   local func = data.func
+  if not func.has_reg_liveliness then
+    il.eval_live_regs{func = func}
+  end
+
   local result = {
     line_defined = func.defined_position and func.defined_position.line,
     column_defined = func.defined_position and func.defined_position.column,
@@ -657,6 +661,7 @@ end
 ---@param func ILFunction
 local function compile(func)
   local data = {func = func} ---@type ILCompilerData
+  func.is_compiling = true
   make_bytecode_func(data)
   determine_reg_usage(data)
 
@@ -699,6 +704,7 @@ local function compile(func)
     upval.upval_index = nil
   end
 
+  func.is_compiling = false
   return data.result
 end
 

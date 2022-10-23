@@ -828,7 +828,14 @@
 ---@field defined_position Position? @ usually the position of the `function_token`
 ---@field last_defined_position Position? @ usually the position of the `end_token`
 ---post IL generation data
+---@field has_blocks boolean @ `blocks` on ILFunction and `block` on ILInstruction
+---@field has_start_stop_insts boolean @ `start_at` and `stop_at` on ILRegister
+---@field has_reg_liveliness boolean @ `regs_(start|stop)_at_(list|lut)` and `live_regs` on ILInstruction
 ---@field blocks ILBlock[] @ intrusive ILL
+---@field has_types boolean @ `(pre|post)_state` on ILInstruction
+---@field has_reg_usage boolean @ `total_get/set_count` and `temporary` on ILRegister
+---@field is_compiling boolean @ `closure_index` on ILFUnction and `captured_as_upval` and `current_reg` on ILRegister
+---
 ---@field temp ILFunctionTemp
 ---temp compilation data
 ---@field closure_index integer @ **zero based** needed for closure instructions to know the function index

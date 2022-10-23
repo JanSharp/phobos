@@ -153,6 +153,8 @@ local function add_first(self, value)
   return node
 end
 
+-- TODO: fix types
+
 ---@class ILLNodeBase
 ---@field list IndexedLinkedListBase @ back reference
 ---@field index integer @ non sequential but ordered index

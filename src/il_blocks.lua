@@ -63,11 +63,10 @@ end
 
 local function make_blocks(func)
   local data = {func = func}
-  il.eval_start_stop_for_all_regs(data)
-  il.eval_live_regs(data)
   eval_blocks(data)
   link_blocks(data)
   func.blocks = data.blocks
+  func.has_blocks = true
   for _, inner_func in ipairs(func.inner_functions) do
     make_blocks(inner_func)
   end

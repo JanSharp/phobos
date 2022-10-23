@@ -191,9 +191,14 @@ local function walk_block(data, block)
   until inst == block.stop_inst.next
 end
 
+---@param func ILFunction
 local function resolve_types(func)
   local data = {func = func}
+  if not func.has_start_stop_insts then
+    il.eval_live_regs(data)
+  end
   walk_block(data, func.blocks.first)
+  func.has_types = true
 end
 
 return resolve_types

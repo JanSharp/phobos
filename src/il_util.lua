@@ -1374,6 +1374,7 @@ end
 ----------------------------------------------------------------------------------------------------
 
 local visit_regs_for_inst
+local visit_all_regs
 do
   local get = 1
   local set = 2
@@ -1475,12 +1476,25 @@ do
   -- ---@param visit_ptr fun(data: T, inst: ILInstruction, ptr: ILPointer, get_set: 1|2|3)
 
   ---@generic T
+  ---@param data T
   ---@param inst ILInstruction
   ---@param visit_reg_func fun(data: T, inst: ILInstruction, reg: ILRegister, get_set: 1|2|3)
-  ---@param data T
   function visit_regs_for_inst(data, inst, visit_reg_func)
     visit_reg = visit_reg_func
     visitor_lut[inst.inst_type](data, inst)
+  end
+
+  ---@generic T
+  ---@param data T
+  ---@param func ILFunction
+  ---@param visit_reg_func fun(data: T, inst: ILInstruction, reg: ILRegister, get_set: 1|2|3)
+  function visit_all_regs(data, func, visit_reg_func)
+    visit_reg = visit_reg_func
+    local inst = func.instructions.first
+    while inst do
+      visitor_lut[inst.inst_type](data, inst)
+      inst = inst.next
+    end
   end
 end
 
@@ -1495,12 +1509,14 @@ do
   end
 
   function eval_start_stop_for_all_regs(data)
+    if data.func.has_start_stop_insts then return end
     data.all_regs = {}
     local inst = data.func.instructions.first
     while inst do
       visit_regs_for_inst(data, inst, visit_reg)
       inst = inst.next
     end
+    data.func.has_start_stop_insts = true
   end
 end
 
@@ -1573,6 +1589,21 @@ end
 local eval_live_regs
 do
   function eval_live_regs(data)
+    if data.func.has_reg_liveliness then return end
+
+    if not data.func.has_start_stop_insts then
+      eval_start_stop_for_all_regs(data)
+    end
+
+    -- data.all_regs is also populated by `eval_start_stop_for_all_regs`
+    if not data.all_regs then
+      data.all_regs = {}
+      ---@diagnostic disable-next-line: redefined-local
+      visit_all_regs(data, data.func, function(data, _, reg)
+        data.all_regs[#data.all_regs+1] = reg
+      end)
+    end
+
     local start_at_list_lut = {}
     local start_at_lut_lut = {}
     local stop_at_list_lut = {}
@@ -1638,10 +1669,13 @@ do
       end
       inst = inst.next
     end
+
+    data.func.has_reg_liveliness = true
   end
 end
 
 local determine_reg_usage_for_inst
+local determine_reg_usage
 do
   local get = 1
   local set = 2
@@ -1665,6 +1699,16 @@ do
 
   function determine_reg_usage_for_inst(inst)
     visit_regs_for_inst(nil, inst, visit_reg)
+  end
+
+  ---@param func ILFunction
+  function determine_reg_usage(func)
+    local inst = func.instructions.first
+    while inst do
+      visit_regs_for_inst(nil, inst, visit_reg)
+      inst = inst.next
+    end
+    func.has_reg_usage = true
   end
 end
 
@@ -1692,6 +1736,9 @@ end
 --
 -- - [ ] reg.captured_as_upval
 -- - [ ] reg.current_reg
+
+-- TODO: only run steps if the function actually has that data evaluated already. [...]
+-- Like don't run `normalize_blocks_for_inst` if the function doesn't have `has_blocks`
 
 ---@param inst ILInstruction
 ---@param inserted_inst ILInstruction
@@ -1811,6 +1858,7 @@ return {
   eval_start_stop_for_regs_for_inst = eval_start_stop_for_regs_for_inst,
   eval_live_regs = eval_live_regs,
   determine_reg_usage_for_inst = determine_reg_usage_for_inst,
+  determine_reg_usage = determine_reg_usage,
 
   -- il modifications
 
