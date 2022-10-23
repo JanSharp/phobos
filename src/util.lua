@@ -45,6 +45,18 @@ local function clear_array(t)
   end
 end
 
+---@generic T
+---@param array T[]
+---@param element T
+local function remove_from_array(array, element)
+  for i = 1, #array do
+    if array[i] == element then
+      table.remove(array, i)
+      break
+    end
+  end
+end
+
 local function replace_table(target, new_data)
   clear_table(target)
   for k, v in pairs(new_data) do
@@ -298,6 +310,7 @@ return {
   invert = invert,
   clear_table = clear_table,
   clear_array = clear_array,
+  remove_from_array = remove_from_array,
   replace_table = replace_table,
   shallow_copy = shallow_copy,
   optional_shallow_copy = optional_shallow_copy,

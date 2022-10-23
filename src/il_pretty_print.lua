@@ -128,7 +128,7 @@ local function get_label(instruction, context)
     instruction_label_getter_lut[instruction.inst_type]
     or function()
       return "UNKNOWN"
-    end
+    end--[[@as fun(inst, context):string]]
   )(instruction, context)
 end
 

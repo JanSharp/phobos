@@ -1506,16 +1506,40 @@ end
 
 local eval_start_stop_for_regs_for_inst
 do
+  ---@param data nil
+  ---@param inst ILInstruction
+  ---@param reg ILRegister
   local function visit_reg(data, inst, reg)
-    if not reg.start_at or inst.index < reg.start_at.index then
-      if reg.start_at then
-        for i = 1, #inst.regs_start_at_list do
-          if inst.regs_start_at_list[i] == reg then
-            table.remove(inst.regs_start_at_list, i)
-            break
+    if not inst.live_regs then
+      local prev_inst = inst.prev
+      if prev_inst then
+        local live_regs = util.shallow_copy(prev_inst.live_regs)
+        for i = #live_regs, 1, -1 do
+          if prev_inst.regs_stop_at_lut[live_regs[i]] then
+            table.remove(live_regs, i)
           end
         end
-        inst.regs_start_at_lut[reg] = nil
+        live_regs[#live_regs+1] = reg
+        inst.live_regs = live_regs
+      else
+        inst.live_regs = {reg}
+      end
+    end
+
+    ---@param start_inst ILInstruction @ inclusive
+    ---@param stop_inst ILInstruction @ exclusive
+    local function add_to_live_regs(start_inst, stop_inst)
+      while start_inst ~= stop_inst do
+        start_inst.live_regs[#start_inst.live_regs+1] = reg
+        start_inst = start_inst.next
+      end
+    end
+
+    if not reg.start_at or inst.index < reg.start_at.index then
+      if reg.start_at then
+        util.remove_from_array(reg.start_at.regs_start_at_list, reg)
+        reg.start_at.regs_start_at_lut[reg] = nil
+        add_to_live_regs(inst.next, reg.start_at.prev)
       end
       reg.start_at = inst
       inst.regs_start_at_list = inst.regs_start_at_list or {}
@@ -1526,13 +1550,9 @@ do
 
     if not reg.stop_at or inst.index > reg.stop_at.index then
       if reg.stop_at then
-        for i = 1, #inst.regs_stop_at_list do
-          if inst.regs_stop_at_list[i] == reg then
-            table.remove(inst.regs_stop_at_list, i)
-            break
-          end
-        end
-        inst.regs_stop_at_lut[reg] = nil
+        util.remove_from_array(reg.stop_at.regs_stop_at_list, reg)
+        reg.stop_at.regs_stop_at_lut[reg] = nil
+        add_to_live_regs(reg.stop_at.next, inst)
       end
       reg.stop_at = inst
       inst.regs_stop_at_list = inst.regs_stop_at_list or {}
@@ -1541,7 +1561,6 @@ do
       inst.regs_stop_at_lut[reg] = true
     end
 
-    -- TODO: live_regs
     -- TODO: pre_state
     -- TODO: post_state
   end
@@ -1662,7 +1681,7 @@ end
 -- - [x] inst.regs_start_at_lut
 -- - [x] inst.regs_stop_at_list
 -- - [x] inst.regs_stop_at_lut
--- - [ ] inst.live_regs
+-- - [x] inst.live_regs
 -- - [ ] inst.pre_state
 -- - [ ] inst.post_state
 -- - [x] reg.start_at
