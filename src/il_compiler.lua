@@ -387,12 +387,16 @@ do
     for _, reg in ipairs(inst.label.live_regs) do
       regs_still_alive_lut[reg] = true
     end
+    -- live_regs are not guaranteed to be in any order, so loop through all of them
+    local result
     for _, reg in ipairs(inst.live_regs) do
-      if reg.captured_as_upval and not regs_still_alive_lut[reg] then
-        return reg.current_reg.reg_index + 1
+      if reg.captured_as_upval and not regs_still_alive_lut[reg]
+        and (not result or reg.current_reg.reg_index < result)
+      then
+        result = reg.current_reg.reg_index + 1
       end
     end
-    return 0
+    return result or 0
   end
 
   generate_inst_lut = {
