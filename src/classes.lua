@@ -698,8 +698,9 @@
 ---| "scoping"
 
 ---@class ILInstruction : IntrusiveILLNode<ILInstruction>
----@field prev ILInstruction? @ (overridden because generics don't work) `nil` if this is the first node
----@field next ILInstruction? @ (overridden because generics don't work) `nil` if this is the last node
+---@field list ILInstructionILL @ (overridden) back reference
+---@field prev ILInstruction? @ (overridden) `nil` if this is the first node
+---@field next ILInstruction? @ (overridden) `nil` if this is the last node
 ---@field inst_type ILInstructionType
 ---@field position ILPosition|nil
 ---post IL generation data
@@ -711,6 +712,10 @@
 ---@field live_regs ILRegister[]
 ---@field pre_state ILState
 ---@field post_state ILState
+
+---@class ILInstructionILL : IntrusiveIndexedLinkedList<ILInstruction>
+---@field first ILInstruction? @ (overridden)
+---@field last ILInstruction? @ (overridden)
 
 ---@class ILState
 ---@field reg_types table<ILRegister, ILType>
@@ -820,7 +825,7 @@
 ---@class ILFunction
 ---@field parent_func ILFunction|nil @ `nil` if main chunk
 ---@field inner_functions ILFunction[]
----@field instructions ILInstruction[] @ intrusive ILL
+---@field instructions ILInstructionILL @ intrusive ILL
 ---@field upvals ILUpval[]
 ---@field param_regs ILRegister[]
 ---@field is_vararg boolean
@@ -831,7 +836,7 @@
 ---@field has_blocks boolean @ `blocks` on ILFunction and `block` on ILInstruction
 ---@field has_start_stop_insts boolean @ `start_at` and `stop_at` on ILRegister
 ---@field has_reg_liveliness boolean @ `regs_(start|stop)_at_(list|lut)` and `live_regs` on ILInstruction
----@field blocks ILBlock[] @ intrusive ILL
+---@field blocks ILBLockILL @ intrusive ILL
 ---@field has_types boolean @ `(pre|post)_state` on ILInstruction
 ---@field has_reg_usage boolean @ `total_get/set_count` and `temporary` on ILRegister
 ---@field is_compiling boolean @ `closure_index` on ILFUnction and `captured_as_upval` and `current_reg` on ILRegister
@@ -840,12 +845,19 @@
 ---temp compilation data
 ---@field closure_index integer @ **zero based** needed for closure instructions to know the function index
 
----@class ILBlock
+---@class ILBlock : IntrusiveILLNode<ILBlock>
+---@field list ILBLockILL @ (overridden) back reference
+---@field prev ILBlock? @ (overridden) `nil` if this is the first node
+---@field next ILBlock? @ (overridden) `nil` if this is the last node
 ---@field source_links ILBlockLink[] @ blocks flowing into this block
 ---@field start_inst ILInstruction @ the first instruction in this block
 ---@field stop_inst ILInstruction @ the last instruction in this block
 ---@field is_main_entry_block boolean
 ---@field target_links ILBlockLink[] @ blocks this block can flow to
+
+---@class ILBLockILL : IntrusiveIndexedLinkedList<ILBLock>
+---@field first ILBlock? @ (overridden)
+---@field last ILBlock? @ (overridden)
 
 ---@class ILBlockLink
 ---@field source_block ILBlock @ the block flowing to `target_block`
