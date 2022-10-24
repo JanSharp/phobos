@@ -1520,25 +1520,27 @@ do
   end
 end
 
-local eval_start_stop_for_regs_for_inst
+local eval_start_stop_and_liveliness_for_regs_for_inst
 do
-  ---@param data nil
+  ---@param func ILFunction
   ---@param inst ILInstruction
   ---@param reg ILRegister
-  local function visit_reg(data, inst, reg)
-    if not inst.live_regs then
-      local prev_inst = inst.prev
-      if prev_inst then
-        local live_regs = util.shallow_copy(prev_inst.live_regs)
-        for i = #live_regs, 1, -1 do
-          if prev_inst.regs_stop_at_lut[live_regs[i]] then
-            table.remove(live_regs, i)
+  local function visit_reg(func, inst, reg)
+    if func.has_reg_liveliness then
+      if not inst.live_regs then
+        local prev_inst = inst.prev
+        if prev_inst then
+          local live_regs = util.shallow_copy(prev_inst.live_regs)
+          for i = #live_regs, 1, -1 do
+            if prev_inst.regs_stop_at_lut[live_regs[i]] then
+              table.remove(live_regs, i)
+            end
           end
+          live_regs[#live_regs+1] = reg
+          inst.live_regs = live_regs
+        else
+          inst.live_regs = {reg}
         end
-        live_regs[#live_regs+1] = reg
-        inst.live_regs = live_regs
-      else
-        inst.live_regs = {reg}
       end
     end
 
@@ -1552,37 +1554,43 @@ do
     end
 
     if not reg.start_at or inst.index < reg.start_at.index then
-      if reg.start_at then
-        util.remove_from_array(reg.start_at.regs_start_at_list, reg)
-        reg.start_at.regs_start_at_lut[reg] = nil
-        add_to_live_regs(inst.next, reg.start_at.prev)
+      if func.has_reg_liveliness then
+        if reg.start_at then
+          util.remove_from_array(reg.start_at.regs_start_at_list, reg)
+          reg.start_at.regs_start_at_lut[reg] = nil
+          add_to_live_regs(inst.next, reg.start_at.prev)
+        end
+        inst.regs_start_at_list = inst.regs_start_at_list or {}
+        inst.regs_start_at_list[#inst.regs_start_at_list+1] = reg
+        inst.regs_start_at_lut = inst.regs_start_at_lut or {}
+        inst.regs_start_at_lut[reg] = true
       end
       reg.start_at = inst
-      inst.regs_start_at_list = inst.regs_start_at_list or {}
-      inst.regs_start_at_list[#inst.regs_start_at_list+1] = reg
-      inst.regs_start_at_lut = inst.regs_start_at_lut or {}
-      inst.regs_start_at_lut[reg] = true
     end
 
     if not reg.stop_at or inst.index > reg.stop_at.index then
-      if reg.stop_at then
-        util.remove_from_array(reg.stop_at.regs_stop_at_list, reg)
-        reg.stop_at.regs_stop_at_lut[reg] = nil
-        add_to_live_regs(reg.stop_at.next, inst)
+      if func.has_reg_liveliness then
+        if reg.stop_at then
+          util.remove_from_array(reg.stop_at.regs_stop_at_list, reg)
+          reg.stop_at.regs_stop_at_lut[reg] = nil
+          add_to_live_regs(reg.stop_at.next, inst)
+        end
+        inst.regs_stop_at_list = inst.regs_stop_at_list or {}
+        inst.regs_stop_at_list[#inst.regs_stop_at_list+1] = reg
+        inst.regs_stop_at_lut = inst.regs_stop_at_lut or {}
+        inst.regs_stop_at_lut[reg] = true
       end
       reg.stop_at = inst
-      inst.regs_stop_at_list = inst.regs_stop_at_list or {}
-      inst.regs_stop_at_list[#inst.regs_stop_at_list+1] = reg
-      inst.regs_stop_at_lut = inst.regs_stop_at_lut or {}
-      inst.regs_stop_at_lut[reg] = true
     end
 
     -- TODO: pre_state
     -- TODO: post_state
   end
 
-  function eval_start_stop_for_regs_for_inst(inst)
-    visit_regs_for_inst(nil, inst, visit_reg)
+  ---@param func ILFunction
+  ---@param inst ILInstruction
+  function eval_start_stop_and_liveliness_for_regs_for_inst(func, inst)
+    visit_regs_for_inst(func, inst, visit_reg)
   end
 end
 
@@ -1737,28 +1745,38 @@ end
 -- - [ ] reg.captured_as_upval
 -- - [ ] reg.current_reg
 
--- TODO: only run steps if the function actually has that data evaluated already. [...]
--- Like don't run `normalize_blocks_for_inst` if the function doesn't have `has_blocks`
+---@param func ILFunction
+---@param inst ILInstruction
+local function update_intermediate_data(func, inst)
+  if func.has_blocks then
+    normalize_blocks_for_inst(inst)
+  end
+  if func.has_start_stop_insts then
+    -- `func.has_reg_liveliness` is checked for in the following function
+    eval_start_stop_and_liveliness_for_regs_for_inst(func, inst)
+  end
+  if func.has_reg_usage then
+    determine_reg_usage_for_inst(inst)
+  end
+end
 
+---@param func ILFunction
 ---@param inst ILInstruction
 ---@param inserted_inst ILInstruction
 ---@return ILInstruction
-local function insert_after_inst(inst, inserted_inst)
+local function insert_after_inst(func, inst, inserted_inst)
   ill.insert_after(inst, inserted_inst)
-  normalize_blocks_for_inst(inserted_inst)
-  eval_start_stop_for_regs_for_inst(inserted_inst)
-  determine_reg_usage_for_inst(inserted_inst)
+  update_intermediate_data(func, inserted_inst)
   return inserted_inst
 end
 
+---@param func ILFunction
 ---@param inst ILInstruction
 ---@param inserted_inst ILInstruction
 ---@return ILInstruction
-local function insert_before_inst(inst, inserted_inst)
+local function insert_before_inst(func, inst, inserted_inst)
   ill.insert_before(inst, inserted_inst)
-  normalize_blocks_for_inst(inserted_inst)
-  eval_start_stop_for_regs_for_inst(inserted_inst)
-  determine_reg_usage_for_inst(inserted_inst)
+  update_intermediate_data(func, inserted_inst)
   return inserted_inst
 end
 
@@ -1767,9 +1785,7 @@ end
 ---@return ILInstruction
 local function prepend_inst(func, inserted_inst)
   ill.prepend(func.instructions, inserted_inst)
-  normalize_blocks_for_inst(inserted_inst)
-  eval_start_stop_for_regs_for_inst(inserted_inst)
-  determine_reg_usage_for_inst(inserted_inst)
+  update_intermediate_data(func, inserted_inst)
   return inserted_inst
 end
 
@@ -1778,9 +1794,7 @@ end
 ---@return ILInstruction
 local function append_inst(func, inserted_inst)
   ill.append(func.instructions, inserted_inst)
-  normalize_blocks_for_inst(inserted_inst)
-  eval_start_stop_for_regs_for_inst(inserted_inst)
-  determine_reg_usage_for_inst(inserted_inst)
+  update_intermediate_data(func, inserted_inst)
   return inserted_inst
 end
 
@@ -1855,7 +1869,7 @@ return {
   -- il registers
 
   eval_start_stop_for_all_regs = eval_start_stop_for_all_regs,
-  eval_start_stop_for_regs_for_inst = eval_start_stop_for_regs_for_inst,
+  eval_start_stop_and_liveliness_for_regs_for_inst = eval_start_stop_and_liveliness_for_regs_for_inst,
   eval_live_regs = eval_live_regs,
   determine_reg_usage_for_inst = determine_reg_usage_for_inst,
   determine_reg_usage = determine_reg_usage,
