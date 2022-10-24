@@ -1532,7 +1532,7 @@ do
         if prev_inst then
           local live_regs = util.shallow_copy(prev_inst.live_regs)
           for i = #live_regs, 1, -1 do
-            if prev_inst.regs_stop_at_lut[live_regs[i]] then
+            if prev_inst.regs_stop_at_lut and prev_inst.regs_stop_at_lut[live_regs[i]] then
               table.remove(live_regs, i)
             end
           end
@@ -1868,6 +1868,8 @@ return {
 
   -- il registers
 
+  visit_regs_for_inst = visit_regs_for_inst,
+  visit_all_regs = visit_all_regs,
   eval_start_stop_for_all_regs = eval_start_stop_for_all_regs,
   eval_start_stop_and_liveliness_for_regs_for_inst = eval_start_stop_and_liveliness_for_regs_for_inst,
   eval_live_regs = eval_live_regs,
@@ -1876,6 +1878,7 @@ return {
 
   -- il modifications
 
+  update_intermediate_data = update_intermediate_data,
   insert_after_inst = insert_after_inst,
   insert_before_inst = insert_before_inst,
   prepend_inst = prepend_inst,
