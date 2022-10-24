@@ -1690,7 +1690,7 @@ do
   local get_and_set = 3
 
   ---@param reg ILRegister
-  local function visit_reg(inst, reg, get_set)
+  local function visit_reg(data, inst, reg, get_set)
     reg.total_get_count = reg.total_get_count or 0
     reg.total_set_count = reg.total_set_count or 0
     if get_set ~= set then
