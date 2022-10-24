@@ -6,14 +6,6 @@ local opcodes = opcode_util.opcodes
 local ill = require("indexed_linked_list")
 local il = require("il_util")
 
-local function determine_reg_usage(data)
-  local inst = data.func.instructions.first
-  while inst do
-    il.determine_reg_usage_for_inst(inst)
-    inst = inst.next
-  end
-end
-
 local generate
 do
   ---@param data ILCompilerData
@@ -663,7 +655,7 @@ local function compile(func)
   local data = {func = func} ---@type ILCompilerData
   func.is_compiling = true
   make_bytecode_func(data)
-  determine_reg_usage(data)
+  il.determine_reg_usage(func)
 
   data.local_reg_count = 0
   data.compiled_instructions = ill.new(true)
