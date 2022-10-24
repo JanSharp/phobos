@@ -554,7 +554,7 @@ do
     end,
     ["ret"] = function(data, inst)
       if inst.ptrs[1] then
-        util.debug_abort("-- TODO: not implemented")
+        -- util.debug_abort("-- TODO: not implemented")
       else
         add_new_inst(data, inst.position, opcodes["return"], {a = 0, b = 1})
       end
@@ -640,6 +640,128 @@ local function make_bytecode_func(data)
   end
 end
 
+local expand_ptr_lists
+do
+  local lut = {
+    ["move"] = function(data, inst)
+    end,
+    ["get_upval"] = function(data, inst)
+    end,
+    ["set_upval"] = function(data, inst)
+    end,
+    ["get_table"] = function(data, inst)
+    end,
+    ["set_table"] = function(data, inst)
+    end,
+    ---@param data ILCompilerData
+    ---@param inst ILSetList
+    ["set_list"] = function(data, inst)
+      util.debug_abort("-- TODO: not implemented")
+    end,
+    ["new_table"] = function(data, inst)
+    end,
+    ---@param data ILCompilerData
+    ---@param inst ILConcat
+    ["concat"] = function(data, inst)
+      util.debug_abort("-- TODO: not implemented")
+    end,
+    ["binop"] = function(data, inst)
+    end,
+    ["unop"] = function(data, inst)
+    end,
+    ["label"] = function(data, inst)
+    end,
+    ["jump"] = function(data, inst)
+    end,
+    ["test"] = function(data, inst)
+    end,
+    ---@param data ILCompilerData
+    ---@param inst ILCall
+    ["call"] = function(data, inst)
+      util.debug_abort("-- TODO: not implemented")
+    end,
+    ---@param data ILCompilerData
+    ---@param inst ILRet
+    ["ret"] = function(data, inst)
+      if inst.ptrs[1] then
+        local regs_lut = {}
+        local regs_count = 0
+        for i, ptr in ipairs(inst.ptrs) do
+          if ptr.ptr_type == "reg" then
+            regs_count = regs_count + 1
+            regs_lut[ptr] = true
+          else
+            local temp_reg = il.new_reg()
+            il.insert_before_inst(data.func, inst, il.new_move{
+              position = inst.position,
+              right_ptr = ptr,
+              result_reg = temp_reg,
+            })
+            inst.ptrs[i] = temp_reg
+          end
+        end
+        il.update_intermediate_data(data.func, inst)
+
+        ---@type table<ILRegister, ILInstruction>
+        local reg_setter_lut = {}
+        local prev_inst = inst.prev
+        while regs_count > 0 do
+          util.debug_assert(prev_inst, "Impossible because there must be an instruction setting every \z
+            register that comes before an instruction using a register."
+          ) ---@cast prev_inst -nil
+          il.visit_regs_for_inst(nil, prev_inst, function(_, _, reg, get_set)
+            if regs_lut[reg] and bit32.band(get_set, 2) ~= 0 then
+              regs_count = regs_count - 1
+              regs_lut[reg] = nil
+              reg_setter_lut[reg] = prev_inst
+            end
+          end)
+          prev_inst = prev_inst.prev
+        end
+
+        -- TODO: think about this a bit more. I think it's functional but there are probably some improvements
+        ---@type ILInstruction
+        local prev_setter_inst
+        for i, reg in pairs(inst.ptrs) do
+          ---@cast reg ILRegister
+          local setter_inst = reg_setter_lut[reg]
+          if setter_inst then
+            if not reg.temporary or prev_setter_inst and setter_inst.index < prev_setter_inst.index then
+              local temp_reg = il.new_reg()
+              il.insert_after_inst(data.func, setter_inst, il.new_move{
+                position = inst.position,
+                right_ptr = reg,
+                result_reg = temp_reg,
+              })
+              inst.ptrs[i] = temp_reg
+            end
+            prev_setter_inst = setter_inst
+          end
+        end
+        il.update_intermediate_data(data.func, inst)
+      end
+    end,
+    ["closure"] = function(data, inst)
+    end,
+    ---@param data ILCompilerData
+    ---@param inst ILVararg
+    ["vararg"] = function(data, inst)
+      util.debug_abort("-- TODO: not implemented")
+    end,
+    ["scoping"] = function(data, inst)
+    end,
+  }
+
+  ---@param data ILCompilerData
+  function expand_ptr_lists(data)
+    local inst = data.func.instructions.first
+    while inst do
+      lut[inst.inst_type](data, inst)
+      inst = inst.next
+    end
+  end
+end
+
 ---@class ILCompilerData
 ---@field func ILFunction
 ---@field result CompiledFunc
@@ -656,6 +778,7 @@ local function compile(func)
   func.is_compiling = true
   make_bytecode_func(data)
   il.determine_reg_usage(func)
+  expand_ptr_lists(data)
 
   data.local_reg_count = 0
   data.compiled_instructions = ill.new(true)
