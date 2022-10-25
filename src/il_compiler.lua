@@ -99,12 +99,17 @@ do
   ---@param data ILCompilerData
   ---@param reg ILCompiledRegister
   local function stop_reg(data, reg)
-    data.local_reg_count = data.local_reg_count - 1
-    if reg.reg_index ~= data.local_reg_count then
-      util.debug_abort(
-        "Attempt to close a register that is not at top.\n\z
-        TODO: handle register shifting. Note that shifting of registers captured as upvalues is forbidden."
-      )
+    if reg.reg_index ~= data.local_reg_count - 1 then
+      data.local_reg_gaps[reg.reg_index] = true
+      -- it might maybe sometimes make sense to actually shift registers into the gap, but it's probably just
+      -- a wasted move instruction. Plus shifting registers captured as upvalues is forbidden
+    else
+      local stopped_reg_count = 1
+      while data.local_reg_gaps[data.local_reg_count - stopped_reg_count - 1] do
+        data.local_reg_gaps[data.local_reg_count - stopped_reg_count - 1] = nil
+        stopped_reg_count = stopped_reg_count + 1
+      end
+      data.local_reg_count = data.local_reg_count - stopped_reg_count
     end
     reg.start_at = get_first_inst(data)
     data.compiled_registers[#data.compiled_registers+1] = reg
@@ -113,6 +118,44 @@ do
   local generate_inst_lut
   local generate_inst
   do
+    ---@type table<string, fun(data: ILCompilerData, inst: ILInstruction)>
+    local restrict_register_indexes_lut = {
+      ---@param data ILCompilerData
+      ---@param inst ILSetList
+      ["set_list"] = function(data, inst)
+        util.debug_abort("-- TODO: not implemented")
+      end,
+      ---@param data ILCompilerData
+      ---@param inst ILConcat
+      ["concat"] = function(data, inst)
+        util.debug_abort("-- TODO: not implemented")
+      end,
+      ---@param data ILCompilerData
+      ---@param inst ILCall
+      ["call"] = function(data, inst)
+        util.debug_abort("-- TODO: not implemented")
+      end,
+      ---@param data ILCompilerData
+      ---@param inst ILRet
+      ["ret"] = function(data, inst)
+        if inst.ptrs then
+          for i, reg in ipairs(inst.ptrs) do
+            ---@cast reg ILRegister
+            util.debug_assert(reg.ptr_type == "reg", "The pre process should change all ptrs to regs.")
+            util.debug_assert(not reg.current_reg, "All registers for lists")
+            reg.current_reg = create_compiled_reg(data, data.local_reg_count + i - 1, reg.name)
+            -- reg.temp_sort_index = nil
+          end
+          data.local_reg_count = data.local_reg_count + #inst.ptrs
+        end
+      end,
+      ---@param data ILCompilerData
+      ---@param inst ILVararg
+      ["vararg"] = function(data, inst)
+        util.debug_abort("-- TODO: not implemented")
+      end,
+    }
+
     ---@class ILRegisterWithTempSortIndex : ILRegister
     ---@field temp_sort_index integer
 
@@ -145,7 +188,10 @@ do
       fill_regs_using_regs_list(inst.regs_start_at_list)
       local reg_count = #regs
       if reg_count == 0 then return end
-      sort_regs()
+      table.sort(regs, function(left, right)
+        return left.current_reg.reg_index > right.current_reg.reg_index
+      end)
+      -- sort_regs()
       for i = reg_count, 1, -1 do
         stop_reg(data, regs[i].current_reg)
         regs[i].temp_sort_index = nil
@@ -153,30 +199,50 @@ do
       end
     end
 
+    ---@param data ILCompilerData
+    ---@param inst ILInstruction
     local function start_local_regs(data, inst)
       if not inst.regs_stop_at_list then return end
-      fill_regs_using_regs_list(inst.regs_stop_at_list)
-      local reg_count = #regs
-      if reg_count == 0 then return end
-      sort_regs()
-      local reg_index_to_close_upvals_from
-      for i = 1, reg_count do
-        local reg = regs[i]
-        regs[i] = nil
-        reg.current_reg = create_compiled_reg(data, data.local_reg_count + i - 1, reg.name)
-        reg.temp_sort_index = nil
-        if reg.captured_as_upval and not reg_index_to_close_upvals_from then
-          reg_index_to_close_upvals_from = reg.current_reg.reg_index
+
+      if restrict_register_indexes_lut[inst.inst_type] then
+        local expected_resulting_count = data.local_reg_count + #inst.regs_stop_at_list
+        restrict_register_indexes_lut[inst.inst_type](data, inst)
+        util.debug_assert(data.local_reg_count == expected_resulting_count, "restrict_register_indexes_lut \z
+          set the incorrect amount of regs"
+        )
+        for _, reg in ipairs(inst.regs_stop_at_list) do
+          util.debug_assert(reg.current_reg, "restrict_register_indexes_lut must create regs \z
+            for all registers that stop at this instruction."
+          )
+          util.debug_assert(reg.current_reg.reg_index < expected_resulting_count,
+            "restrict_register_indexes_lut created regs past the reg counts which would create gaps which \z
+              is not allowed in start_local_regs"
+          )
         end
+      else
+        fill_regs_using_regs_list(inst.regs_stop_at_list)
+        local reg_count = #regs
+        if reg_count == 0 then return end
+        sort_regs()
+        local reg_index_to_close_upvals_from
+        for i = 1, reg_count do
+          local reg = regs[i]
+          regs[i] = nil
+          reg.current_reg = create_compiled_reg(data, data.local_reg_count + i - 1, reg.name)
+          reg.temp_sort_index = nil
+          if reg.captured_as_upval and not reg_index_to_close_upvals_from then
+            reg_index_to_close_upvals_from = reg.current_reg.reg_index
+          end
+        end
+        -- do this after all regs have been created - all regs are alive - for nice and clean debug symbols
+        if reg_index_to_close_upvals_from then
+          add_new_inst(data, inst.position, opcodes.jmp, {
+            a = reg_index_to_close_upvals_from + 1,
+            sbx = 0,
+          })
+        end
+        data.local_reg_count = data.local_reg_count + reg_count
       end
-      -- do this after all regs have been created - all regs are alive - for nice and clean debug symbols
-      if reg_index_to_close_upvals_from then
-        add_new_inst(data, inst.position, opcodes.jmp, {
-          a = reg_index_to_close_upvals_from + 1,
-          sbx = 0,
-        })
-      end
-      data.local_reg_count = data.local_reg_count + reg_count
     end
 
     ---@param inst ILInstruction
@@ -552,9 +618,16 @@ do
     ["call"] = function(data, inst)
       util.debug_abort("-- TODO: not implemented")
     end,
+    ---@param inst ILRet
     ["ret"] = function(data, inst)
       if inst.ptrs[1] then
-        -- util.debug_abort("-- TODO: not implemented")
+        if (inst.ptrs[#inst.ptrs]--[[@as ILRegister]]).is_vararg then
+          util.debug_abort("-- TODO: not implemented (vararg)")
+        end
+        add_new_inst(data, inst.position, opcodes["return"], {
+          a = (inst.ptrs[1]--[[@as ILRegister]]).current_reg.reg_index,
+          b = #inst.ptrs + 1,
+        })
       else
         add_new_inst(data, inst.position, opcodes["return"], {a = 0, b = 1})
       end
@@ -767,6 +840,7 @@ end
 ---@field result CompiledFunc
 -- ---@field stack table
 ---@field local_reg_count integer
+---@field local_reg_gaps table<integer, true>
 ---@field compiled_instructions IntrusiveIndexedLinkedList
 ---@field compiled_registers ILCompiledRegister[]
 ---@field constant_lut table<number|string|boolean, integer>
@@ -781,6 +855,7 @@ local function compile(func)
   expand_ptr_lists(data)
 
   data.local_reg_count = 0
+  data.local_reg_gaps = {}
   data.compiled_instructions = ill.new(true)
   data.compiled_registers = {}
   data.constant_lut = {}
