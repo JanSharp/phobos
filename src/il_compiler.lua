@@ -771,9 +771,9 @@ do
               result_reg = temp_reg,
             })
             inst.ptrs[i] = temp_reg
+            il.add_reg_to_inst_get(data.func, inst, temp_reg)
           end
         end
-        il.update_intermediate_data(data.func, inst)
 
         ---@type table<ILRegister, ILInstruction>
         local reg_setter_lut = {}
@@ -807,11 +807,12 @@ do
                 result_reg = temp_reg,
               })
               inst.ptrs[i] = temp_reg
+              il.remove_reg_from_inst_get(data.func, inst, reg)
+              il.add_reg_to_inst_get(data.func, inst, temp_reg)
             end
             prev_setter_inst = setter_inst
           end
         end
-        il.update_intermediate_data(data.func, inst)
       end
     end,
     ["closure"] = function(data, inst)

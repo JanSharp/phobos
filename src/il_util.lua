@@ -1375,6 +1375,7 @@ end
 
 local visit_regs_for_inst
 local visit_all_regs
+local inst_uses_reg
 do
   local get = 1
   local set = 2
@@ -1496,6 +1497,19 @@ do
       inst = inst.next
     end
   end
+
+  ---@param inst ILInstruction
+  ---@param reg ILRegister
+  function inst_uses_reg(inst, reg)
+    local result = false
+    visit_reg = function(_, _, current_reg, _)
+      if current_reg == reg then
+        result = true
+      end
+    end
+    visitor_lut[inst.inst_type](nil, inst)
+    return result
+  end
 end
 
 local eval_start_stop_for_all_regs
@@ -1520,13 +1534,15 @@ do
   end
 end
 
+local add_start_stop_and_liveliness_for_reg_for_inst
 local eval_start_stop_and_liveliness_for_regs_for_inst
 do
   ---@param func ILFunction
   ---@param inst ILInstruction
   ---@param reg ILRegister
-  local function visit_reg(func, inst, reg)
+  function add_start_stop_and_liveliness_for_reg_for_inst(func, inst, reg)
     if func.has_reg_liveliness then
+      -- initialize `live_regs` if they are nil. updating others is handled afterwards
       if not inst.live_regs then
         local prev_inst = inst.prev
         if prev_inst then
@@ -1590,7 +1606,47 @@ do
   ---@param func ILFunction
   ---@param inst ILInstruction
   function eval_start_stop_and_liveliness_for_regs_for_inst(func, inst)
-    visit_regs_for_inst(func, inst, visit_reg)
+    visit_regs_for_inst(func, inst, add_start_stop_and_liveliness_for_reg_for_inst)
+  end
+end
+
+local remove_start_stop_and_liveliness_for_reg_for_inst
+do
+  ---@param func ILFunction
+  ---@param inst ILInstruction
+  ---@param reg ILRegister
+  function remove_start_stop_and_liveliness_for_reg_for_inst(func, inst, reg)
+    local function do_stuff(iteration_key, start_stop_at_key, list_key, lut_key, end_iteration_inst)
+      if inst ~= reg[start_stop_at_key] then return end
+      if func.has_reg_liveliness then
+        inst[lut_key][reg] = nil
+        util.remove_from_array(inst[list_key], reg)
+      end
+      local current_inst = inst
+      while not inst_uses_reg(inst, reg) do
+        if func.has_reg_liveliness then
+          util.remove_from_array(current_inst.live_regs, reg)
+        end
+        current_inst = current_inst[iteration_key]
+        if current_inst == end_iteration_inst then -- only used in the first call to this function
+          if func.has_reg_liveliness then
+            reg.stop_at.regs_stop_at_lut[reg] = nil
+            util.remove_from_array(reg.stop_at.regs_stop_at_list, reg)
+          end
+          -- the register is no longer used at all, we are done
+          return true
+        end
+      end
+      ---@cast current_inst -nil
+      if func.has_reg_liveliness then
+        current_inst[lut_key][reg] = true
+        current_inst[list_key][#current_inst[list_key]+1] = reg
+      end
+      reg[start_stop_at_key] = current_inst
+    end
+
+    if do_stuff("next", "start_at", "regs_start_at_list", "regs_start_at_lut", reg.stop_at) then return end
+    do_stuff("prev", "stop_at", "regs_stop_at_list", "regs_stop_at_lut", nil)
   end
 end
 
@@ -1682,6 +1738,15 @@ do
   end
 end
 
+---@param reg ILRegister
+local function determine_temporary(reg)
+  reg.temporary = reg.total_get_count <= 1 and reg.total_set_count <= 1
+  if reg.is_vararg and not reg.temporary then
+    util.debug_abort("Malformed vararg register. Vararg registers must only be set once and used once.")
+  end
+end
+
+local add_reg_usage_for_reg_for_inst
 local determine_reg_usage_for_inst
 local determine_reg_usage
 do
@@ -1690,7 +1755,7 @@ do
   local get_and_set = 3
 
   ---@param reg ILRegister
-  local function visit_reg(data, inst, reg, get_set)
+  function add_reg_usage_for_reg_for_inst(data, inst, reg, get_set)
     reg.total_get_count = reg.total_get_count or 0
     reg.total_set_count = reg.total_set_count or 0
     if get_set ~= set then
@@ -1699,24 +1764,39 @@ do
     if get_set ~= get then
       reg.total_set_count = reg.total_set_count + 1
     end
-    reg.temporary = reg.total_get_count <= 1 and reg.total_set_count <= 1
-    if reg.is_vararg and not reg.temporary then
-      util.debug_abort("Malformed vararg register. Vararg registers must only be set once and used once.")
-    end
+    determine_temporary(reg)
   end
 
   function determine_reg_usage_for_inst(inst)
-    visit_regs_for_inst(nil, inst, visit_reg)
+    visit_regs_for_inst(nil, inst, add_reg_usage_for_reg_for_inst)
   end
 
   ---@param func ILFunction
   function determine_reg_usage(func)
     local inst = func.instructions.first
     while inst do
-      visit_regs_for_inst(nil, inst, visit_reg)
+      visit_regs_for_inst(nil, inst, add_reg_usage_for_reg_for_inst)
       inst = inst.next
     end
     func.has_reg_usage = true
+  end
+end
+
+local remove_reg_usage_for_reg_for_inst
+do
+  local get = 1
+  local set = 2
+  local get_and_set = 3
+
+  ---@param reg ILRegister
+  function remove_reg_usage_for_reg_for_inst(data, inst, reg, get_set)
+    if get_set ~= set then
+      reg.total_get_count = reg.total_get_count - 1
+    end
+    if get_set ~= get then
+      reg.total_set_count = reg.total_set_count - 1
+    end
+    determine_temporary(reg)
   end
 end
 
@@ -1747,10 +1827,63 @@ end
 
 ---@param func ILFunction
 ---@param inst ILInstruction
-local function update_intermediate_data(func, inst)
-  if func.has_blocks then
-    normalize_blocks_for_inst(inst)
+---@param reg ILRegister
+---@param get_set 1|2|3
+local function add_reg_to_inst(func, inst, reg, get_set)
+  if func.has_start_stop_insts then
+    -- `func.has_reg_liveliness` is checked for in the following function
+    add_start_stop_and_liveliness_for_reg_for_inst(func, inst, reg)
   end
+  if func.has_reg_usage then
+    add_reg_usage_for_reg_for_inst(nil, inst, reg, get_set)
+  end
+end
+
+---@param func ILFunction
+---@param inst ILInstruction
+---@param reg ILRegister
+local function add_reg_to_inst_get(func, inst, reg)
+  add_reg_to_inst(func, inst, reg, 1)
+end
+
+---@param func ILFunction
+---@param inst ILInstruction
+---@param reg ILRegister
+local function add_reg_to_inst_set(func, inst, reg)
+  add_reg_to_inst(func, inst, reg, 2)
+end
+
+---@param func ILFunction
+---@param inst ILInstruction
+---@param reg ILRegister
+---@param get_set 1|2|3
+local function remove_reg_from_inst(func, inst, reg, get_set)
+  if func.has_start_stop_insts then
+    -- `func.has_reg_liveliness` is checked for in the following function
+    remove_start_stop_and_liveliness_for_reg_for_inst(func, inst, reg)
+  end
+  if func.has_reg_usage then
+    remove_reg_usage_for_reg_for_inst(nil, inst, reg, get_set)
+  end
+end
+
+---@param func ILFunction
+---@param inst ILInstruction
+---@param reg ILRegister
+local function remove_reg_from_inst_get(func, inst, reg)
+  remove_reg_from_inst(func, inst, reg, 1)
+end
+
+---@param func ILFunction
+---@param inst ILInstruction
+---@param reg ILRegister
+local function remove_reg_from_inst_set(func, inst, reg)
+  remove_reg_from_inst(func, inst, reg, 2)
+end
+
+---@param func ILFunction
+---@param inst ILInstruction
+local function update_intermediate_data(func, inst)
   if func.has_start_stop_insts then
     -- `func.has_reg_liveliness` is checked for in the following function
     eval_start_stop_and_liveliness_for_regs_for_inst(func, inst)
@@ -1878,6 +2011,10 @@ return {
 
   -- il modifications
 
+  add_reg_to_inst_get = add_reg_to_inst_get,
+  add_reg_to_inst_set = add_reg_to_inst_set,
+  remove_reg_from_inst_get = remove_reg_from_inst_get,
+  remove_reg_from_inst_set = remove_reg_from_inst_set,
   update_intermediate_data = update_intermediate_data,
   insert_after_inst = insert_after_inst,
   insert_before_inst = insert_before_inst,
