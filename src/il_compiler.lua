@@ -917,13 +917,14 @@ do
   ---@param inst ILInstruction
   ---@param ptrs ILPointer[]
   local function expand_ptr_list(data, inst, ptrs)
-    -- TODO: handle the same register being in the ptrs list multiple times
     local regs_lut = {}
     local regs_count = 0
     for i, ptr in ipairs(ptrs) do
       if ptr.ptr_type == "reg" then
-        regs_count = regs_count + 1
-        regs_lut[ptr] = true
+        if not regs_lut[ptr] then
+          regs_count = regs_count + 1
+          regs_lut[ptr] = true
+        end
       else
         local temp_reg = il.new_reg()
         il.insert_before_inst(data.func, inst, il.new_move{
