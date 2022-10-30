@@ -124,6 +124,8 @@ do
       local top_reg_index = data.local_reg_count
       local reg_count = #inst.result_regs
 
+      -- TODO: use a gap instead of making a new temp reg if there is a temp reg
+
       local requires_temp_reg = false
       local register_list_index = top_reg_index
       ::do_it_again::
