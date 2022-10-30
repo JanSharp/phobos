@@ -807,7 +807,7 @@ do
       local function assign_from_temps(temp_regs, num_lhs, move_last_local)
         for i = num_lhs, 1, -1 do
           local left = lefts[i]
-          local right_reg = temp_regs[num_lhs - i + 1]
+          local right_reg = temp_regs[i]
           if left.type == "index" then
             generate_settable(left, stat.lhs[i], right_reg)
           elseif left.type == "local" then
