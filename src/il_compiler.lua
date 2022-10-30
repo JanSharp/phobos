@@ -269,17 +269,35 @@ do
       end,
     }
 
+    ---@param data ILCompilerData
+    ---@param first_reg_index integer
+    ---@param regs ILRegister[]
+    local function restrict_register_list(data, first_reg_index, regs)
+      for i, reg in ipairs(regs) do
+        util.debug_assert(reg.ptr_type == "reg", "The pre process should change all ptrs to regs.")
+        util.debug_assert(not reg.current_reg, "All registers for lists")
+        reg.current_reg = create_compiled_reg(data, first_reg_index + i - 1, reg.name)
+      end
+      data.local_reg_count = first_reg_index + #regs
+    end
+
     ---@type table<string, fun(data: ILCompilerData, inst: ILInstruction)>
     local restrict_register_indexes_lut = {
       ---@param data ILCompilerData
       ---@param inst ILSetList
       ["set_list"] = function(data, inst)
-        util.debug_abort("-- TODO: not implemented")
+        if inst.table_reg.current_reg.reg_index == data.local_reg_count - 1 then
+          restrict_register_list(data, data.local_reg_count, inst.right_ptrs)
+        else
+          -- gap for the temp reg
+          data.local_reg_gaps[data.local_reg_count] = true
+          restrict_register_list(data, data.local_reg_count + 1, inst.right_ptrs)
+        end
       end,
       ---@param data ILCompilerData
       ---@param inst ILConcat
       ["concat"] = function(data, inst)
-        util.debug_abort("-- TODO: not implemented")
+        restrict_register_list(data, data.local_reg_count, inst.right_ptrs)
       end,
       ---@param data ILCompilerData
       ---@param inst ILCall
@@ -290,14 +308,7 @@ do
       ---@param inst ILRet
       ["ret"] = function(data, inst)
         if inst.ptrs then
-          for i, reg in ipairs(inst.ptrs) do
-            ---@cast reg ILRegister
-            util.debug_assert(reg.ptr_type == "reg", "The pre process should change all ptrs to regs.")
-            util.debug_assert(not reg.current_reg, "All registers for lists")
-            reg.current_reg = create_compiled_reg(data, data.local_reg_count + i - 1, reg.name)
-            -- reg.temp_sort_index = nil
-          end
-          data.local_reg_count = data.local_reg_count + #inst.ptrs
+          restrict_register_list(data, data.local_reg_count, inst.ptrs)
         end
       end,
       ---@param data ILCompilerData
@@ -668,8 +679,24 @@ do
       const_or_ref_or_load_ptr_post(data, inst.position, inst.key_ptr, key)
       return inst.prev
     end,
+    ---@param inst ILSetList
     ["set_list"] = function(data, inst)
-      util.debug_abort("-- TODO: not implemented")
+      if (inst.right_ptrs[#inst.right_ptrs]--[[@as ILRegister]]).is_vararg then
+        util.debug_abort("-- TODO: not implemented (vararg)")
+      end
+      local table_reg_index = (inst.right_ptrs[1]--[[@as ILRegister]]).current_reg.reg_index - 1
+      add_new_inst(data, inst.position, opcodes.setlist, {
+        a = table_reg_index,
+        b = #inst.right_ptrs,
+        c = ((inst.start_index - 1) / phobos_consts.fields_per_flush) + 1,
+      })
+      if inst.table_reg.current_reg.reg_index ~= table_reg_index then
+        add_new_inst(data, inst.position, opcodes.move, {
+          a = table_reg_index,
+          b = inst.table_reg.current_reg.reg_index,
+        })
+      end
+      return inst.prev
     end,
     ---@param inst ILNewTable
     ["new_table"] = function(data, inst)
@@ -682,8 +709,15 @@ do
       ensure_is_top_reg_post(data, inst.position, inst.result_reg.current_reg, reg)
       return inst.prev
     end,
+    ---@param inst ILConcat
     ["concat"] = function(data, inst)
-      util.debug_abort("-- TODO: not implemented")
+      local register_list_index = (inst.right_ptrs[1]--[[@as ILRegister]]).current_reg.reg_index
+      add_new_inst(data, inst.position, opcodes.concat, {
+        a = inst.result_reg.current_reg.reg_index,
+        b = register_list_index,
+        c = register_list_index + #inst.right_ptrs - 1,
+      })
+      return inst.prev
     end,
     ---@param inst ILBinop
     ["binop"] = function(data, inst)
@@ -879,6 +913,69 @@ end
 
 local expand_ptr_lists
 do
+  ---@param data ILCompilerData
+  ---@param inst ILInstruction
+  ---@param ptrs ILPointer[]
+  local function expand_ptr_list(data, inst, ptrs)
+    -- TODO: handle the same register being in the ptrs list multiple times
+    local regs_lut = {}
+    local regs_count = 0
+    for i, ptr in ipairs(ptrs) do
+      if ptr.ptr_type == "reg" then
+        regs_count = regs_count + 1
+        regs_lut[ptr] = true
+      else
+        local temp_reg = il.new_reg()
+        il.insert_before_inst(data.func, inst, il.new_move{
+          position = inst.position,
+          right_ptr = ptr,
+          result_reg = temp_reg,
+        })
+        ptrs[i] = temp_reg
+        il.add_reg_to_inst_get(data.func, inst, temp_reg)
+      end
+    end
+
+    ---@type table<ILRegister, ILInstruction>
+    local reg_setter_lut = {}
+    local prev_inst = inst.prev
+    while regs_count > 0 do
+      util.debug_assert(prev_inst, "Impossible because there must be an instruction setting every \z
+        register that comes before an instruction using a register."
+      ) ---@cast prev_inst -nil
+      il.visit_regs_for_inst(nil, prev_inst, function(_, _, reg, get_set)
+        if regs_lut[reg] and bit32.band(get_set, 2) ~= 0 then
+          regs_count = regs_count - 1
+          regs_lut[reg] = nil
+          reg_setter_lut[reg] = prev_inst
+        end
+      end)
+      prev_inst = prev_inst.prev
+    end
+
+    -- TODO: think about this a bit more. I think it's functional but there are probably some improvements
+    ---@type ILInstruction
+    local prev_setter_inst
+    for i, reg in pairs(ptrs) do
+      ---@cast reg ILRegister
+      local setter_inst = reg_setter_lut[reg]
+      if setter_inst then
+        if not reg.temporary or prev_setter_inst and setter_inst.index < prev_setter_inst.index then
+          local temp_reg = il.new_reg()
+          il.insert_after_inst(data.func, setter_inst, il.new_move{
+            position = inst.position,
+            right_ptr = reg,
+            result_reg = temp_reg,
+          })
+          ptrs[i] = temp_reg
+          il.remove_reg_from_inst_get(data.func, inst, reg)
+          il.add_reg_to_inst_get(data.func, inst, temp_reg)
+        end
+        prev_setter_inst = setter_inst
+      end
+    end
+  end
+
   local lut = {
     ["move"] = function(data, inst)
     end,
@@ -893,14 +990,14 @@ do
     ---@param data ILCompilerData
     ---@param inst ILSetList
     ["set_list"] = function(data, inst)
-      util.debug_abort("-- TODO: not implemented")
+      expand_ptr_list(data, inst, inst.right_ptrs)
     end,
     ["new_table"] = function(data, inst)
     end,
     ---@param data ILCompilerData
     ---@param inst ILConcat
     ["concat"] = function(data, inst)
-      util.debug_abort("-- TODO: not implemented")
+      expand_ptr_list(data, inst, inst.right_ptrs)
     end,
     ["binop"] = function(data, inst)
     end,
@@ -921,62 +1018,7 @@ do
     ---@param inst ILRet
     ["ret"] = function(data, inst)
       if inst.ptrs[1] then
-        local regs_lut = {}
-        local regs_count = 0
-        for i, ptr in ipairs(inst.ptrs) do
-          if ptr.ptr_type == "reg" then
-            regs_count = regs_count + 1
-            regs_lut[ptr] = true
-          else
-            local temp_reg = il.new_reg()
-            il.insert_before_inst(data.func, inst, il.new_move{
-              position = inst.position,
-              right_ptr = ptr,
-              result_reg = temp_reg,
-            })
-            inst.ptrs[i] = temp_reg
-            il.add_reg_to_inst_get(data.func, inst, temp_reg)
-          end
-        end
-
-        ---@type table<ILRegister, ILInstruction>
-        local reg_setter_lut = {}
-        local prev_inst = inst.prev
-        while regs_count > 0 do
-          util.debug_assert(prev_inst, "Impossible because there must be an instruction setting every \z
-            register that comes before an instruction using a register."
-          ) ---@cast prev_inst -nil
-          il.visit_regs_for_inst(nil, prev_inst, function(_, _, reg, get_set)
-            if regs_lut[reg] and bit32.band(get_set, 2) ~= 0 then
-              regs_count = regs_count - 1
-              regs_lut[reg] = nil
-              reg_setter_lut[reg] = prev_inst
-            end
-          end)
-          prev_inst = prev_inst.prev
-        end
-
-        -- TODO: think about this a bit more. I think it's functional but there are probably some improvements
-        ---@type ILInstruction
-        local prev_setter_inst
-        for i, reg in pairs(inst.ptrs) do
-          ---@cast reg ILRegister
-          local setter_inst = reg_setter_lut[reg]
-          if setter_inst then
-            if not reg.temporary or prev_setter_inst and setter_inst.index < prev_setter_inst.index then
-              local temp_reg = il.new_reg()
-              il.insert_after_inst(data.func, setter_inst, il.new_move{
-                position = inst.position,
-                right_ptr = reg,
-                result_reg = temp_reg,
-              })
-              inst.ptrs[i] = temp_reg
-              il.remove_reg_from_inst_get(data.func, inst, reg)
-              il.add_reg_to_inst_get(data.func, inst, temp_reg)
-            end
-            prev_setter_inst = setter_inst
-          end
-        end
+        expand_ptr_list(data, inst, inst.ptrs)
       end
     end,
     ["closure"] = function(data, inst)
