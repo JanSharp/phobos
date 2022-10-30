@@ -119,6 +119,157 @@ do
   local generate_inst
   do
     ---@type table<string, fun(data: ILCompilerData, inst: ILInstruction)>
+    local fix_register_indexes_lut = {
+      ---@param data ILCompilerData
+      ---@param inst ILCall
+      ["call"] = function(data, inst)
+        util.debug_abort("-- TODO: not implemented")
+      end,
+      ---@param data ILCompilerData
+      ---@param inst ILVararg
+      ["vararg"] = function(data, inst)
+        local top_reg_index = data.local_reg_count
+        local reg_count = #inst.result_regs
+
+        local requires_temp_reg = false
+        local register_list_index = top_reg_index
+        ::do_it_again::
+
+        ---@type table<integer, true?>
+        local free_register_indexes_lut = {[top_reg_index] = requires_temp_reg or nil}
+        ---@type table<integer, {is_done: boolean, is_loop: boolean, moves: {source_reg: integer, target_reg: integer}[]}>
+        local loop_or_chain_reg_lut = {}
+        local reg_moving_into_top_reg_index = nil
+
+        local function is_free_target_index(reg_index)
+          -- moving into a register that is still alive past this instruction, it's a downwards move
+          return reg_index < register_list_index
+            or reg_index >= register_list_index + reg_count -- detect upwards moves
+        end
+
+        local function check_for_loop(reg_index)
+          local current_reg_index = reg_index
+          while not is_free_target_index(current_reg_index) do
+            local result_reg_index = current_reg_index - register_list_index + 1
+            current_reg_index = inst.result_regs[result_reg_index].current_reg.reg_index
+            if current_reg_index == reg_index then return true end
+          end
+          return false
+        end
+
+        local function add_loop_or_chain(first_reg_index, is_loop, stop_condition)
+          local current_reg_index = first_reg_index
+          local moves = {}
+          local loop = {is_loop = is_loop, moves = moves}
+          repeat
+            loop_or_chain_reg_lut[current_reg_index] = loop
+            local result_reg_index = current_reg_index - register_list_index + 1
+            local move_data = {source_reg = current_reg_index}
+            current_reg_index = inst.result_regs[result_reg_index].current_reg.reg_index
+            move_data.target_reg = current_reg_index
+            moves[#moves+1] = move_data
+          until stop_condition(current_reg_index)
+        end
+
+        local function add_loop(first_reg_index)
+          add_loop_or_chain(first_reg_index, true, function(current_reg_index)
+            return current_reg_index == first_reg_index
+          end)
+        end
+
+        local function add_chain(first_reg_index)
+          add_loop_or_chain(first_reg_index, false, function(current_reg_index)
+            return is_free_target_index(current_reg_index)
+          end)
+        end
+
+        for i, reg in ipairs(inst.result_regs) do
+          local current_reg_index = register_list_index + i - 1
+          if loop_or_chain_reg_lut[current_reg_index] then goto continue end
+          if is_free_target_index(current_reg_index) then
+            if reg.current_reg.reg_index == top_reg_index then
+              reg_moving_into_top_reg_index = current_reg_index
+            else
+              free_register_indexes_lut[current_reg_index] = true
+            end
+          elseif reg.current_reg.reg_index ~= current_reg_index
+            and not free_register_indexes_lut[reg.current_reg.reg_index]
+          then
+            -- check if this is actually a loop
+            if check_for_loop(current_reg_index) then
+              if not requires_temp_reg then
+                requires_temp_reg = true
+                register_list_index = register_list_index + 1
+                -- now that it requires a temp reg, it has to start over since all registers have been shifted
+                goto do_it_again
+              end
+              -- it's a loop
+              add_loop(current_reg_index)
+            else
+              -- it's just a chain ending in a free move, not a loop
+              add_chain(current_reg_index)
+            end
+          end
+          ::continue::
+        end
+
+        if reg_moving_into_top_reg_index then
+          add_new_inst(data, inst.position, opcodes.move, {
+            a = top_reg_index,
+            b = reg_moving_into_top_reg_index,
+          })
+        end
+
+        for i = reg_count, 1, -1 do
+          local reg = inst.result_regs[i]
+          local current_reg_index = register_list_index + i - 1
+          if current_reg_index == reg_moving_into_top_reg_index then goto continue end
+          local loop_or_chain = loop_or_chain_reg_lut[current_reg_index]
+          if loop_or_chain then
+            if loop_or_chain.is_done then goto continue end
+            if loop_or_chain.is_loop then -- loop
+              local moves = loop_or_chain.moves
+              local last_move = moves[#moves]
+              add_new_inst(data, inst.position, opcodes.move, {
+                a = last_move.target_reg,
+                b = top_reg_index,
+              })
+              for j = 1, #moves - 1 do
+                local move = loop_or_chain.moves[j]
+                add_new_inst(data, inst.position, opcodes.move, {
+                  a = move.target_reg,
+                  b = move.source_reg,
+                })
+              end
+              add_new_inst(data, inst.position, opcodes.move, {
+                a = top_reg_index,
+                b = last_move.source_reg,
+              })
+            else -- chain
+              for j = #loop_or_chain.moves, 1, -1 do
+                local move = loop_or_chain.moves[j]
+                add_new_inst(data, inst.position, opcodes.move, {
+                  a = move.target_reg,
+                  b = move.source_reg,
+                })
+              end
+            end
+            loop_or_chain.is_done = true
+          elseif reg.current_reg.reg_index ~= current_reg_index then
+            -- everything that isn't in a loop or chain is a simple move
+            add_new_inst(data, inst.position, opcodes.move, {
+              a = reg.current_reg.reg_index,
+              b = current_reg_index,
+            })
+          end
+          ::continue::
+        end
+
+        inst.register_list_index = register_list_index
+      end,
+    }
+
+    ---@type table<string, fun(data: ILCompilerData, inst: ILInstruction)>
     local restrict_register_indexes_lut = {
       ---@param data ILCompilerData
       ---@param inst ILSetList
@@ -152,7 +303,7 @@ do
       ---@param data ILCompilerData
       ---@param inst ILVararg
       ["vararg"] = function(data, inst)
-        util.debug_abort("-- TODO: not implemented")
+        util.debug_abort("Impossible because no registers should ever stop at an ILVararg instruction.")
       end,
     }
 
@@ -184,18 +335,23 @@ do
     -- when reading these functions remember that we are generating from back to front
 
     local function stop_local_regs(data, inst)
-      if not inst.regs_start_at_list then return end
-      fill_regs_using_regs_list(inst.regs_start_at_list)
-      local reg_count = #regs
-      if reg_count == 0 then return end
-      table.sort(regs, function(left, right)
-        return left.current_reg.reg_index > right.current_reg.reg_index
-      end)
-      -- sort_regs()
-      for i = reg_count, 1, -1 do
-        stop_reg(data, regs[i].current_reg)
-        regs[i].temp_sort_index = nil
-        regs[i] = nil
+      if inst.regs_start_at_list then
+        fill_regs_using_regs_list(inst.regs_start_at_list)
+        local reg_count = #regs
+        if reg_count == 0 then return end
+        table.sort(regs, function(left, right)
+          return left.current_reg.reg_index > right.current_reg.reg_index
+        end)
+        -- sort_regs()
+        for i = reg_count, 1, -1 do
+          stop_reg(data, regs[i].current_reg)
+          regs[i].temp_sort_index = nil
+          regs[i] = nil
+        end
+      end
+      local fix_register_indexes = fix_register_indexes_lut[inst.inst_type]
+      if fix_register_indexes then
+        fix_register_indexes(data, inst)
       end
     end
 
@@ -643,8 +799,16 @@ do
       ensure_is_top_reg_post(data, inst.position, inst.result_reg.current_reg, reg)
       return inst.prev
     end,
+    ---@param inst ILVararg
     ["vararg"] = function(data, inst)
-      util.debug_abort("-- TODO: not implemented")
+      if inst.result_regs[#inst.result_regs].is_vararg then
+        util.debug_abort("-- TODO: not implemented (vararg)")
+      end
+      add_new_inst(data, inst.position, opcodes.vararg, {
+        a = inst.register_list_index,
+        b = #inst.result_regs + 1,
+      })
+      return inst.prev
     end,
     ["scoping"] = function(data, inst)
       -- no op
@@ -820,7 +984,7 @@ do
     ---@param data ILCompilerData
     ---@param inst ILVararg
     ["vararg"] = function(data, inst)
-      util.debug_abort("-- TODO: not implemented")
+      -- nothing to do, vararg only outputs a list of registers, doesn't take an input
     end,
     ["scoping"] = function(data, inst)
     end,

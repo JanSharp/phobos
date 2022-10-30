@@ -817,6 +817,8 @@
 ---@class ILVararg : ILInstruction
 ---@field inst_type "vararg"
 ---@field result_regs ILRegister[] @ The last one can be an `ILVarargRegister`
+---temp compilation data
+---@field register_list_index integer
 
 ---@class ILScoping : ILInstruction
 ---@field inst_type "scoping"

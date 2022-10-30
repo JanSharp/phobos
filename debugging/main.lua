@@ -218,8 +218,9 @@ local function compile(filename)
       success, err = pcall(require("il_blocks"), il)
       if not success then print(err) goto finish end
 
-      success, err = pcall(require("il_types"), il)
-      if not success then print(err) goto finish end
+      -- TODO: fix il_types for `local foo; foo = ...`
+      -- success, err = pcall(require("il_types"), il)
+      -- if not success then print(err) goto finish end
 
       success, err = pcall(function()
         local il_func_id = 0
