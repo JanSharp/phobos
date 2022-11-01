@@ -1041,38 +1041,17 @@ do
     end
   end
 
-  local lut = {
-    ["move"] = function(data, inst)
-    end,
-    ["get_upval"] = function(data, inst)
-    end,
-    ["set_upval"] = function(data, inst)
-    end,
-    ["get_table"] = function(data, inst)
-    end,
-    ["set_table"] = function(data, inst)
-    end,
+  ---@type table<string, fun(data: ILCompilerData, inst: ILInstruction)>
+  local expand_ptr_list_lut = {
     ---@param data ILCompilerData
     ---@param inst ILSetList
     ["set_list"] = function(data, inst)
       expand_ptr_list(data, inst, inst.right_ptrs)
     end,
-    ["new_table"] = function(data, inst)
-    end,
     ---@param data ILCompilerData
     ---@param inst ILConcat
     ["concat"] = function(data, inst)
       expand_ptr_list(data, inst, inst.right_ptrs)
-    end,
-    ["binop"] = function(data, inst)
-    end,
-    ["unop"] = function(data, inst)
-    end,
-    ["label"] = function(data, inst)
-    end,
-    ["jump"] = function(data, inst)
-    end,
-    ["test"] = function(data, inst)
     end,
     ---@param data ILCompilerData
     ---@param inst ILCall
@@ -1086,22 +1065,17 @@ do
         expand_ptr_list(data, inst, inst.ptrs)
       end
     end,
-    ["closure"] = function(data, inst)
-    end,
-    ---@param data ILCompilerData
-    ---@param inst ILVararg
-    ["vararg"] = function(data, inst)
-      -- nothing to do, vararg only outputs a list of registers, doesn't take an input
-    end,
-    ["scoping"] = function(data, inst)
-    end,
+    -- nothing to do for vararg, it only outputs a list of registers, doesn't take an input
   }
 
   ---@param data ILCompilerData
   function expand_ptr_lists(data)
     local inst = data.func.instructions.first
     while inst do
-      lut[inst.inst_type](data, inst)
+      local expand_ptrs = expand_ptr_list_lut[inst.inst_type]
+      if expand_ptrs then
+        expand_ptrs(data, inst)
+      end
       inst = inst.next
     end
   end
