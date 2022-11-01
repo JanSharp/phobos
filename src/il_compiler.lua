@@ -5,9 +5,12 @@ local opcode_util = require("opcode_util")
 local opcodes = opcode_util.opcodes
 local ill = require("indexed_linked_list")
 local il = require("il_util")
+local stack = require("stack")
 
 local generate
 do
+  local restore_last_snapshot = false
+
   ---@param data ILCompilerData
   ---@param position Position
   ---@param op Opcode
@@ -27,17 +30,6 @@ do
   end
 
   ---@param data ILCompilerData
-  ---@param inst ILCompiledInstruction
-  ---@param inserted_inst ILCompiledInstruction
-  local function insert_inst(data, inst, inserted_inst)
-    if not inst then
-      add_inst(data, inserted_inst)
-    else
-      ill.insert_before(inst, inserted_inst)
-    end
-  end
-
-  ---@param data ILCompilerData
   ---@param position Position
   ---@param op Opcode
   ---@param args InstructionArguments
@@ -49,21 +41,52 @@ do
   end
 
   ---@param data ILCompilerData
-  ---@param inst ILCompiledInstruction
-  ---@param position Position
-  ---@param op Opcode
-  ---@param args InstructionArguments
-  ---@return ILCompiledInstruction inserted_inst
-  local function insert_new_inst(data, inst, position, op, args)
-    local inserted_inst = new_inst(data, position, op, args)
-    insert_inst(data, inst, inserted_inst)
-    return inserted_inst
-  end
-
-  ---@param data ILCompilerData
   ---@return ILCompiledInstruction
   local function get_first_inst(data)
     return data.compiled_instructions.first--[[@as ILCompiledInstruction]]
+  end
+
+  ---@param data ILCompilerData
+  ---@param current_inst ILInstruction
+  local function take_snapshot(data, current_inst)
+    ---@type ILCompilerDataSnapshot
+    local snapshot = {
+      first_inst = get_first_inst(data),
+      compiled_registers_count = data.compiled_registers_count,
+      local_reg_gaps = util.shallow_copy(data.local_reg_gaps),
+      local_reg_count = data.local_reg_count,
+      constants_count = data.constants_count,
+      nil_constant_idx = data.nil_constant_idx,
+      nan_constant_idx = data.nan_constant_idx,
+      all_jumps = util.shallow_copy(data.all_jumps),
+      max_stack_size = data.result.max_stack_size,
+      current_inst = current_inst,
+    }
+    stack.push(data.snapshots, snapshot)
+  end
+
+  ---@param data ILCompilerData
+  ---@return ILInstruction
+  local function load_snapshot(data)
+    local snapshot = stack.pop(data.snapshots)
+    util.debug_assert(snapshot, "Attempt to load a snapshot when there are no snapshots on the stack.")
+    while snapshot.first_inst.prev do
+      ill.remove(snapshot.first_inst.prev)
+    end
+    for i = snapshot.constants_count, data.constants_count - 1 do
+      local constant = data.result.constants[i]
+      data.constant_lut[constant.index] = nil
+      data.result.constants[i] = nil
+    end
+    data.compiled_registers_count = snapshot.compiled_registers_count
+    data.local_reg_gaps = snapshot.local_reg_gaps
+    data.local_reg_count = snapshot.local_reg_count
+    data.constants_count = snapshot.constants_count
+    data.nil_constant_idx = snapshot.nil_constant_idx
+    data.nan_constant_idx = snapshot.nan_constant_idx
+    data.all_jumps = snapshot.all_jumps
+    data.result.max_stack_size = snapshot.max_stack_size
+    return snapshot.current_inst
   end
 
   ---@class ILCompiledRegister
@@ -263,10 +286,9 @@ do
       inst.register_list_index = register_list_index
     end
 
-    ---@type table<string, fun(data: ILCompilerData, inst: ILInstruction)>
-    local fix_register_indexes_lut = {
-      ["call"] = fix_register_indexes,
-      ["vararg"] = fix_register_indexes,
+    local fix_register_indexes_lut = util.invert{
+      "call",
+      "vararg",
     }
 
     ---@param data ILCompilerData
@@ -367,8 +389,7 @@ do
           regs[i] = nil
         end
       end
-      local fix_register_indexes = fix_register_indexes_lut[inst.inst_type]
-      if fix_register_indexes then
+      if fix_register_indexes_lut[inst.inst_type] then
         fix_register_indexes(data, inst)
       end
     end
@@ -419,8 +440,17 @@ do
       end
     end
 
+    local take_snapshots_before_types_lut = util.invert{
+      "set_list",
+      "call",
+      "ret",
+    }
+
     ---@param inst ILInstruction
     function generate_inst(data, inst)
+      if take_snapshots_before_types_lut[inst] then
+        take_snapshot(data, inst)
+      end
       stop_local_regs(data, inst)
       start_local_regs(data, inst)
       return generate_inst_lut[inst.inst_type](data, inst)
@@ -451,6 +481,7 @@ do
     end
   end
 
+  ---@param data ILCompilerData
   local function add_constant(data, ptr)
     -- NOTE: what does this mean: [...]
     -- unless const table is too big, then fetch into temporary (and emit warning: const table too large)
@@ -460,7 +491,8 @@ do
       if data.nil_constant_idx then
         return data.nil_constant_idx
       end
-      data.nil_constant_idx = #data.result.constants
+      data.nil_constant_idx = data.constants_count
+      data.constants_count = data.constants_count + 1
       data.result.constants[data.nil_constant_idx+1] = {node_type = "nil"}
       return data.nil_constant_idx
     end
@@ -469,7 +501,8 @@ do
       if data.nan_constant_idx then
         return data.nan_constant_idx
       end
-      data.nan_constant_idx = #data.result.constants
+      data.nan_constant_idx = data.constants_count
+      data.constants_count = data.constants_count + 1
       data.result.constants[data.nan_constant_idx+1] = {node_type = "number", value = 0/0}
       return data.nan_constant_idx
     end
@@ -477,7 +510,8 @@ do
     if data.constant_lut[ptr.value] then
       return data.constant_lut[ptr.value]
     end
-    local i = #data.result.constants
+    local i = data.constants_count
+    data.constants_count = data.constants_count + 1
     data.result.constants[i+1] = {
       node_type = ptr.ptr_type,
       value = ptr.value,
@@ -880,6 +914,10 @@ do
     local inst = data.func.instructions.last
     while inst do
       inst = generate_inst(data, inst)
+      if restore_last_snapshot then
+        restore_last_snapshot = false
+        inst = load_snapshot(data)
+      end
     end
   end
 end
@@ -1069,6 +1107,18 @@ do
   end
 end
 
+---@class ILCompilerDataSnapshot
+---@field first_inst ILCompiledInstruction
+---@field compiled_registers_count integer
+---@field local_reg_gaps table<integer, true>
+---@field local_reg_count integer
+---@field constants_count integer
+---@field nil_constant_idx integer?
+---@field nan_constant_idx integer?
+---@field all_jumps (ILJump|ILTest)[]
+---@field max_stack_size integer
+---@field current_inst ILInstruction
+
 ---@class ILCompilerData
 ---@field func ILFunction
 ---@field result CompiledFunc
@@ -1077,8 +1127,14 @@ end
 ---@field local_reg_gaps table<integer, true>
 ---@field compiled_instructions IntrusiveIndexedLinkedList
 ---@field compiled_registers ILCompiledRegister[]
+---@field compiled_registers_count integer
 ---@field constant_lut table<number|string|boolean, integer>
+---@field constants_count integer
+---@field nil_constant_idx integer?
+---@field nan_constant_idx integer?
 ---@field all_jumps (ILJump|ILTest)[]
+---@field all_jumps_count integer
+---@field snapshots ILCompilerDataSnapshot[]
 
 ---@param func ILFunction
 local function compile(func)
@@ -1092,8 +1148,12 @@ local function compile(func)
   data.local_reg_gaps = {}
   data.compiled_instructions = ill.new(true)
   data.compiled_registers = {}
+  data.compiled_registers_count = 0
   data.constant_lut = {}
+  data.constants_count = 0
   data.all_jumps = {}
+  data.all_jumps_count = 0
+  data.snapshots = stack.new_stack()
   generate(data)
 
   do
