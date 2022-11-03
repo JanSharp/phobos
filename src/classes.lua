@@ -752,6 +752,8 @@
 ---@field table_reg ILRegister
 ---@field start_index integer
 ---@field right_ptrs ILPointer[] @ The last one can be an `ILVarargRegister`
+---temp compilation data
+---@field forced_list_index integer?
 
 ---@class ILNewTable : ILInstruction
 ---@field inst_type "new_table"
@@ -763,6 +765,8 @@
 ---@field inst_type "concat"
 ---@field result_reg ILRegister
 ---@field right_ptrs ILPointer[]
+---temp compilation data
+---@field forced_list_index integer?
 
 ---@class ILBinop : ILInstruction
 ---@field inst_type "binop"
@@ -804,10 +808,15 @@
 ---@field func_reg ILRegister
 ---@field arg_ptrs ILPointer[] @ The last one can be an `ILVarargRegister`
 ---@field result_regs ILRegister[] @ The last one can be an `ILVarargRegister`
+---temp compilation data
+---@field register_list_index integer
+---@field forced_list_index integer?
 
 ---@class ILRet : ILInstruction
 ---@field inst_type "ret"
 ---@field ptrs ILPointer[] @ The last one can be an `ILVarargRegister`
+---temp compilation data
+---@field forced_list_index integer?
 
 ---@class ILClosure : ILInstruction
 ---@field inst_type "closure"
