@@ -460,23 +460,24 @@ do
   ---@param data ILCompilerData
   ---@param reg ILCompiledRegister
   ---@return ILCompiledRegister top_reg
-  local function ensure_is_top_reg_pre(data, reg)
+  local function ensure_is_top_reg_pre(data, position, reg)
     if reg.reg_index >= data.local_reg_count - 1 then
       return reg
     else
-      return create_new_temp_reg(data)
+      local temp_reg = create_new_temp_reg(data)
+      add_new_inst(data, position, opcodes.move, {
+        a = reg.reg_index,
+        b = temp_reg.reg_index,
+      })
+      return temp_reg
     end
   end
 
   ---@param data ILCompilerData
   ---@param initial_reg ILCompiledRegister
   ---@param top_reg ILCompiledRegister
-  local function ensure_is_top_reg_post(data, position, initial_reg, top_reg)
+  local function ensure_is_top_reg_post(data, initial_reg, top_reg)
     if top_reg ~= initial_reg then
-      add_new_inst(data, position, opcodes.move, {
-        a = initial_reg.reg_index,
-        b = top_reg.reg_index,
-      })
       stop_reg(data, top_reg)
     end
   end
@@ -741,13 +742,13 @@ do
     end,
     ---@param inst ILNewTable
     ["new_table"] = function(data, inst)
-      local reg = ensure_is_top_reg_pre(data, inst.result_reg.current_reg)
+      local reg = ensure_is_top_reg_pre(data, inst.position, inst.result_reg.current_reg)
       add_new_inst(data, inst.position, opcodes.newtable, {
         a = reg.reg_index,
         b = util.number_to_floating_byte(inst.array_size),
         c = util.number_to_floating_byte(inst.hash_size),
       })
-      ensure_is_top_reg_post(data, inst.position, inst.result_reg.current_reg, reg)
+      ensure_is_top_reg_post(data, inst.result_reg.current_reg, reg)
       return inst.prev
     end,
     ---@param inst ILConcat
@@ -885,12 +886,12 @@ do
     end,
     ---@param inst ILClosure
     ["closure"] = function(data, inst)
-      local reg = ensure_is_top_reg_pre(data, inst.result_reg.current_reg)
+      local reg = ensure_is_top_reg_pre(data, inst.position, inst.result_reg.current_reg)
       add_new_inst(data, inst.position, opcodes.closure, {
         a = reg.reg_index,
         bx = inst.func.closure_index,
       })
-      ensure_is_top_reg_post(data, inst.position, inst.result_reg.current_reg, reg)
+      ensure_is_top_reg_post(data, inst.result_reg.current_reg, reg)
       return inst.prev
     end,
     ---@param inst ILVararg
