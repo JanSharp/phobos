@@ -508,7 +508,7 @@ do
   ---@param data ILCompilerData
   ---@param reg ILCompiledRegister
   ---@return ILCompiledRegister top_reg
-  local function ensure_is_top_reg_pre(data, position, reg)
+  local function ensure_is_top_reg_for_set_pre(data, position, reg)
     if reg.reg_index >= data.local_reg_count - 1 then
       return reg
     else
@@ -524,9 +524,33 @@ do
   ---@param data ILCompilerData
   ---@param initial_reg ILCompiledRegister
   ---@param top_reg ILCompiledRegister
-  local function ensure_is_top_reg_post(data, initial_reg, top_reg)
+  local function ensure_is_top_reg_for_set_post(data, initial_reg, top_reg)
     if top_reg ~= initial_reg then
       stop_reg(data, top_reg)
+    end
+  end
+
+  ---@param data ILCompilerData
+  ---@param reg ILCompiledRegister
+  ---@return ILCompiledRegister top_reg
+  local function ensure_is_exact_reg_for_get_pre(data, reg, reg_index)
+    if reg.reg_index == reg_index then
+      return reg
+    else
+      return create_compiled_reg(data, reg_index)
+    end
+  end
+
+  ---@param data ILCompilerData
+  ---@param initial_reg ILCompiledRegister
+  ---@param exact_reg ILCompiledRegister
+  local function ensure_is_exact_reg_for_get_post(data, position, initial_reg, exact_reg)
+    if exact_reg ~= initial_reg then
+      add_new_inst(data, position, opcodes.move, {
+        a = exact_reg.reg_index,
+        b = initial_reg.reg_index,
+      })
+      stop_reg(data, exact_reg)
     end
   end
 
@@ -773,28 +797,24 @@ do
     ["set_list"] = function(data, inst)
       local is_vararg = (inst.right_ptrs[#inst.right_ptrs]--[[@as ILRegister]]).is_vararg
       local table_reg_index = (inst.right_ptrs[1]--[[@as ILRegister]]).current_reg.reg_index - 1
+      local table_reg = ensure_is_exact_reg_for_get_pre(data, inst.table_reg.current_reg, table_reg_index)
       add_new_inst(data, inst.position, opcodes.setlist, {
         a = table_reg_index,
         b = is_vararg and 0 or #inst.right_ptrs,
         c = ((inst.start_index - 1) / phobos_consts.fields_per_flush) + 1,
       })
-      if inst.table_reg.current_reg.reg_index ~= table_reg_index then
-        add_new_inst(data, inst.position, opcodes.move, {
-          a = table_reg_index,
-          b = inst.table_reg.current_reg.reg_index,
-        })
-      end
+      ensure_is_exact_reg_for_get_post(data, inst.position, inst.table_reg.current_reg, table_reg)
       return inst.prev
     end,
     ---@param inst ILNewTable
     ["new_table"] = function(data, inst)
-      local reg = ensure_is_top_reg_pre(data, inst.position, inst.result_reg.current_reg)
+      local reg = ensure_is_top_reg_for_set_pre(data, inst.position, inst.result_reg.current_reg)
       add_new_inst(data, inst.position, opcodes.newtable, {
         a = reg.reg_index,
         b = util.number_to_floating_byte(inst.array_size),
         c = util.number_to_floating_byte(inst.hash_size),
       })
-      ensure_is_top_reg_post(data, inst.result_reg.current_reg, reg)
+      ensure_is_top_reg_for_set_post(data, inst.result_reg.current_reg, reg)
       return inst.prev
     end,
     ---@param inst ILConcat
@@ -898,17 +918,13 @@ do
       local vararg_args = inst.arg_ptrs[1] and (inst.arg_ptrs[#inst.arg_ptrs]--[[@as ILRegister]]).is_vararg
       local vararg_result = inst.result_regs[1] and inst.result_regs[#inst.result_regs].is_vararg
       local func_reg_index = inst.register_list_index
+      local func_reg = ensure_is_exact_reg_for_get_pre(data, inst.func_reg.current_reg, func_reg_index)
       add_new_inst(data, inst.position, opcodes.call, {
         a = func_reg_index,
         b = vararg_args and 0 or (#inst.arg_ptrs + 1),
         c = vararg_result and 0 or (#inst.result_regs + 1),
       })
-      if inst.func_reg.current_reg.reg_index ~= func_reg_index then
-        add_new_inst(data, inst.position, opcodes.move, {
-          a = func_reg_index,
-          b = inst.func_reg.current_reg.reg_index,
-        })
-      end
+      ensure_is_exact_reg_for_get_post(data, inst.position, inst.func_reg.current_reg, func_reg)
       return inst.prev
     end,
     ---@param inst ILRet
@@ -926,12 +942,12 @@ do
     end,
     ---@param inst ILClosure
     ["closure"] = function(data, inst)
-      local reg = ensure_is_top_reg_pre(data, inst.position, inst.result_reg.current_reg)
+      local reg = ensure_is_top_reg_for_set_pre(data, inst.position, inst.result_reg.current_reg)
       add_new_inst(data, inst.position, opcodes.closure, {
         a = reg.reg_index,
         bx = inst.func.closure_index,
       })
-      ensure_is_top_reg_post(data, inst.result_reg.current_reg, reg)
+      ensure_is_top_reg_for_set_post(data, inst.result_reg.current_reg, reg)
       return inst.prev
     end,
     ---@param inst ILVararg
