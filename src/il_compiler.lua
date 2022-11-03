@@ -131,6 +131,17 @@ do
     if reg_index >= data.result.max_stack_size then
       data.result.max_stack_size = reg_index + 1
     end
+    if reg_index < data.local_reg_count then
+      util.debug_assert(
+        data.local_reg_gaps[reg_index],
+        "Attempt to create a register with the index "..reg_index.." while that index is occupied."
+      )
+    else
+      for i = data.local_reg_count, reg_index - 1 do
+        data.local_reg_gaps[i] = true
+      end
+      data.local_reg_count = reg_index + 1
+    end
     return {
       reg_index = reg_index,
       name = name,
@@ -140,10 +151,8 @@ do
   end
 
   ---@param data ILCompilerData
-  local function create_new_temp_reg(data, name)
-    local reg = create_compiled_reg(data, data.local_reg_count, name)
-    data.local_reg_count = data.local_reg_count + 1
-    return reg
+  local function create_new_reg_at_top(data, name)
+    return create_compiled_reg(data, data.local_reg_count, name)
   end
 
   ---@param data ILCompilerData
@@ -353,15 +362,6 @@ do
         -- util.debug_assert(not reg.current_reg, "All registers for lists")
         reg.current_reg = create_compiled_reg(data, list_index + i - 1, reg.name)
       end
-      data.local_reg_count = list_index + #regs
-    end
-
-    ---@param data ILCompilerData
-    ---@param to_index integer
-    local function make_gaps(data, to_index)
-      for i = data.local_reg_count, to_index do
-        data.local_reg_gaps[i] = true
-      end
     end
 
     ---@type table<string, fun(data: ILCompilerData, inst: ILInstruction)>
@@ -371,14 +371,12 @@ do
       ["set_list"] = function(data, inst)
         inst.forced_list_index = inst.forced_list_index or (data.local_reg_count + 1)
         restrict_register_list(data, inst.forced_list_index + 1, inst.right_ptrs)
-        make_gaps(data, inst.forced_list_index)
       end,
       ---@param data ILCompilerData
       ---@param inst ILConcat
       ["concat"] = function(data, inst)
         inst.forced_list_index = inst.forced_list_index or data.local_reg_count
         restrict_register_list(data, inst.forced_list_index, inst.right_ptrs)
-        make_gaps(data, inst.forced_list_index - 1)
       end,
       ---@param data ILCompilerData
       ---@param inst ILCall
@@ -392,7 +390,6 @@ do
           )
         end
         restrict_register_list(data, inst.forced_list_index + 1, inst.arg_ptrs)
-        make_gaps(data, inst.forced_list_index)
       end,
       ---@param data ILCompilerData
       ---@param inst ILRet
@@ -400,7 +397,6 @@ do
         if inst.ptrs then
           inst.forced_list_index = inst.forced_list_index or data.local_reg_count
           restrict_register_list(data, inst.forced_list_index, inst.ptrs)
-          make_gaps(data, inst.forced_list_index - 1)
         else
           stack.pop(data.snapshots) -- NOTE: what a waste of performance, but it doesn't happen often
         end
@@ -480,7 +476,7 @@ do
         for i = 1, reg_count do
           local reg = regs[i]
           regs[i] = nil
-          reg.current_reg = create_compiled_reg(data, data.local_reg_count + i - 1, reg.name)
+          reg.current_reg = create_compiled_reg(data, data.local_reg_count, reg.name)
           reg.temp_sort_index = nil
           if reg.captured_as_upval and not reg_index_to_close_upvals_from then
             reg_index_to_close_upvals_from = reg.current_reg.reg_index
@@ -493,7 +489,6 @@ do
             sbx = 0,
           })
         end
-        data.local_reg_count = data.local_reg_count + reg_count
       end
     end
 
@@ -517,7 +512,7 @@ do
     if reg.reg_index >= data.local_reg_count - 1 then
       return reg
     else
-      local temp_reg = create_new_temp_reg(data)
+      local temp_reg = create_new_reg_at_top(data)
       add_new_inst(data, position, opcodes.move, {
         a = reg.reg_index,
         b = temp_reg.reg_index,
@@ -620,7 +615,7 @@ do
       if k <= 0xff then
         return k
       end
-      return create_new_temp_reg(data)
+      return create_new_reg_at_top(data)
     end
   end
 
@@ -654,7 +649,7 @@ do
     if ptr.ptr_type == "reg" then
       return (ptr--[[@as ILRegister]]).current_reg
     else
-      return create_new_temp_reg(data)
+      return create_new_reg_at_top(data)
     end
   end
 
