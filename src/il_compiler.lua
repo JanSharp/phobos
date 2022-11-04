@@ -202,8 +202,7 @@ do
         if register_list_index > top_reg_index then
           has_temp_reg = true
         elseif register_list_index < top_reg_index then
-          -- TODO: set forced_list_index... but I can't.
-          -- Well I have to shift it dependent on what index it currently used......
+          -- modifies forced_list_index by setting a shift that's applied later
           setup_for_restoring_snapshot(data, inst, register_list_index - top_reg_index)
           return
         end
@@ -355,9 +354,10 @@ do
     }
 
     ---@param data ILCompilerData
-    ---@param list_index integer
+    ---@param inst ILSetList|ILConcat|ILCall|ILRet
     ---@param regs ILRegister[]
-    local function restrict_register_list(data, list_index, regs)
+    local function restrict_register_list(data, inst, regs)
+      local list_index = inst.forced_list_index
       for i, reg in ipairs(regs) do
         util.debug_assert(reg.ptr_type == "reg", "The pre process should change all ptrs to regs.")
         -- util.debug_assert(not reg.current_reg, "All registers for lists")
@@ -371,33 +371,40 @@ do
       ---@param inst ILSetList
       ["set_list"] = function(data, inst)
         inst.forced_list_index = inst.forced_list_index or (data.local_reg_count + 1)
-        restrict_register_list(data, inst.forced_list_index + 1, inst.right_ptrs)
+        if inst.table_reg.stop_at == inst then
+          inst.table_reg.current_reg = create_compiled_reg(
+            data,
+            inst.forced_list_index - 1,
+            inst.table_reg.name
+          )
+        end
+        restrict_register_list(data, inst, inst.right_ptrs)
       end,
       ---@param data ILCompilerData
       ---@param inst ILConcat
       ["concat"] = function(data, inst)
         inst.forced_list_index = inst.forced_list_index or data.local_reg_count
-        restrict_register_list(data, inst.forced_list_index, inst.right_ptrs)
+        restrict_register_list(data, inst, inst.right_ptrs)
       end,
       ---@param data ILCompilerData
       ---@param inst ILCall
       ["call"] = function(data, inst)
-        inst.forced_list_index = inst.forced_list_index or inst.register_list_index
+        inst.forced_list_index = inst.forced_list_index or (inst.register_list_index + 1)
         if inst.func_reg.stop_at == inst then
           inst.func_reg.current_reg = create_compiled_reg(
             data,
-            inst.forced_list_index,
+            inst.forced_list_index - 1,
             inst.func_reg.name
           )
         end
-        restrict_register_list(data, inst.forced_list_index + 1, inst.arg_ptrs)
+        restrict_register_list(data, inst, inst.arg_ptrs)
       end,
       ---@param data ILCompilerData
       ---@param inst ILRet
       ["ret"] = function(data, inst)
         if inst.ptrs then
           inst.forced_list_index = inst.forced_list_index or data.local_reg_count
-          restrict_register_list(data, inst.forced_list_index, inst.ptrs)
+          restrict_register_list(data, inst, inst.ptrs)
         else
           stack.pop(data.snapshots) -- NOTE: what a waste of performance, but it doesn't happen often
         end
@@ -634,7 +641,9 @@ do
   ---@return integer|ILCompiledRegister const_or_result_reg
   local function const_or_ref_or_load_ptr_pre(data, position, ptr)
     if ptr.ptr_type == "reg" then
-      return (ptr--[[@as ILRegister]]).current_reg
+      return util.debug_assert((ptr--[[@as ILRegister]]).current_reg,
+        "A register must have an index when referring to it."
+      )
     else
       local k = add_constant(data, ptr)
       if k <= 0xff then
@@ -919,6 +928,8 @@ do
     end,
     ---@param inst ILCall
     ["call"] = function(data, inst)
+      -- TODO: Optimize by forcing registers to be at the right index and removing the moves in the [...]
+      -- pre-process step (removing the `not reg.temporary` check, or so)
       local vararg_args = inst.arg_ptrs[1] and (inst.arg_ptrs[#inst.arg_ptrs]--[[@as ILRegister]]).is_vararg
       local vararg_result = inst.result_regs[1] and inst.result_regs[#inst.result_regs].is_vararg
       local func_reg_index = inst.register_list_index
