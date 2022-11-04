@@ -171,7 +171,8 @@ do
       data.local_reg_count = data.local_reg_count - stopped_reg_count
     end
     reg.start_at = get_first_inst(data)
-    data.compiled_registers[#data.compiled_registers+1] = reg
+    data.compiled_registers_count = data.compiled_registers_count + 1
+    data.compiled_registers[data.compiled_registers_count] = reg
   end
 
   local generate_inst_lut
@@ -893,9 +894,11 @@ do
         -- set after all instructions have been generated - once `inst_index`es have been evaluated
         sbx = (nil)--[[@as integer]],
       })
-      data.all_jumps[#data.all_jumps+1] = inst
+      data.all_jumps_count = data.all_jumps_count + 1
+      data.all_jumps[data.all_jumps_count] = inst
       return inst.prev
     end,
+    ---@param data ILCompilerData
     ---@param inst ILTest
     ["test"] = function(data, inst)
       -- remember, generated from back to front, so the jump comes "first"
@@ -904,7 +907,8 @@ do
         -- set after all instructions have been generated - once `inst_index`es have been evaluated
         sbx = (nil)--[[@as integer]],
       })
-      data.all_jumps[#data.all_jumps+1] = inst
+      data.all_jumps_count = data.all_jumps_count + 1
+      data.all_jumps[data.all_jumps_count] = inst
       local condition_reg = ref_or_load_ptr_pre(data, inst.condition_ptr)
       add_new_inst(data, inst.position, opcodes.test, {
         a = condition_reg.reg_index,
