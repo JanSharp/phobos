@@ -295,7 +295,7 @@
       },
     },
     {
-      "name": "Lua tests/compile_test",
+      "name": "Lua tests/compile_test AST compiler",
       "type": "lua-local",
       "request": "launch",
       "linux": {
@@ -348,7 +348,7 @@
       },
     },
     {
-      "name": "Phobos tests/compile_test",
+      "name": "Phobos tests/compile_test AST compiler",
       "type": "lua-local",
       "request": "launch",
       "preLaunchTask": "Build Debug",
@@ -394,6 +394,125 @@
           ".dll",
           // main_filename
           "tests/compile_test.lua",
+        ],
+        "program": {
+          "file": "out/debug/entry_point.lua",
+          "lua": "bin/windows/lua",
+        },
+      },
+    },
+    {
+      "name": "Lua tests/compile_test IL compiler",
+      "type": "lua-local",
+      "request": "launch",
+      "linux": {
+        "args": [
+          // root
+          "src",
+          // c_lib_root
+          "bin/linux",
+          // c_lib_extension
+          ".so",
+          // main_filename
+          "tests/compile_test.lua",
+          // arguments passed along to the main file
+          "--use-il",
+        ],
+        "program": {
+          "file": "src/entry_point.lua",
+          "lua": "bin/linux/lua",
+        },
+      },
+      "osx": {
+        "args": [
+          // root
+          "src",
+          // c_lib_root
+          "bin/osx",
+          // c_lib_extension
+          ".so",
+          // main_filename
+          "tests/compile_test.lua",
+          // arguments passed along to the main file
+          "--use-il",
+        ],
+        "program": {
+          "file": "src/entry_point.lua",
+          "lua": "bin/osx/lua",
+        },
+      },
+      "windows": {
+        "args": [
+          // root
+          "src",
+          // c_lib_root
+          "bin/windows",
+          // c_lib_extension
+          ".dll",
+          // main_filename
+          "tests/compile_test.lua",
+          // arguments passed along to the main file
+          "--use-il",
+        ],
+        "program": {
+          "file": "src/entry_point.lua",
+          "lua": "bin/windows/lua",
+        },
+      },
+    },
+    {
+      "name": "Phobos tests/compile_test IL compiler",
+      "type": "lua-local",
+      "request": "launch",
+      "preLaunchTask": "Build Debug",
+      "linux": {
+        "args": [
+          // root
+          "out/debug",
+          // c_lib_root
+          "bin/linux",
+          // c_lib_extension
+          ".so",
+          // main_filename
+          "tests/compile_test.lua",
+          // arguments passed along to the main file
+          "--use-il",
+        ],
+        "program": {
+          "file": "out/debug/entry_point.lua",
+          "lua": "bin/linux/lua",
+        },
+      },
+      "osx": {
+        "args": [
+          // root
+          "out/debug",
+          // c_lib_root
+          "bin/osx",
+          // c_lib_extension
+          ".so",
+          // main_filename
+          "tests/compile_test.lua",
+          // arguments passed along to the main file
+          "--use-il",
+        ],
+        "program": {
+          "file": "out/debug/entry_point.lua",
+          "lua": "bin/osx/lua",
+        },
+      },
+      "windows": {
+        "args": [
+          // root
+          "out/debug",
+          // c_lib_root
+          "bin/windows",
+          // c_lib_extension
+          ".dll",
+          // main_filename
+          "tests/compile_test.lua",
+          // arguments passed along to the main file
+          "--use-il",
         ],
         "program": {
           "file": "out/debug/entry_point.lua",

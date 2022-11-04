@@ -153,8 +153,13 @@ add_phobos_profiles{
   args = {"temp/test.lua"},
 }
 add_phobos_profiles{
-  name = "tests/compile_test",
+  name = "tests/compile_test AST compiler",
   main_filename = "tests/compile_test.lua",
+}
+add_phobos_profiles{
+  name = "tests/compile_test IL compiler",
+  main_filename = "tests/compile_test.lua",
+  args = {"--use-il"},
 }
 add_phobos_profiles{
   name = "tests/main",

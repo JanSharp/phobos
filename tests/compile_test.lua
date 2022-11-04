@@ -58,6 +58,13 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
         Files would be at `temp/before.txt` and `temp/after.txt`",
       flag = true,
     },
+    {
+      field = "use_il",
+      long = "use-il",
+      short = "i",
+      description = "Use the IL compiler instead of the AST compiler",
+      flag = true,
+    }
   },
 })
 if not args then util.abort() end
@@ -107,6 +114,8 @@ local jump_linker
 local fold_const
 local fold_control_statements
 local compiler
+local il_generator
+local il_compiler
 local dump
 local disassembler
 local formatter
@@ -123,6 +132,8 @@ local function init()
   fold_const = req("optimize.fold_const")
   fold_control_statements = req("optimize.fold_control_statements")
   compiler = req("compiler")
+  il_generator = req("il_generator")
+  il_compiler = req("il_compiler")
   dump = req("dump")
   disassembler = req("disassembler")
   formatter = req("formatter")
@@ -163,11 +174,17 @@ local function compile(filename)
   if args.ensure_clean_data then
     prev_ast = util.copy(ast, true)
   end
-  local compiled_data = compiler(ast, {
-    optimizations = {
-      tail_calls = true,
-    },
-  })
+  local compiled_data
+  if args.use_il then
+    local il = il_generator(ast)
+    compiled_data = il_compiler(il)
+  else
+    compiled_data = compiler(ast, {
+      optimizations = {
+        tail_calls = true,
+      },
+    })
+  end
 
   if args.ensure_clean_data then
     local success, msg = pcall(assert.contents_equals, prev_ast, ast)
