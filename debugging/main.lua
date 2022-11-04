@@ -261,6 +261,10 @@ local function compile(filename)
       --     ..", get: "..(reg.total_get_count or "?")..", set: "..(reg.total_set_count or "?")..")"
       --   )
       -- end
+
+      local il_dumped
+      success, il_dumped = pcall(require("dump"), compiled)
+      if not success then print(il_dumped) goto finish end
     end
 
     if do_fold_const then
