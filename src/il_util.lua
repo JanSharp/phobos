@@ -1641,7 +1641,9 @@ do
       end
       ---@cast current_inst -nil
       if func.has_reg_liveliness then
+        current_inst[lut_key] = current_inst[lut_key] or {}
         current_inst[lut_key][reg] = true
+        current_inst[list_key] = current_inst[list_key] or {}
         current_inst[list_key][#current_inst[list_key]+1] = reg
       end
       reg[start_stop_at_key] = current_inst
