@@ -1415,6 +1415,7 @@ do
     ["get_table"] = function(data, inst)
       visit_reg(data, inst, inst.result_reg, set)
       visit_reg(data, inst, inst.table_reg, get)
+      visit_ptr(data, inst, inst.key_ptr, get)
     end,
     ["set_table"] = function(data, inst)
       visit_reg(data, inst, inst.table_reg, get)
