@@ -374,7 +374,7 @@ do
           key_ptr = const_or_local_or_fetch(expr.suffix),
         })
       else
-        func_reg = local_or_fetch(expr.ex, func)
+        func_reg = generate_expr(expr.ex, func)
       end
 
       generate_expr_list(expr.args, func, -1, arg_ptrs, true)
