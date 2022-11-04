@@ -1025,14 +1025,15 @@ local function make_bytecode_func(data)
         index = 0,
         name = upval.name,
         in_stack = true,
-        local_idx = upval.reg_in_parent_func.current_reg.reg_index,
+        -- due to order of operations, at this point the registers have been converted to compiled registers
+        local_idx = (upval.reg_in_parent_func.current_reg--[[@as CompiledRegister]]).index,
       }
     elseif upval.parent_type == "upval" then
       result.upvals[i] = {
         index = 0,
         name = upval.name,
         in_stack = false,
-        local_idx = upval.parent_upval.upval_index,
+        upval_idx = upval.parent_upval.upval_index,
       }
     elseif upval.parent_type == "env" then
       result.upvals[i] = {
