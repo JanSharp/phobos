@@ -1623,12 +1623,13 @@ do
         util.remove_from_array(inst[list_key], reg)
       end
       local current_inst = inst
-      while not inst_uses_reg(inst, reg) do
+      while not inst_uses_reg(current_inst, reg) do
         if func.has_reg_liveliness then
           util.remove_from_array(current_inst.live_regs, reg)
         end
         current_inst = current_inst[iteration_key]
         if current_inst == end_iteration_inst then -- only used in the first call to this function
+          util.debug_assert(end_iteration_inst, "Impossible because there must be an instruction using this register.")
           if func.has_reg_liveliness then
             reg.stop_at.regs_stop_at_lut[reg] = nil
             util.remove_from_array(reg.stop_at.regs_stop_at_list, reg)
