@@ -74,9 +74,9 @@ do
     while snapshot.first_inst.prev do
       ill.remove(snapshot.first_inst.prev)
     end
-    for i = snapshot.constants_count, data.constants_count - 1 do
+    for i = snapshot.constants_count + 1, data.constants_count do
       local constant = data.result.constants[i]
-      data.constant_lut[constant.index] = nil
+      data.constant_lut[constant.value] = nil
       -- data.result.constants[i] = nil -- no need because after it's done generating it gets cleaned up
     end
     data.compiled_registers_count = snapshot.compiled_registers_count
