@@ -484,7 +484,14 @@ do
         for i = 1, reg_count do
           local reg = regs[i]
           regs[i] = nil
-          reg.current_reg = create_compiled_reg(data, data.local_reg_count, reg.name)
+          local reg_index = data.local_reg_count
+          if next(data.local_reg_gaps) then
+            reg_index = 0
+            while not data.local_reg_gaps[reg_index] do
+              reg_index = reg_index + 1
+            end
+          end
+          reg.current_reg = create_compiled_reg(data, reg_index, reg.name)
           reg.temp_sort_index = nil
           if reg.captured_as_upval and not reg_index_to_close_upvals_from then
             reg_index_to_close_upvals_from = reg.current_reg.reg_index
