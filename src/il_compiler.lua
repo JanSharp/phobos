@@ -203,7 +203,7 @@ do
           has_temp_reg = true
         elseif register_list_index < top_reg_index then
           -- modifies forced_list_index by setting a shift that's applied later
-          setup_for_restoring_snapshot(data, inst, register_list_index - top_reg_index)
+          setup_for_restoring_snapshot(data, inst, top_reg_index - register_list_index)
           return
         end
       else
