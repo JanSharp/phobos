@@ -136,6 +136,7 @@ do
         data.local_reg_gaps[reg_index],
         "Attempt to create a register with the index "..reg_index.." while that index is occupied."
       )
+      data.local_reg_gaps[reg_index] = nil
     else
       for i = data.local_reg_count, reg_index - 1 do
         data.local_reg_gaps[i] = true
