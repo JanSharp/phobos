@@ -765,10 +765,14 @@ do
     ---@param inst ILMove
     ["move"] = function(data, inst)
       if inst.right_ptr.ptr_type == "reg" then
-        add_new_inst(data, inst.position, opcodes.move, {
-          a = inst.result_reg.current_reg.reg_index,
-          b = (inst.right_ptr--[[@as ILRegister]]).current_reg.reg_index,
-        })
+        local a = inst.result_reg.current_reg.reg_index
+        local b = (inst.right_ptr--[[@as ILRegister]]).current_reg.reg_index
+        if a ~= b then
+          add_new_inst(data, inst.position, opcodes.move, {
+            a = a,
+            b = b,
+          })
+        end
       else
         add_load_constant(data, inst.position, inst.right_ptr, inst.result_reg.current_reg)
       end
