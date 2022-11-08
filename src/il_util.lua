@@ -301,7 +301,8 @@ end
 
 local function new_boolean(value)
   local ptr = new_ptr("boolean")
-  ptr.value = assert(value ~= nil)
+  assert(value ~= nil)
+  ptr.value = value
   return ptr
 end
 
