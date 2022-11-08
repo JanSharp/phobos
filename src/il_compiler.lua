@@ -1117,7 +1117,9 @@ do
             )
           end
           local temp_reg = il.new_reg()
-          il.insert_after_inst(data.func, setter_inst, il.new_move{
+          local after_inst = reg.temporary and setter_inst or inst.prev
+          ---@cast after_inst -nil
+          il.insert_after_inst(data.func, after_inst, il.new_move{
             position = inst.position,
             right_ptr = reg,
             result_reg = temp_reg,
