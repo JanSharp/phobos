@@ -184,6 +184,11 @@ do
       local top_reg_index = data.local_reg_count
       local reg_count = #inst.result_regs
 
+      if reg_count == 0 then
+        inst.register_list_index = top_reg_index
+        return
+      end
+
       -- if inst.inst_type == "call" and inst.func_reg.stop_at ~= inst then
       --   top_reg_index = top_reg_index + 1
       -- end
@@ -192,8 +197,8 @@ do
 
       -- TODO: detect which register indexes would require the least amount of moves
 
-      local last_reg = inst.result_regs[#inst.result_regs]
-      local is_vararg = last_reg and last_reg.is_vararg
+      local last_reg = inst.result_regs[reg_count]
+      local is_vararg = last_reg.is_vararg
 
       local register_list_index
       local has_temp_reg = false
