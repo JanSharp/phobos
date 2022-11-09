@@ -332,7 +332,7 @@ do
               b = last_move.source_reg,
             })
           else -- chain
-            for j = #loop_or_chain.moves, 1, -1 do
+            for j = 1, #loop_or_chain.moves do
               local move = loop_or_chain.moves[j]
               add_new_inst(data, inst.position, opcodes.move, {
                 a = move.target_reg,
