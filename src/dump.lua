@@ -184,7 +184,10 @@ local function get_local_debug_symbols(func)
   end
 
   for _, reg in ipairs(func.debug_registers) do
-    if reg.name then
+    -- TODO: The il compiler is outputting registers that stop before they start. Either fix that or [...]
+    -- change the error message a little bit above to not complain about this issue, since the if condition
+    -- below now prevents that error from happening
+    if reg.name and reg.start_at <= reg.stop_at then
       add_to_lut(start_at_lut, reg.start_at, reg)
       add_to_lut(stop_at_lut, reg.stop_at, reg)
     end
