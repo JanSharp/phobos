@@ -790,11 +790,10 @@ local function sub_expr(limit, scope)
         table.insert(node.op_tokens, 1, op_token)
         table.insert(node.concat_src_paren_wrappers, 1, {})
       elseif node.node_type == "concat" and not node.force_single_result then
-        error("Impossible -- TODO: explain why it's impossible. Note to jog my memory: \z
-          concat is right associative, so the right ones are going to be parsed first. \z
-          the only way for the current `node` to be a concat node is if the simple expression \z
-          at the very beginning parsed a concat node wrapped in parenthesis, however those are \z
-          excluded by the if condition."
+        util.debug_abort("Impossible because concat is right associative which causes `sub_expr` to \z
+          recursively parse until the end of the concat chain and the if block above handles that. \z
+          The only case where `node` could be a concat node is if it is wrapped in parens, but that's \z
+          excluded in the if condition, so the else block runs below."
         )
       else
         local left_node = node
