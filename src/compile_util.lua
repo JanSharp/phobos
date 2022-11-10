@@ -35,6 +35,7 @@ end
 ---@field accept_bytecode boolean
 ---@field inject_scripts fun(ast:AstFunctionDef)[]
 ---@field error_message_count integer
+---@field return_error_msg boolean @ when `false` writes the error message to io.stderr if available, or print
 ---@field use_load boolean
 ---@field optimizations Optimizations
 
@@ -53,7 +54,14 @@ local function compile(options, context)
       local msg = error_code_util.get_message_for_list(errors, "syntax errors in "
         ..(options.text and options.text_source or options.filename), options.error_message_count
       )
-      print(msg)
+      if options.return_error_msg then
+        return false, msg
+      end
+      if io and io.stderr then
+        io.stderr:write(msg)
+      else
+        print(msg)
+      end
       return false
     end
     return true

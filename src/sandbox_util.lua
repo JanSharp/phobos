@@ -24,7 +24,6 @@ if #template_separator > 1 then
   )
 end
 
----TODO: this is still a bit of a prototype, I'd like to refine it before calling it done
 local function enable_phobos_require()
   local pho_path_cache = {}
   local function get_pho_path()
@@ -44,16 +43,17 @@ local function enable_phobos_require()
 
   local function pho_loader(module_name, filename)
     local context = compile_util.new_context()
-    local loadable_chunk = compile_util.compile({
+    local loadable_chunk, err_msg = compile_util.compile({
       filename = filename,
       source_name = "@?",
       accept_bytecode = true,
       error_message_count = 8,
+      return_error_msg = true,
     }, context)
     if not loadable_chunk then
-      error()
+      error("Error loading module '"..module_name.."' from file '"..filename.."':\n"..err_msg)
     end
-    return assert(load(loadable_chunk))(filename)
+    return assert(load(loadable_chunk), "Phobos generated invalid bytecode.")(filename)
   end
 
   local function pho_searcher(module_name)
