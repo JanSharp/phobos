@@ -490,7 +490,7 @@ end
 local function primary_exp(scope)
   if test_next("(") then
     local open_paren_token = new_token_node(true)
-    --TODO: compact lambda here:
+    -- NOTE: compact lambda here:
     -- token_type is ')', empty args expect `'=>' expr` next
     -- token_type is 'ident'
     --  followed by `,` is multiple args, finish list then `=> expr`
