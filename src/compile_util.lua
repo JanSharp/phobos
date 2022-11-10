@@ -4,6 +4,8 @@ local parser = require("parser")
 local jump_linker = require("jump_linker")
 local fold_const = require("optimize.fold_const")
 local fold_control_statements = require("optimize.fold_control_statements")
+local il_generator = require("il_generator")
+local il_compiler = require("il_compiler")
 local compiler = require("compiler")
 local dump = require("dump")
 local constants = require("constants")
@@ -32,6 +34,7 @@ end
 ---@field text string
 ---@field text_source string
 ---@field source_name string @ `?` is a placeholder for `filename`
+---@field use_il_compiler boolean
 ---@field accept_bytecode boolean
 ---@field inject_scripts fun(ast:AstFunctionDef)[]
 ---@field error_message_count integer
@@ -92,7 +95,13 @@ local function compile(options, context)
       fold_control_statements(ast)
     end
   end
-  local compiled = compiler(ast, options)
+  local compiled
+  if options.use_il_compiler then
+    local il = il_generator(ast)
+    compiled = il_compiler(il)
+  else
+    compiled = compiler(ast, options)
+  end
   local bytecode = dump(compiled)
   if options.use_load then
     return string.format("\z
