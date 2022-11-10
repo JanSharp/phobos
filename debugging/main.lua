@@ -265,6 +265,16 @@ local function compile(filename)
       local il_dumped
       success, il_dumped = pcall(require("dump"), compiled)
       if not success then print(il_dumped) goto finish end
+
+      if load_and_run_compiled_funcs then
+        print("ILR:")
+        local il_func
+        il_func, err = load(il_dumped)
+        if not il_func then print(err) goto finish end
+        success, err = pcall(il_func)
+        if not success then print(err) goto finish end
+        print("----------")
+      end
     end
 
     if do_fold_const then
