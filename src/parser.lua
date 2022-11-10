@@ -845,7 +845,6 @@ local function assignment(lhs, lhs_comma_tokens, state_for_unexpected_expression
     local first_token = token
     local initial_error_code_insts_count = get_error_code_insts_count()
     lhs[#lhs+1] = suffixed_exp(scope)
-    -- TODO: disallow `(exp)` (so force single result expressions) and `exp()` (call expressions)
     return assignment(
       lhs,
       lhs_comma_tokens,
