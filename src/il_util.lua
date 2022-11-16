@@ -44,6 +44,7 @@ end
 ---@field right_ptr ILPointer
 
 ---@param params ILMoveParams
+---@return ILMove
 local function new_move(params)
   local inst = new_inst(params, "move")
   inst.result_reg = assert_reg(params, "result_reg")
@@ -56,6 +57,7 @@ end
 ---@field upval ILUpval
 
 ---@param params ILGetUpvalParams
+---@return ILGetUpval
 local function new_get_upval(params)
   local inst = new_inst(params, "get_upval")
   inst.result_reg = assert_reg(params, "result_reg")
@@ -68,6 +70,7 @@ end
 ---@field right_ptr ILPointer
 
 ---@param params ILSetUpvalParams
+---@return ILSetUpval
 local function new_set_upval(params)
   local inst = new_inst(params, "set_upval")
   inst.upval = assert_field(params, "upval")
@@ -81,6 +84,7 @@ end
 ---@field key_ptr ILPointer
 
 ---@param params ILGetTableParams
+---@return ILGetTable
 local function new_get_table(params)
   local inst = new_inst(params, "get_table")
   inst.result_reg = assert_reg(params, "result_reg")
@@ -95,6 +99,7 @@ end
 ---@field right_ptr ILPointer
 
 ---@param params ILSetTableParams
+---@return ILSetTable
 local function new_set_table(params)
   local inst = new_inst(params, "set_table")
   inst.table_reg = assert_reg(params, "table_reg")
@@ -109,6 +114,7 @@ end
 ---@field right_ptrs ILPointer[] @ The last one can be an `ILVarargRegister`
 
 ---@param params ILSetListParams
+---@return ILSetList
 local function new_set_list(params)
   local inst = new_inst(params, "set_list")
   inst.table_reg = assert_reg(params, "table_reg")
@@ -123,6 +129,7 @@ end
 ---@field hash_size integer|nil
 
 ---@param params ILNewTableParams
+---@return ILNewTable
 local function new_new_table(params)
   local inst = new_inst(params, "new_table")
   inst.result_reg = assert_reg(params, "result_reg")
@@ -136,6 +143,7 @@ end
 ---@field right_ptrs ILPointer[]
 
 ---@param params ILConcatParams
+---@return ILConcat
 local function new_concat(params)
   local inst = new_inst(params, "concat")
   inst.result_reg = assert_reg(params, "result_reg")
@@ -148,8 +156,10 @@ end
 ---@field op AstBinOpOp
 ---@field left_ptr ILPointer
 ---@field right_ptr ILPointer
+---@field raw boolean
 
 ---@param params ILBinopParams
+---@return ILBinop
 local function new_binop(params)
   local inst = new_inst(params, "binop")
   inst.result_reg = assert_reg(params, "result_reg")
@@ -159,6 +169,7 @@ local function new_binop(params)
   )
   inst.left_ptr = assert_ptr(params, "left_ptr")
   inst.right_ptr = assert_ptr(params, "right_ptr")
+  inst.raw = params.raw or false
   return inst
 end
 
@@ -168,6 +179,7 @@ end
 ---@field right_ptr ILPointer
 
 ---@param params ILUnopParams
+---@return ILUnop
 local function new_unop(params)
   local inst = new_inst(params, "unop")
   inst.result_reg = assert_reg(params, "result_reg")
@@ -180,6 +192,7 @@ end
 ---@field name string|nil
 
 ---@param params ILLabelParams
+---@return ILLabel
 local function new_label(params)
   local inst = new_inst(params, "label")
   inst.name = params.name
@@ -190,6 +203,7 @@ end
 ---@field label ILLabel
 
 ---@param params ILJumpParams
+---@return ILJump
 local function new_jump(params)
   local inst = new_inst(params, "jump")
   inst.label = assert_field(params, "label")
@@ -202,6 +216,7 @@ end
 ---@field jump_if_true boolean|nil
 
 ---@param params ILTestParams
+---@return ILTest
 local function new_test(params)
   local inst = new_inst(params, "test")
   inst.label = assert_field(params, "label")
@@ -216,6 +231,7 @@ end
 ---@field result_regs ILRegister[]|nil @ The last one can be an `ILVarargRegister`
 
 ---@param params ILCallParams
+---@return ILCall
 local function new_call(params)
   local inst = new_inst(params, "call")
   inst.func_reg = assert_reg(params, "func_reg")
@@ -228,6 +244,7 @@ end
 ---@field ptrs ILPointer[]|nil @ The last one can be an `ILVarargRegister`
 
 ---@param params ILRetParams
+---@return ILRet
 local function new_ret(params)
   local inst = new_inst(params, "ret")
   inst.ptrs = params.ptrs or {}
@@ -239,6 +256,7 @@ end
 ---@field func ILFunction
 
 ---@param params ILClosureParams
+---@return ILClosure
 local function new_closure(params)
   local inst = new_inst(params, "closure")
   inst.result_reg = assert_reg(params, "result_reg")
@@ -250,6 +268,7 @@ end
 ---@field result_regs ILRegister[]|nil @ The last one can be an `ILVarargRegister`
 
 ---@param params ILVarargParams
+---@return ILVararg
 local function new_vararg(params)
   local inst = new_inst(params, "vararg")
   inst.result_regs = params.result_regs or {}
@@ -260,6 +279,7 @@ end
 ---@field regs ILRegister[]
 
 ---@param params ILScopingParams
+---@return ILScoping
 local function new_scoping(params)
   local inst = new_inst(params, "scoping")
   inst.regs = params.regs or {}

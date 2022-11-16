@@ -161,7 +161,10 @@
 ---can be any expression
 ---@field consumed_nodes AstNode[]|nil
 
----@class AstStatement : AstNode, ILLNode
+---@class AstStatement : AstNode, IntrusiveILLNode<AstStatement>
+---@field list AstStatementList @ (overridden) back reference
+---@field prev AstStatement? @ (overridden) `nil` if this is the first node
+---@field next AstStatement? @ (overridden) `nil` if this is the last node
 
 ---@class AstParenWrapper
 ---@field open_paren_token AstTokenNode
@@ -175,8 +178,10 @@
 ---the first one in the list/first one you encounter when processing the data
 ---@field src_paren_wrappers AstParenWrapper[]|nil
 
----@class AstStatementList : IndexedLinkedList
+---@class AstStatementList : IntrusiveIndexedLinkedList<AstStatement>
 ---@field scope AstScope
+---@field first AstStatement? @ (overridden)
+---@field last AstStatement? @ (overridden)
 
 ---@class AstScope : AstNode
 ---@field parent_scope AstScope @ `nil` for AstENVScope (very top level)
@@ -698,7 +703,7 @@
 ---| "scoping"
 
 ---@class ILInstruction : IntrusiveILLNode<ILInstruction>
----@field list ILInstructionILL @ (overridden) back reference
+---@field list ILInstructionList @ (overridden) back reference
 ---@field prev ILInstruction? @ (overridden) `nil` if this is the first node
 ---@field next ILInstruction? @ (overridden) `nil` if this is the last node
 ---@field inst_type ILInstructionType
@@ -713,7 +718,7 @@
 ---@field pre_state ILState
 ---@field post_state ILState
 
----@class ILInstructionILL : IntrusiveIndexedLinkedList<ILInstruction>
+---@class ILInstructionList : IntrusiveIndexedLinkedList<ILInstruction>
 ---@field first ILInstruction? @ (overridden)
 ---@field last ILInstruction? @ (overridden)
 
@@ -836,7 +841,7 @@
 ---@class ILFunction
 ---@field parent_func ILFunction|nil @ `nil` if main chunk
 ---@field inner_functions ILFunction[]
----@field instructions ILInstructionILL @ intrusive ILL
+---@field instructions ILInstructionList @ intrusive ILL
 ---@field upvals ILUpval[]
 ---@field param_regs ILRegister[]
 ---@field is_vararg boolean
@@ -847,7 +852,7 @@
 ---@field has_blocks boolean @ `blocks` on ILFunction and `block` on ILInstruction
 ---@field has_start_stop_insts boolean @ `start_at` and `stop_at` on ILRegister
 ---@field has_reg_liveliness boolean @ `regs_(start|stop)_at_(list|lut)` and `live_regs` on ILInstruction
----@field blocks ILBLockILL @ intrusive ILL
+---@field blocks ILBLockList @ intrusive ILL
 ---@field has_types boolean @ `(pre|post)_state` on ILInstruction
 ---@field has_reg_usage boolean @ `total_get/set_count` and `temporary` on ILRegister
 ---@field is_compiling boolean @ `closure_index` on ILFUnction and `captured_as_upval` and `current_reg` on ILRegister
@@ -857,7 +862,7 @@
 ---@field closure_index integer @ **zero based** needed for closure instructions to know the function index
 
 ---@class ILBlock : IntrusiveILLNode<ILBlock>
----@field list ILBLockILL @ (overridden) back reference
+---@field list ILBLockList @ (overridden) back reference
 ---@field prev ILBlock? @ (overridden) `nil` if this is the first node
 ---@field next ILBlock? @ (overridden) `nil` if this is the last node
 ---@field source_links ILBlockLink[] @ blocks flowing into this block
@@ -866,7 +871,7 @@
 ---@field is_main_entry_block boolean
 ---@field target_links ILBlockLink[] @ blocks this block can flow to
 
----@class ILBLockILL : IntrusiveIndexedLinkedList<ILBLock>
+---@class ILBLockList : IntrusiveIndexedLinkedList<ILBLock>
 ---@field first ILBlock? @ (overridden)
 ---@field last ILBlock? @ (overridden)
 

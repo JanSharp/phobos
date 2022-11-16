@@ -10,9 +10,9 @@ end
 
 ---@class AstWalkerContext
 ---called before walking a node
----@field on_open fun(node: AstNode, context: AstWalkerContext, is_statement: boolean)|nil
+---@field on_open table<AstNodeType, fun(node: AstNode, context: AstWalkerContext, is_statement: boolean)|nil>
 ---called after walking a node
----@field on_close fun(node: AstNode, context: AstWalkerContext, is_statement: boolean)|nil
+---@field on_close table<AstNodeType, fun(node: AstNode, context: AstWalkerContext, is_statement: boolean)|nil>
 ---@field node_stack AstNode[]
 ---@field stat_stack AstStatement[]
 ---@field scope_stack AstScope[]
