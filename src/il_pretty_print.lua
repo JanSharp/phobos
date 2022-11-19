@@ -118,8 +118,14 @@ local instruction_label_getter_lut = {
   ["vararg"] = function(inst, context)
     return "VARARG", get_list(get_reg, inst.result_regs, context).." := vararg"
   end,
+  ["close_up"] = function(inst, context)
+    return "CLOSEUP", "close upvalues for regs: "..get_list(get_reg, inst.regs, context)
+  end,
   ["scoping"] = function(inst, context)
     return "SCOPING", "alive: "..get_list(get_reg, inst.regs, context)
+  end,
+  ["to_number"] = function(inst, context)
+    return "TONUMBER", get_reg(inst.result_reg, context).." := tonumber("..get_ptr(inst.right_ptr, context)..")"
   end,
 }
 

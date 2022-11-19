@@ -34,9 +34,27 @@ end
 
 ---@class ILInstParamsBase
 ---@field position ILPosition
+---@field inst_group ILInstructionGroup?
 
 local function new_inst(params, inst_type)
-  return {inst_type = inst_type, position = params.position}
+  return {
+    inst_type = inst_type,
+    inst_group = params.inst_group,
+    position = params.position,
+  }
+end
+
+---@param group_type ILInstructionGroupType
+---@param start ILInstruction?
+---@param stop ILInstruction?
+---@return ILInstructionGroup
+local function new_instruction_group(group_type, start, stop)
+  ---@type ILInstructionGroup
+  return {
+    group_type = group_type,
+    start = start,
+    stop = stop,
+  }
 end
 
 ---@class ILMoveParams : ILInstParamsBase
@@ -275,6 +293,17 @@ local function new_vararg(params)
   return inst
 end
 
+---@class ILCloseUpParams : ILInstParamsBase
+---@field regs ILRegister[]
+
+---@param params ILCloseUpParams
+---@return ILCloseUp
+local function new_close_up(params)
+  local inst = new_inst(params, "close_up")
+  inst.regs = params.regs or {}
+  return inst
+end
+
 ---@class ILScopingParams : ILInstParamsBase
 ---@field regs ILRegister[]
 
@@ -283,6 +312,19 @@ end
 local function new_scoping(params)
   local inst = new_inst(params, "scoping")
   inst.regs = params.regs or {}
+  return inst
+end
+
+---@class ILToNumberParams : ILInstParamsBase
+---@field result_reg ILRegister
+---@field right_ptr ILPointer
+
+---@param params ILToNumberParams
+---@return ILToNumber
+local function new_to_number(params)
+  local inst = new_inst(params, "to_number")
+  inst.result_reg = assert_reg(params, "result_reg")
+  inst.right_ptr = assert_ptr(params, "right_ptr")
   return inst
 end
 
@@ -1484,15 +1526,23 @@ do
       for _, upval in ipairs(inst.func.upvals) do
         if upval.parent_type == "local" then
           visit_reg(data, inst, upval.reg_in_parent_func, get)
-          upval.reg_in_parent_func.captured_as_upval = true
+          upval.reg_in_parent_func.captured_as_upval = true -- FIXME: captured_as_upval does not belong here
         end
       end
     end,
     ["vararg"] = function(data, inst)
       visit_reg_list(data, inst, inst.result_regs, set) -- must be in order
     end,
+    ["close_up"] = function(data, inst)
+      -- this neither gets or sets those registers, but I guess get is more accurate. Not sure to be honest
+      visit_reg_list(data, inst, inst.regs, get)
+    end,
     ["scoping"] = function(data, inst)
       visit_reg_list(data, inst, inst.regs, get_and_set)
+    end,
+    ["to_number"] = function(data, inst)
+      visit_reg(data, inst, inst.result_reg, set)
+      visit_reg(data, inst, inst.right_ptr, get)
     end,
   }
 
@@ -1855,6 +1905,9 @@ end
 ---@param reg ILRegister
 ---@param get_set 1|2|3
 local function add_reg_to_inst(func, inst, reg, get_set)
+  if inst.inst_group then
+    util.debug_abort("Attempt to add a register to an inst in inst_group (which are immutable).")
+  end
   if func.has_start_stop_insts then
     -- `func.has_reg_liveliness` is checked for in the following function
     add_start_stop_and_liveliness_for_reg_for_inst(func, inst, reg)
@@ -1883,6 +1936,9 @@ end
 ---@param reg ILRegister
 ---@param get_set 1|2|3
 local function remove_reg_from_inst(func, inst, reg, get_set)
+  if inst.inst_group then
+    util.debug_abort("Attempt to remove a register from an inst in inst_group (which are immutable).")
+  end
   if func.has_start_stop_insts then
     -- `func.has_reg_liveliness` is checked for in the following function
     remove_start_stop_and_liveliness_for_reg_for_inst(func, inst, reg)
@@ -1923,6 +1979,9 @@ end
 ---@param inserted_inst ILInstruction
 ---@return ILInstruction
 local function insert_after_inst(func, inst, inserted_inst)
+  if inst.inst_group and inst ~= inst.inst_group.stop then
+    util.debug_abort("Attempt to insert an instruction inside of an inst_group (which are immutable).")
+  end
   ill.insert_after(inst, inserted_inst)
   update_intermediate_data(func, inserted_inst)
   return inserted_inst
@@ -1933,6 +1992,9 @@ end
 ---@param inserted_inst ILInstruction
 ---@return ILInstruction
 local function insert_before_inst(func, inst, inserted_inst)
+  if inst.inst_group and inst ~= inst.inst_group.start then
+    util.debug_abort("Attempt to insert an instruction inside of an inst_group (which are immutable).")
+  end
   ill.insert_before(inst, inserted_inst)
   update_intermediate_data(func, inserted_inst)
   return inserted_inst
@@ -1960,6 +2022,8 @@ return {
 
   -- instructions
 
+  new_instruction_group = new_instruction_group,
+
   new_move = new_move,
   new_get_upval = new_get_upval,
   new_set_upval = new_set_upval,
@@ -1977,7 +2041,9 @@ return {
   new_ret = new_ret,
   new_closure = new_closure,
   new_vararg = new_vararg,
+  new_close_up = new_close_up,
   new_scoping = new_scoping,
+  new_to_number = new_to_number,
 
   -- pointers
 

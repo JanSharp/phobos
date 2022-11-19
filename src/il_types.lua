@@ -113,6 +113,7 @@ local modify_post_state_func_lut = {
       -- TODO: this can be improved by a lot now
       set_type(inst.post_state, inst.result_reg, il.new_type{type_flags = il.every_flag})
     -- end
+    -- NOTE: only check for meta methods if the `raw` flag is not set
   end,
   ["unop"] = function(data, inst)
     if inst.op == "not" then
@@ -142,7 +143,13 @@ local modify_post_state_func_lut = {
   end,
   ["vararg"] = function(data, inst)
   end,
+  ["close_up"] = function(data, inst)
+  end,
   ["scoping"] = function(data, inst)
+  end,
+  ["to_number"] = function(data, inst)
+    -- TODO: check if it is actually convert-able to a number and set the correct number range
+    set_type(inst.post_state, inst.result_reg, il.new_type{type_flags = il.number_flag})
   end,
 }
 

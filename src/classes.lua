@@ -700,13 +700,43 @@
 ---| "ret"
 ---| "closure"
 ---| "vararg"
+---| "close_up"
 ---| "scoping"
+---| "to_number"
+
+---@alias ILInstructionGroupType
+---| "forprep"
+---| "forloop"
+---| "tforcall"
+---| "tforloop"
+
+---@class ILInstructionGroup
+---@field group_type ILInstructionGroupType
+---@field start ILInstruction
+---@field stop ILInstruction
+
+---@class ILForprepGroup : ILInstructionGroup
+---@field group_type "forprep"
+---@field index_reg ILRegister
+---@field loop_jump ILJump
+
+---@class ILForloopGroup : ILInstructionGroup
+---@field group_type "forloop"
+---@field index_reg ILRegister
+---@field loop_jump ILJump
+
+---@class ILTforcallGroup : ILInstructionGroup
+---@field group_type "tforcall"
+
+---@class ILTforloopGroup : ILInstructionGroup
+---@field group_type "tforloop"
 
 ---@class ILInstruction : IntrusiveILLNode<ILInstruction>
 ---@field list ILInstructionList @ (overridden) back reference
 ---@field prev ILInstruction? @ (overridden) `nil` if this is the first node
 ---@field next ILInstruction? @ (overridden) `nil` if this is the last node
 ---@field inst_type ILInstructionType
+---@field inst_group ILInstructionGroup
 ---@field position ILPosition|nil
 ---post IL generation data
 ---@field block ILBlock
@@ -779,6 +809,7 @@
 ---@field op ILBinOpOpBase @ note the absence of "and" and "or"
 ---@field left_ptr ILPointer
 ---@field right_ptr ILPointer
+---@field raw boolean @ wether or not this instruction can use meta methods or not. Used for fornum
 
 ---@class ILUnop : ILInstruction
 ---@field inst_type "unop"
@@ -834,9 +865,18 @@
 ---temp compilation data
 ---@field register_list_index integer
 
+---@class ILCloseUp : ILInstruction
+---@field inst_type "close_up"
+---@field regs ILRegister[]
+
 ---@class ILScoping : ILInstruction
 ---@field inst_type "scoping"
 ---@field regs ILRegister[]
+
+---@class ILToNumber : ILInstruction
+---@field inst_type "to_number"
+---@field result_reg ILRegister
+---@field right_ptr ILPointer
 
 ---@class ILFunction
 ---@field parent_func ILFunction|nil @ `nil` if main chunk

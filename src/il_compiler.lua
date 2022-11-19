@@ -177,6 +177,7 @@ do
   end
 
   local generate_inst_lut
+  local generate_inst_group_lut
   local generate_inst
   do
     ---@param data ILCompilerData
@@ -449,23 +450,63 @@ do
 
     -- when reading these functions remember that we are generating from back to front
 
+    ---@param data ILCompilerData
+    ---@param reg_list ILRegister[]
+    local function stop_local_regs_for_list(data, reg_list)
+      fill_regs_using_regs_list(reg_list)
+      local reg_count = #regs
+      if reg_count == 0 then return end
+      table.sort(regs, function(left, right)
+        return left.current_reg.reg_index > right.current_reg.reg_index
+      end)
+      -- sort_regs()
+      for i = reg_count, 1, -1 do
+        stop_reg(data, regs[i].current_reg)
+        regs[i].temp_sort_index = nil
+        regs[i] = nil
+      end
+    end
+
     local function stop_local_regs(data, inst)
       if inst.regs_start_at_list then
-        fill_regs_using_regs_list(inst.regs_start_at_list)
-        local reg_count = #regs
-        if reg_count == 0 then return end
-        table.sort(regs, function(left, right)
-          return left.current_reg.reg_index > right.current_reg.reg_index
-        end)
-        -- sort_regs()
-        for i = reg_count, 1, -1 do
-          stop_reg(data, regs[i].current_reg)
-          regs[i].temp_sort_index = nil
-          regs[i] = nil
-        end
+        stop_local_regs_for_list(data, inst.regs_start_at_list)
       end
       if fix_register_indexes_lut[inst.inst_type] then
         fix_register_indexes(data, inst)
+      end
+    end
+
+    ---@param data ILCompilerData
+    ---@param position Position
+    ---@param reg_list ILRegister[]
+    local function start_local_regs_for_list(data, position, reg_list)
+      fill_regs_using_regs_list(reg_list)
+      local reg_count = #regs
+      if reg_count == 0 then return end
+      sort_regs()
+      local reg_index_to_close_upvals_from
+      for i = 1, reg_count do
+        local reg = regs[i]
+        regs[i] = nil
+        local reg_index = data.local_reg_count
+        if next(data.local_reg_gaps) then
+          reg_index = 0
+          while not data.local_reg_gaps[reg_index] do
+            reg_index = reg_index + 1
+          end
+        end
+        reg.current_reg = create_compiled_reg(data, reg_index, reg.name)
+        reg.temp_sort_index = nil
+        if reg.captured_as_upval and not reg_index_to_close_upvals_from then
+          reg_index_to_close_upvals_from = reg.current_reg.reg_index
+        end
+      end
+      -- do this after all regs have been created - all regs are alive - for nice and clean debug symbols
+      if reg_index_to_close_upvals_from then
+        add_new_inst(data, position, opcodes.jmp, {
+          a = reg_index_to_close_upvals_from + 1,
+          sbx = 0,
+        })
       end
     end
 
@@ -482,39 +523,66 @@ do
           )
         end
       else
-        fill_regs_using_regs_list(inst.regs_stop_at_list)
-        local reg_count = #regs
-        if reg_count == 0 then return end
-        sort_regs()
-        local reg_index_to_close_upvals_from
-        for i = 1, reg_count do
-          local reg = regs[i]
-          regs[i] = nil
-          local reg_index = data.local_reg_count
-          if next(data.local_reg_gaps) then
-            reg_index = 0
-            while not data.local_reg_gaps[reg_index] do
-              reg_index = reg_index + 1
+        start_local_regs_for_list(data, inst.position, inst.regs_stop_at_list)
+      end
+    end
+
+    ---@param inst_group ILInstructionGroup
+    local function get_total_reg_start_and_stop_at_lists_for_inst_group(inst_group)
+      local start_at_lut = {}
+      local stop_at_lut = {}
+      local inst = inst_group.start
+      while inst ~= inst_group.stop.next do
+        if inst.regs_start_at_list then
+          for _, reg in ipairs(inst.regs_start_at_list) do
+            start_at_lut[reg] = true
+          end
+        end
+        if inst.regs_stop_at_list then
+          for _, reg in ipairs(inst.regs_stop_at_list) do
+            stop_at_lut[reg] = true
+          end
+      end
+        inst = inst.next
+      end
+      local start_at_list = {}
+      local stop_at_list = {}
+      inst = inst_group.start
+      while inst ~= inst_group.stop.next do
+        if inst.regs_start_at_list then
+          for _, reg in ipairs(inst.regs_start_at_list) do
+            if not stop_at_lut[reg] then
+              start_at_list[#start_at_list+1] = reg
             end
           end
-          reg.current_reg = create_compiled_reg(data, reg_index, reg.name)
-          reg.temp_sort_index = nil
-          if reg.captured_as_upval and not reg_index_to_close_upvals_from then
-            reg_index_to_close_upvals_from = reg.current_reg.reg_index
+        end
+        if inst.regs_stop_at_list then
+          for _, reg in ipairs(inst.regs_stop_at_list) do
+            if not start_at_lut[reg] then
+              stop_at_list[#stop_at_list+1] = reg
+            end
           end
         end
-        -- do this after all regs have been created - all regs are alive - for nice and clean debug symbols
-        if reg_index_to_close_upvals_from then
-          add_new_inst(data, inst.position, opcodes.jmp, {
-            a = reg_index_to_close_upvals_from + 1,
-            sbx = 0,
-          })
-        end
+        inst = inst.next
       end
+      return start_at_list, stop_at_list
+    end
+
+    ---@param data ILCompilerData
+    ---@param inst_group ILInstructionGroup
+    local function generate_inst_group(data, inst_group)
+      local start_at_list, stop_at_list = get_total_reg_start_and_stop_at_lists_for_inst_group(inst_group)
+      stop_local_regs_for_list(data, start_at_list)
+      start_local_regs_for_list(data, inst_group.start.position, stop_at_list)
+      return generate_inst_group_lut[inst_group.group_type](data, inst_group)
     end
 
     ---@param inst ILInstruction
     function generate_inst(data, inst)
+      if inst.inst_group then
+        return generate_inst_group(data, inst.inst_group)
+      end
+
       if take_snapshots_before_types_lut[inst.inst_type] then
         take_snapshot(data, inst)
       end
@@ -991,9 +1059,74 @@ do
       })
       return inst.prev
     end,
+    ---@param inst ILCloseUp
+    ["close_up"] = function(data, inst)
+      -- TODO: ensure there are no other registers that are captured as upvalues above the ones closed here [...]
+      -- this also needs to be done for all other places upvalues get closed (so for jumps and labels)
+      local a
+      for _, reg in ipairs(inst.regs) do
+        if reg.captured_as_upval and (not a or reg.current_reg.reg_index < a) then
+          a = reg.current_reg.reg_index + 1
+        end
+      end
+      if a then
+        add_new_inst(data, inst.position, opcodes.jmp, {
+          a = a,
+          sbx = 0,
+        })
+      end
+      return inst.prev
+    end,
+    ---@param inst ILScoping
     ["scoping"] = function(data, inst)
       -- no op
       return inst.prev
+    end,
+    ---@param inst ILToNumber
+    ["to_number"] = function(data, inst)
+      util.abort("Standalone 'to_number' il instructions cannot be compiled. There is no Lua opcode for it. \z
+        'to_number' is used inside of forprep instruction groups to represent Lua's implementation of the \z
+        forprep opcode."
+      )
+    end,
+  }
+
+  generate_inst_group_lut = {
+    ---@param data ILCompilerData
+    ---@param inst_group ILForprepGroup
+    ["forprep"] = function(data, inst_group)
+      inst_group.loop_jump.jump_inst = add_new_inst(data, inst_group.start.position, opcodes.forprep, {
+        a = inst_group.index_reg.current_reg.reg_index,
+        -- set after all instructions have been generated - once `inst_index`es have been evaluated
+        sbx = (nil)--[[@as integer]],
+      })
+      data.all_jumps_count = data.all_jumps_count + 1
+      data.all_jumps[data.all_jumps_count] = inst_group.loop_jump
+      return inst_group.start.prev
+    end,
+    ---@param data ILCompilerData
+    ---@param inst_group ILForloopGroup
+    ["forloop"] = function(data, inst_group)
+      inst_group.loop_jump.jump_inst = add_new_inst(data, inst_group.start.position, opcodes.forloop, {
+        a = inst_group.index_reg.current_reg.reg_index,
+        -- set after all instructions have been generated - once `inst_index`es have been evaluated
+        sbx = (nil)--[[@as integer]],
+      })
+      data.all_jumps_count = data.all_jumps_count + 1
+      data.all_jumps[data.all_jumps_count] = inst_group.loop_jump
+      return inst_group.start.prev
+    end,
+    ---@param data ILCompilerData
+    ---@param inst_group ILTforcallGroup
+    ["tforcall"] = function(data, inst_group)
+      util.debug_abort("-- TODO: not implemented")
+      return inst_group.start.prev
+    end,
+    ---@param data ILCompilerData
+    ---@param inst_group ILTforloopGroup
+    ["tforloop"] = function(data, inst_group)
+      util.debug_abort("-- TODO: not implemented")
+      return inst_group.start.prev
     end,
   }
 
