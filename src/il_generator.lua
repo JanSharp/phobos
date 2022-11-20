@@ -539,24 +539,20 @@ do
 
       -- TODO: use a "register group" to force these 3 registers to be "adjacent"
 
-      local forprep_group = il.new_instruction_group("forprep")--[[@as ILForprepGroup]]
-      forprep_group.index_reg = index_reg
+      -- start of forprep group
 
       -- convert index, limit and step to numbers
-      forprep_group.start = add_inst(func, il.new_to_number{
-        inst_group = forprep_group,
+      local forprep_group_start = add_inst(func, il.new_to_number{
         position = stat.for_token,
         result_reg = index_reg,
         right_ptr = index_reg
       })
       add_inst(func, il.new_to_number{
-        inst_group = forprep_group,
         position = stat.for_token,
         result_reg = limit_reg,
         right_ptr = limit_reg
       })
       add_inst(func, il.new_to_number{
-        inst_group = forprep_group,
         position = stat.for_token,
         result_reg = step_reg,
         right_ptr = step_reg
@@ -564,7 +560,6 @@ do
 
       -- subtract step from index once to match the forprep instruction
       add_inst(func, il.new_binop{
-        inst_group = forprep_group,
         position = stat.for_token,
         raw = true,
         result_reg = index_reg,
@@ -575,12 +570,21 @@ do
 
       -- jump to the forloop instruction which is past the body of the loop
       local prep_jump_forward = add_inst(func, il.new_jump{
-        inst_group = forprep_group,
         position = stat.for_token,
         label = prevent_assert,
       })
-      forprep_group.stop = prep_jump_forward
-      forprep_group.loop_jump = prep_jump_forward
+
+      -- stop of forprep group
+
+      il.new_forprep_group{
+        position = stat.for_token,
+        start = forprep_group_start,
+        stop = prep_jump_forward,
+        index_reg = index_reg,
+        limit_reg = limit_reg,
+        step_reg = step_reg,
+        loop_jump = prep_jump_forward,
+      }
 
       -- the target label for forloop. it can be anywhere because it's simply sbx, unrelated to forprep
       local start_label = add_inst(func, il.new_label{position = stat.for_token})
@@ -606,16 +610,14 @@ do
       -- target label for forprep. just like for forloop, this can be anywhere, so not part of the group
       prep_jump_forward.label = add_inst(func, il.new_label{position = stat.for_token})
 
-      local forloop_group = il.new_instruction_group("forloop")--[[@as ILForloopGroup]]
-      forloop_group.index_reg = index_reg
-
       local leave_jumps = {}
+
+      -- start of forloop group
 
       -- increment index using a temporary register to match the internal implementation of forloop
       -- it only writes the new value of the index to the index register if it continues looping
       local incremented_index_reg = il.new_reg()
-      forloop_group.start = add_inst(func, il.new_binop{
-        inst_group = forloop_group,
+      local forloop_group_start = add_inst(func, il.new_binop{
         position = stat.do_token,
         result_reg = incremented_index_reg,
         left_ptr = index_reg,
@@ -627,7 +629,6 @@ do
       -- test `step > 0`
       local temp_reg = il.new_reg()
       add_inst(func, il.new_binop{
-        inst_group = forloop_group,
         position = stat.for_token,
         result_reg = temp_reg,
         left_ptr = step_reg,
@@ -636,7 +637,6 @@ do
         raw = true,
       })
       local step_comp_jump = add_inst(func, il.new_test{
-        inst_group = forloop_group,
         position = stat.for_token,
         condition_ptr = temp_reg,
         jump_if_true = true,
@@ -647,7 +647,6 @@ do
       -- and this does `if index < limit then break end`
       temp_reg = il.new_reg()
       add_inst(func, il.new_binop{
-        inst_group = forloop_group,
         position = stat.for_token,
         result_reg = temp_reg,
         left_ptr = incremented_index_reg,
@@ -656,7 +655,6 @@ do
         raw = true,
       })
       leave_jumps[#leave_jumps+1] = add_inst(func, il.new_test{
-        inst_group = forloop_group,
         position = stat.for_token,
         condition_ptr = temp_reg,
         jump_if_true = true,
@@ -664,18 +662,16 @@ do
       })
       -- jump past the other branch for the initial `step > 0` test
       local jump_to_block = add_inst(func, il.new_jump{
-        inst_group = forloop_group,
         position = stat.for_token,
         label = prevent_assert,
       })
 
       -- set jump target for the second branch
-      jump_here({step_comp_jump}, func, stat.for_token).inst_group = forloop_group
+      jump_here({step_comp_jump}, func, stat.for_token)
       -- this is the branch: `if step > 0 then`
       -- and this does `if index > limit then break end`
       temp_reg = il.new_reg()
       add_inst(func, il.new_binop{
-        inst_group = forloop_group,
         position = stat.for_token,
         result_reg = temp_reg,
         left_ptr = incremented_index_reg,
@@ -684,7 +680,6 @@ do
         raw = true,
       })
       leave_jumps[#leave_jumps+1] = add_inst(func, il.new_test{
-        inst_group = forloop_group,
         position = stat.for_token,
         condition_ptr = temp_reg,
         jump_if_true = true,
@@ -692,33 +687,40 @@ do
       })
 
       -- set jump target for the first branch, since it skips the second branch on success (and breaks/leaves on failure)
-      jump_here({jump_to_block}, func, stat.for_token).inst_group = forloop_group
+      jump_here({jump_to_block}, func, stat.for_token)
       -- `index = incremented_index`
       add_inst(func, il.new_move{
-        inst_group = forloop_group,
         position = stat.eq_token,
         result_reg = index_reg,
         right_ptr = incremented_index_reg,
       })
       -- `local_var = incremented_index`
       add_inst(func, il.new_move{
-        inst_group = forloop_group,
         position = stat.eq_token,
         result_reg = local_reg,
         right_ptr = incremented_index_reg,
       })
       -- jump back up, next loop iteration
-      forloop_group.loop_jump = add_inst(func, il.new_jump{
-        inst_group = forloop_group,
+      local forloop_group_loop_jump = add_inst(func, il.new_jump{
         position = stat.do_token,
         label = start_label,
       })
 
       -- set jump target for leave and break jumps
-      local label = jump_here(leave_jumps, func, stat.end_token)
-      ---@cast label -nil
-      label.inst_group = forloop_group
-      forloop_group.stop = label
+      local forloop_group_stop = jump_here(leave_jumps, func, stat.end_token)
+      ---@cast forloop_group_stop -nil
+
+      -- stop of forloop group
+
+      il.new_forloop_group{
+        position = stat.for_token,
+        start = forloop_group_start,
+        stop = forloop_group_stop,
+        index_reg = index_reg,
+        limit_reg = limit_reg,
+        step_reg = step_reg,
+        loop_jump = forloop_group_loop_jump,
+      }
 
       breaks_jump_here(stat, func, stat.end_token)
 

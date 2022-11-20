@@ -714,15 +714,20 @@
 ---@field group_type ILInstructionGroupType
 ---@field start ILInstruction
 ---@field stop ILInstruction
+---@field position Position?
 
 ---@class ILForprepGroup : ILInstructionGroup
 ---@field group_type "forprep"
 ---@field index_reg ILRegister
+---@field limit_reg ILRegister
+---@field step_reg ILRegister
 ---@field loop_jump ILJump
 
 ---@class ILForloopGroup : ILInstructionGroup
 ---@field group_type "forloop"
 ---@field index_reg ILRegister
+---@field limit_reg ILRegister
+---@field step_reg ILRegister
 ---@field loop_jump ILJump
 
 ---@class ILTforcallGroup : ILInstructionGroup

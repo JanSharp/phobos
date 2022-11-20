@@ -33,28 +33,87 @@ local function assert_ptr(params, field_name)
 end
 
 ---@class ILInstParamsBase
----@field position ILPosition
----@field inst_group ILInstructionGroup?
+---@field position ILPosition?
 
 local function new_inst(params, inst_type)
   return {
     inst_type = inst_type,
-    inst_group = params.inst_group,
     position = params.position,
   }
 end
 
+---@class ILInstGroupParamsBase
+---@field position ILPosition?
+---@field start ILInstruction
+---@field stop ILInstruction
+
 ---@param group_type ILInstructionGroupType
----@param start ILInstruction?
----@param stop ILInstruction?
----@return ILInstructionGroup
-local function new_instruction_group(group_type, start, stop)
-  ---@type ILInstructionGroup
-  return {
+---@param params ILInstGroupParamsBase
+local function new_instruction_group(group_type, params)
+  local group = {
     group_type = group_type,
-    start = start,
-    stop = stop,
+    position = params.position,
+    start = assert_field(params, "start"),
+    stop = assert_field(params, "stop"),
   }
+  local inst = group.start
+  while inst ~= group.stop.next do
+    inst.inst_group = group
+    inst = inst.next
+  end
+  return group
+end
+
+---@class ILForprepGroupParams : ILInstGroupParamsBase
+---@field index_reg ILRegister
+---@field limit_reg ILRegister
+---@field step_reg ILRegister
+---@field loop_jump ILJump
+
+---@param params ILForprepGroupParams
+---@return ILForprepGroup
+local function new_forprep_group(params)
+  local group = new_instruction_group("forprep", params)
+  group.index_reg = assert_reg(params, "index_reg")
+  group.limit_reg = assert_reg(params, "limit_reg")
+  group.step_reg = assert_reg(params, "step_reg")
+  group.loop_jump = assert_field(params, "loop_jump")
+  return group
+end
+
+---@class ILForloopGroupParams : ILInstGroupParamsBase
+---@field index_reg ILRegister
+---@field limit_reg ILRegister
+---@field step_reg ILRegister
+---@field loop_jump ILJump
+
+---@param params ILForloopGroupParams
+---@return ILForloopGroup
+local function new_forloop_group(params)
+  local group = new_instruction_group("forloop", params)
+  group.index_reg = assert_reg(params, "index_reg")
+  group.limit_reg = assert_reg(params, "limit_reg")
+  group.step_reg = assert_reg(params, "step_reg")
+  group.loop_jump = assert_field(params, "loop_jump")
+  return group
+end
+
+---@class ILTforcallGroupParams : ILInstGroupParamsBase
+
+---@param params ILTforcallGroupParams
+---@return ILTforcallGroup
+local function new_tforcall_group(params)
+  local group = new_instruction_group("tforcall", params)
+  return group
+end
+
+---@class ILTforloopGroupParams : ILInstGroupParamsBase
+
+---@param params ILTforloopGroupParams
+---@return ILTforloopGroup
+local function new_tforloop_group(params)
+  local group = new_instruction_group("tforloop", params)
+  return group
 end
 
 ---@class ILMoveParams : ILInstParamsBase
@@ -2022,7 +2081,10 @@ return {
 
   -- instructions
 
-  new_instruction_group = new_instruction_group,
+  new_forprep_group = new_forprep_group,
+  new_forloop_group = new_forloop_group,
+  new_tforcall_group = new_tforcall_group,
+  new_tforloop_group = new_tforloop_group,
 
   new_move = new_move,
   new_get_upval = new_get_upval,

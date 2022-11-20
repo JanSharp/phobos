@@ -1095,7 +1095,7 @@ do
     ---@param data ILCompilerData
     ---@param inst_group ILForprepGroup
     ["forprep"] = function(data, inst_group)
-      inst_group.loop_jump.jump_inst = add_new_inst(data, inst_group.start.position, opcodes.forprep, {
+      inst_group.loop_jump.jump_inst = add_new_inst(data, inst_group.position, opcodes.forprep, {
         a = inst_group.index_reg.current_reg.reg_index,
         -- set after all instructions have been generated - once `inst_index`es have been evaluated
         sbx = (nil)--[[@as integer]],
@@ -1107,7 +1107,7 @@ do
     ---@param data ILCompilerData
     ---@param inst_group ILForloopGroup
     ["forloop"] = function(data, inst_group)
-      inst_group.loop_jump.jump_inst = add_new_inst(data, inst_group.start.position, opcodes.forloop, {
+      inst_group.loop_jump.jump_inst = add_new_inst(data, inst_group.position, opcodes.forloop, {
         a = inst_group.index_reg.current_reg.reg_index,
         -- set after all instructions have been generated - once `inst_index`es have been evaluated
         sbx = (nil)--[[@as integer]],
