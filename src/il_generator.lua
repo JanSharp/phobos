@@ -537,8 +537,6 @@ do
       limit_reg.name = "(for limit)"
       step_reg.name = "(for step)"
 
-      -- TODO: use a "register group" to force these 3 registers to be "adjacent"
-
       -- start of forprep group
 
       -- convert index, limit and step to numbers

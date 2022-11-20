@@ -1199,7 +1199,7 @@ local function make_bytecode_func(data)
   end
 end
 
-local expand_ptr_lists
+local pre_compilation_process
 do
   ---@param data ILCompilerData
   ---@param inst ILInstruction
@@ -1303,13 +1303,60 @@ do
     -- nothing to do for vararg, it only outputs a list of registers, doesn't take an input
   }
 
+  ---@param regs ILRegister[]
+  local function create_reg_group(regs)
+    local reg_group = {regs = regs}
+    for i, reg in ipairs(regs) do
+      reg.reg_group = reg_group
+      reg.index_in_reg_group = i
+    end
+  end
+
+  ---@param index_reg ILRegister
+  ---@param limit_reg ILRegister
+  ---@param step_reg ILRegister
+  local function create_register_group_for_numeric_for(index_reg, limit_reg, step_reg)
+    if index_reg.reg_group or limit_reg.reg_group or step_reg.reg_group then
+      if not (index_reg.reg_group == limit_reg.reg_group
+          and index_reg.reg_group == step_reg.reg_group
+          and index_reg.index_in_reg_group == limit_reg.index_in_reg_group - 1
+          and index_reg.index_in_reg_group == step_reg.index_in_reg_group - 2
+        )
+      then
+        -- NOTE: if this actually becomes a problem at some point then this can at least prepend or append [...]
+        -- registers to the group when possible
+        util.debug_abort("Invalid register usage for registers that are used by forprep or forloop groups. \z
+          The index, limit and step registers must all share the same register group and be in sequential \z
+          order within that group"
+        )
+      end
+      return -- they are already in a valid group, nothing to do
+    end
+    create_reg_group{index_reg, limit_reg, step_reg}
+  end
+
+  local inst_group_pre_process_lut = {
+    ["forprep"] = function(data, inst_group)
+      create_register_group_for_numeric_for(inst_group.index_reg, inst_group.limit_reg, inst_group.step_reg)
+    end,
+    ["forloop"] = function(data, inst_group)
+      create_register_group_for_numeric_for(inst_group.index_reg, inst_group.limit_reg, inst_group.step_reg)
+    end,
+  }
+
   ---@param data ILCompilerData
-  function expand_ptr_lists(data)
+  function pre_compilation_process(data)
     local inst = data.func.instructions.first
     while inst do
       local expand_ptrs = expand_ptr_list_lut[inst.inst_type]
       if expand_ptrs then
         expand_ptrs(data, inst)
+      end
+      if inst.inst_group then
+        local inst_group_pre_process = inst_group_pre_process_lut[inst.inst_group.group_type]
+        if inst_group_pre_process then
+          inst_group_pre_process(data, inst.inst_group)
+        end
       end
       inst = inst.next
     end
@@ -1364,7 +1411,7 @@ local function compile(func)
   func.is_compiling = true
   make_bytecode_func(data)
   il.determine_reg_usage(func)
-  expand_ptr_lists(data)
+  pre_compilation_process(data)
 
   generate(data)
 

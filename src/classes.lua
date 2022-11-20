@@ -565,6 +565,12 @@
 --------------------------------------------------
 -- intermediate language:
 
+---This data structure is created right before compilation as it is only needed during compilation
+---@class ILRegisterGroup
+---@field regs ILRegister[]
+---the index for the first register in the `regs` array, once it has been determined
+---@field first_reg_index integer?
+
 ---@alias ILPointerType
 ---| "reg"
 ---| "number"
@@ -587,6 +593,9 @@
 ---@field temporary boolean?
 ---@field captured_as_upval boolean?
 ---@field current_reg ILCompiledRegister
+---temp compilation data
+---@field reg_group ILRegisterGroup?
+---@field index_in_reg_group integer?
 
 ---@class ILVarargRegister : ILRegister
 ---@field name nil
