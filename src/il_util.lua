@@ -1585,7 +1585,6 @@ do
       for _, upval in ipairs(inst.func.upvals) do
         if upval.parent_type == "local" then
           visit_reg(data, inst, upval.reg_in_parent_func, get)
-          upval.reg_in_parent_func.captured_as_upval = true -- FIXME: captured_as_upval does not belong here
         end
       end
     end,

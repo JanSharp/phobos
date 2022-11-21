@@ -568,6 +568,9 @@
 ---This data structure is created right before compilation as it is only needed during compilation
 ---@class ILRegisterGroup
 ---@field regs ILRegister[]
+---I believe linked groups are groups that share the same registers
+---@field prev_linked ILRegisterGroup?
+---@field next_linked ILRegisterGroup?
 ---the index for the first register in the `regs` array, once it has been determined
 ---@field first_reg_index integer?
 
@@ -594,6 +597,9 @@
 ---@field captured_as_upval boolean?
 ---@field current_reg ILCompiledRegister
 ---temp compilation data
+---the first register group this register is apart of. Said group might be linked to more register groups
+---which may also include this register in their register list
+---TODO: is it the first or last group? implementation will decide
 ---@field reg_group ILRegisterGroup?
 ---@field index_in_reg_group integer?
 
@@ -761,6 +767,7 @@
 ---@field live_regs ILRegister[]
 ---@field pre_state ILState
 ---@field post_state ILState
+---@field input_reg_group ILRegisterGroup?
 
 ---@class ILInstructionList : IntrusiveIndexedLinkedList<ILInstruction>
 ---@field first ILInstruction? @ (overridden)
@@ -801,8 +808,6 @@
 ---@field table_reg ILRegister
 ---@field start_index integer
 ---@field right_ptrs ILPointer[] @ The last one can be an `ILVarargRegister`
----temp compilation data
----@field forced_list_index integer?
 
 ---@class ILNewTable : ILInstruction
 ---@field inst_type "new_table"
@@ -814,8 +819,6 @@
 ---@field inst_type "concat"
 ---@field result_reg ILRegister
 ---@field right_ptrs ILPointer[]
----temp compilation data
----@field forced_list_index integer?
 
 ---@class ILBinop : ILInstruction
 ---@field inst_type "binop"
@@ -858,15 +861,10 @@
 ---@field func_reg ILRegister
 ---@field arg_ptrs ILPointer[] @ The last one can be an `ILVarargRegister`
 ---@field result_regs ILRegister[] @ The last one can be an `ILVarargRegister`
----temp compilation data
----@field register_list_index integer
----@field forced_list_index integer?
 
 ---@class ILRet : ILInstruction
 ---@field inst_type "ret"
 ---@field ptrs ILPointer[] @ The last one can be an `ILVarargRegister`
----temp compilation data
----@field forced_list_index integer?
 
 ---@class ILClosure : ILInstruction
 ---@field inst_type "closure"
@@ -876,8 +874,6 @@
 ---@class ILVararg : ILInstruction
 ---@field inst_type "vararg"
 ---@field result_regs ILRegister[] @ The last one can be an `ILVarargRegister`
----temp compilation data
----@field register_list_index integer
 
 ---@class ILCloseUp : ILInstruction
 ---@field inst_type "close_up"

@@ -1078,7 +1078,9 @@ function generate_il_func(functiondef, parent_func)
     else -- upval.parent_def.def_type == "local" (and it is not the _ENV "local")
       ---@cast parent_func -?
       il_upval.parent_type = "local"
-      func.upvals[i].reg_in_parent_func = parent_func.temp.local_reg_lut[upval.parent_def]
+      local reg_in_parent_func = parent_func.temp.local_reg_lut[upval.parent_def]
+      func.upvals[i].reg_in_parent_func = reg_in_parent_func
+      reg_in_parent_func.captured_as_upval = true
     end
   end
 

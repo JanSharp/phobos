@@ -9,9 +9,6 @@ local stack = require("stack")
 
 local generate
 do
-  local restore_last_snapshot = false
-  local forced_list_index_shift = 0
-
   ---@param data ILCompilerData
   ---@param position Position
   ---@param op Opcode
@@ -45,75 +42,6 @@ do
   ---@return ILCompiledInstruction
   local function get_first_inst(data)
     return data.compiled_instructions.first--[[@as ILCompiledInstruction]]
-  end
-
-  ---@param data ILCompilerData
-  ---@param current_inst ILInstruction
-  local function take_snapshot(data, current_inst)
-    ---@type ILCompilerDataSnapshot
-    local snapshot = {
-      first_inst = get_first_inst(data),
-      compiled_registers_count = data.compiled_registers_count,
-      local_reg_gaps = util.shallow_copy(data.local_reg_gaps),
-      local_reg_count = data.local_reg_count,
-      constants_count = data.constants_count,
-      nil_constant_idx = data.nil_constant_idx,
-      nan_constant_idx = data.nan_constant_idx,
-      all_jumps = util.shallow_copy(data.all_jumps),
-      max_stack_size = data.result.max_stack_size,
-      current_inst = current_inst,
-    }
-    stack.push(data.snapshots, snapshot)
-  end
-
-  ---@param data ILCompilerData
-  ---@return ILInstruction
-  local function load_snapshot(data)
-    local snapshot = stack.pop(data.snapshots)
-    util.debug_assert(snapshot, "Attempt to load a snapshot when there are no snapshots on the stack.")
-    while snapshot.first_inst.prev do
-      ill.remove(snapshot.first_inst.prev)
-    end
-    for i = snapshot.constants_count + 1, data.constants_count do
-      local constant = data.result.constants[i]
-      data.constant_lut[constant.value] = nil
-      -- data.result.constants[i] = nil -- no need because after it's done generating it gets cleaned up
-    end
-    data.compiled_registers_count = snapshot.compiled_registers_count
-    data.local_reg_gaps = snapshot.local_reg_gaps
-    data.local_reg_count = snapshot.local_reg_count
-    data.constants_count = snapshot.constants_count
-    data.nil_constant_idx = snapshot.nil_constant_idx
-    data.nan_constant_idx = snapshot.nan_constant_idx
-    data.all_jumps = snapshot.all_jumps
-    data.result.max_stack_size = snapshot.max_stack_size
-    return snapshot.current_inst
-  end
-
-  local take_snapshots_before_types_lut = util.invert{
-    "set_list",
-    "call",
-    "ret",
-  }
-
-  local insts_with_forced_list_index_lut = util.invert{
-    "set_list",
-    "concat",
-    "call",
-    "ret",
-  }
-
-  ---@param data ILCompilerData
-  ---@param inst ILInstruction
-  ---@param list_index_shift integer
-  local function setup_for_restoring_snapshot(data, inst, list_index_shift)
-    restore_last_snapshot = true
-    forced_list_index_shift = list_index_shift
-    if take_snapshots_before_types_lut[inst.inst_type] then
-      -- prevent infinite loops, since the snapshot for this instruction is taken before
-      -- any function that might want to restore a prior snapshot is called for this instruction
-      stack.pop(data.snapshots)
-    end
   end
 
   ---@class ILCompiledRegister
@@ -179,250 +107,8 @@ do
   local generate_inst_lut
   local generate_inst_group_lut
   local generate_inst
+  local generate_inst_group
   do
-    ---@param data ILCompilerData
-    ---@param inst ILCall|ILVararg
-    local function fix_register_indexes(data, inst)
-      local top_reg_index = data.local_reg_count
-      local reg_count = #inst.result_regs
-
-      if reg_count == 0 then
-        inst.register_list_index = top_reg_index
-        return
-      end
-
-      -- if inst.inst_type == "call" and inst.func_reg.stop_at ~= inst then
-      --   top_reg_index = top_reg_index + 1
-      -- end
-
-      -- TODO: use a gap instead of making a new temp reg if there is a temp reg
-
-      -- TODO: detect which register indexes would require the least amount of moves
-
-      local last_reg = inst.result_regs[reg_count]
-      local is_vararg = last_reg.is_vararg
-
-      local register_list_index
-      local has_temp_reg = false
-      if is_vararg then
-        register_list_index = last_reg.current_reg.reg_index - #inst.result_regs + 1
-        if register_list_index > top_reg_index then
-          has_temp_reg = true
-        elseif register_list_index < top_reg_index then
-          -- modifies forced_list_index by setting a shift that's applied later
-          setup_for_restoring_snapshot(data, inst, top_reg_index - register_list_index)
-          return
-        end
-      else
-        register_list_index = top_reg_index
-      end
-      ::do_it_again::
-
-      ---@type table<integer, true?>
-      local free_register_indexes_lut = {[top_reg_index] = has_temp_reg or nil}
-      ---@type table<integer, {is_done: boolean, is_loop: boolean, moves: {source_reg: integer, target_reg: integer}[]}>
-      local loop_or_chain_reg_lut = {}
-      local reg_moving_into_top_reg_index = nil
-
-      local function is_free_target_index(reg_index)
-        -- moving into a register that is still alive past this instruction, it's a downwards move
-        return reg_index < register_list_index
-          or reg_index >= register_list_index + reg_count -- detect upwards moves
-      end
-
-      local function check_for_loop(reg_index)
-        local current_reg_index = reg_index
-        while not is_free_target_index(current_reg_index) do
-          local result_reg_index = current_reg_index - register_list_index + 1
-          current_reg_index = inst.result_regs[result_reg_index].current_reg.reg_index
-          if current_reg_index == reg_index then return true end
-        end
-        return false
-      end
-
-      local function add_loop_or_chain(first_reg_index, is_loop, stop_condition)
-        local current_reg_index = first_reg_index
-        local moves = {}
-        local loop = {is_loop = is_loop, moves = moves}
-        repeat
-          loop_or_chain_reg_lut[current_reg_index] = loop
-          local result_reg_index = current_reg_index - register_list_index + 1
-          local move_data = {source_reg = current_reg_index}
-          current_reg_index = inst.result_regs[result_reg_index].current_reg.reg_index
-          move_data.target_reg = current_reg_index
-          moves[#moves+1] = move_data
-        until stop_condition(current_reg_index)
-      end
-
-      local function add_loop(first_reg_index)
-        add_loop_or_chain(first_reg_index, true, function(current_reg_index)
-          return current_reg_index == first_reg_index
-        end)
-      end
-
-      local function add_chain(first_reg_index)
-        add_loop_or_chain(first_reg_index, false, function(current_reg_index)
-          return is_free_target_index(current_reg_index)
-        end)
-      end
-
-      for i, reg in ipairs(inst.result_regs) do
-        local current_reg_index = register_list_index + i - 1
-        if loop_or_chain_reg_lut[current_reg_index] then goto continue end
-        if is_free_target_index(current_reg_index) then
-          if has_temp_reg and reg.current_reg.reg_index == top_reg_index then
-            reg_moving_into_top_reg_index = current_reg_index
-          else
-            free_register_indexes_lut[current_reg_index] = true
-          end
-        elseif reg.current_reg.reg_index ~= current_reg_index
-          and not free_register_indexes_lut[reg.current_reg.reg_index]
-        then
-          -- check if this is actually a loop
-          if check_for_loop(current_reg_index) then
-            if not has_temp_reg then
-              if is_vararg then
-                setup_for_restoring_snapshot(data, inst, 1)
-                return
-              end
-              has_temp_reg = true
-              register_list_index = register_list_index + 1
-              -- now that it requires a temp reg, it has to start over since all registers have been shifted
-              goto do_it_again
-            end
-            -- it's a loop
-            add_loop(current_reg_index)
-          else
-            -- it's just a chain ending in a free move, not a loop
-            add_chain(current_reg_index)
-          end
-        end
-        ::continue::
-      end
-
-      if reg_moving_into_top_reg_index then
-        add_new_inst(data, inst.position, opcodes.move, {
-          a = top_reg_index,
-          b = reg_moving_into_top_reg_index,
-        })
-      end
-
-      for i = reg_count, 1, -1 do
-        local reg = inst.result_regs[i]
-        local current_reg_index = register_list_index + i - 1
-        if current_reg_index == reg_moving_into_top_reg_index then goto continue end
-        local loop_or_chain = loop_or_chain_reg_lut[current_reg_index]
-        if loop_or_chain then
-          if loop_or_chain.is_done then goto continue end
-          if loop_or_chain.is_loop then -- loop
-            local moves = loop_or_chain.moves
-            local last_move = moves[#moves]
-            add_new_inst(data, inst.position, opcodes.move, {
-              a = last_move.target_reg,
-              b = top_reg_index,
-            })
-            for j = 1, #moves - 1 do
-              local move = loop_or_chain.moves[j]
-              add_new_inst(data, inst.position, opcodes.move, {
-                a = move.target_reg,
-                b = move.source_reg,
-              })
-            end
-            add_new_inst(data, inst.position, opcodes.move, {
-              a = top_reg_index,
-              b = last_move.source_reg,
-            })
-          else -- chain
-            for j = 1, #loop_or_chain.moves do
-              local move = loop_or_chain.moves[j]
-              add_new_inst(data, inst.position, opcodes.move, {
-                a = move.target_reg,
-                b = move.source_reg,
-              })
-            end
-          end
-          loop_or_chain.is_done = true
-        elseif reg.current_reg.reg_index ~= current_reg_index then
-          -- everything that isn't in a loop or chain is a simple move
-          add_new_inst(data, inst.position, opcodes.move, {
-            a = reg.current_reg.reg_index,
-            b = current_reg_index,
-          })
-        end
-        ::continue::
-      end
-
-      inst.register_list_index = register_list_index
-    end
-
-    local fix_register_indexes_lut = util.invert{
-      "call",
-      "vararg",
-    }
-
-    ---@param data ILCompilerData
-    ---@param inst ILSetList|ILConcat|ILCall|ILRet
-    ---@param regs ILRegister[]
-    local function restrict_register_list(data, inst, regs)
-      local list_index = inst.forced_list_index
-      for i, reg in ipairs(regs) do
-        util.debug_assert(reg.ptr_type == "reg", "The pre process should change all ptrs to regs.")
-        -- util.debug_assert(not reg.current_reg, "All registers for lists")
-        reg.current_reg = create_compiled_reg(data, list_index + i - 1, reg.name)
-      end
-    end
-
-    ---@type table<string, fun(data: ILCompilerData, inst: ILInstruction)>
-    local restrict_register_indexes_lut = {
-      ---@param data ILCompilerData
-      ---@param inst ILSetList
-      ["set_list"] = function(data, inst)
-        inst.forced_list_index = inst.forced_list_index or (data.local_reg_count + 1)
-        if inst.table_reg.stop_at == inst then
-          inst.table_reg.current_reg = create_compiled_reg(
-            data,
-            inst.forced_list_index - 1,
-            inst.table_reg.name
-          )
-        end
-        restrict_register_list(data, inst, inst.right_ptrs)
-      end,
-      ---@param data ILCompilerData
-      ---@param inst ILConcat
-      ["concat"] = function(data, inst)
-        inst.forced_list_index = inst.forced_list_index or data.local_reg_count
-        restrict_register_list(data, inst, inst.right_ptrs)
-      end,
-      ---@param data ILCompilerData
-      ---@param inst ILCall
-      ["call"] = function(data, inst)
-        inst.forced_list_index = inst.forced_list_index or (inst.register_list_index + 1)
-        if inst.func_reg.stop_at == inst then
-          inst.func_reg.current_reg = create_compiled_reg(
-            data,
-            inst.forced_list_index - 1,
-            inst.func_reg.name
-          )
-        end
-        restrict_register_list(data, inst, inst.arg_ptrs)
-      end,
-      ---@param data ILCompilerData
-      ---@param inst ILRet
-      ["ret"] = function(data, inst)
-        if inst.ptrs then
-          inst.forced_list_index = inst.forced_list_index or data.local_reg_count
-          restrict_register_list(data, inst, inst.ptrs)
-        else
-          stack.pop(data.snapshots) -- NOTE: what a waste of performance, but it doesn't happen often
-        end
-      end,
-      ---@param data ILCompilerData
-      ---@param inst ILVararg
-      ["vararg"] = function(data, inst)
-        util.debug_abort("Impossible because no registers should ever stop at an ILVararg instruction.")
-      end,
-    }
-
     ---@class ILRegisterWithTempSortIndex : ILRegister
     ---@field temp_sort_index integer
 
@@ -471,9 +157,6 @@ do
       if inst.regs_start_at_list then
         stop_local_regs_for_list(data, inst.regs_start_at_list)
       end
-      if fix_register_indexes_lut[inst.inst_type] then
-        fix_register_indexes(data, inst)
-      end
     end
 
     ---@param data ILCompilerData
@@ -514,17 +197,7 @@ do
     ---@param inst ILInstruction
     local function start_local_regs(data, inst)
       if not inst.regs_stop_at_list then return end
-
-      if restrict_register_indexes_lut[inst.inst_type] then
-        restrict_register_indexes_lut[inst.inst_type](data, inst)
-        for _, reg in ipairs(inst.regs_stop_at_list) do
-          util.debug_assert(reg.current_reg, "restrict_register_indexes_lut must create regs \z
-            for all registers that stop at this instruction."
-          )
-        end
-      else
-        start_local_regs_for_list(data, inst.position, inst.regs_stop_at_list)
-      end
+      start_local_regs_for_list(data, inst.position, inst.regs_stop_at_list)
     end
 
     ---@param inst_group ILInstructionGroup
@@ -570,7 +243,7 @@ do
 
     ---@param data ILCompilerData
     ---@param inst_group ILInstructionGroup
-    local function generate_inst_group(data, inst_group)
+    function generate_inst_group(data, inst_group)
       local start_at_list, stop_at_list = get_total_reg_start_and_stop_at_lists_for_inst_group(inst_group)
       stop_local_regs_for_list(data, start_at_list)
       start_local_regs_for_list(data, inst_group.start.position, stop_at_list)
@@ -579,17 +252,8 @@ do
 
     ---@param inst ILInstruction
     function generate_inst(data, inst)
-      if inst.inst_group then
-        return generate_inst_group(data, inst.inst_group)
-      end
-
-      if take_snapshots_before_types_lut[inst.inst_type] then
-        take_snapshot(data, inst)
-      end
       stop_local_regs(data, inst)
-      if restore_last_snapshot then return end -- early returns, wouldn't want to waste performance
       start_local_regs(data, inst)
-      if restore_last_snapshot then return end -- same here
       return generate_inst_lut[inst.inst_type](data, inst)
     end
   end
@@ -1017,7 +681,7 @@ do
       -- pre-process step (removing the `not reg.temporary` check, or so)
       local vararg_args = inst.arg_ptrs[1] and (inst.arg_ptrs[#inst.arg_ptrs]--[[@as ILRegister]]).is_vararg
       local vararg_result = inst.result_regs[1] and inst.result_regs[#inst.result_regs].is_vararg
-      local func_reg_index = inst.register_list_index
+      local func_reg_index = inst.register_list_index -- FIXME: rely on register groups
       local func_reg = ensure_is_exact_reg_for_get_pre(data, inst.func_reg.current_reg, func_reg_index)
       add_new_inst(data, inst.position, opcodes.call, {
         a = func_reg_index,
@@ -1054,7 +718,7 @@ do
     ["vararg"] = function(data, inst)
       local is_vararg = inst.result_regs[#inst.result_regs].is_vararg
       add_new_inst(data, inst.position, opcodes.vararg, {
-        a = inst.register_list_index,
+        a = inst.register_list_index, -- FIXME: rely on register groups
         b = is_vararg and 0 or (#inst.result_regs + 1),
       })
       return inst.prev
@@ -1130,16 +794,14 @@ do
     end,
   }
 
+  ---@param data ILCompilerData
   function generate(data)
     local inst = data.func.instructions.last
     while inst do
-      inst = generate_inst(data, inst)
-      if restore_last_snapshot then
-        restore_last_snapshot = false
-        inst = load_snapshot(data)
-        if insts_with_forced_list_index_lut[inst.inst_type] then
-          inst.forced_list_index = inst.forced_list_index + forced_list_index_shift
-        end
+      if inst.inst_group then
+        inst = generate_inst_group(data, inst.inst_group)
+      else
+        inst = generate_inst(data, inst)
       end
     end
   end
@@ -1203,17 +865,21 @@ local pre_compilation_process
 do
   ---@param data ILCompilerData
   ---@param inst ILInstruction
+  ---@param regs ILRegister[]
+  ---@param start_index integer @ start index in `regs`
+  local function group_registers(data, inst, regs, start_index)
+    -- pretty sure we don't need to do anything if the group would be an input group
+    -- for an instruction past the end of the instruction list
+    if not inst then return end
+    -- TODO: impl
+  end
+
+  ---@param data ILCompilerData
+  ---@param inst ILInstruction
   ---@param ptrs ILPointer[]
   local function expand_ptr_list(data, inst, ptrs)
-    local regs_lut = {}
-    local regs_count = 0
     for i, ptr in ipairs(ptrs) do
-      if ptr.ptr_type == "reg" then
-        if not regs_lut[ptr] then
-          regs_count = regs_count + 1
-          regs_lut[ptr] = true
-        end
-      else
+      if ptr.ptr_type ~= "reg" then
         local temp_reg = il.new_reg()
         il.insert_before_inst(data.func, inst, il.new_move{
           position = inst.position,
@@ -1224,123 +890,59 @@ do
         il.add_reg_to_inst_get(data.func, inst, temp_reg)
       end
     end
-
-    ---@type table<ILRegister, ILInstruction>
-    local reg_setter_lut = {}
-    local prev_inst = inst.prev
-    while regs_count > 0 do
-      util.debug_assert(prev_inst, "Impossible because there must be an instruction setting every \z
-        register that comes before an instruction using a register."
-      ) ---@cast prev_inst -nil
-      il.visit_regs_for_inst(nil, prev_inst, function(_, _, reg, get_set)
-        if regs_lut[reg] and bit32.band(get_set, 2) ~= 0 then
-          regs_count = regs_count - 1
-          regs_lut[reg] = nil
-          reg_setter_lut[reg] = prev_inst
-        end
-      end)
-      prev_inst = prev_inst.prev
-    end
-
-    -- TODO: think about this a bit more. I think it's functional but there are probably some improvements
-    ---@type ILInstruction
-    local prev_setter_inst
-    for i, reg in pairs(ptrs) do
-      ---@cast reg ILRegister
-      local setter_inst = reg_setter_lut[reg]
-      if setter_inst then
-        if not reg.temporary or prev_setter_inst and setter_inst.index < prev_setter_inst.index then
-          if reg.is_vararg then
-            util.debug_abort("Impossible because there must be no instructions between an instruction \z
-              setting a vararg register and an instruction consuming a vararg register \z
-              before expanding register lists. (Note that it might be possible to simply ignore vararg \z
-              registers for this expansion logic here and have the snapshot logic during compilation take \z
-              care of it. That mostly applies if I remove the restriction of 'no insts between these 2' \z
-              that was mentioned previously.)"
-            )
-          end
-          local temp_reg = il.new_reg()
-          local after_inst = reg.temporary and setter_inst or inst.prev
-          ---@cast after_inst -nil
-          il.insert_after_inst(data.func, after_inst, il.new_move{
-            position = inst.position,
-            right_ptr = reg,
-            result_reg = temp_reg,
-          })
-          ptrs[i] = temp_reg
-          il.remove_reg_from_inst_get(data.func, inst, reg)
-          il.add_reg_to_inst_get(data.func, inst, temp_reg)
-        end
-        prev_setter_inst = setter_inst
-      end
-    end
   end
 
   ---@type table<string, fun(data: ILCompilerData, inst: ILInstruction)>
-  local expand_ptr_list_lut = {
+  local inst_pre_process_lut = {
     ---@param data ILCompilerData
     ---@param inst ILSetList
     ["set_list"] = function(data, inst)
       expand_ptr_list(data, inst, inst.right_ptrs)
+      inst.right_ptrs[0] = inst.table_reg
+      group_registers(data, inst, inst.right_ptrs, 0)
+      inst.right_ptrs[0] = nil
     end,
     ---@param data ILCompilerData
     ---@param inst ILConcat
     ["concat"] = function(data, inst)
       expand_ptr_list(data, inst, inst.right_ptrs)
+      -- TODO: where does the result_reg have to go
+      group_registers(data, inst, inst.right_ptrs, 1)
     end,
     ---@param data ILCompilerData
     ---@param inst ILCall
     ["call"] = function(data, inst)
       expand_ptr_list(data, inst, inst.arg_ptrs)
+      inst.arg_ptrs[0] = inst.func_reg
+      group_registers(data, inst, inst.arg_ptrs, 0)
+      inst.arg_ptrs[0] = nil
+      group_registers(data, inst.next, inst.result_regs, 1)
     end,
     ---@param data ILCompilerData
     ---@param inst ILRet
     ["ret"] = function(data, inst)
       if inst.ptrs[1] then
         expand_ptr_list(data, inst, inst.ptrs)
+        group_registers(data, inst, inst.ptrs, 1)
       end
     end,
-    -- nothing to do for vararg, it only outputs a list of registers, doesn't take an input
+    ---@param data ILCompilerData
+    ---@param inst ILVararg
+    ["vararg"] = function(data, inst)
+      group_registers(data, inst.next, inst.result_regs, 1)
+    end,
   }
-
-  ---@param regs ILRegister[]
-  local function create_reg_group(regs)
-    local reg_group = {regs = regs}
-    for i, reg in ipairs(regs) do
-      reg.reg_group = reg_group
-      reg.index_in_reg_group = i
-    end
-  end
-
-  ---@param index_reg ILRegister
-  ---@param limit_reg ILRegister
-  ---@param step_reg ILRegister
-  local function create_register_group_for_numeric_for(index_reg, limit_reg, step_reg)
-    if index_reg.reg_group or limit_reg.reg_group or step_reg.reg_group then
-      if not (index_reg.reg_group == limit_reg.reg_group
-          and index_reg.reg_group == step_reg.reg_group
-          and index_reg.index_in_reg_group == limit_reg.index_in_reg_group - 1
-          and index_reg.index_in_reg_group == step_reg.index_in_reg_group - 2
-        )
-      then
-        -- NOTE: if this actually becomes a problem at some point then this can at least prepend or append [...]
-        -- registers to the group when possible
-        util.debug_abort("Invalid register usage for registers that are used by forprep or forloop groups. \z
-          The index, limit and step registers must all share the same register group and be in sequential \z
-          order within that group"
-        )
-      end
-      return -- they are already in a valid group, nothing to do
-    end
-    create_reg_group{index_reg, limit_reg, step_reg}
-  end
 
   local inst_group_pre_process_lut = {
     ["forprep"] = function(data, inst_group)
-      create_register_group_for_numeric_for(inst_group.index_reg, inst_group.limit_reg, inst_group.step_reg)
+      local regs = {inst_group.index_reg, inst_group.limit_reg, inst_group.step_reg}
+      group_registers(data, inst_group.start, regs, 1)
+      group_registers(data, inst_group.stop, regs, 1)
     end,
     ["forloop"] = function(data, inst_group)
-      create_register_group_for_numeric_for(inst_group.index_reg, inst_group.limit_reg, inst_group.step_reg)
+      local regs = {inst_group.index_reg, inst_group.limit_reg, inst_group.step_reg}
+      group_registers(data, inst_group.start, regs, 1)
+      group_registers(data, inst_group.stop, regs, 1)
     end,
   }
 
@@ -1348,17 +950,19 @@ do
   function pre_compilation_process(data)
     local inst = data.func.instructions.first
     while inst do
-      local expand_ptrs = expand_ptr_list_lut[inst.inst_type]
-      if expand_ptrs then
-        expand_ptrs(data, inst)
-      end
       if inst.inst_group then
         local inst_group_pre_process = inst_group_pre_process_lut[inst.inst_group.group_type]
         if inst_group_pre_process then
           inst_group_pre_process(data, inst.inst_group)
         end
+        inst = inst.inst_group.stop.next
+      else
+        local inst_pre_process = inst_pre_process_lut[inst.inst_type]
+        if inst_pre_process then
+          inst_pre_process(data, inst)
+        end
+        inst = inst.next
       end
-      inst = inst.next
     end
   end
 end
