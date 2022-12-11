@@ -49,6 +49,7 @@
     "concats",
     "consts",
     "currentdir",
+    "cyclomatic",
     "dostat",
     "elseblock",
     "endianness",

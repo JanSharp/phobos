@@ -225,9 +225,15 @@ local function compile(filename)
       success, err = pcall(function()
         local il_func_id = 0
         local pretty_print = require("il_pretty_print")
+        local cyclomatic_complexity = require("il_cyclomatic_complexity")
         local block_ids = {}
         local next_block_id = 0
+        ---@param func ILFunction
         local function il_add_func_lines(func)
+          do
+            local line = get_line(func.defined_position and func.defined_position.line)
+            line[#line+1] = "-- IL1: cyclomatic complexity: "..cyclomatic_complexity(func)
+          end
           il_func_id = il_func_id + 1
           -- "-- < line column compiler :  func_id  pc  opcode  description  params >\n"
           pretty_print(func, function(data)
