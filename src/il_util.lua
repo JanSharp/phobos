@@ -396,31 +396,39 @@ local function new_ptr(ptr_type)
 end
 
 local function new_reg(name)
+  ---@type ILRegister
   local ptr = new_ptr("reg")
   ptr.name = name
   ptr.is_vararg = false
   return ptr
 end
 
+local gap_reg = new_reg()
+gap_reg.is_gap = true
+
 local function new_vararg_reg()
+  ---@type ILRegister
   local ptr = new_ptr("reg")
   ptr.is_vararg = true
   return ptr
 end
 
 local function new_number(value)
+  ---@type ILNumber
   local ptr = new_ptr("number")
   ptr.value = assert(value)
   return ptr
 end
 
 local function new_string(value)
+  ---@type ILString
   local ptr = new_ptr("string")
   ptr.value = assert(value)
   return ptr
 end
 
 local function new_boolean(value)
+  ---@type ILBoolean
   local ptr = new_ptr("boolean")
   assert(value ~= nil)
   ptr.value = value
@@ -428,6 +436,7 @@ local function new_boolean(value)
 end
 
 local function new_nil()
+  ---@type ILNil
   local ptr = new_ptr("nil")
   return ptr
 end
@@ -1495,13 +1504,21 @@ end
 -- il registers
 ----------------------------------------------------------------------------------------------------
 
+---@param regs ILRegister[]
+local function is_vararg_list(regs)
+  return regs[#regs].is_vararg
+end
+
 local visit_regs_for_inst
 local visit_all_regs
 local inst_uses_reg
+local get_flag = 1
+local set_flag = 2
+local get_and_set_flags = 3
 do
-  local get = 1
-  local set = 2
-  local get_and_set = 3
+  local get = get_flag
+  local set = set_flag
+  local get_and_set = get_and_set_flags
 
   local visit_reg
 
@@ -1883,18 +1900,14 @@ local add_reg_usage_for_reg_for_inst
 local determine_reg_usage_for_inst
 local determine_reg_usage
 do
-  local get = 1
-  local set = 2
-  local get_and_set = 3
-
   ---@param reg ILRegister
   function add_reg_usage_for_reg_for_inst(data, inst, reg, get_set)
     reg.total_get_count = reg.total_get_count or 0
     reg.total_set_count = reg.total_set_count or 0
-    if get_set ~= set then
+    if get_set ~= set_flag then
       reg.total_get_count = reg.total_get_count + 1
     end
-    if get_set ~= get then
+    if get_set ~= get_flag then
       reg.total_set_count = reg.total_set_count + 1
     end
     determine_temporary(reg)
@@ -1917,16 +1930,12 @@ end
 
 local remove_reg_usage_for_reg_for_inst
 do
-  local get = 1
-  local set = 2
-  local get_and_set = 3
-
   ---@param reg ILRegister
   function remove_reg_usage_for_reg_for_inst(data, inst, reg, get_set)
-    if get_set ~= set then
+    if get_set ~= set_flag then
       reg.total_get_count = reg.total_get_count - 1
     end
-    if get_set ~= get then
+    if get_set ~= get_flag then
       reg.total_set_count = reg.total_set_count - 1
     end
     determine_temporary(reg)
@@ -2109,6 +2118,7 @@ return {
   -- pointers
 
   new_reg = new_reg,
+  gap_reg = gap_reg,
   new_vararg_reg = new_vararg_reg,
   new_number = new_number,
   new_string = new_string,
@@ -2153,6 +2163,10 @@ return {
 
   -- il registers
 
+  is_vararg_list = is_vararg_list,
+  get_flag = get_flag,
+  set_flag = set_flag,
+  get_and_set_flags = get_and_set_flags,
   visit_regs_for_inst = visit_regs_for_inst,
   visit_all_regs = visit_all_regs,
   eval_start_stop_for_all_regs = eval_start_stop_for_all_regs,

@@ -565,14 +565,25 @@
 --------------------------------------------------
 -- intermediate language:
 
+---@class ILLinkedRegisterGroup
+---@field groups_lut table<ILRegisterGroup, true>
+---@field groups ILRegisterGroup[] @ sorted by `group.inst.index` ascending
+-- ---@field forced_offsets ILLinkedRegisterGroup.ForcedOffsets[]
+
 ---This data structure is created right before compilation as it is only needed during compilation
 ---@class ILRegisterGroup
+---@field linked_groups ILLinkedRegisterGroup
+---@field inst ILInstruction?
 ---@field regs ILRegister[]
----I believe linked groups are groups that share the same registers
----@field prev_linked ILRegisterGroup?
----@field next_linked ILRegisterGroup?
+---@field is_input boolean @ `false` means "is output"
 ---the index for the first register in the `regs` array, once it has been determined
----@field first_reg_index integer?
+-- ---@field first_reg_index integer?
+---@field offset_to_next_group integer?
+---
+---Temporary during reg group index evaluation
+---@field offset_to_prev_group integer?
+---@field prev_group ILRegisterGroup?
+---@field next_group ILRegisterGroup?
 
 ---@alias ILPointerType
 ---| "reg"
@@ -587,7 +598,10 @@
 ---@class ILRegister : ILPointer
 ---@field ptr_type "reg"
 ---@field name string|nil
+---@field is_parameter boolean
+---@field requires_move_into_register_group boolean
 ---@field is_vararg boolean
+---@field is_gap boolean? @ indicates a gap in register lists
 ---post IL generation data
 ---@field start_at ILInstruction
 ---@field stop_at ILInstruction
@@ -597,10 +611,7 @@
 ---@field captured_as_upval boolean?
 ---@field current_reg ILCompiledRegister
 ---temp compilation data
----the first register group this register is apart of. Said group might be linked to more register groups
----which may also include this register in their register list
----TODO: is it the first or last group? implementation will decide
----@field reg_group ILRegisterGroup?
+---@field reg_groups ILRegisterGroup[]?
 ---@field index_in_reg_group integer?
 
 ---@class ILVarargRegister : ILRegister
@@ -743,6 +754,7 @@
 ---@field index_reg ILRegister
 ---@field limit_reg ILRegister
 ---@field step_reg ILRegister
+---@field local_reg ILRegister
 ---@field loop_jump ILJump
 
 ---@class ILTforcallGroup : ILInstructionGroup
@@ -768,6 +780,7 @@
 ---@field pre_state ILState
 ---@field post_state ILState
 ---@field input_reg_group ILRegisterGroup?
+---@field output_reg_group ILRegisterGroup?
 
 ---@class ILInstructionList : IntrusiveIndexedLinkedList<ILInstruction>
 ---@field first ILInstruction? @ (overridden)

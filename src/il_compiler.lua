@@ -864,14 +864,109 @@ end
 local pre_compilation_process
 do
   ---@param data ILCompilerData
-  ---@param inst ILInstruction
+  ---@param left_group ILRegisterGroup
+  ---@param right_group ILRegisterGroup
+  local function link_register_groups(data, left_group, right_group)
+    if left_group.linked_groups then
+      if right_group.linked_groups then
+        -- merge linked groups
+        local linked_groups = left_group.linked_groups
+        for other_group in pairs(right_group.linked_groups.groups_lut) do
+          linked_groups.groups_lut[other_group] = true
+        end
+        data.all_linked_groups_lut[right_group.linked_groups] = nil
+        right_group.linked_groups = linked_groups
+      else
+        -- reuse left linked groups
+        right_group.linked_groups = left_group.linked_groups
+        right_group.linked_groups.groups_lut[right_group] = true
+      end
+    else
+      if right_group.linked_groups then
+        -- reuse right linked groups
+        left_group.linked_groups = right_group.linked_groups
+        left_group.linked_groups.groups_lut[left_group] = true
+      else
+        util.debug_abort("Impossible because once a group has been created in group_registers \z
+          it must have a linked group"
+        )
+      end
+    end
+  end
+
+  ---@param data ILCompilerData
+  ---@param left_group ILRegisterGroup
+  ---@param right_group ILRegisterGroup
+  ---@param offset integer
+  local function set_forced_offset_for_groups(data, left_group, right_group, offset)
+    if left_group.linked_groups ~= right_group.linked_groups then
+      link_register_groups(data, left_group, right_group)
+    end
+    left_group.offset_to_next_group = offset
+  end
+
+  ---@param data ILCompilerData
+  ---@param inst ILInstruction?
+  ---@param is_input boolean
   ---@param regs ILRegister[]
   ---@param start_index integer @ start index in `regs`
-  local function group_registers(data, inst, regs, start_index)
-    -- pretty sure we don't need to do anything if the group would be an input group
-    -- for an instruction past the end of the instruction list
-    if not inst then return end
-    -- TODO: impl
+  local function group_registers(data, inst, is_input, regs, start_index)
+    do
+      ---@type ILRegister[]
+      local new_regs = {}
+      local deduplicate_regs_lut = (not is_input and {} or nil)--[[@as table<ILRegister, true>]]
+      for i = #regs, start_index, -1 do
+        local reg = regs[i]
+        if not is_input then
+          -- when creating an output list where the same register is used multiple times, the last one wins
+          -- the other ones must be replaced with gaps as they get ignored
+          if deduplicate_regs_lut[reg] then
+            reg = il.gap_reg
+          else
+            deduplicate_regs_lut[reg] = true
+          end
+        end
+        new_regs[i - start_index + 1] = reg
+      end
+      regs = new_regs
+    end
+
+    ---@type ILRegisterGroup
+    local group = {
+      inst = inst,
+      regs = regs,
+      is_input = is_input,
+    }
+    if inst then
+      inst[is_input and "input_reg_group" or "output_reg_group"] = group
+    end
+
+    for _, reg in ipairs(regs) do
+      if not reg.is_parameter and not reg.requires_move_into_register_group then
+        if not reg.reg_groups then
+          reg.reg_groups = {group}
+        else
+          if reg.is_vararg then
+            local prev_group = reg.reg_groups[#reg.reg_groups]
+            set_forced_offset_for_groups(data, prev_group, group, #prev_group.regs - #group.regs)
+          else
+            link_register_groups(data, reg.reg_groups[1], group)
+          end
+          reg.reg_groups[#reg.reg_groups+1] = group
+        end
+      end
+    end
+
+    if not group.linked_groups then
+      -- create new linked groups
+      group.linked_groups = {
+        groups_lut = {[group] = true},
+        groups = (nil)--[=[@as ILRegisterGroup[]]=], -- populated once all links are done
+      }
+      data.all_linked_groups_lut[group.linked_groups] = true
+    end
+
+    return group
   end
 
   ---@param data ILCompilerData
@@ -893,76 +988,639 @@ do
   end
 
   ---@type table<string, fun(data: ILCompilerData, inst: ILInstruction)>
-  local inst_pre_process_lut = {
+  local inst_create_reg_group_lut = {
     ---@param data ILCompilerData
     ---@param inst ILSetList
     ["set_list"] = function(data, inst)
       expand_ptr_list(data, inst, inst.right_ptrs)
       inst.right_ptrs[0] = inst.table_reg
-      group_registers(data, inst, inst.right_ptrs, 0)
+      group_registers(data, inst, true, inst.right_ptrs, 0)
       inst.right_ptrs[0] = nil
     end,
     ---@param data ILCompilerData
     ---@param inst ILConcat
     ["concat"] = function(data, inst)
       expand_ptr_list(data, inst, inst.right_ptrs)
-      -- TODO: where does the result_reg have to go
-      group_registers(data, inst, inst.right_ptrs, 1)
+      set_forced_offset_for_groups(
+        data,
+        group_registers(data, inst, true, inst.right_ptrs, 1),
+        group_registers(data, inst, false, {inst.result_reg}, 1),
+        0
+      )
     end,
     ---@param data ILCompilerData
     ---@param inst ILCall
     ["call"] = function(data, inst)
       expand_ptr_list(data, inst, inst.arg_ptrs)
       inst.arg_ptrs[0] = inst.func_reg
-      group_registers(data, inst, inst.arg_ptrs, 0)
+      local input_group = group_registers(data, inst, true, inst.arg_ptrs, 0)
       inst.arg_ptrs[0] = nil
-      group_registers(data, inst.next, inst.result_regs, 1)
+      local output_group = group_registers(data, inst, false, inst.result_regs, 1)
+      set_forced_offset_for_groups(data, input_group, output_group, 0)
     end,
     ---@param data ILCompilerData
     ---@param inst ILRet
     ["ret"] = function(data, inst)
       if inst.ptrs[1] then
         expand_ptr_list(data, inst, inst.ptrs)
-        group_registers(data, inst, inst.ptrs, 1)
+        group_registers(data, inst, true, inst.ptrs, 1)
       end
     end,
     ---@param data ILCompilerData
     ---@param inst ILVararg
     ["vararg"] = function(data, inst)
-      group_registers(data, inst.next, inst.result_regs, 1)
+      group_registers(data, inst, false, inst.result_regs, 1)
     end,
   }
 
-  local inst_group_pre_process_lut = {
+  ---@param inst_group ILForprepGroup|ILForloopGroup
+  local function validate_forprep_and_forloop_regs(inst_group)
+    util.debug_assert(inst_group.index_reg ~= inst_group.limit_reg
+        and inst_group.index_reg ~= inst_group.step_reg
+        and inst_group.limit_reg ~= inst_group.step_reg,
+      "The index, limit and step registers for forprep and forloop instruction groups must all be unique."
+    )
+    if inst_group.group_type == "forloop" then
+      util.debug_assert(inst_group.local_reg ~= inst_group.index_reg
+          and inst_group.local_reg ~= inst_group.limit_reg
+          and inst_group.local_reg ~= inst_group.step_reg,
+        "The index, limit, step and local registers for forloop instruction groups must all be unique."
+      )
+    end
+  end
+  local inst_group_create_reg_group_lut = {
     ["forprep"] = function(data, inst_group)
+      validate_forprep_and_forloop_regs(inst_group)
       local regs = {inst_group.index_reg, inst_group.limit_reg, inst_group.step_reg}
-      group_registers(data, inst_group.start, regs, 1)
-      group_registers(data, inst_group.stop, regs, 1)
+      set_forced_offset_for_groups(
+        data,
+        group_registers(data, inst_group.start, true, regs, 1),
+        group_registers(data, inst_group.stop, false, regs, 1),
+        0
+      )
     end,
     ["forloop"] = function(data, inst_group)
+      validate_forprep_and_forloop_regs(inst_group)
       local regs = {inst_group.index_reg, inst_group.limit_reg, inst_group.step_reg}
-      group_registers(data, inst_group.start, regs, 1)
-      group_registers(data, inst_group.stop, regs, 1)
+      set_forced_offset_for_groups(
+        data,
+        group_registers(data, inst_group.start, true, regs, 1),
+        group_registers(
+          data,
+          inst_group.stop,
+          false,
+          {inst_group.index_reg, il.gap_reg, il.gap_reg, inst_group.local_reg},
+          1
+        ),
+        0
+      )
     end,
   }
+
+  ---@param linked_groups ILLinkedRegisterGroup
+  local function populate_sorted_groups_list(linked_groups)
+    local groups = {}
+    linked_groups.groups = groups
+    for group in pairs(linked_groups.groups_lut) do
+      groups[#groups+1] = group
+    end
+    table.sort(groups, function(left, right)
+      -- apparently it can ask if the same value that only exists once in the list should be
+      -- positioned to the left of itself. It makes no sense, but I tested it and to make it
+      -- a stable sort it must return false in this case. returning true or having the normal
+      -- logic handle it makes it straight up put elements out of order
+      if left == right then return false end
+      if left.inst.index == right.inst.index then
+        return left.is_input
+      end
+      return left.inst.index < right.inst.index
+    end)
+  end
+
+  ---@param data ILCompilerData
+  ---@param linked_groups ILLinkedRegisterGroup
+  local function split_linked_groups_recursive(data, linked_groups)
+    -- find all regs and determine which require moves no matter what
+    ---@type ILRegister[]
+    local all_regs = {}
+    local did_mark_a_new_register_to_require_move_into_register_group = false
+    do
+      local first_index = linked_groups.groups[1].inst.index
+      local last_index = linked_groups.groups[#linked_groups.groups].inst.index
+      local all_regs_lut = {}
+      for i = 1, #linked_groups.groups do
+        local group = linked_groups.groups[i]
+        for _, reg in ipairs(group.regs) do
+          if not all_regs_lut[reg] then
+            all_regs_lut[reg] = true
+            all_regs[#all_regs+1] = reg
+
+            -- TODO: somehow improve this condition to not leave big gaps in the stack
+            if not reg.requires_move_into_register_group
+              and reg.start_at.index < first_index
+              and reg.stop_at.index > last_index
+            then
+              reg.requires_move_into_register_group = true
+              did_mark_a_new_register_to_require_move_into_register_group = true
+            end
+          end
+        end
+      end
+    end
+
+    if not did_mark_a_new_register_to_require_move_into_register_group then
+      -- no registers that could cause the linked groups to split, just return
+      return
+    end
+
+    -- make all registers forget what groups they were in
+    for _, reg in ipairs(all_regs) do
+      reg.reg_groups = nil
+    end
+
+    -- make the linked group no longer exist
+    data.all_linked_groups_lut[linked_groups] = nil
+
+    -- the next part cares about iteration order, so we must create the ordered array
+    populate_sorted_groups_list(linked_groups)
+
+    -- recreate all groups creating new links in the process
+    local prev_group_has_forced_offset = false
+    local prev_group
+    local prev_offset_to_next_group
+    for _, group in ipairs(linked_groups.groups) do
+      local new_group = group_registers(data, group.inst, group.is_input, group.regs, 1)
+      if prev_group_has_forced_offset then
+        set_forced_offset_for_groups(data, prev_group, new_group, prev_offset_to_next_group)
+        prev_group_has_forced_offset = false
+      end
+      if group.offset_to_next_group then
+        prev_group_has_forced_offset = true
+        prev_group = new_group
+        prev_offset_to_next_group = group.offset_to_next_group
+      end
+    end
+
+    -- this part doesn't care about iteration order, but it's using the ordered one anyway
+
+    -- split all newly created groups again, unless only one new group was created
+    local new_groups_count = 0
+    local new_groups_lut = {}
+    for _, group in ipairs(linked_groups.groups) do
+      if not new_groups_lut[group.linked_groups] then
+        -- but do process the first new group if a second new group is found
+        if new_groups_count == 1 then
+          split_linked_groups_recursive(data, (next(new_groups_lut)))
+        end
+        new_groups_lut[group.linked_groups] = true
+        new_groups_count = new_groups_count + 1
+        -- to prevent infinite recursion don't do anything for the first new group
+        if new_groups_count ~= 1 then
+          split_linked_groups_recursive(data, group.linked_groups)
+        end
+      end
+    end
+  end
+
+  ---@param left ILInstruction
+  ---@param right ILInstruction
+  local function is_same_inst_group(left, right)
+    if left.inst_group then
+      return left.inst_group == right.inst_group
+    else
+      return left == right
+    end
+  end
+
+  ---@param inst ILInstruction
+  ---@param reg ILRegister
+  local function get_get_set_flags_for_reg_for_inst_group(inst, reg)
+    local total_get_set = 0
+    local function callback(_, _, current_reg, get_set)
+      if current_reg == reg then
+        total_get_set = bit32.bor(total_get_set, get_set)
+      end
+    end
+    if inst.inst_group then
+      local current_inst = inst.inst_group.start
+      repeat
+        il.visit_regs_for_inst(nil, inst, callback)
+      until current_inst == inst.inst_group.stop
+    else
+      il.visit_regs_for_inst(nil, inst, callback)
+    end
+    return total_get_set
+  end
+
+  ---@param inst ILInstruction
+  ---@param reg ILRegister
+  local function inst_group_gets_reg(inst, reg)
+    return bit32.band(il.get_flag, get_get_set_flags_for_reg_for_inst_group(inst, reg)) ~= 0
+  end
+
+  ---@param inst ILInstruction
+  ---@param reg ILRegister
+  local function inst_group_sets_reg(inst, reg)
+    return bit32.band(il.set_flag, get_get_set_flags_for_reg_for_inst_group(inst, reg)) ~= 0
+  end
+
+  ---@param inst ILInstruction
+  ---@param reg ILRegister
+  local function input_and_output_reg_index_is_the_same(inst, reg)
+    local input_group = inst.inst_group and inst.inst_group.start.input_reg_group or inst.input_reg_group
+    local output_group = inst.inst_group and inst.inst_group.start.output_reg_group or inst.output_reg_group
+
+    if input_group and output_group then
+      local offset = input_group.offset_to_next_group
+      util.debug_assert(offset,
+        "the input and output reg groups of an instruction or instruction group must be forcibly linked."
+      )
+
+      local count_in_input = util.count_of(input_group.regs, reg)
+
+      if count_in_input > 1 then
+        return false
+      end
+
+      if count_in_input == 1 then
+        local index_in_input = util.count_of(input_group.regs, reg)
+        local corresponding_reg_in_output = output_group.regs[index_in_input - offset]
+        return corresponding_reg_in_output == reg
+          or corresponding_reg_in_output.is_gap
+          or (not corresponding_reg_in_output and not il.is_vararg_list(output_group.regs))
+      end
+
+      -- count_in_input == 0
+      local index_in_output = util.index_of(output_group.regs, reg)
+      local corresponding_reg_in_input = input_group.regs[index_in_output + offset]
+      return corresponding_reg_in_input.is_gap
+        or (not corresponding_reg_in_input and not il.is_vararg_list(input_group.regs))
+    end
+
+    if input_group then
+      return util.count_of(input_group.regs, reg) == 1
+    end
+
+    return true
+  end
+
+  local determine_best_offsets
+  do
+    ---@param group ILRegisterGroup
+    ---@param index_in_regs integer @
+    ---must take the index, not the reg itself, because input groups can have the same register multiple times
+    local function what_can_we_do(group, index_in_regs)
+      local reg = group.regs[index_in_regs]
+      ---@class DetermineBestOffsetsUnknownData
+      ---@field lifetime_before integer
+      ---@field lifetime_after integer
+      ---@field use_in_place_as_soon_as_possible boolean
+      local result = {
+        group = group,
+        reg = reg,
+        index_in_regs = index_in_regs,
+        usable_in_place = false,
+        movable = true,
+      }
+      if group.is_input then
+        if is_same_inst_group(group.inst, reg.stop_at) -- is this group the _last_ one using the register
+          or input_and_output_reg_index_is_the_same(group.inst, reg) -- or input and output are the same index
+          -- NOTE: if the next instruction (that isn't this one) that uses this register doesn't get its value
+          -- but instead sets it then we could also use it in place here. No that's not something that should
+          -- happen here, that should be a previous step during optimization, splitting the registers in 2
+        then
+          result.usable_in_place = true
+        end
+      else
+        if is_same_inst_group(group.inst, reg.start_at) -- is this group the _first_ one using the register
+          or input_and_output_reg_index_is_the_same(group.inst, reg) -- or input and output are the same index
+        then
+          result.usable_in_place = true
+        end
+      end
+      return result
+    end
+
+    ---@param start_inst ILInstruction
+    ---@param stop_inst ILInstruction
+    local function count_instructions_from_to(start_inst, stop_inst)
+      if start_inst.index > stop_inst.index then
+        return 0
+      end
+      local inst = start_inst
+      local result = 1
+      while inst ~= stop_inst and (not inst.inst_group or inst.inst_group ~= stop_inst.inst_group) do
+        result = result + 1
+        inst = (inst.inst_group and inst.inst_group.stop.next or inst.next)--[[@as ILInstruction]]
+      end
+      return result
+    end
+
+    ---@param linked_group ILLinkedRegisterGroup
+    function determine_best_offsets(linked_group)
+      ---@type DetermineBestOffsetsUnknownData[]
+      local unknowns = {}
+      ---@type DetermineBestOffsetsUnknownData[]
+      local can_only_move = {}
+
+      ---@type table<ILRegister, DetermineBestOffsetsUnknownData[]>
+      local unknowns_by_reg = {}
+      ---@type table<ILRegisterGroup, DetermineBestOffsetsUnknownData[]>
+      local unknowns_by_group = {}
+
+      local first_inst = linked_group.groups[1].inst.prev
+      local last_inst = linked_group.groups[#linked_group.groups].inst.next
+
+      for i, group in ipairs(linked_group.groups) do
+        group.prev_group = linked_group.groups[i - 1]
+        group.next_group = linked_group.groups[i + 1]
+        if group.offset_to_next_group then
+          group.next_group.offset_to_prev_group = -group.offset_to_next_group
+        end
+        unknowns_by_group[group] = {}
+
+        for j = 1, #group.regs do
+          local reg = group.regs[j]
+          local unknown = what_can_we_do(group, j)
+          unknown.lifetime_before = first_inst and count_instructions_from_to(reg.start_at, first_inst) or 0
+          unknown.lifetime_after = last_inst and count_instructions_from_to(last_inst, reg.stop_at) or 0
+          if unknown.usable_in_place then
+            unknowns[#unknowns+1] = unknown
+            unknowns_by_group[group][#unknowns_by_group[group]+1] = unknown
+            unknowns_by_reg[reg] = unknowns_by_reg[reg] or {}
+            unknowns_by_reg[reg][#unknowns_by_reg[reg]+1] = unknown
+          else
+            -- NOTE: currently useless
+            can_only_move[#can_only_move+1] = unknown
+          end
+        end
+      end
+
+      ---@type table<ILRegister, integer>
+      local reg_indexes = {}
+      ---@type type<ILRegisterGroup, integer>
+      local group_indexes = {}
+      local group_indexes_count = 0
+      ---@type table<ILRegister, table<integer, true>>
+      local disallowed_indexes = {}
+      for _, unknown in ipairs(unknowns) do
+        if not disallowed_indexes[unknown.reg] then
+          disallowed_indexes[unknown.reg] = {}
+        end
+      end
+      local total_moves_count = 0
+
+      local winning_reg_indexes
+      local winning_score
+
+      local set_reg_index
+      ---@param group ILRegisterGroup
+      ---@param group_index integer
+      ---@param to_revert table @ state to pass to `revert_changes`
+      ---@return boolean success
+      local function set_group_index(group, group_index, to_revert)
+        group_indexes[group] = group_index
+        group_indexes_count = group_indexes_count + 1
+        to_revert[#to_revert+1] = {
+          type = "set_group_index",
+          group = group,
+        }
+        local unknowns_for_group = unknowns_by_group[group]
+        for _, unknown in ipairs(unknowns_for_group) do
+          local reg_index = reg_indexes[unknown.reg]
+          if reg_index then
+            local current_group_index = reg_index - unknown.index_in_regs + 1
+            if group_index ~= current_group_index then
+              return false -- the already fixed index does not match the set group_index, abort set
+            end
+          else -- reg_index == nil
+            if unknown.use_in_place_as_soon_as_possible
+              and not set_reg_index(unknown.reg, group_index + unknown.index_in_regs - 1, to_revert)
+            then
+              return false
+            end
+          end
+        end
+        if group.offset_to_prev_group
+          and not group_indexes[group.prev_group]
+          and not set_group_index(group.prev_group, group_index + group.offset_to_prev_group, to_revert)
+        then
+          return false
+        end
+        if group.offset_to_next_group
+          and not group_indexes[group.next_group]
+          and not set_group_index(group.next_group, group_index + group.offset_to_next_group, to_revert)
+        then
+          return false
+        end
+        return true
+      end
+
+      ---@param reg ILRegister
+      ---@param reg_index integer
+      ---@param to_revert table @ state to pass to `revert_changes`
+      ---@return boolean success
+      function set_reg_index(reg, reg_index, to_revert)
+        reg_indexes[reg] = reg_index
+        to_revert[#to_revert+1] = {
+          type = "set_reg_index",
+          reg = reg,
+        }
+        local unknowns_for_reg = unknowns_by_reg[reg]
+        for _, unknown in ipairs(unknowns_for_reg) do
+          local group_index = group_indexes[unknown.group]
+          if group_index then
+            local current_reg_index = group_index + unknown.index_in_regs - 1
+            if reg_index ~= current_reg_index then
+              return false -- the already fixed index does not match the set reg_index, abort set
+            end
+          else -- group_index == nil
+            if unknown.use_in_place_as_soon_as_possible
+              and not set_group_index(unknown.group, reg_index - unknown.index_in_regs + 1, to_revert)
+            then
+              return false
+            end
+          end
+        end
+        return true
+      end
+
+      ---@param to_revert table
+      local function revert_changes(to_revert)
+        for i = #to_revert, 1, -1 do
+          local action = to_revert[i]
+          if action.type == "set_reg_index" then
+            reg_indexes[action.reg] = nil
+          elseif action.type == "set_group_index" then
+            group_indexes[action.group] = nil
+            group_indexes_count = group_indexes_count - 1
+          end
+        end
+      end
+
+      local walk
+      ---@param unknown DetermineBestOffsetsUnknownData
+      ---@param i integer
+      local function use_in_place(unknown, i)
+        local group_index = group_indexes[unknown.group]
+        if group_index then
+          local correct_reg_index = group_index + unknown.index_in_regs - 1
+          local reg_index = reg_indexes[unknown.reg]
+          if reg_index then
+            if reg_index ~= correct_reg_index then
+              return -- the already fixed index does not match where it needs to be, invalid attempt
+            end
+            walk(i + 1)
+            return
+          end
+          -- reg_index == nil
+
+          -- this can force other groups to be at a fixed index. we must set said index
+          -- additionally there might be registers that were already marked as "use in place" for
+          -- those groups, but couldn't set their index yet, so we must set their index as well
+          -- in doing so we might actually realize it's an invalid attempt and have to cleanup and early return
+          local to_revert = {}
+          if set_reg_index(unknown.reg, correct_reg_index, to_revert) then
+            walk(i + 1)
+          end
+          -- unset the index of all registers and groups that were set by the previous logic
+          revert_changes(to_revert)
+          return
+        end
+        -- group_index == nil
+        local reg_index = reg_indexes[unknown.reg]
+        if reg_index then
+          local to_revert = {}
+          if set_group_index(unknown.group, reg_index - unknown.index_in_regs + 1, to_revert) then
+            walk(i + 1)
+          end
+          revert_changes(to_revert)
+        end
+        -- we can't set the index of this register yet for its group doesn't have an index
+
+        -- we must instead mark this register to be used in place once the group gets an index
+        unknown.use_in_place_as_soon_as_possible = true
+        walk(i + 1)
+        -- unset the previously set flag
+        unknown.use_in_place_as_soon_as_possible = nil
+      end
+
+      local move_score_weight = 32
+
+      ---@param unknown DetermineBestOffsetsUnknownData
+      ---@param i integer
+      local function use_move(unknown, i)
+        do
+          local reg_index = reg_indexes[unknown.reg]
+          local group_index = group_indexes[unknown.group]
+          if reg_index and group_index and reg_index == group_index + unknown.index_in_regs - 1 then
+            return -- it's already in-place, adding a move would make no sense
+          end
+        end
+        if winning_score and (total_moves_count + 1) * move_score_weight > winning_score then
+          return
+        end
+        total_moves_count = total_moves_count + 1
+        walk(i + 1)
+        total_moves_count = total_moves_count - 1
+      end
+
+      local attempt_count = 0
+
+      local groups_count = #linked_group.groups
+      local function eval_score()
+        attempt_count = attempt_count + 1
+        print(attempt_count..": "..group_indexes_count.."/"..groups_count.." "
+          ..(winning_score or "?").." vs "..(total_moves_count * move_score_weight)
+        )
+        if group_indexes_count ~= groups_count then return end
+        -- TODO: take the amount and size of gaps into consideration when calculating score
+        local score = total_moves_count * move_score_weight
+        return score
+      end
+
+      local unknowns_count = #unknowns
+      ---@param i integer
+      function walk(i)
+        if i > unknowns_count then
+          local score = eval_score()
+          if score and (not winning_score or score < winning_score) then
+            winning_reg_indexes = util.shallow_copy(reg_indexes)
+            winning_score = score
+          end
+          return
+        end
+        local unknown = unknowns[i]
+        use_in_place(unknown, i)
+        use_move(unknown, i)
+      end
+
+      set_group_index(linked_group.groups[1], 0, {})
+      walk(1)
+
+      if not winning_score then
+        util.debug_abort("Unable to determine register indexes for linked register groups because \z
+          there are no solutions where all groups got assigned an index. This very most likely means \z
+          that the groups aren't actually linked anymore. Some registers always require moves and \z
+          those registers were the only ones keeping some groups linked with each other. \z
+          Though maybe it is possible for them to be linked and there is no solution that can use \z
+          registers in place in a way where all groups are linked, not sure."
+        )
+      end
+
+      -- TODO: save the winning indexes somewhere somehow
+    end
+  end
 
   ---@param data ILCompilerData
   function pre_compilation_process(data)
     local inst = data.func.instructions.first
+
+    -- TODO: remove once I'm sure the is_parameter flag on registers is good
+    -- group_registers(data, nil, false, data.func.param_regs, 1)
+
+    -- create register groups
     while inst do
       if inst.inst_group then
-        local inst_group_pre_process = inst_group_pre_process_lut[inst.inst_group.group_type]
-        if inst_group_pre_process then
-          inst_group_pre_process(data, inst.inst_group)
+        local inst_group_create_reg_group = inst_group_create_reg_group_lut[inst.inst_group.group_type]
+        if inst_group_create_reg_group then
+          inst_group_create_reg_group(data, inst.inst_group)
         end
         inst = inst.inst_group.stop.next
       else
-        local inst_pre_process = inst_pre_process_lut[inst.inst_type]
-        if inst_pre_process then
-          inst_pre_process(data, inst)
+        local inst_create_reg_group = inst_create_reg_group_lut[inst.inst_type]
+        if inst_create_reg_group then
+          inst_create_reg_group(data, inst)
         end
         inst = inst.next
       end
+    end
+
+    do
+      local initial_groups_lut = util.shallow_copy(data.all_linked_groups_lut)
+      for linked_groups in pairs(initial_groups_lut) do
+        populate_sorted_groups_list(linked_groups)
+        split_linked_groups_recursive(data, linked_groups)
+      end
+    end
+
+    -- populate groups list from groups_lut
+    for linked_groups in pairs(data.all_linked_groups_lut) do
+      populate_sorted_groups_list(linked_groups)
+    end
+
+    -- convert all_linked_groups_lut into a list
+    local all_linked_groups = {}
+    for linked_groups in pairs(data.all_linked_groups_lut) do
+      all_linked_groups[#all_linked_groups+1] = linked_groups
+    end
+    table.sort(all_linked_groups, function(left, right)
+      return left.groups[1].inst.index < right.groups[1].inst.index
+    end)
+
+    -- determine best relative register indexes within linked groups
+    for _, linked_group in ipairs(all_linked_groups) do
+      determine_best_offsets(linked_group)
     end
   end
 end
@@ -995,6 +1653,7 @@ end
 ---@field all_jumps (ILJump|ILTest)[]
 ---@field all_jumps_count integer
 ---@field snapshots ILCompilerDataSnapshot[]
+---@field all_linked_groups_lut table<ILLinkedRegisterGroup, true>
 
 ---@param func ILFunction
 local function compile(func)
@@ -1011,6 +1670,7 @@ local function compile(func)
     all_jumps = {},
     all_jumps_count = 0,
     snapshots = stack.new_stack(),
+    all_linked_groups_lut = {},
   }
   func.is_compiling = true
   make_bytecode_func(data)

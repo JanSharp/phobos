@@ -156,6 +156,34 @@ local function replace_range(target, range, start_index, stop_index, range_start
   end
 end
 
+---@generic T
+---@param array T[]
+---@param value T
+---@param start_index integer? @ default: `1`
+---@return integer? index @ nil if the value was not found in the array
+local function index_of(array, value, start_index)
+  for i = start_index or 1, #array do
+    if array[i] == value then
+      return i
+    end
+  end
+end
+
+---@generic T
+---@param array T[]
+---@param value T
+---@param start_index integer? @ default: `1`
+---@return integer count @ the amount of times `value` exists in `array`
+local function count_of(array, value, start_index)
+  local count = 0
+  for i = start_index or 1, #array do
+    if array[i] == value then
+      count = count + 1
+    end
+  end
+  return count
+end
+
 local function debug_abort(message)
   return error(message)
 end
@@ -318,6 +346,8 @@ return {
   insert_range = insert_range,
   remove_range = remove_range,
   replace_range = replace_range,
+  index_of = index_of,
+  count_of = count_of,
   debug_abort = debug_abort,
   abort = abort,
   debug_assert = debug_assert,

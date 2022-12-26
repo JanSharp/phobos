@@ -717,6 +717,7 @@ do
         index_reg = index_reg,
         limit_reg = limit_reg,
         step_reg = step_reg,
+        local_reg = local_reg,
         loop_jump = forloop_group_loop_jump,
       }
 
@@ -1086,12 +1087,16 @@ function generate_il_func(functiondef, parent_func)
 
   -- special handling for methods because self is not in the params list
   if functiondef.is_method then
-    func.param_regs[1] = il.new_reg("self")
+    local reg = il.new_reg("self")
+    reg.is_parameter = true
+    func.param_regs[1] = reg
     func.temp.local_reg_lut[functiondef.locals[1]] = func.param_regs[1]
   end
   local param_offset = functiondef.is_method and 1 or 0
   for i, param in ipairs(functiondef.params) do
-    func.param_regs[i + param_offset] = il.new_reg(param.name)
+    local reg = il.new_reg(param.name)
+    reg.is_parameter = true
+    func.param_regs[i + param_offset] = reg
     set_local_reg(param, func.param_regs[i + param_offset], func)
   end
 
@@ -1104,6 +1109,14 @@ function generate_il_func(functiondef, parent_func)
   end
 
   generate_scope(functiondef, func)
+
+  -- parameters also have to stay alive for the entire function in case they are captured a an upvalue
+  if func.param_regs[1] then
+    add_inst(func, il.new_scoping{
+      position = not functiondef.is_main and functiondef.function_token or nil,
+      regs = func.param_regs, -- using a reference to the same table!
+    })
+  end
 
   -- self does have a local so it gets included in the scope's SCOPING instruction
 
