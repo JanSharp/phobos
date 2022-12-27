@@ -2,7 +2,6 @@
 -- function names and behavior inspired by C# System.Linq
 
 ---@class LinqObj
----@field count integer
 ---@field __tab any[]
 ---@field __start_index integer
 ---@field __stop_index integer
@@ -25,6 +24,7 @@ local linq_meta = {__index = linq_meta_index}
 -- [ ] average
 -- [ ] ? chunk
 -- [ ] contains
+-- [x] count
 -- [ ] ? default_if_empty
 -- [ ] distinct
 -- [ ] distinct_by
@@ -60,7 +60,7 @@ local linq_meta = {__index = linq_meta_index}
 -- [ ] ? remove_at
 -- [ ] ? remove_range
 -- [ ] reverse
--- [ ] select
+-- [x] select
 -- [ ] select_many
 -- [ ] sequence_equal
 -- [ ] single
@@ -177,12 +177,9 @@ local linq_meta = {__index = linq_meta_index}
 
 ---@generic T
 ---@param self LinqObj|T[]
----@param amount integer
----@return LinqObj|T[]
-function linq_meta_index:take(amount)
-  self.count = math.min(self.count, amount)
-  self.__stop_index = self.__start_index + self.count - 1
-  return self
+---@return integer
+function linq_meta_index:count()
+  return self.__stop_index - self.__start_index + 1
 end
 
 ---@generic T
@@ -206,6 +203,28 @@ function linq_meta_index:iterate()
 end
 
 ---@generic T
+---@generic TResult
+---@param self LinqObj|T[]
+---@param selector fun(value: T, i: integer):TResult
+---@return LinqObj|TResult[]
+function linq_meta_index:select(selector)
+  local tab = self.__tab
+  for i = self.__start_index, self.__stop_index do
+    tab[i] = selector(tab[i], i)
+  end
+  return self
+end
+
+---@generic T
+---@param self LinqObj|T[]
+---@param amount integer
+---@return LinqObj|T[]
+function linq_meta_index:take(amount)
+  self.__stop_index = math.min(self.__stop_index, self.__start_index + amount - 1)
+  return self
+end
+
+---@generic T
 ---@param tab T[]
 ---@param do_copy boolean?
 ---@return LinqObj|T[]
@@ -217,13 +236,10 @@ local function linq(tab, do_copy)
     end
     tab = tab_copy
   end
-  local count = #tab
   return setmetatable({
-    count = count,
     __tab = tab,
-    __actions = {},
     __start_index = 1,
-    __stop_index = count,
+    __stop_index = #tab,
   }, linq_meta)
 end
 
