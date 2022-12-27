@@ -2,9 +2,8 @@
 -- function names and behavior inspired by C# System.Linq
 
 ---@class LinqObj
----@field __tab any[]
----@field __start_index integer
----@field __stop_index integer
+---@field __iter fun(state: nil, key: integer?):integer?, any?
+---@field __count integer? @ `nil` when count is unknown
 local linq_meta_index = {}
 local linq_meta = {__index = linq_meta_index}
 
@@ -179,27 +178,23 @@ local linq_meta = {__index = linq_meta_index}
 ---@param self LinqObj|T[]
 ---@return integer
 function linq_meta_index:count()
-  return self.__stop_index - self.__start_index + 1
-end
-
----@generic T
----@param state LinqObj|T[]
----@param index integer?
----@return integer? index
----@return T? value
-local function linq_next(state, index)
-  index = state.__start_index + (index or 0)
-  if index > state.__stop_index then return end
-  return index - state.__start_index + 1, state.__tab[index]
+  if self.__count then
+    return self.__count
+  end
+  local count = 0
+  for _ in self.__iter do
+    count = count + 1
+  end
+  return count
 end
 
 ---@generic T
 ---@param self LinqObj|T[]
----@return fun(table: T[], i: integer?):integer?, T? iter
----@return LinqObj|T[] state
+---@return fun(state: nil, index: integer?):integer?, T? iter
+---@return nil state
 ---@return nil key
 function linq_meta_index:iterate()
-  return linq_next, self
+  return self.__iter
 end
 
 ---@generic T
@@ -208,38 +203,53 @@ end
 ---@param selector fun(value: T, i: integer):TResult
 ---@return LinqObj|TResult[]
 function linq_meta_index:select(selector)
-  local tab = self.__tab
-  for i = self.__start_index, self.__stop_index do
-    tab[i] = selector(tab[i], i)
+  local inner_iter = self.__iter
+  self.__iter = function(_, i)
+    local value
+    i, value = inner_iter(nil, i)
+    if not i then return end
+    return i, selector(value, i)
   end
   return self
 end
 
+-- the language server says that this function has a duplicate set on the `__iter` field... it's drunk
+
+---@diagnostic disable: duplicate-set-field
 ---@generic T
 ---@param self LinqObj|T[]
----@param amount integer
+---@param count integer
 ---@return LinqObj|T[]
-function linq_meta_index:take(amount)
-  self.__stop_index = math.min(self.__stop_index, self.__start_index + amount - 1)
+function linq_meta_index:take(count)
+  if count == 0 then
+    self.__iter = function() end
+    self.__count = 0
+    return self
+  end
+  local inner_iter = self.__iter
+  self.__iter = function(_, i)
+    if (i or 0) >= count then return end
+    return inner_iter(nil, i)
+  end
+  if self.__count then
+    self.__count = math.min(self.__count, count)
+  end
   return self
 end
+---@diagnostic enable: duplicate-set-field
 
 ---@generic T
 ---@param tab T[]
----@param do_copy boolean?
 ---@return LinqObj|T[]
-local function linq(tab, do_copy)
-  if do_copy then
-    local tab_copy = {}
-    for i = 1, #tab do
-      tab_copy[i] = tab[i]
-    end
-    tab = tab_copy
-  end
+local function linq(tab)
+  local count = #tab
   return setmetatable({
-    __tab = tab,
-    __start_index = 1,
-    __stop_index = #tab,
+    __iter = function(_, i)
+      if i >= count then return end
+      i = i + 1
+      return i, tab[i]
+    end,
+    __count = count,
   }, linq_meta)
 end
 
