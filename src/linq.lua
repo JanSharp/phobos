@@ -70,7 +70,7 @@ local linq_meta = {__index = linq_meta_index}
 -- [ ] sum
 -- [x] take
 -- [ ] take_last
--- [ ] take_while
+-- [x] take_while
 -- [ ] to_array
 -- [ ] to_dict
 -- [ ] to_linked_list
@@ -237,6 +237,22 @@ function linq_meta_index:take(count)
   return self
 end
 ---@diagnostic enable: duplicate-set-field
+
+---@generic T
+---@param self LinqObj|T[]
+---@param condition fun(value: T, i: integer):boolean
+---@return LinqObj|T[]
+function linq_meta_index:take_while(condition)
+  self.__count = nil
+  local inner_iter = self.__iter
+  self.__iter = function(_, i)
+    local value
+    i, value = inner_iter(nil, i)
+    if not i or not condition(value, i) then return end
+    return i, value
+  end
+  return self
+end
 
 ---@generic T
 ---@param self LinqObj|T[]
