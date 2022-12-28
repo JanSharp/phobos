@@ -77,7 +77,7 @@ local linq_meta = {__index = linq_meta_index}
 -- [ ] to_lookup
 -- [ ] union
 -- [ ] union_by
--- [ ] where
+-- [x] where
 
 
 
@@ -237,6 +237,24 @@ function linq_meta_index:take(count)
   return self
 end
 ---@diagnostic enable: duplicate-set-field
+
+---@generic T
+---@param self LinqObj|T[]
+---@param condition fun(value: T, i: integer):boolean
+---@return LinqObj|T[]
+function linq_meta_index:where(condition)
+  self.__count = nil
+  local inner_iter = self.__iter
+  self.__iter = function(_, i)
+    local value
+    repeat
+      i, value = inner_iter(nil, i)
+      if not i then return end
+    until condition(value, i)
+    return i, value
+  end
+  return self
+end
 
 ---@generic T
 ---@param tab T[]
