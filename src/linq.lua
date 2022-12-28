@@ -221,6 +221,7 @@ end
 ---@param selector fun(value: T, i: integer):(LinqObj|TResult[]) @ can either return an array or a linq object
 ---@return LinqObj|TResult[]
 function linq_meta_index:select_many(selector)
+  self.__count = nil
   local inner_iter = self.__iter
   local i = 0
   local collection
