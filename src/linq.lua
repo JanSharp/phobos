@@ -2,6 +2,7 @@
 -- function names and behavior inspired by C# System.Linq
 
 ---@class LinqObj
+---@field __is_linq true
 ---@field __iter fun():any?
 ---@field __count integer? @ `nil` when count is unknown
 local linq_meta_index = {}
@@ -60,7 +61,7 @@ local linq_meta = {__index = linq_meta_index}
 -- [ ] ? remove_range
 -- [ ] reverse
 -- [x] select
--- [ ] select_many
+-- [x] select_many
 -- [ ] sequence_equal
 -- [ ] single
 -- [ ] skip
@@ -214,6 +215,52 @@ function linq_meta_index:select(selector)
   return self
 end
 
+---@generic T
+---@generic TResult
+---@param self LinqObj|T[]
+---@param selector fun(value: T, i: integer):(LinqObj|TResult[]) @ can either return an array or a linq object
+---@return LinqObj|TResult[]
+function linq_meta_index:select_many(selector)
+  local inner_iter = self.__iter
+  local i = 0
+  local collection
+  ---used if the collection is a linq object
+  local collection_iter
+  ---used if the collection is an array
+  local collection_length
+  local collection_index
+  self.__iter = function()
+    while true do
+      if collection then
+        if collection_iter then
+          local value = collection_iter()
+          if value ~= nil then
+            return value
+          end
+        else
+          collection_index = collection_index + 1
+          if collection_index <= collection_length then
+            return collection[collection_index]
+          end
+        end
+      end
+
+      local value = inner_iter()
+      if value == nil then return end
+      i = i + 1
+      collection = selector(value, i)
+      if collection.__is_linq then
+        collection_iter = collection.__iter
+      else
+        collection_iter = nil
+        collection_length = #collection
+        collection_index = 0
+      end
+    end
+  end
+  return self
+end
+
 -- the language server says that this function has a duplicate set on the `__iter` field... it's drunk
 
 ---@diagnostic disable: duplicate-set-field
@@ -285,6 +332,7 @@ local function linq(tab)
   local count = #tab
   local i = 0
   return setmetatable({
+    __is_linq = true,
     __iter = function()
       if i >= count then return end
       i = i + 1
