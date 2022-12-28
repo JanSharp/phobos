@@ -327,20 +327,36 @@ function linq_meta_index:where(condition)
 end
 
 ---@generic T
----@param tab T[]
+---@generic TState
+---@generic TKey
+---@param tab_or_iter T[]|fun(state: TState, key: T?):(T?) @ an array or an iterator returning a single value
+---@param state TState? @ used if this is an iterator
+---@param starting_value T? @ used if this is an iterator
 ---@return LinqObj|T[]
-local function linq(tab)
-  local count = #tab
-  local i = 0
-  return setmetatable({
-    __is_linq = true,
-    __iter = function()
-      if i >= count then return end
-      i = i + 1
-      return tab[i]
-    end,
-    __count = count,
-  }, linq_meta)
+local function linq(tab_or_iter, state, starting_value)
+  if type(tab_or_iter) == "table" then
+    local count = #tab_or_iter
+    local i = 0
+    return setmetatable({
+      __is_linq = true,
+      __iter = function()
+        if i >= count then return end
+        i = i + 1
+        return tab_or_iter[i]
+      end,
+      __count = count,
+    }, linq_meta)
+  else
+    local value = starting_value
+    return setmetatable({
+      __is_linq = true,
+      __iter = function()
+        value = tab_or_iter(state, value)
+        return value
+      end,
+      -- __count = nil,
+    }, linq_meta)
+  end
 end
 
 return linq
