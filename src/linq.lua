@@ -2,7 +2,7 @@
 -- function names and behavior inspired by C# System.Linq
 
 ---@class LinqObj
----@field __iter fun(state: nil, key: integer?):integer?, any?
+---@field __iter fun():any?
 ---@field __count integer? @ `nil` when count is unknown
 local linq_meta_index = {}
 local linq_meta = {__index = linq_meta_index}
@@ -182,7 +182,7 @@ function linq_meta_index:count()
     return self.__count
   end
   local count = 0
-  for _ in self.__iter do
+  while self.__iter() ~= nil do
     count = count + 1
   end
   return count
@@ -204,11 +204,12 @@ end
 ---@return LinqObj|TResult[]
 function linq_meta_index:select(selector)
   local inner_iter = self.__iter
-  self.__iter = function(_, i)
-    local value
-    i, value = inner_iter(nil, i)
-    if not i then return end
-    return i, selector(value, i)
+  local i = 0
+  self.__iter = function()
+    local value = inner_iter()
+    if value == nil then return end
+    i = i + 1
+    return selector(value, i)
   end
   return self
 end
@@ -227,9 +228,11 @@ function linq_meta_index:take(count)
     return self
   end
   local inner_iter = self.__iter
-  self.__iter = function(_, i)
-    if (i or 0) >= count then return end
-    return inner_iter(nil, i)
+  local i = 0
+  self.__iter = function()
+    if i >= count then return end
+    i = i + 1
+    return inner_iter()
   end
   if self.__count then
     self.__count = math.min(self.__count, count)
@@ -245,11 +248,12 @@ end
 function linq_meta_index:take_while(condition)
   self.__count = nil
   local inner_iter = self.__iter
-  self.__iter = function(_, i)
-    local value
-    i, value = inner_iter(nil, i)
-    if not i or not condition(value, i) then return end
-    return i, value
+  local i = 0
+  self.__iter = function()
+    local value = inner_iter()
+    i = i + 1
+    if value == nil or not condition(value, i) then return end
+    return value
   end
   return self
 end
@@ -261,13 +265,15 @@ end
 function linq_meta_index:where(condition)
   self.__count = nil
   local inner_iter = self.__iter
-  self.__iter = function(_, i)
+  local i = 0
+  self.__iter = function()
     local value
     repeat
-      i, value = inner_iter(nil, i)
-      if not i then return end
+      value = inner_iter()
+      if value == nil then return end
+      i = i + 1
     until condition(value, i)
-    return i, value
+    return value
   end
   return self
 end
@@ -277,11 +283,12 @@ end
 ---@return LinqObj|T[]
 local function linq(tab)
   local count = #tab
+  local i = 0
   return setmetatable({
-    __iter = function(_, i)
+    __iter = function()
       if i >= count then return end
       i = i + 1
-      return i, tab[i]
+      return tab[i]
     end,
     __count = count,
   }, linq_meta)
