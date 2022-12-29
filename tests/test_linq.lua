@@ -206,6 +206,22 @@ do
     assert_sequential_index_arg(obj, obj.distinct, function() return 1 end)
   end)
 
+  add_test("except makes __count unknown", function()
+    local obj = linq{}:except{}
+    local got = obj.__count
+    assert.equals(nil, got, "internal __count")
+  end)
+
+  add_test("except with an array to exclude", function()
+    local obj = linq(get_test_strings()):except{"foo", false}
+    assert_iteration(obj, {"bar", "baz"})
+  end)
+
+  add_test("except with a linq object to exclude", function()
+    local obj = linq(get_test_strings()):except(linq{"foo", "baz"})
+    assert_iteration(obj, {"bar", false})
+  end)
+
   add_test("iterate returns the correct iterator", function()
     local obj = linq{}
     local got_iter = obj:iterate()

@@ -18,8 +18,9 @@ local linq_meta = {__index = linq_meta_index}
 -- [ ] ? default_if_empty
 -- [x] distinct
 -- [ ] ? element_at
--- [ ] except
+-- [x] except
 -- [ ] except_by
+-- [ ] except_lut
 -- [ ] find
 -- [ ] find_last
 -- [ ] first
@@ -238,6 +239,36 @@ function linq_meta_index:distinct(selector)
   return self
 end
 ---@diagnostic enable: duplicate-set-field
+
+---@generic T
+---@param self LinqObj|T[]
+---@param collection LinqObj|T[]
+---@return LinqObj|T[]
+function linq_meta_index:except(collection)
+  self.__count = nil
+  local inner_iter = self.__iter
+  local lut
+  self.__iter = function()
+    if not lut then
+      lut = {}
+      if collection.__is_linq then
+        for value in collection.__iter do
+          lut[value] = true
+        end
+      else
+        for i = 1, #collection do
+          lut[collection[i]] = true
+        end
+      end
+    end
+    local value
+    repeat
+      value = inner_iter()
+    until not lut[value] -- if value is nil it will break out of the loop
+    return value
+  end
+  return self
+end
 
 ---@generic T
 ---@param self LinqObj|T[]
