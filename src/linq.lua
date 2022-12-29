@@ -10,9 +10,7 @@ local linq_meta = {__index = linq_meta_index}
 
 -- [x] all
 -- [x] any
--- [ ] append
--- [ ] append_range
--- [ ] append_linq
+-- [x] append
 -- [ ] average
 -- [ ] ? chunk
 -- [ ] contains
@@ -100,6 +98,44 @@ function linq_meta_index:any(condition)
     i = i + 1
   end
   return false
+end
+
+---@generic T
+---@generic TResult
+---@param self LinqObj|T[]
+---@param collection LinqObj|T[]
+---@return LinqObj|T[]
+function linq_meta_index:append(collection)
+  local current_iter = self.__iter
+  local next_iter
+  if collection.__is_linq then
+    next_iter = collection.__iter
+    if self.__count and collection.__count then
+      self.__count = self.__count + collection.__count
+    else
+      self.__count = nil
+    end
+  else
+    local i = 0
+    next_iter = function()
+      i = i + 1
+      return collection[i]
+    end
+    if self.__count then
+      self.__count = self.__count + #collection
+    end
+  end
+  self.__iter = function()
+    local value = current_iter()
+    if value == nil then
+      if next_iter == nil then return end
+      current_iter = next_iter
+      next_iter = nil
+      value = current_iter()
+    end
+    return value
+  end
+  return self
 end
 
 ---@generic T

@@ -92,6 +92,52 @@ do
     assert_sequential_index_arg(obj, obj.any, function() return false end)
   end)
 
+  add_test("append an array, self has known __count", function()
+    local obj = linq(get_test_strings()):append{"hello", "world"}
+    assert.equals(6, obj.__count, "internal __count")
+    assert_iteration(obj, {"foo", "bar", false, "baz", "hello", "world"})
+  end)
+
+  add_test("append an array, self has unknown __count", function()
+    local obj = linq(get_test_strings())
+    obj.__count = nil
+    obj = obj:append{"hello", "world"}
+    assert.equals(nil, obj.__count, "internal __count")
+    assert_iteration(obj, {"foo", "bar", false, "baz", "hello", "world"})
+  end)
+
+  add_test("append a linq object with known __count, self has known __count", function()
+    local obj = linq(get_test_strings()):append(linq{"hello", "world"})
+    assert.equals(6, obj.__count, "internal __count")
+    assert_iteration(obj, {"foo", "bar", false, "baz", "hello", "world"})
+  end)
+
+  add_test("append a linq object with unknown __count, self has known __count", function()
+    local obj_to_append = linq{"hello", "world"}
+    obj_to_append.__count = nil
+    local obj = linq(get_test_strings()):append(obj_to_append)
+    assert.equals(nil, obj.__count, "internal __count")
+    assert_iteration(obj, {"foo", "bar", false, "baz", "hello", "world"})
+  end)
+
+  add_test("append a linq object with known __count, self has unknown __count", function()
+    local obj = linq(get_test_strings())
+    obj.__count = nil
+    obj = obj:append{"hello", "world"}
+    assert.equals(nil, obj.__count, "internal __count")
+    assert_iteration(obj, {"foo", "bar", false, "baz", "hello", "world"})
+  end)
+
+  add_test("append a linq object with unknown __count, self has unknown __count", function()
+    local obj_to_append = linq{"hello", "world"}
+    obj_to_append.__count = nil
+    local obj = linq(get_test_strings())
+    obj.__count = nil
+    obj = obj:append(obj_to_append)
+    assert.equals(nil, obj.__count, "internal __count")
+    assert_iteration(obj, {"foo", "bar", false, "baz", "hello", "world"})
+  end)
+
   add_test("count on object with known __count", function()
     local obj = linq(get_test_strings())
     assert.equals(#get_test_strings(), obj:count(), "count")
