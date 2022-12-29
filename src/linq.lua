@@ -16,8 +16,7 @@ local linq_meta = {__index = linq_meta_index}
 -- [x] contains
 -- [x] count
 -- [ ] ? default_if_empty
--- [ ] distinct
--- [ ] distinct_by
+-- [x] distinct
 -- [ ] ? element_at
 -- [ ] except
 -- [ ] except_by
@@ -199,6 +198,46 @@ function linq_meta_index:count()
   end
   return count
 end
+
+---@diagnostic disable: duplicate-set-field
+---@generic T
+---@param self LinqObj|T[]
+---@param selector (fun(value: T, index: integer): any)?
+---@return LinqObj|T[]
+function linq_meta_index:distinct(selector)
+  self.__count = nil
+  local inner_iter = self.__iter
+  local visited_lut = {}
+  if selector then
+    local i = 0
+    self.__iter = function()
+      while true do
+        local value = inner_iter()
+        if value == nil then return end
+        i = i + 1
+        value = selector(value, i)
+        if not visited_lut[value] then
+          visited_lut[value] = true
+          return value
+        end
+      end
+    end
+  else
+    -- this is duplicated logic with the selector stuff removed for optimization
+    self.__iter = function()
+      while true do
+        local value = inner_iter()
+        if value == nil then return end
+        if not visited_lut[value] then
+          visited_lut[value] = true
+          return value
+        end
+      end
+    end
+  end
+  return self
+end
+---@diagnostic enable: duplicate-set-field
 
 ---@generic T
 ---@param self LinqObj|T[]

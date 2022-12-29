@@ -183,6 +183,29 @@ do
     assert.equals(#get_test_strings(), obj:count(), "count")
   end)
 
+  add_test("distinct makes __count unknown", function()
+    local obj = linq{}:distinct()
+    local got = obj.__count
+    assert.equals(nil, got, "internal __count")
+  end)
+
+  add_test("distinct with a triple duplicate and a double duplicate", function()
+    local obj = linq{"hi", "hello", "hi", "bye", "bye", "hi"}:distinct()
+    assert_iteration(obj, {"hi", "hello", "bye"})
+  end)
+
+  add_test("distinct with a selector", function()
+    local obj = linq(get_test_strings())
+      :distinct(function(value) return type(value) == "string" and value:sub(1, 2) or value end)
+    ;
+    assert_iteration(obj, {"fo", "ba", false})
+  end)
+
+  add_test("distinct with a selector using index arg", function()
+    local obj = linq(get_test_strings())
+    assert_sequential_index_arg(obj, obj.distinct, function() return 1 end)
+  end)
+
   add_test("iterate returns the correct iterator", function()
     local obj = linq{}
     local got_iter = obj:iterate()
