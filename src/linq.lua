@@ -20,7 +20,8 @@ local linq_meta = {__index = linq_meta_index}
 -- [ ] ? element_at
 -- [x] except
 -- [x] except_by
--- [ ] except_lut
+-- [x] except_lut
+-- [x] except_lut_by
 -- [ ] find
 -- [ ] find_last
 -- [ ] first
@@ -259,12 +260,14 @@ end
 
 ---@generic T
 ---@param self LinqObj|T[]
----@param collection LinqObj|T[]
+---@param lut (table<T, true>)?
+---@param collection (LinqObj|T[])?
 ---@return LinqObj|T[]
-function linq_meta_index:except(collection)
+local function except_internal(self, lut, collection)
   self.__count = nil
+  -- collection will never be nil if lut is nil
+  ---@cast collection -nil
   local inner_iter = self.__iter
-  local lut
   self.__iter = function()
     lut = lut or build_lut_for_except(collection)
     local value
@@ -279,14 +282,16 @@ end
 ---@generic T
 ---@generic TKey
 ---@param self LinqObj|T[]
----@param collection LinqObj|TKey[]
 ---@param selector fun(value: T, index: integer): TKey
+---@param lut (table<T, true>)?
+---@param collection (LinqObj|TKey[])?
 ---@return LinqObj|T[]
-function linq_meta_index:except_by(collection, selector)
+local function except_by_internal(self, selector, lut, collection)
   self.__count = nil
+  -- collection will never be nil if lut is nil
+  ---@cast collection -nil
   local inner_iter = self.__iter
   local i = 0
-  local lut
   self.__iter = function()
     lut = lut or build_lut_for_except(collection)
     local value
@@ -298,6 +303,42 @@ function linq_meta_index:except_by(collection, selector)
     return value
   end
   return self
+end
+
+---@generic T
+---@param self LinqObj|T[]
+---@param collection LinqObj|T[]
+---@return LinqObj|T[]
+function linq_meta_index:except(collection)
+  return except_internal(self, nil, collection)
+end
+
+---@generic T
+---@generic TKey
+---@param self LinqObj|T[]
+---@param collection LinqObj|TKey[]
+---@param selector fun(value: T, index: integer): TKey
+---@return LinqObj|T[]
+function linq_meta_index:except_by(collection, selector)
+  return except_by_internal(self, selector, nil, collection)
+end
+
+---@generic T
+---@param self LinqObj|T[]
+---@param lut table<T, true>
+---@return LinqObj|T[]
+function linq_meta_index:except_lut(lut)
+  return except_internal(self, lut)
+end
+
+---@generic T
+---@generic TKey
+---@param self LinqObj|T[]
+---@param lut table<TKey, true>
+---@param selector fun(value: T, index: integer): TKey
+---@return LinqObj|T[]
+function linq_meta_index:except_lut_by(lut, selector)
+  return except_by_internal(self, selector, lut)
 end
 
 ---@generic T

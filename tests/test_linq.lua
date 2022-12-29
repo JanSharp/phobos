@@ -257,6 +257,16 @@ do
     assert_sequential_index_arg(obj, obj.except_by, {}, function(value) return value end)
   end)
 
+  add_test("except_lut is nearly identical to except", function()
+    local obj = linq(get_test_strings()):except_lut{bar = true, [false] = true}
+    assert_iteration(obj, {"foo", "baz"})
+  end)
+
+  add_test("except_lut_by is nearly identical to except_by", function()
+    local obj = linq{"hi", "there", "friend"}:except_lut_by({[5] = true}, function(value) return #value end)
+    assert_iteration(obj, {"hi", "friend"})
+  end)
+
   add_test("iterate returns the correct iterator", function()
     local obj = linq{}
     local got_iter = obj:iterate()
