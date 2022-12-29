@@ -19,7 +19,7 @@ local linq_meta = {__index = linq_meta_index}
 -- [x] distinct
 -- [ ] ? element_at
 -- [x] except
--- [ ] except_by
+-- [x] except_by
 -- [ ] except_lut
 -- [ ] find
 -- [ ] find_last
@@ -241,6 +241,23 @@ end
 ---@diagnostic enable: duplicate-set-field
 
 ---@generic T
+---@param collection LinqObj|T[]
+---@return table<T, true>
+local function build_lut_for_except(collection)
+  local lut = {}
+  if collection.__is_linq then
+    for value in collection.__iter do
+      lut[value] = true
+    end
+  else
+    for i = 1, #collection do
+      lut[collection[i]] = true
+    end
+  end
+  return lut
+end
+
+---@generic T
 ---@param self LinqObj|T[]
 ---@param collection LinqObj|T[]
 ---@return LinqObj|T[]
@@ -249,22 +266,35 @@ function linq_meta_index:except(collection)
   local inner_iter = self.__iter
   local lut
   self.__iter = function()
-    if not lut then
-      lut = {}
-      if collection.__is_linq then
-        for value in collection.__iter do
-          lut[value] = true
-        end
-      else
-        for i = 1, #collection do
-          lut[collection[i]] = true
-        end
-      end
-    end
+    lut = lut or build_lut_for_except(collection)
     local value
     repeat
       value = inner_iter()
     until not lut[value] -- if value is nil it will break out of the loop
+    return value
+  end
+  return self
+end
+
+---@generic T
+---@generic TKey
+---@param self LinqObj|T[]
+---@param collection LinqObj|TKey[]
+---@param selector fun(value: T, index: integer): TKey
+---@return LinqObj|T[]
+function linq_meta_index:except_by(collection, selector)
+  self.__count = nil
+  local inner_iter = self.__iter
+  local i = 0
+  local lut
+  self.__iter = function()
+    lut = lut or build_lut_for_except(collection)
+    local value
+    repeat
+      value = inner_iter()
+      if value == nil then return end
+      i = i + 1
+    until not lut[selector(value, i)]
     return value
   end
   return self

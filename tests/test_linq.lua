@@ -27,13 +27,16 @@ local function assert_iteration(linq_obj, expected_results)
 end
 
 ---@generic T
-local function assert_sequential_index_arg(linq_obj, func, callback)
+local function assert_sequential_index_arg(linq_obj, func, ...)
   local i = 1
-  local obj = func(linq_obj, function(value, j)
+  local args = {...}
+  local callback = args[#args]
+  args[#args] = function(value, j)
     assert.equals(i, j, "value is '"..tostring(value).."'")
     i = i + 1
     return callback(value, j)
-  end)
+  end
+  local obj = func(linq_obj, table.unpack(args))
   if type(obj) == "table" and obj.__is_linq then
     while obj.__iter() ~= nil do end
   end
@@ -220,6 +223,38 @@ do
   add_test("except with a linq object to exclude", function()
     local obj = linq(get_test_strings()):except(linq{"foo", "baz"})
     assert_iteration(obj, {"bar", false})
+  end)
+
+  add_test("except_by makes __count unknown", function()
+    local obj = linq{}:except_by({}, function(value) return value end)
+    local got = obj.__count
+    assert.equals(nil, got, "internal __count")
+  end)
+
+  add_test("except_by with an array to exclude", function()
+    local obj = linq(get_test_strings())
+      :except_by(
+        ({"f", false})--[=[@as (string|boolean)[]]=],
+        function(value)
+          return type(value) == "string" and value:sub(1, 1) or false
+        end
+      )
+    ;
+    assert_iteration(obj, {"bar", "baz"})
+  end)
+
+  add_test("except_by with a linq object to exclude", function()
+    local obj = linq(get_test_strings())
+      :except_by(linq{"o", "a"}, function(value)
+        return type(value) == "string" and value:sub(2, 2) or value
+      end)
+    ;
+    assert_iteration(obj, {false})
+  end)
+
+  add_test("except_by with selector using index arg", function()
+    local obj = linq(get_test_strings())
+    assert_sequential_index_arg(obj, obj.except_by, {}, function(value) return value end)
   end)
 
   add_test("iterate returns the correct iterator", function()
