@@ -11,7 +11,7 @@ local linq_meta = {__index = linq_meta_index}
 -- [x] all
 -- [x] any
 -- [x] append
--- [ ] average
+-- [x] average
 -- [ ] ? chunk
 -- [ ] contains
 -- [x] count
@@ -136,6 +136,41 @@ function linq_meta_index:append(collection)
     return value
   end
   return self
+end
+
+---@generic T
+---@param self LinqObj|T[]
+---@param selector (fun(value: T, index: integer): number)?
+---@return number
+function linq_meta_index:average(selector)
+  -- technically this function contains the same logic 3 times
+  -- this is purely for optimization reasons
+
+  if selector then
+    local i = 0
+    local total = 0
+    for value in self.__iter do
+      i = i + 1
+      total = total + selector(value, i)
+    end
+    return total / i
+  end
+
+  if self.__count then
+    local total = 0
+    for value in self.__iter do
+      total = total + value
+    end
+    return total / self.__count
+  end
+
+  local i = 0
+  local total = 0
+  for value in self.__iter do
+    i = i + 1
+    total = total + value
+  end
+  return total / i
 end
 
 ---@generic T

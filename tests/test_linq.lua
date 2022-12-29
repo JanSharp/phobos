@@ -138,6 +138,30 @@ do
     assert_iteration(obj, {"foo", "bar", false, "baz", "hello", "world"})
   end)
 
+  add_test("average on object with known __count", function()
+    local got = linq{1, 3, 5, 18, 32}:average()
+    assert.equals((1 + 3 + 5 + 18 + 32) / 5, got, "result of 'average'")
+  end)
+
+  add_test("average on object with unknown __count", function()
+    local obj = linq{1, 3, 5, 18, 32}
+    obj.__count = nil
+    local got = obj:average()
+    assert.equals((1 + 3 + 5 + 18 + 32) / 5, got, "result of 'average'")
+  end)
+
+  add_test("average using selector", function()
+    local got = linq(get_test_strings())
+      :average(function(value) return type(value) == "string" and #value or 100 end)
+    ;
+    assert.equals((3 + 3 + 100 + 3) / 4, got, "result of 'average'")
+  end)
+
+  add_test("average using selector using index arg", function()
+    local obj = linq(get_test_strings())
+    assert_sequential_index_arg(obj, obj.average, function() return 1 end)
+  end)
+
   add_test("count on object with known __count", function()
     local obj = linq(get_test_strings())
     assert.equals(#get_test_strings(), obj:count(), "count")
