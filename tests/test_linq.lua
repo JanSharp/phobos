@@ -162,6 +162,16 @@ do
     assert_sequential_index_arg(obj, obj.average, function() return 1 end)
   end)
 
+  add_test("contains with a value that exists", function()
+    local got = linq(get_test_strings()):contains("bar")
+    assert.equals(true, got, "result of 'contains'")
+  end)
+
+  add_test("contains with a value that does not exist", function()
+    local got = linq(get_test_strings()):contains(123)
+    assert.equals(false, got, "result of 'contains'")
+  end)
+
   add_test("count on object with known __count", function()
     local obj = linq(get_test_strings())
     assert.equals(#get_test_strings(), obj:count(), "count")

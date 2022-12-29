@@ -13,7 +13,7 @@ local linq_meta = {__index = linq_meta_index}
 -- [x] append
 -- [x] average
 -- [ ] ? chunk
--- [ ] contains
+-- [x] contains
 -- [x] count
 -- [ ] ? default_if_empty
 -- [ ] distinct
@@ -171,6 +171,19 @@ function linq_meta_index:average(selector)
     total = total + value
   end
   return total / i
+end
+
+---@generic T
+---@param self LinqObj|T[]
+---@param value T
+---@return boolean
+function linq_meta_index:contains(value)
+  for v in self.__iter do
+    if v == value then
+      return true
+    end
+  end
+  return false
 end
 
 ---@generic T
