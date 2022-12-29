@@ -23,7 +23,7 @@ local linq_meta = {__index = linq_meta_index}
 -- [x] except_lut
 -- [x] except_lut_by
 -- [x] first
--- [ ] foreach
+-- [x] for_each
 -- [ ] group_by
 -- [ ] group_join
 -- [ ] ? index_of
@@ -358,6 +358,17 @@ function linq_meta_index:first(condition)
   local value = self.__iter()
   if value ~= nil then
     return value, 1
+  end
+end
+
+---@generic T
+---@param self LinqObj|T[]
+---@param action fun(value: T, index: integer)
+function linq_meta_index:for_each(action)
+  local i = 0
+  for value in self.__iter do
+    i = i + 1
+    action(value, i)
   end
 end
 

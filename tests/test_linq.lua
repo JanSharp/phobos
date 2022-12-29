@@ -296,6 +296,14 @@ do
     assert_sequential_index_arg(obj, obj.first, function() return false end)
   end)
 
+  add_test("for_each with an action using index arg", function()
+    local values = get_test_strings()
+    local obj = linq(values)
+    assert_sequential_index_arg(obj, obj.for_each, function(value, i)
+      assert.equals(values[i], value, "value #"..i)
+    end)
+  end)
+
   add_test("iterate returns the correct iterator", function()
     local obj = linq{}
     local got_iter = obj:iterate()
