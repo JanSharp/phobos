@@ -26,6 +26,19 @@ local function assert_iteration(linq_obj, expected_results)
   assert.equals(nil, iter(), "iterator returned another value after the end of expected values")
 end
 
+---@generic T
+local function assert_sequential_index_arg(linq_obj, func, callback)
+  local i = 1
+  local obj = func(linq_obj, function(value, j)
+    assert.equals(i, j, "value is '"..tostring(value).."'")
+    i = i + 1
+    return callback(value, j)
+  end)
+  if type(obj) == "table" and obj.__is_linq then
+    while obj.__iter() ~= nil do end
+  end
+end
+
 do
   local scope = framework.scope:new_scope("linq")
 
@@ -47,6 +60,36 @@ do
       return (value or 0) + 1
     end, state, 2)
     assert_iteration(obj, {3, 4, 5, false})
+  end)
+
+  add_test("all with condition matching everything", function()
+    local got = linq(get_test_strings()):all(function() return true end)
+    assert.equals(true, got, "result of 'all'")
+  end)
+
+  add_test("all with condition matching 3 out of 4", function()
+    local got = linq(get_test_strings()):all(function(value) return type(value) == "string" end)
+    assert.equals(false, got, "result of 'all'")
+  end)
+
+  add_test("all with condition using index arg", function()
+    local obj = linq(get_test_strings())
+    assert_sequential_index_arg(obj, obj.all, function() return true end)
+  end)
+
+  add_test("any with condition matching nothing", function()
+    local got = linq(get_test_strings()):any(function() return false end)
+    assert.equals(false, got, "result of 'any'")
+  end)
+
+  add_test("any with condition matching 1 out of 4", function()
+    local got = linq(get_test_strings()):any(function(value) return type(value) == "boolean" end)
+    assert.equals(true, got, "result of 'any'")
+  end)
+
+  add_test("any with condition using index arg", function()
+    local obj = linq(get_test_strings())
+    assert_sequential_index_arg(obj, obj.any, function() return false end)
   end)
 
   add_test("count on object with known __count", function()
@@ -71,7 +114,7 @@ do
     local expected_count = obj.__count
     obj = obj:select(function(value) return value end)
     local got_count = obj.__count
-    assert.equals(expected_count, got_count, "__count before and after call to select")
+    assert.equals(expected_count, got_count, "__count before and after call to 'select'")
   end)
 
   add_test("select with selector performing substring", function()

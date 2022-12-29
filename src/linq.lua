@@ -8,8 +8,8 @@
 local linq_meta_index = {}
 local linq_meta = {__index = linq_meta_index}
 
--- [ ] all
--- [ ] any
+-- [x] all
+-- [x] any
 -- [ ] append
 -- [ ] append_range
 -- [ ] append_linq
@@ -71,6 +71,36 @@ local linq_meta = {__index = linq_meta_index}
 -- [ ] union
 -- [ ] union_by
 -- [x] where
+
+---@generic T
+---@param self LinqObj|T[]
+---@param condition fun(value: T, index: integer?):boolean
+---@return boolean
+function linq_meta_index:all(condition)
+  local i = 1
+  for value in self.__iter do
+    if not condition(value, i) then
+      return false
+    end
+    i = i + 1
+  end
+  return true
+end
+
+---@generic T
+---@param self LinqObj|T[]
+---@param condition fun(value: T, index: integer?):boolean
+---@return boolean
+function linq_meta_index:any(condition)
+  local i = 1
+  for value in self.__iter do
+    if condition(value, i) then
+      return true
+    end
+    i = i + 1
+  end
+  return false
+end
 
 ---@generic T
 ---@param self LinqObj|T[]
