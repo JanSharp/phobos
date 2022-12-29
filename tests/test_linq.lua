@@ -267,6 +267,35 @@ do
     assert_iteration(obj, {"hi", "friend"})
   end)
 
+  add_test("first gets the first element", function()
+    local got_value, got_index = linq(get_test_strings()):first()
+    assert.equals("foo", got_value, "value result of 'first'")
+    assert.equals(1, got_index, "index result of 'first'")
+  end)
+
+  add_test("first on an empty collection", function()
+    local got_value, got_index = linq{}:first()
+    assert.equals(nil, got_value, "value result of 'first'")
+    assert.equals(nil, got_index, "index result of 'first'")
+  end)
+
+  add_test("first with condition matching a value that does exist", function()
+    local got_value, got_index = linq(get_test_strings()):first(function(value) return value == "baz" end)
+    assert.equals("baz", got_value, "value result of 'first'")
+    assert.equals(4, got_index, "index result of 'first'")
+  end)
+
+  add_test("first with condition matching a value that does not exist", function()
+    local got_value, got_index = linq(get_test_strings()):first(function() return false end)
+    assert.equals(nil, got_value, "value result of 'first'")
+    assert.equals(nil, got_index, "index result of 'first'")
+  end)
+
+  add_test("first with a condition using index arg", function()
+    local obj = linq(get_test_strings())
+    assert_sequential_index_arg(obj, obj.first, function() return false end)
+  end)
+
   add_test("iterate returns the correct iterator", function()
     local obj = linq{}
     local got_iter = obj:iterate()

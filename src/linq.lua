@@ -22,9 +22,7 @@ local linq_meta = {__index = linq_meta_index}
 -- [x] except_by
 -- [x] except_lut
 -- [x] except_lut_by
--- [ ] find
--- [ ] find_last
--- [ ] first
+-- [x] first
 -- [ ] foreach
 -- [ ] group_by
 -- [ ] group_join
@@ -339,6 +337,28 @@ end
 ---@return LinqObj|T[]
 function linq_meta_index:except_lut_by(lut, selector)
   return except_by_internal(self, selector, lut)
+end
+
+---@generic T
+---@param self LinqObj|T[]
+---@param condition (fun(value: T, index: integer): boolean)?
+---@return T? value
+---@return integer? index
+function linq_meta_index:first(condition)
+  if condition then
+    local i = 1
+    for value in self.__iter do
+      if condition(value, i) then
+        return value, i
+      end
+      i = i + 1
+    end
+    return
+  end
+  local value = self.__iter()
+  if value ~= nil then
+    return value, 1
+  end
 end
 
 ---@generic T
