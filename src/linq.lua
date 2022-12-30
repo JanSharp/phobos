@@ -280,11 +280,11 @@ end
 ---@generic T
 ---@generic TKey
 ---@param self LinqObj|T[]
----@param selector fun(value: T, index: integer): TKey
+---@param key_selector fun(value: T, index: integer): TKey
 ---@param lut (table<T, true>)?
 ---@param collection (LinqObj|TKey[])?
 ---@return LinqObj|T[]
-local function except_by_internal(self, selector, lut, collection)
+local function except_by_internal(self, key_selector, lut, collection)
   self.__count = nil
   -- collection will never be nil if lut is nil
   ---@cast collection -nil
@@ -297,7 +297,7 @@ local function except_by_internal(self, selector, lut, collection)
       value = inner_iter()
       if value == nil then return end
       i = i + 1
-    until not lut[selector(value, i)]
+    until not lut[key_selector(value, i)]
     return value
   end
   return self
@@ -315,10 +315,10 @@ end
 ---@generic TKey
 ---@param self LinqObj|T[]
 ---@param collection LinqObj|TKey[]
----@param selector fun(value: T, index: integer): TKey
+---@param key_selector fun(value: T, index: integer): TKey
 ---@return LinqObj|T[]
-function linq_meta_index:except_by(collection, selector)
-  return except_by_internal(self, selector, nil, collection)
+function linq_meta_index:except_by(collection, key_selector)
+  return except_by_internal(self, key_selector, nil, collection)
 end
 
 ---@generic T
@@ -333,10 +333,10 @@ end
 ---@generic TKey
 ---@param self LinqObj|T[]
 ---@param lut table<TKey, true>
----@param selector fun(value: T, index: integer): TKey
+---@param key_selector fun(value: T, index: integer): TKey
 ---@return LinqObj|T[]
-function linq_meta_index:except_lut_by(lut, selector)
-  return except_by_internal(self, selector, lut)
+function linq_meta_index:except_lut_by(lut, key_selector)
+  return except_by_internal(self, key_selector, lut)
 end
 
 ---@generic T
@@ -372,12 +372,15 @@ function linq_meta_index:for_each(action)
   end
 end
 
+-- TODO: probably add an element selector to group_by, effectively performing a
+-- select before putting the elements inside of the grouping results
+
 ---@generic T
 ---@generic TKey
 ---@param self LinqObj|T[]
----@param selector fun(value: T, index: integer): TKey
+---@param key_selector fun(value: T, index: integer): TKey
 ---@return LinqObj|(({key: TKey, count: integer}|T[])[])
-function linq_meta_index:group_by(selector)
+function linq_meta_index:group_by(key_selector)
   self.__count = nil
   local inner_iter = self.__iter
   local i = 0
@@ -390,7 +393,7 @@ function linq_meta_index:group_by(selector)
       local groups_lut = {}
       for value in inner_iter do
         i = i + 1
-        local key = selector(value, i)
+        local key = key_selector(value, i)
         local group = groups_lut[key]
         if group then
           local count = group.count + 1
