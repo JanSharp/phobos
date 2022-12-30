@@ -4,6 +4,7 @@ local assert = require("assert")
 
 local linq = require("linq")
 
+---@return (string|boolean)[]
 local function get_test_strings()
   return {
     "foo",
@@ -21,7 +22,7 @@ local function assert_iteration(linq_obj, expected_results)
   local iter = linq_obj.__iter
   for i, expected in ipairs(expected_results) do
     local got = iter()
-    assert.equals(expected, got, "value #"..i)
+    assert.contents_equals(expected, got, "value #"..i)
   end
   assert.equals(nil, iter(), "iterator returned another value after the end of expected values")
 end
@@ -245,7 +246,7 @@ do
 
   add_test("except_by with a linq object to exclude", function()
     local obj = linq(get_test_strings())
-      :except_by(linq{"o", "a"}, function(value)
+      :except_by(linq{"o", "a"}--[=[@as (string|boolean)[]]=], function(value)
         return type(value) == "string" and value:sub(2, 2) or value
       end)
     ;
@@ -302,6 +303,21 @@ do
     assert_sequential_index_arg(obj, obj.for_each, function(value, i)
       assert.equals(values[i], value, "value #"..i)
     end)
+  end)
+
+  add_test("group_by creating 2 groups", function()
+    local obj = linq(get_test_strings())
+      :group_by(function(value) return type(value) end)
+    ;
+    assert_iteration(obj, {
+      {key = "string", count = 3, "foo", "bar", "baz"},
+      {key = "boolean", count = 1, false},
+    })
+  end)
+
+  add_test("group_by with selector using index arg", function()
+    local obj = linq(get_test_strings())
+    assert_sequential_index_arg(obj, obj.group_by, function() return 0 end)
   end)
 
   add_test("iterate returns the correct iterator", function()

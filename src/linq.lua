@@ -24,7 +24,7 @@ local linq_meta = {__index = linq_meta_index}
 -- [x] except_lut_by
 -- [x] first
 -- [x] for_each
--- [ ] group_by
+-- [x] group_by
 -- [ ] group_join
 -- [ ] ? index_of
 -- [ ] ? index_of_last
@@ -370,6 +370,49 @@ function linq_meta_index:for_each(action)
     i = i + 1
     action(value, i)
   end
+end
+
+---@generic T
+---@generic TKey
+---@param self LinqObj|T[]
+---@param selector fun(value: T, index: integer): TKey
+---@return LinqObj|(({key: TKey, count: integer}|T[])[])
+function linq_meta_index:group_by(selector)
+  self.__count = nil
+  local inner_iter = self.__iter
+  local i = 0
+  local groups
+  local groups_index = 0
+  self.__iter = function()
+    if not groups then
+      groups = {}
+      local groups_count = 0
+      local groups_lut = {}
+      for value in inner_iter do
+        i = i + 1
+        local key = selector(value, i)
+        local group = groups_lut[key]
+        if group then
+          local count = group.count + 1
+          group.count = count
+          group[count] = value
+        else
+          group = {
+            key = key,
+            count = 1,
+            value,
+          }
+          groups_lut[key] = group
+          groups_count = groups_count + 1
+          groups[groups_count] = group
+        end
+      end
+    end
+
+    groups_index = groups_index + 1
+    return groups[groups_index]
+  end
+  return self
 end
 
 ---@generic T
