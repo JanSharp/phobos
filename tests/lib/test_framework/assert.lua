@@ -72,7 +72,7 @@ end
 local function get_ref_locations(locations, side)
   return locations
     and ("\n"..side.." previous references:\n  "..table.concat(locations, "\n  "))
-    or ("\n"..side.." none")
+    or ("\n"..side.." no references")
 end
 
 ---@param expected any
