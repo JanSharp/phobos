@@ -19,12 +19,12 @@ end
 ---@param linq_obj LinqObj|T[]
 ---@param expected_results T[]
 local function assert_iteration(linq_obj, expected_results)
-  local iter = linq_obj.__iter
-  for i, expected in ipairs(expected_results) do
-    local got = iter()
-    assert.contents_equals(expected, got, "value #"..i)
+  local got_results = {}
+  for value in linq_obj.__iter do
+    got_results[#got_results+1] = value
   end
-  assert.equals(nil, iter(), "iterator returned another value after the end of expected values")
+  assert.contents_equals(expected_results, got_results)
+  return got_results
 end
 
 ---@generic T
@@ -318,6 +318,90 @@ do
   add_test("group_by with selector using index arg", function()
     local obj = linq(get_test_strings())
     assert_sequential_index_arg(obj, obj.group_by, function() return 0 end)
+  end)
+
+  add_test("group_join associates one inner (an array) to one outer", function()
+    local obj = linq{{key = 10, value = "hello"}}
+      :group_join(
+        {{key = 10, inner_value = "world"}},
+        function(inner) return inner.key end,
+        function(outer) return outer.key end
+      )
+    ;
+    assert_iteration(obj, {
+      {key = 10, outer = {key = 10, value = "hello"}, inner = {{key = 10, inner_value = "world"}}},
+    })
+  end)
+
+  add_test("group_join associates one inner (a linq object) to one outer", function()
+    local obj = linq{{key = 10, value = "hello"}}
+      :group_join(
+        linq{{key = 10, inner_value = "world"}},
+        function(inner) return inner.key end,
+        function(outer) return outer.key end
+      )
+    ;
+    assert_iteration(obj, {
+      {key = 10, outer = {key = 10, value = "hello"}, inner = {{key = 10, inner_value = "world"}}},
+    })
+  end)
+
+  add_test("group_join keeps outer without any corresponding inner", function()
+    local obj = linq{{key = 10, value = "hello"}}
+      :group_join(
+        {},
+        function(inner) return inner.key end,
+        function(outer) return outer.key end
+      )
+    ;
+    assert_iteration(obj, {
+      {key = 10, outer = {key = 10, value = "hello"}, inner = {}},
+    })
+  end)
+
+  add_test("group_join keeps multiple outer with the same key, assigning the same inner", function()
+    local obj = linq{{key = 10, value = "hello"}, {key = 10, value = "world"}}
+      :group_join(
+        {{key = 10, inner_value = "foo"}},
+        function(inner) return inner.key end,
+        function(outer) return outer.key end
+      )
+    ;
+    -- same reference of the inner value, but arrays around it are shallow copied
+    local expected_inner = {key = 10, inner_value = "foo"}
+    assert_iteration(obj, {
+      {key = 10, outer = {key = 10, value = "hello"}, inner = {expected_inner}},
+      {key = 10, outer = {key = 10, value = "world"}, inner = {expected_inner}},
+    })
+  end)
+
+  add_test("group_join ignores inner with key not used by any outer", function()
+    local obj = linq{{key = 10, value = "hello"}}
+      :group_join(
+        {{key = 20, inner_value = "world"}},
+        function(inner) return inner.key end,
+        function(outer) return outer.key end
+      )
+    ;
+    assert_iteration(obj, {
+      {key = 10, outer = {key = 10, value = "hello"}, inner = {}},
+    })
+  end)
+
+  add_test("group_join groups multiple inner with outer", function()
+    local obj = linq{{key = 10, value = "hello"}}
+      :group_join(
+        {{key = 10, inner_value = "foo"}, {key = 10, inner_value = "bar"}},
+        function(inner) return inner.key end,
+        function(outer) return outer.key end
+      )
+    ;
+    assert_iteration(obj, {
+      {key = 10, outer = {key = 10, value = "hello"}, inner = {
+        {key = 10, inner_value = "foo"},
+        {key = 10, inner_value = "bar"},
+      }},
+    })
   end)
 
   add_test("iterate returns the correct iterator", function()

@@ -25,7 +25,7 @@ local linq_meta = {__index = linq_meta_index}
 -- [x] first
 -- [x] for_each
 -- [x] group_by
--- [ ] group_join
+-- [x] group_join
 -- [ ] ? index_of
 -- [ ] ? index_of_last
 -- [ ] ? insert
@@ -414,6 +414,77 @@ function linq_meta_index:group_by(key_selector)
 
     groups_index = groups_index + 1
     return groups[groups_index]
+  end
+  return self
+end
+
+---@generic TOuter
+---@generic TInner
+---@generic TKey
+---@param self LinqObj|TOuter[]
+---@param inner_collection LinqObj|TInner[]
+---@param outer_key_selector fun(value: TOuter, index: integer): TKey
+---@param inner_key_selector fun(value: TInner, index: integer): TKey
+---@return LinqObj|{key: TKey, outer: TOuter, inner: TInner[]}[]
+function linq_meta_index:group_join(inner_collection, outer_key_selector, inner_key_selector)
+  local iter = self.__iter
+  local results
+  local results_index = 0
+  self.__iter = function()
+    if not results then
+      local groups_lut = {}
+      results = {}
+      local i = 0
+      for value in iter do
+        i = i + 1
+        local key = outer_key_selector(value, i)
+        local group = groups_lut[key]
+        local result
+        if group then
+          result = {key = key, outer = value, inner = group, requires_copy = true}
+        else
+          group = {}
+          groups_lut[key] = group
+          result = {key = key, outer = value, inner = group}
+        end
+        results[i] = result
+      end
+
+      if inner_collection.__is_linq then
+        i = 0
+        for value in inner_collection.__iter do
+          i = i + 1
+          local key = inner_key_selector(value, i)
+          local group = groups_lut[key]
+          if group then
+            group[#group+1] = value
+          end
+        end
+      else
+        for j = 1, #inner_collection do
+          local value = inner_collection[j]
+          local key = inner_key_selector(value, i)
+          local group = groups_lut[key]
+          if group then
+            group[#group+1] = value
+          end
+        end
+      end
+    end
+
+    results_index = results_index + 1
+    local result = results[results_index]
+    if not result then return end
+    if result.requires_copy then
+      local copy = {}
+      local group = result.inner
+      for i = 1, #group do
+        copy[i] = group[i]
+      end
+      result.inner = copy
+      result.requires_copy = nil
+    end
+    return result
   end
   return self
 end
