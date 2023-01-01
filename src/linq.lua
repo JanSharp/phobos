@@ -30,8 +30,7 @@ local linq_meta = {__index = linq_meta_index}
 -- [ ] ? index_of_last
 -- [ ] ? insert
 -- [ ] ? insert_range
--- [ ] intersect
--- [ ] intersect_by
+-- [x] intersect
 -- [x] iterate
 -- [ ] join
 -- [ ] last
@@ -488,6 +487,64 @@ function linq_meta_index:group_join(inner_collection, outer_key_selector, inner_
   end
   return self
 end
+
+---@diagnostic disable: duplicate-set-field
+---@generic T
+---@generic TKey
+---@param self LinqObj|T[]
+---@param collection LinqObj|T[]
+---@param key_selector (fun(value: T): TKey)? @ no index, because it's used on both collections
+---@return LinqObj|T[]
+function linq_meta_index:intersect(collection, key_selector)
+  self.__count = nil
+  local inner_iter = self.__iter
+  local lut
+  if key_selector then
+    self.__iter = function()
+      if not lut then
+        lut = {}
+        if collection.__is_linq then
+          for value in collection.__iter do
+            lut[key_selector(value)] = true
+          end
+        else
+          for i = 1, #collection do
+            lut[key_selector(collection[i])] = true
+          end
+        end
+      end
+      while true do
+        local value = inner_iter()
+        if value == nil then return end
+        if lut[key_selector(value)] then return value end
+      end
+    end
+  else
+    -- duplicated for optimization, simply removed calls to `key_selector`
+    self.__iter = function()
+      if not lut then
+        lut = {}
+        if collection.__is_linq then
+          for value in collection.__iter do
+            lut[value] = true
+          end
+        else
+          for i = 1, #collection do
+            lut[collection[i]] = true
+          end
+        end
+      end
+      while true do
+        local value = inner_iter()
+        -- and flipped the order of these if checks for a tiny bit of extra performance
+        if lut[value] then return value end
+        if value == nil then return end
+      end
+    end
+  end
+  return self
+end
+---@diagnostic enable: duplicate-set-field
 
 ---@generic T
 ---@param self LinqObj|T[]

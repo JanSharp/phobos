@@ -464,6 +464,46 @@ do
     iterate(obj)
   end)
 
+  add_test("intersect with strings and 'false'", function()
+    local obj = linq(get_test_strings()):intersect(get_test_strings())
+    assert_iteration(obj, get_test_strings())
+  end)
+
+  add_test("intersect with empty collections", function()
+    local obj = linq{}:intersect{}
+    assert_iteration(obj, {})
+  end)
+
+  add_test("intersect makes __count unknown", function()
+    local obj = linq{}:intersect{}
+    local got = obj.__count
+    assert.equals(nil, got, "internal __count")
+  end)
+
+  add_test("intersect with array collection", function()
+    local obj = linq{"hello", "world"}:intersect{"goodbye", "world"}
+    assert_iteration(obj, {"world"})
+  end)
+
+  add_test("intersect with linq object collection", function()
+    local obj = linq{"hello", "world"}:intersect(linq{"goodbye", "world"})
+    assert_iteration(obj, {"world"})
+  end)
+
+  add_test("intersect with array collection with key_selector", function()
+    local obj = linq{"hello", "world"}
+      :intersect({"goodbye", "world"}, function(value) return value:sub(1, 3) end)
+    ;
+    assert_iteration(obj, {"world"})
+  end)
+
+  add_test("intersect with linq object collection with key_selector", function()
+    local obj = linq{"hello", "world"}
+      :intersect(linq{"goodbye", "world"}, function(value) return value:sub(1, 3) end)
+    ;
+    assert_iteration(obj, {"world"})
+  end)
+
   add_test("iterate returns the correct iterator", function()
     local obj = linq{}
     local got_iter = obj:iterate()
