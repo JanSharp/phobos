@@ -28,16 +28,29 @@ local function assert_iteration(linq_obj, expected_results)
 end
 
 ---@generic T
-local function assert_sequential_index_arg(linq_obj, func, ...)
-  local i = 1
-  local args = {...}
-  local callback = args[#args]
-  args[#args] = function(value, j)
-    assert.equals(i, j, "value is '"..tostring(value).."'")
-    i = i + 1
-    return callback(value, j)
+---@param linq_obj LinqObj|T[]
+local function iterate(linq_obj)
+  while linq_obj.__iter() ~= nil do end
+end
+
+---@param callback fun(assert_sequential: fun(value, i), ...): ...
+local function assert_sequential_factory(callback)
+  local expected_i = 0
+  return function(...)
+    return callback(function(value, i)
+      expected_i = expected_i + 1
+      assert.equals(expected_i, i, "sequential index for value '"..tostring(value).."'")
+    end, ...)
   end
-  local obj = func(linq_obj, table.unpack(args))
+end
+
+---uses `assert_sequential_factory`, so this is just a helper function for functions
+---which only take a single parameter, the callback/selector function, which gets `value` and `i` as args
+local function assert_sequential_helper(linq_obj, func, callback)
+  local obj = func(linq_obj, assert_sequential_factory(function(assert_sequential, value, i)
+    assert_sequential(value, i)
+    return callback(value, i)
+  end))
   if type(obj) == "table" and obj.__is_linq then
     while obj.__iter() ~= nil do end
   end
@@ -78,7 +91,7 @@ do
 
   add_test("all with condition using index arg", function()
     local obj = linq(get_test_strings())
-    assert_sequential_index_arg(obj, obj.all, function() return true end)
+    assert_sequential_helper(obj, obj.all, function() return true end)
   end)
 
   add_test("any with condition matching nothing", function()
@@ -93,7 +106,7 @@ do
 
   add_test("any with condition using index arg", function()
     local obj = linq(get_test_strings())
-    assert_sequential_index_arg(obj, obj.any, function() return false end)
+    assert_sequential_helper(obj, obj.any, function() return false end)
   end)
 
   add_test("append an array, self has known __count", function()
@@ -163,7 +176,7 @@ do
 
   add_test("average using selector using index arg", function()
     local obj = linq(get_test_strings())
-    assert_sequential_index_arg(obj, obj.average, function() return 1 end)
+    assert_sequential_helper(obj, obj.average, function() return 1 end)
   end)
 
   add_test("contains with a value that exists", function()
@@ -207,7 +220,7 @@ do
 
   add_test("distinct with a selector using index arg", function()
     local obj = linq(get_test_strings())
-    assert_sequential_index_arg(obj, obj.distinct, function() return 1 end)
+    assert_sequential_helper(obj, obj.distinct, function() return 1 end)
   end)
 
   add_test("except makes __count unknown", function()
@@ -255,7 +268,12 @@ do
 
   add_test("except_by with selector using index arg", function()
     local obj = linq(get_test_strings())
-    assert_sequential_index_arg(obj, obj.except_by, {}, function(value) return value end)
+      :except_by({}, assert_sequential_factory(function(assert_sequential, value, i)
+        assert_sequential(value, i)
+        return value
+      end))
+    ;
+    iterate(obj)
   end)
 
   add_test("except_lut is nearly identical to except", function()
@@ -294,13 +312,13 @@ do
 
   add_test("first with a condition using index arg", function()
     local obj = linq(get_test_strings())
-    assert_sequential_index_arg(obj, obj.first, function() return false end)
+    assert_sequential_helper(obj, obj.first, function() return false end)
   end)
 
   add_test("for_each with an action using index arg", function()
     local values = get_test_strings()
     local obj = linq(values)
-    assert_sequential_index_arg(obj, obj.for_each, function(value, i)
+    assert_sequential_helper(obj, obj.for_each, function(value, i)
       assert.equals(values[i], value, "value #"..i)
     end)
   end)
@@ -317,7 +335,7 @@ do
 
   add_test("group_by with selector using index arg", function()
     local obj = linq(get_test_strings())
-    assert_sequential_index_arg(obj, obj.group_by, function() return 0 end)
+    assert_sequential_helper(obj, obj.group_by, function() return 0 end)
   end)
 
   add_test("group_join associates one inner (an array) to one outer", function()
