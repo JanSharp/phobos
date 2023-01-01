@@ -422,6 +422,48 @@ do
     })
   end)
 
+  add_test("group_join inner (an array) key selector using index arg", function()
+    local obj = linq{}
+      :group_join(
+        get_test_strings(),
+        function(value) return value end,
+        assert_sequential_factory(function(assert_sequential, value, i)
+          assert_sequential(value, i)
+          return value
+        end)
+      )
+    ;
+    iterate(obj)
+  end)
+
+  add_test("group_join inner (a linq object) key selector using index arg", function()
+    local obj = linq{}
+      :group_join(
+        linq(get_test_strings()),
+        function(value) return value end,
+        assert_sequential_factory(function(assert_sequential, value, i)
+          assert_sequential(value, i)
+          return value
+        end)
+      )
+    ;
+    iterate(obj)
+  end)
+
+  add_test("group_join outer key selector using index arg", function()
+    local obj = linq(get_test_strings())
+      :group_join(
+        {},
+        assert_sequential_factory(function(assert_sequential, value, i)
+          assert_sequential(value, i)
+          return value
+        end),
+        function(value) return value end
+      )
+    ;
+    iterate(obj)
+  end)
+
   add_test("iterate returns the correct iterator", function()
     local obj = linq{}
     local got_iter = obj:iterate()

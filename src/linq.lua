@@ -463,7 +463,7 @@ function linq_meta_index:group_join(inner_collection, outer_key_selector, inner_
       else
         for j = 1, #inner_collection do
           local value = inner_collection[j]
-          local key = inner_key_selector(value, i)
+          local key = inner_key_selector(value, j)
           local group = groups_lut[key]
           if group then
             group[#group+1] = value
