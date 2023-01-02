@@ -645,6 +645,16 @@ do
     assert.equals(3, got, "result of 'max'")
   end)
 
+  add_test("max with 4 values using custom comparator", function()
+    local function get_value(value)
+      return type(value) == "string" and #value or 100
+    end
+    local got = linq(get_test_strings()):max(function(left, right)
+      return get_value(left) > get_value(right)
+    end)
+    assert.equals(false, got, "result of 'max'")
+  end)
+
   add_test("max with empty collection", function()
     local obj = linq{}
     assert.errors("Attempt to evaluate max value on an empty collection%.", function()
@@ -656,7 +666,19 @@ do
     local got = linq(get_test_strings()):max_by(function(value)
       return type(value) == "string" and #value or 0
     end)
-    assert.equals(3, got, "result of 'max_by'")
+    assert.equals("foo", got, "result of 'max_by'")
+  end)
+
+  add_test("max_by with 4 values using custom comparator", function()
+    local got = linq(get_test_strings()):max_by(function(value)
+      return type(value) == "string" and #value or 0
+    end, function(left, right)
+      -- 0 beats everything!
+      if left == 0 then return true end
+      if right == 0 then return false end
+      return left > right
+    end)
+    assert.equals(false, got, "result of 'max_by'")
   end)
 
   add_test("max_by with empty collection", function()
