@@ -626,24 +626,45 @@ end
 
 ---@generic T
 ---@param self LinqObj|T[]
+---@param comparator fun(left: T, right: T): boolean
+---@return T
+local function max_or_min(self, comparator)
+  local result
+  for value in self.__iter do
+    if result == nil or comparator(value, result) then
+      result = value
+    end
+  end
+  return result
+end
+
+---@generic T
+---@generic TValue
+---@param self LinqObj|T[]
+---@param selector fun(value: T, index: integer): TValue
+---@param comparator fun(left: T, right: T): boolean
+---@return T
+local function max_or_min_by(self, selector, comparator)
+  local result_value
+  local result
+  local i = 0
+  for value in self.__iter do
+    i = i + 1
+    local num_value = selector(value, i)
+    if result_value == nil or comparator(num_value, result_value) then
+      result_value = num_value
+      result = value
+    end
+  end
+  return result
+end
+
+---@generic T
+---@param self LinqObj|T[]
 ---@param left_is_greater_func (fun(left: T, right: T): boolean)?
 ---@return T
 function linq_meta_index:max(left_is_greater_func)
-  local max
-  if left_is_greater_func then
-    for value in self.__iter do
-      if max == nil or left_is_greater_func(value, max) then
-        max = value
-      end
-    end
-  else
-    -- duplicated for better performance
-    for value in self.__iter do
-      if not max or value > max then
-        max = value
-      end
-    end
-  end
+  local max = max_or_min(self, left_is_greater_func or function(left, right) return left > right end)
   if max == nil then error("Attempt to evaluate max value on an empty collection.") end
   return max
 end
@@ -655,30 +676,10 @@ end
 ---@param left_is_greater_func (fun(left: TValue, right: TValue): boolean)?
 ---@return T
 function linq_meta_index:max_by(selector, left_is_greater_func)
-  local max_value
-  local result
-  local i = 0
-  if left_is_greater_func then
-    for value in self.__iter do
-      i = i + 1
-      local num_value = selector(value, i)
-      if max_value == nil or left_is_greater_func(num_value, max_value) then
-        max_value = num_value
-        result = value
-      end
-    end
-  else
-    -- duplicated for better performance
-    for value in self.__iter do
-      i = i + 1
-      local num_value = selector(value, i)
-      if not max_value or num_value > max_value then
-        max_value = num_value
-        result = value
-      end
-    end
-  end
-  if max_value == nil then error("Attempt to evaluate max value on an empty collection.") end
+  local result = max_or_min_by(self, selector, left_is_greater_func or function(left, right)
+    return left > right
+  end)
+  if result == nil then error("Attempt to evaluate max value on an empty collection.") end
   return result
 end
 
