@@ -42,7 +42,7 @@ local linq_meta = {__index = linq_meta_index}
 -- [ ] order_by
 -- [ ] order_desc
 -- [ ] order_desc_by
--- [ ] prepend
+-- [x] prepend
 -- [ ] ? remove_first
 -- [ ] ? remove_last
 -- [ ] ? remove_at
@@ -705,6 +705,45 @@ function linq_meta_index:min_by(selector, left_is_lesser_func)
   end)
   if result == nil then error("Attempt to evaluate min value on an empty collection.") end
   return result
+end
+
+---@generic T
+---@generic TResult
+---@param self LinqObj|T[]
+---@param collection LinqObj|T[]
+---@return LinqObj|T[]
+function linq_meta_index:prepend(collection)
+  local current_iter
+  ---@type fun()?
+  local next_iter = self.__iter
+  if collection.__is_linq then
+    current_iter = collection.__iter
+    if self.__count and collection.__count then
+      self.__count = self.__count + collection.__count
+    else
+      self.__count = nil
+    end
+  else
+    local i = 0
+    current_iter = function()
+      i = i + 1
+      return collection[i]
+    end
+    if self.__count then
+      self.__count = self.__count + #collection
+    end
+  end
+  self.__iter = function()
+    local value = current_iter()
+    if value == nil then
+      if next_iter == nil then return end
+      current_iter = next_iter
+      next_iter = nil
+      value = current_iter()
+    end
+    return value
+  end
+  return self
 end
 
 ---@generic T

@@ -750,6 +750,52 @@ do
     end))
   end)
 
+  add_test("prepend an array, self has known __count", function()
+    local obj = linq(get_test_strings()):prepend{"hello", "world"}
+    assert.equals(6, obj.__count, "internal __count")
+    assert_iteration(obj, {"hello", "world", table.unpack(get_test_strings())})
+  end)
+
+  add_test("prepend an array, self has unknown __count", function()
+    local obj = linq(get_test_strings())
+    obj.__count = nil
+    obj = obj:prepend{"hello", "world"}
+    assert.equals(nil, obj.__count, "internal __count")
+    assert_iteration(obj, {"hello", "world", table.unpack(get_test_strings())})
+  end)
+
+  add_test("prepend a linq object with known __count, self has known __count", function()
+    local obj = linq(get_test_strings()):prepend(linq{"hello", "world"})
+    assert.equals(6, obj.__count, "internal __count")
+    assert_iteration(obj, {"hello", "world", table.unpack(get_test_strings())})
+  end)
+
+  add_test("prepend a linq object with unknown __count, self has known __count", function()
+    local obj_to_prepend = linq{"hello", "world"}
+    obj_to_prepend.__count = nil
+    local obj = linq(get_test_strings()):prepend(obj_to_prepend)
+    assert.equals(nil, obj.__count, "internal __count")
+    assert_iteration(obj, {"hello", "world", table.unpack(get_test_strings())})
+  end)
+
+  add_test("prepend a linq object with known __count, self has unknown __count", function()
+    local obj = linq(get_test_strings())
+    obj.__count = nil
+    obj = obj:prepend{"hello", "world"}
+    assert.equals(nil, obj.__count, "internal __count")
+    assert_iteration(obj, {"hello", "world", table.unpack(get_test_strings())})
+  end)
+
+  add_test("prepend a linq object with unknown __count, self has unknown __count", function()
+    local obj_to_prepend = linq{"hello", "world"}
+    obj_to_prepend.__count = nil
+    local obj = linq(get_test_strings())
+    obj.__count = nil
+    obj = obj:prepend(obj_to_prepend)
+    assert.equals(nil, obj.__count, "internal __count")
+    assert_iteration(obj, {"hello", "world", table.unpack(get_test_strings())})
+  end)
+
   add_test("select does not affect __count", function()
     local obj = linq(get_test_strings())
     local expected_count = obj.__count
