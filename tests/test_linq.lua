@@ -33,13 +33,15 @@ local function iterate(linq_obj)
   while linq_obj.__iter() ~= nil do end
 end
 
----@param callback fun(assert_sequential: fun(value, i), ...): ...
+---@param callback fun(assert_sequential: fun(value, i, description?), ...): ...
 local function assert_sequential_factory(callback)
   local expected_i = 0
   return function(...)
-    return callback(function(value, i)
+    return callback(function(value, i, description)
       expected_i = expected_i + 1
-      assert.equals(expected_i, i, "sequential index for value '"..tostring(value).."'")
+      assert.equals(expected_i, i, "sequential index for value '"..tostring(value).."'"
+        ..(description and " for "..description or "")
+      )
     end, ...)
   end
 end
@@ -508,6 +510,134 @@ do
     local obj = linq{}
     local got_iter = obj:iterate()
     assert.equals(obj.__iter, got_iter, "iterator")
+  end)
+
+  add_test("join makes __count unknown", function()
+    local obj = linq{}
+      :join(
+        {},
+        function(value) return value end,
+        function(value) return value end,
+        function(outer, inner) return {outer = outer, inner = inner} end
+      )
+    ;
+    local got = obj.__count
+    assert.equals(nil, got, "internal __count")
+  end)
+
+  add_test("join with an array inner collection", function()
+    local obj = linq{"hello", "world"}
+      :join(
+        {"hi", "what", "hey"},
+        function(value) return value:sub(1, 1) end,
+        function(value) return value:sub(1, 1) end,
+        function(outer, inner) return {outer = outer, inner = inner} end
+      )
+    ;
+    assert_iteration(obj, {
+      {outer = "hello", inner = "hi"},
+      {outer = "hello", inner = "hey"},
+      {outer = "world", inner = "what"},
+    })
+  end)
+
+  add_test("join with a linq object inner collection", function()
+    local obj = linq{"hello", "world"}
+      :join(
+        linq{"hi", "what", "hey"},
+        function(value) return value:sub(1, 1) end,
+        function(value) return value:sub(1, 1) end,
+        function(outer, inner) return {outer = outer, inner = inner} end
+      )
+    ;
+    assert_iteration(obj, {
+      {outer = "hello", inner = "hi"},
+      {outer = "hello", inner = "hey"},
+      {outer = "world", inner = "what"},
+    })
+  end)
+
+  add_test("join an outer without any corresponding inner drops the outer", function()
+    local obj = linq{"foo"}
+      :join(
+        {},
+        function(value) return value end,
+        function(value) return value end,
+        function(outer, inner) return {outer = outer, inner = inner} end
+      )
+    ;
+    assert_iteration(obj, {})
+  end)
+
+  add_test("join an inner without any corresponding outer drops the inner", function()
+    local obj = linq{}
+      :join(
+        {"foo"},
+        function(value) return value end,
+        function(value) return value end,
+        function(outer, inner) return {outer = outer, inner = inner} end
+      )
+    ;
+    assert_iteration(obj, {})
+  end)
+
+  add_test("join 2 outer and 2 inner all with the same key creates 4 results", function()
+    local obj = linq{"bar", "baz"}
+      :join(
+        {"better", "best"},
+        function(value) return value:sub(1, 1) end,
+        function(value) return value:sub(1, 1) end,
+        function(outer, inner) return {outer = outer, inner = inner} end
+      )
+    ;
+    assert_iteration(obj, {
+      {outer = "bar", inner = "better"},
+      {outer = "bar", inner = "best"},
+      {outer = "baz", inner = "better"},
+      {outer = "baz", inner = "best"},
+    })
+  end)
+
+  add_test("join with an array inner collection with all selectors using index arg", function()
+    local obj = linq(get_test_strings())
+      :join(
+        get_test_strings(),
+        assert_sequential_factory(function(assert_sequential, value, i)
+          assert_sequential(value, i, "outer_key_selector")
+          return value
+        end),
+        assert_sequential_factory(function(assert_sequential, value, i)
+          assert_sequential(value, i, "inner_key_selector")
+          return value
+        end),
+        assert_sequential_factory(function(assert_sequential, outer, inner, i)
+          assert_sequential("outer: "..tostring(outer)..", inner: "..tostring(inner), i, "result_selector")
+          return {outer = outer, inner = inner}
+        end)
+      )
+    ;
+    iterate(obj)
+  end)
+
+  add_test("join with a linq object inner collection with all selectors using index arg", function()
+    local obj = linq(get_test_strings())
+      :join(
+        linq(get_test_strings()),
+        assert_sequential_factory(function(assert_sequential, value, i)
+          assert_sequential(value, i, "outer_key_selector")
+          return value
+        end),
+        assert_sequential_factory(function(assert_sequential, value, i)
+          assert_sequential(value, i, "inner_key_selector")
+          return value
+        end),
+        assert_sequential_factory(function(assert_sequential, outer, inner, i)
+          assert_sequential("outer: "..tostring(outer)..", inner: "..tostring(inner), i, "result_selector")
+          return {outer = outer, inner = inner}
+        end)
+      )
+    ;
+    iterate(obj)
   end)
 
   add_test("select does not affect __count", function()

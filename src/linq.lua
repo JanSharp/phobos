@@ -32,7 +32,7 @@ local linq_meta = {__index = linq_meta_index}
 -- [ ] ? insert_range
 -- [x] intersect
 -- [x] iterate
--- [ ] join
+-- [x] join
 -- [ ] last
 -- [ ] max
 -- [ ] max_by
@@ -553,6 +553,75 @@ end
 ---@return nil key
 function linq_meta_index:iterate()
   return self.__iter
+end
+
+---@generic TOuter
+---@generic TInner
+---@generic TKey
+---@generic TResult
+---@param self LinqObj|TOuter[]
+---@param inner_collection LinqObj|TInner[]
+---@param outer_key_selector fun(value: TOuter, index: integer): TKey
+---@param inner_key_selector fun(value: TInner, index: integer): TKey
+---@param result_selector fun(outer: TOuter, inner: TInner, index: integer): TResult
+---@return LinqObj|TResult[]
+function linq_meta_index:join(inner_collection, outer_key_selector, inner_key_selector, result_selector)
+  self.__count = nil
+  local iter = self.__iter
+  local outer_i = 0
+  local current_outer
+  local current_group
+  local current_group_index = 0
+  local groups_lut
+  local results_index = 0
+  self.__iter = function()
+    if not groups_lut then
+      groups_lut = {}
+      if inner_collection.__is_linq then
+        local i = 0
+        for value in inner_collection.__iter do
+          i = i + 1
+          local key = inner_key_selector(value, i)
+          local group = groups_lut[key]
+          if group then
+            group[#group+1] = value
+          else
+            groups_lut[key] = {value}
+          end
+        end
+      else
+        for j = 1, #inner_collection do
+          local value = inner_collection[j]
+          local key = inner_key_selector(value, j)
+          local group = groups_lut[key]
+          if group then
+            group[#group+1] = value
+          else
+            groups_lut[key] = {value}
+          end
+        end
+      end
+    end
+
+    local inner
+    while true do
+      while not current_group do
+        current_outer = iter()
+        if current_outer == nil then return end
+        outer_i = outer_i + 1
+        current_group = groups_lut[outer_key_selector(current_outer, outer_i)]
+      end
+      current_group_index = current_group_index + 1
+      inner = current_group[current_group_index]
+      if inner ~= nil then break end
+      current_group = nil
+      current_group_index = 0
+    end
+
+    results_index = results_index + 1
+    return result_selector(current_outer, inner, results_index)
+  end
+  return self
 end
 
 ---@generic T
