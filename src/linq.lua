@@ -34,8 +34,8 @@ local linq_meta = {__index = linq_meta_index}
 -- [x] iterate
 -- [x] join
 -- [ ] last
--- [ ] max
--- [ ] max_by
+-- [x] max
+-- [x] max_by
 -- [ ] min
 -- [ ] min_by
 -- [ ] order
@@ -622,6 +622,39 @@ function linq_meta_index:join(inner_collection, outer_key_selector, inner_key_se
     return result_selector(current_outer, inner, results_index)
   end
   return self
+end
+
+---@generic T : number
+---@param self LinqObj|T[]
+---@return T
+function linq_meta_index:max()
+  local max
+  for value in self.__iter do
+    if not max or value > max then
+      max = value
+    end
+  end
+  if not max then error("Attempt to evaluate max value on an empty collection.") end
+  return max
+end
+
+---@generic T
+---@generic TResult : number
+---@param self LinqObj|T[]
+---@param selector fun(value: T, index: integer): TResult
+---@return TResult
+function linq_meta_index:max_by(selector)
+  local max
+  local i = 0
+  for value in self.__iter do
+    i = i + 1
+    value = selector(value, i)
+    if not max or value > max then
+      max = value
+    end
+  end
+  if not max then error("Attempt to evaluate max value on an empty collection.") end
+  return max
 end
 
 ---@generic T

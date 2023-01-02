@@ -640,6 +640,39 @@ do
     iterate(obj)
   end)
 
+  add_test("max with 3 values", function()
+    local got = linq{2, 1, 3}:max()
+    assert.equals(3, got, "result of 'max'")
+  end)
+
+  add_test("max with empty collection", function()
+    local obj = linq{}
+    assert.errors("Attempt to evaluate max value on an empty collection%.", function()
+      obj:max()
+    end)
+  end)
+
+  add_test("max_by with 4 values", function()
+    local got = linq(get_test_strings()):max_by(function(value)
+      return type(value) == "string" and #value or 0
+    end)
+    assert.equals(3, got, "result of 'max_by'")
+  end)
+
+  add_test("max_by with empty collection", function()
+    local obj = linq{}
+    assert.errors("Attempt to evaluate max value on an empty collection%.", function()
+      obj:max_by(function(value) return value end)
+    end)
+  end)
+
+  add_test("max_by with selector using index arg", function()
+    linq{1, 4, 2, 3, 10}:max_by(assert_sequential_factory(function(assert_sequential, value, i)
+      assert_sequential(value, i)
+      return value
+    end))
+  end)
+
   add_test("select does not affect __count", function()
     local obj = linq(get_test_strings())
     local expected_count = obj.__count
