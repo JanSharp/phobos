@@ -36,8 +36,8 @@ local linq_meta = {__index = linq_meta_index}
 -- [ ] last
 -- [x] max
 -- [x] max_by
--- [ ] min
--- [ ] min_by
+-- [x] min
+-- [x] min_by
 -- [ ] order
 -- [ ] order_by
 -- [ ] order_desc
@@ -680,6 +680,30 @@ function linq_meta_index:max_by(selector, left_is_greater_func)
     return left > right
   end)
   if result == nil then error("Attempt to evaluate max value on an empty collection.") end
+  return result
+end
+
+---@generic T
+---@param self LinqObj|T[]
+---@param left_is_lesser_func (fun(left: T, right: T): boolean)?
+---@return T
+function linq_meta_index:min(left_is_lesser_func)
+  local min = max_or_min(self, left_is_lesser_func or function(left, right) return left < right end)
+  if min == nil then error("Attempt to evaluate min value on an empty collection.") end
+  return min
+end
+
+---@generic T
+---@generic TValue
+---@param self LinqObj|T[]
+---@param selector fun(value: T, index: integer): TValue
+---@param left_is_lesser_func (fun(left: TValue, right: TValue): boolean)?
+---@return T
+function linq_meta_index:min_by(selector, left_is_lesser_func)
+  local result = max_or_min_by(self, selector, left_is_lesser_func or function(left, right)
+    return left < right
+  end)
+  if result == nil then error("Attempt to evaluate min value on an empty collection.") end
   return result
 end
 

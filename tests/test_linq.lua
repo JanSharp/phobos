@@ -695,6 +695,61 @@ do
     end))
   end)
 
+  add_test("min with 3 values", function()
+    local got = linq{2, 1, 3}:min()
+    assert.equals(1, got, "result of 'min'")
+  end)
+
+  add_test("min with 4 values using custom comparator", function()
+    local function get_value(value)
+      return type(value) == "string" and #value or -100
+    end
+    local got = linq(get_test_strings()):min(function(left, right)
+      return get_value(left) < get_value(right)
+    end)
+    assert.equals(false, got, "result of 'min'")
+  end)
+
+  add_test("min with empty collection", function()
+    local obj = linq{}
+    assert.errors("Attempt to evaluate min value on an empty collection%.", function()
+      obj:min()
+    end)
+  end)
+
+  add_test("min_by with 4 values", function()
+    local got = linq(get_test_strings()):min_by(function(value)
+      return type(value) == "string" and #value or 100
+    end)
+    assert.equals("foo", got, "result of 'min_by'")
+  end)
+
+  add_test("min_by with 4 values using custom comparator", function()
+    local got = linq(get_test_strings()):min_by(function(value)
+      return type(value) == "string" and #value or 100
+    end, function(left, right)
+      -- 100 beats everything!
+      if left == 100 then return true end
+      if right == 100 then return false end
+      return left < right
+    end)
+    assert.equals(false, got, "result of 'min_by'")
+  end)
+
+  add_test("min_by with empty collection", function()
+    local obj = linq{}
+    assert.errors("Attempt to evaluate min value on an empty collection%.", function()
+      obj:min_by(function(value) return value end)
+    end)
+  end)
+
+  add_test("min_by with selector using index arg", function()
+    linq{1, 4, 2, 3, 10}:min_by(assert_sequential_factory(function(assert_sequential, value, i)
+      assert_sequential(value, i)
+      return value
+    end))
+  end)
+
   add_test("select does not affect __count", function()
     local obj = linq(get_test_strings())
     local expected_count = obj.__count
