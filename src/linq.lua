@@ -99,7 +99,6 @@ function linq_meta_index:any(condition)
 end
 
 ---@generic T
----@generic TResult
 ---@param self LinqObj|T[]
 ---@param collection LinqObj|T[]
 ---@return LinqObj|T[]
@@ -708,7 +707,6 @@ function linq_meta_index:min_by(selector, left_is_lesser_func)
 end
 
 ---@generic T
----@generic TResult
 ---@param self LinqObj|T[]
 ---@param collection LinqObj|T[]
 ---@return LinqObj|T[]
