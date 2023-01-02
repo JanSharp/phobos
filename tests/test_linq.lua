@@ -796,6 +796,16 @@ do
     assert_iteration(obj, {"hello", "world", table.unpack(get_test_strings())})
   end)
 
+  add_test("reverse with 0 values", function()
+    local obj = linq{}:reverse()
+    assert_iteration(obj, {})
+  end)
+
+  add_test("reverse with 4 values", function()
+    local obj = linq(get_test_strings()):reverse()
+    assert_iteration(obj, {"baz", false, "bar", "foo"})
+  end)
+
   add_test("select does not affect __count", function()
     local obj = linq(get_test_strings())
     local expected_count = obj.__count

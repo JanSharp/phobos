@@ -47,7 +47,7 @@ local linq_meta = {__index = linq_meta_index}
 -- [ ] ? remove_last
 -- [ ] ? remove_at
 -- [ ] ? remove_range
--- [ ] reverse
+-- [x] reverse
 -- [x] select
 -- [x] select_many
 -- [ ] sequence_equal
@@ -740,6 +740,27 @@ function linq_meta_index:prepend(collection)
       value = current_iter()
     end
     return value
+  end
+  return self
+end
+
+---@generic T
+---@param self LinqObj|T[]
+---@return LinqObj|T[]
+function linq_meta_index:reverse()
+  local values
+  local values_index = 1
+  local inner_iter = self.__iter
+  self.__iter = function()
+    if not values then
+      values = {}
+      for value in inner_iter do
+        values[values_index] = value
+        values_index = values_index + 1
+      end
+    end
+    values_index = values_index - 1
+    return values[values_index] -- if values_index is zero, it returns nil
   end
   return self
 end
