@@ -33,7 +33,7 @@ local linq_meta = {__index = linq_meta_index}
 -- [x] intersect
 -- [x] iterate
 -- [x] join
--- [ ] last
+-- [x] last
 -- [x] max
 -- [x] max_by
 -- [x] min
@@ -621,6 +621,36 @@ function linq_meta_index:join(inner_collection, outer_key_selector, inner_key_se
     return result_selector(current_outer, inner, results_index)
   end
   return self
+end
+
+---@generic T
+---@param self LinqObj|T[]
+---@param condition (fun(value: T, index: integer): boolean)?
+---@return T? value
+---@return integer? index
+function linq_meta_index:last(condition)
+  local values = {}
+  local values_count = 0
+  for value in self.__iter do
+    values_count = values_count + 1
+    values[values_count] = value
+  end
+
+  if values_count == 0 then
+    return
+  end
+
+  if condition then
+    for i = values_count, 1, -1 do
+      local value = values[i]
+      if condition(value, i) then
+        return value, i
+      end
+    end
+    return
+  end
+
+  return values[values_count], values_count
 end
 
 ---@generic T

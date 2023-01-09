@@ -34,25 +34,30 @@ local function iterate(linq_obj)
 end
 
 ---@param callback fun(assert_sequential: fun(value, i, description?), ...): ...
-local function assert_sequential_factory(callback)
-  local expected_i = 0
+---@param start_index integer?
+---@param step integer?
+local function assert_sequential_factory(callback, start_index, step)
+  local expected_i = start_index or 1
+  step = step or 1
   return function(...)
     return callback(function(value, i, description)
-      expected_i = expected_i + 1
       assert.equals(expected_i, i, "sequential index for value '"..tostring(value).."'"
         ..(description and " for "..description or "")
       )
+      expected_i = expected_i + step
     end, ...)
   end
 end
 
 ---uses `assert_sequential_factory`, so this is just a helper function for functions
 ---which only take a single parameter, the callback/selector function, which gets `value` and `i` as args
-local function assert_sequential_helper(linq_obj, func, callback)
+---@param start_index integer?
+---@param step integer?
+local function assert_sequential_helper(linq_obj, func, callback, start_index, step)
   local obj = func(linq_obj, assert_sequential_factory(function(assert_sequential, value, i)
     assert_sequential(value, i)
     return callback(value, i)
-  end))
+  end, start_index, step))
   if type(obj) == "table" and obj.__is_linq then
     while obj.__iter() ~= nil do end
   end
@@ -510,6 +515,35 @@ do
     local obj = linq{}
     local got_iter = obj:iterate()
     assert.equals(obj.__iter, got_iter, "iterator")
+  end)
+
+  add_test("last gets the last element", function()
+    local got_value, got_index = linq(get_test_strings()):last()
+    assert.equals("baz", got_value, "value result of 'last'")
+    assert.equals(4, got_index, "index result of 'last'")
+  end)
+
+  add_test("last on an empty collection", function()
+    local got_value, got_index = linq{}:last()
+    assert.equals(nil, got_value, "value result of 'last'")
+    assert.equals(nil, got_index, "index result of 'last'")
+  end)
+
+  add_test("last with condition matching a value that does exist", function()
+    local got_value, got_index = linq(get_test_strings()):last(function(value) return value == "foo" end)
+    assert.equals("foo", got_value, "value result of 'last'")
+    assert.equals(1, got_index, "index result of 'last'")
+  end)
+
+  add_test("last with condition matching a value that does not exist", function()
+    local got_value, got_index = linq(get_test_strings()):last(function() return false end)
+    assert.equals(nil, got_value, "value result of 'last'")
+    assert.equals(nil, got_index, "index result of 'last'")
+  end)
+
+  add_test("last with a condition using index arg", function()
+    local obj = linq(get_test_strings())
+    assert_sequential_helper(obj, obj.last, function() return false end, 4, -1)
   end)
 
   add_test("join makes __count unknown", function()
