@@ -2999,7 +2999,7 @@ do
   )
 
   add_test(
-    "invalid token generates syntax error",
+    "invalid token with multiple error_code_insts generates multiple syntax errors",
     [["\x]],
     function()
       local token_node = next_token_node()
