@@ -381,9 +381,13 @@ do
     }, got)
   end)
 
+  for _, data in ipairs{
+    {label = "function sequence positions (localfunc)", text = " ---foo\n---hello\nlocal function bar() end"},
+    {label = "function sequence positions (funcstat)", text = " ---foo\n---hello\nfunction bar() end"},
+  }
   do
-    local function test_function_sequence_positions(text)
-      local got = parse(text)
+    scope:add_test(data.label, function()
+      local got = parse(data.text)
       assert.contents_equals({
         new_func_seq{
           description = {"foo", "hello"},
@@ -391,14 +395,6 @@ do
           stop_position = new_pos(2, 8),
         },
       }, got)
-    end
-
-    scope:add_test("function sequence positions (localfunc)", function()
-      test_function_sequence_positions(" ---foo\n---hello\nlocal function bar() end")
-    end)
-
-    scope:add_test("function sequence positions (funcstat)", function()
-      test_function_sequence_positions(" ---foo\n---hello\nfunction bar() end")
     end)
   end
 
@@ -843,21 +839,17 @@ do
 
   -- literal types
 
+  for _, data in ipairs{
+    {label = "literal type using '", text = "'hello world'"},
+    {label = "literal type using \"", text = '"hello world"'},
+  }
   do
-    local function test_literal(text)
-      local got = parse_type(text)
+    scope:add_test(data.label, function()
+      local got = parse_type(data.text)
       assert.contents_equals(new_type{
         type_type = "literal",
-        value = text,
+        value = data.text,
       }, got)
-    end
-
-    scope:add_test("literal type using '", function()
-      test_literal("'hello world'")
-    end)
-
-    scope:add_test("literal type using \"", function()
-      test_literal('"hello world"')
     end)
   end
 
@@ -908,25 +900,18 @@ do
 
   -- reference types
 
+  for _, data in ipairs{
+    {label = "reference type 'any'", type_name = "any"},
+    {label = "reference type 'table'", type_name = "table"},
+    {label = "reference type 'fun'", type_name = "fun"},
+  }
   do
-    local function test_reference(type_name)
-      local got = parse_type(type_name)
+    scope:add_test(data.label, function()
+      local got = parse_type(data.type_name)
       assert.contents_equals(new_type{
         type_type = "reference",
-        type_name = type_name,
+        type_name = data.type_name,
       }, got)
-    end
-
-    scope:add_test("reference type 'any'", function()
-      test_reference("any")
-    end)
-
-    scope:add_test("reference type 'table'", function()
-      test_reference("table")
-    end)
-
-    scope:add_test("reference type 'fun'", function()
-      test_reference("fun")
     end)
   end
 

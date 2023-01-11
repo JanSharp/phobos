@@ -19,6 +19,11 @@ do
     pretty_print.custom_pretty_printers["string"] = prev_custom_string_pretty_printer
   end
 
+  -- data sets used in both serializer and deserializer tests
+  -- set in the serializer scope, reused for deserializer tests
+  local space_optimized_uint_test_dataset
+  local double_test_dataset
+
   do
     local serializer_scope = main_scope:new_scope("serializer")
 
@@ -115,12 +120,24 @@ do
     -- Tested the out of bounds function, at this point it's just a matter of
     -- "is every function calling the out of bounds function with the right args".
 
-    local function add_uint_16_32_64_tests(name, value, str, oob_max, oob_name)
-      local byte_count = #str
+    for _, data in ipairs{
+      {name = "uint16", value = 0xf1f2, str = "\xf2\xf1", oob_max = 2 ^ 16},
+      {name = "uint32", value = 0xf1f2f3f4, str = "\xf4\xf3\xf2\xf1", oob_max = 2 ^ 32},
+      {
+        name = "uint64",
+        value = 0x00000000f1f2f3f4,
+        str = "\xf4\xf3\xf2\xf1\x00\x00\x00\x00",
+        oob_max = 2 ^ 53,
+        oob_name = "uint64 (actually uint53)",
+      },
+    }
+    do
+      local name = data.name
+      local byte_count = #data.str
 
       add_test(name, function(serializer)
-        serializer["write_"..name](serializer, value)
-        return str
+        serializer["write_"..name](serializer, data.value)
+        return data.str
       end)
 
       -- highest value in small form
@@ -150,18 +167,12 @@ do
       end
 
       add_out_of_bounds_test(name.." out of bounds",
-        oob_name or name, 0, -1, oob_max,
+        data.oob_name or name, 0, -1, data.oob_max,
         function(serializer)
           serializer["write_"..name](serializer, -1)
         end
       )
     end
-
-    add_uint_16_32_64_tests("uint16", 0xf1f2, "\xf2\xf1", 2 ^ 16)
-
-    add_uint_16_32_64_tests("uint32", 0xf1f2f3f4, "\xf4\xf3\xf2\xf1", 2 ^ 32)
-
-    add_uint_16_32_64_tests("uint64", 0x00000000f1f2f3f4, "\xf4\xf3\xf2\xf1\x00\x00\x00\x00", 2 ^ 53, "uint64 (actually uint53)")
 
     add_test("biggest uint64", function(serializer)
       serializer:write_uint64(2 ^ 53 - 1)
@@ -180,19 +191,22 @@ do
       end
     )
 
-    local function add_optimized_uint_test(label, value, result)
-      add_test("space optimized uint "..label, function(serializer)
-        serializer:write_uint_space_optimized(value)
-        return result, #result
+    -- this dataset is also used for deserializer tests
+    space_optimized_uint_test_dataset = {
+      {label = "zero", value = 0, serialized = "\0"},
+      {label = "max 1 bit value", value = 1, serialized = "\1"},
+      {label = "max 7 bit value", value = 0x7f, serialized = "\x7f"},
+      {label = "max 8 bit value", value = 0xff, serialized = "\xff\x01"},
+      {label = "max 21 bit value", value = 0x1fffff, serialized = "\xff\xff\x7f"},
+      {label = "max 53 bit value", value = 2 ^ 53 - 1, serialized = "\xff\xff\xff\xff\xff\xff\xff\x0f"},
+    }
+
+    for _, data in ipairs(space_optimized_uint_test_dataset) do
+      add_test("space optimized uint "..data.label, function(serializer)
+        serializer:write_uint_space_optimized(data.value)
+        return data.serialized, #data.serialized
       end)
     end
-
-    add_optimized_uint_test("zero", 0, "\0")
-    add_optimized_uint_test("max 1 bit value", 1, "\1")
-    add_optimized_uint_test("max 7 bit value", 0x7f, "\x7f")
-    add_optimized_uint_test("max 8 bit value", 0xff, "\xff\x01")
-    add_optimized_uint_test("max 21 bit value", 0x1fffff, "\xff\xff\x7f")
-    add_optimized_uint_test("max 53 bit value", 2 ^ 53 - 1, "\xff\xff\xff\xff\xff\xff\xff\x0f")
 
     add_out_of_bounds_test("space optimized uint out of bounds",
       "space optimized uint (up to 53 bits)", 0, -1, 2 ^ 53,
@@ -201,32 +215,35 @@ do
       end
     )
 
-    local function add_double_test(label, value, result)
-      add_test("double "..label, function(serializer)
-        serializer:write_double(value)
-        return result, 8
+    -- this dataset is also used for deserializer tests
+    double_test_dataset = {
+      -- site used for learning, even if it's just 32 bit floats:
+      -- https://www.h-schmidt.net/FloatConverter/IEEE754.html
+      -- the comments use big endian, the actual strings are written in little endian
+      -- 0 is all 0s. Thank you IEEE754 <3
+      {label = "zero", value = 0, serialized = "\x00\x00\x00\x00\x00\x00\x00\x00"},
+      -- the next 3 use an exponent of 0, which is achieved by setting the entire exponent to 1s,
+      -- except the highest bit to 0. for example: 0011 1111  1111 0000 ... 0000 0000
+      {label = "one", value = 1, serialized = "\x00\x00\x00\x00\x00\x00\xf0\x3f"},
+      {label = "one and one quarter", value = 1.25, serialized = "\x00\x00\x00\x00\x00\x00\xf4\x3f"},
+      {label = "negative one", value = -1, serialized = "\x00\x00\x00\x00\x00\x00\xf0\xbf"},
+      -- the first 2 bytes: 0100 0011  0011 0000 - to make an exponent of 52
+      {label = "huge number", value = 2 ^ 52 + 1, serialized = "\x01\x00\x00\x00\x00\x00\x30\x43"},
+      -- the entire exponent set to 1s and at least 1 bit in the mantissa is a 1...
+      -- or for simplicity just set all of them to 1s, including the sign bit
+      {label = "nan", value = 0/0, serialized = "\xff\xff\xff\xff\xff\xff\xff\xff"},
+      -- the entire exponent filled with 1s
+      {label = "inf", value = 1/0, serialized = "\x00\x00\x00\x00\x00\x00\xf0\x7f"},
+      -- same here, but with sign bit
+      {label = "negative inf", value = -1/0, serialized = "\x00\x00\x00\x00\x00\x00\xf0\xff"},
+    }
+
+    for _, data in ipairs(double_test_dataset) do
+      add_test("double "..data.label, function(serializer)
+        serializer:write_double(data.value)
+        return data.serialized, 8
       end)
     end
-
-    -- site used for learning, even if it's just 32 bit floats:
-    -- https://www.h-schmidt.net/FloatConverter/IEEE754.html
-    -- the comments use big endian, the actual strings are written in little endian
-    -- 0 is all 0s. Thank you IEEE754 <3
-    add_double_test("zero", 0, "\x00\x00\x00\x00\x00\x00\x00\x00")
-    -- the next 3 use an exponent of 0, which is achieved by setting the entire exponent to 1s,
-    -- except the highest bit to 0. for example: 0011 1111  1111 0000 ... 0000 0000
-    add_double_test("one", 1, "\x00\x00\x00\x00\x00\x00\xf0\x3f")
-    add_double_test("one and one quarter", 1.25, "\x00\x00\x00\x00\x00\x00\xf4\x3f")
-    add_double_test("negative one", -1, "\x00\x00\x00\x00\x00\x00\xf0\xbf")
-    -- the first 2 bytes: 0100 0011  0011 0000 - to make an exponent of 52
-    add_double_test("huge number", 2 ^ 52 + 1, "\x01\x00\x00\x00\x00\x00\x30\x43")
-    -- the entire exponent set to 1s and at least 1 bit in the mantissa is a 1...
-    -- or for simplicity just set all of them to 1s, including the sign bit
-    add_double_test("nan", 0/0, "\xff\xff\xff\xff\xff\xff\xff\xff")
-    -- the entire exponent filled with 1s
-    add_double_test("inf", 1/0, "\x00\x00\x00\x00\x00\x00\xf0\x7f")
-    -- same here, but with sign bit
-    add_double_test("negative inf", -1/0, "\x00\x00\x00\x00\x00\x00\xf0\xff")
 
     add_test("nil string", function(serializer)
       serializer:write_string(nil)
@@ -413,7 +430,7 @@ do
       assert.equals(9, deserializer:get_index(), "for get_index()")
     end)
 
-    local function add_read_past_end_test(name)
+    for _, name in ipairs{"read_raw", "read_bytes",} do
       deserializer_scope:add_test(name.." past end while allow_reading_past_end is false", function()
         local deserializer = binary.new_deserializer("foo")
         assert.errors("Attempt to read 10 bytes starting at index 1 where binary_string length is 3.", function()
@@ -421,18 +438,22 @@ do
         end)
       end)
     end
-    add_read_past_end_test("read_raw")
-    add_read_past_end_test("read_bytes")
 
     add_test("uint8", "\xf1", function(deserializer)
       return {0xf1, deserializer:read_uint8()}
     end)
 
-    local function add_uint_16_32_64_tests(name, str, value)
-      local byte_count = #str
+    for _, data in ipairs{
+      {name = "uint16", str = "\xf2\xf1", value = 0xf1f2},
+      {name = "uint32", str = "\xf4\xf3\xf2\xf1", value = 0xf1f2f3f4},
+      {name = "uint64", str = "\xf6\xf5\xf4\xf3\xf2\xf1\x1f\x00", value = 0x001ff1f2f3f4f5f6},
+    }
+    do
+      local name = data.name
+      local byte_count = #data.str
 
-      add_test(name, str, function(deserializer)
-        return {value, deserializer["read_"..name](deserializer)}
+      add_test(name, data.str, function(deserializer)
+        return {data.value, deserializer["read_"..name](deserializer)}
       end)
 
       -- highest value in small form
@@ -458,12 +479,6 @@ do
       end
     end
 
-    add_uint_16_32_64_tests("uint16", "\xf2\xf1", 0xf1f2)
-
-    add_uint_16_32_64_tests("uint32", "\xf4\xf3\xf2\xf1", 0xf1f2f3f4)
-
-    add_uint_16_32_64_tests("uint64", "\xf6\xf5\xf4\xf3\xf2\xf1\x1f\x00", 0x001ff1f2f3f4f5f6)
-
     add_test("uint64 7th byte out of bounds", "\x00\x00\x00\x00\x00\x00\x20\x00", function(deserializer)
       assert.errors("Unsupported.*uint64 %(actually uint53%).*2%s*^%s*53.", function()
         deserializer:read_uint64()
@@ -480,46 +495,19 @@ do
       return {0x0000010000000000, deserializer:read_size_t()}
     end)
 
-    local function add_optimized_uint_test(label, str, result)
-      add_test("space optimized uint "..label, str, function(deserializer)
-        return {result, deserializer:read_uint_space_optimized()}
+    -- reusing the dataset that was also used in serializer tests
+    for _, data in ipairs(space_optimized_uint_test_dataset) do
+      add_test("space optimized uint "..data.label, data.serialized, function(deserializer)
+        return {data.value, deserializer:read_uint_space_optimized()}
       end)
     end
 
-    -- all of these numbers are the same ones used in for the serializer tests
-    add_optimized_uint_test("zero", "\0", 0)
-    add_optimized_uint_test("max 1 bit value", "\1", 1)
-    add_optimized_uint_test("max 7 bit value", "\x7f", 0x7f)
-    add_optimized_uint_test("max 8 bit value", "\xff\x01", 0xff)
-    add_optimized_uint_test("max 21 bit value", "\xff\xff\x7f", 0x1fffff)
-    add_optimized_uint_test("max 53 bit value", "\xff\xff\xff\xff\xff\xff\xff\x0f", 2 ^ 53 - 1)
-
-    local function add_double_test(label, str, result)
-      add_test("double "..label, str, function(deserializer)
-        return {result, deserializer:read_double()}
+    -- reusing the dataset that was also used in serializer tests
+    for _, data in ipairs(double_test_dataset) do
+      add_test("double "..data.label, data.serialized, function(deserializer)
+        return {data.value, deserializer:read_double()}
       end)
     end
-
-    -- all of these numbers are the same ones used in for the serializer tests
-    -- comments are also copied from above
-
-    -- the comments use big endian, the actual strings are written in little endian
-    -- 0 is all 0s. Thank you IEEE754 <3
-    add_double_test("zero", "\x00\x00\x00\x00\x00\x00\x00\x00", 0)
-    -- the next 3 use an exponent of 0, which is achieved by setting the entire exponent to 1s,
-    -- except the highest bit to 0. for example: 0011 1111  1111 0000 ... 0000 0000
-    add_double_test("one", "\x00\x00\x00\x00\x00\x00\xf0\x3f", 1)
-    add_double_test("one and one quarter", "\x00\x00\x00\x00\x00\x00\xf4\x3f", 1.25)
-    add_double_test("negative one", "\x00\x00\x00\x00\x00\x00\xf0\xbf", -1)
-    -- the first 2 bytes: 0100 0011  0011 0000 - to make an exponent of 52
-    add_double_test("huge number", "\x01\x00\x00\x00\x00\x00\x30\x43", 2 ^ 52 + 1)
-    -- the entire exponent set to 1s and at least 1 bit in the mantissa is a 1...
-    -- or for simplicity just set all of them to 1s, including the sign bit
-    add_double_test("nan", "\xff\xff\xff\xff\xff\xff\xff\xff", 0/0)
-    -- the entire exponent filled with 1s
-    add_double_test("inf", "\x00\x00\x00\x00\x00\x00\xf0\x7f", 1/0)
-    -- same here, but with sign bit
-    add_double_test("negative inf", "\x00\x00\x00\x00\x00\x00\xf0\xff", -1/0)
 
     add_test("nil string", "\0\0", function(deserializer)
       assert.equals(nil, deserializer:read_string())
