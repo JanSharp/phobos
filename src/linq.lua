@@ -50,7 +50,7 @@ local linq_meta = {__index = linq_meta_index}
 -- [x] reverse
 -- [x] select
 -- [x] select_many
--- [ ] sequence_equal
+-- [x] sequence_equal
 -- [ ] single
 -- [ ] skip
 -- [ ] skip_last
@@ -857,6 +857,40 @@ function linq_meta_index:select_many(selector)
     end
   end
   return self
+end
+
+---@generic T
+---@param self LinqObj|T[]
+---@param collection LinqObj|T[]
+---@return boolean
+function linq_meta_index:sequence_equal(collection)
+  if collection.__is_linq then
+    if self.__count and collection.__count and self.__count ~= collection.__count then
+      return false
+    end
+    while true do
+      local value = self.__iter()
+      if value ~= collection.__iter() then
+        return false
+      end
+      if value == nil then
+        return true
+      end
+    end
+  end
+
+  local count = #collection
+  if self.__count and self.__count ~= count then
+    return false
+  end
+  for i = 1, count do
+    if self.__iter() ~= collection[i] then
+      return false
+    end
+  end
+  -- if self.__count is not nil then we know both the count and all values are equal
+  -- if the count is unknown then we must call the iterator one more time to check if it has reached the end
+  return self.__count and true or self.__iter() == nil
 end
 
 -- the language server says that this function has a duplicate set on the `__iter` field... it's drunk

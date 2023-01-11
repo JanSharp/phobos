@@ -15,6 +15,31 @@ local function get_test_strings()
   }
 end
 
+local known_or_unknown_count_dataset = {
+  {label = "known __count", make_obj = function(values)
+    return linq(values)
+  end},
+  {label = "unknown __count", make_obj = function(values)
+    local obj = linq(values)
+    obj.__count = nil
+    return obj
+  end},
+}
+
+local array_or_obj_with_known_or_unknown_count_dataset = {
+  {label = "an array", make_obj = function(values)
+    return values
+  end},
+  {label = "a linq object with known __count", make_obj = function(values)
+    return linq(values)
+  end},
+  {label = "a linq object with unknown __count", make_obj = function(values)
+    local obj = linq(values)
+    obj.__count = nil
+    return obj
+  end},
+}
+
 ---@generic T
 ---@param linq_obj LinqObj|T[]
 ---@param expected_results T[]
@@ -913,6 +938,23 @@ do
     ;
     assert_iteration(obj, {"foo", "foo", "bar", false, false, "baz"})
   end)
+
+  for _, outer in ipairs(known_or_unknown_count_dataset) do
+    for _, inner in ipairs(array_or_obj_with_known_or_unknown_count_dataset) do
+      for _, data in ipairs{
+        {label = "matching values", values = get_test_strings(), result = true},
+        {label = "too few values", values = {"foo", "bar", false}, result = false},
+        {label = "too many values", values = {"foo", "bar", false, "baz", "hello"}, result = false},
+        {label = "mismatching values", values = {"foo", "nope", true, "yes"}, result = false},
+      }
+      do
+        add_test("sequence_equal with "..outer.label.." with "..inner.label.." with "..data.label, function()
+          local got = outer.make_obj(get_test_strings()):sequence_equal(inner.make_obj(data.values))
+          assert.equals(data.result, got, "result of 'sequence_equal'")
+        end)
+      end
+    end
+  end
 
   add_test("take 0 values", function()
     local obj = linq(get_test_strings()):take(0)
