@@ -70,21 +70,16 @@ do
     end)
   end)
 
+  for _, data in ipairs{
+    {label = "invalid path containing '?' to set_cwd", symbol = "?"},
+    {label = "invalid path containing '*' to set_cwd", symbol = "*"},
+    {label = "invalid path containing '\\' to set_cwd", symbol = "\\"},
+  }
   do
-    local function test_invalid_symbol(symbol)
-      assert.errors("Invalid entry name 'foo"..symbol.."bar', contains '"..symbol.."'.", function()
-        fs:set_cwd("foo"..symbol.."bar")
+    add_test(data.label, function()
+      assert.errors("Invalid entry name 'foo"..data.symbol.."bar', contains '"..data.symbol.."'.", function()
+        fs:set_cwd("foo"..data.symbol.."bar")
       end, nil, true)
-    end
-
-    add_test("invalid path containing '?' to set_cwd", function()
-      test_invalid_symbol("?")
-    end)
-    add_test("invalid path containing '*' to set_cwd", function()
-      test_invalid_symbol("*")
-    end)
-    add_test("invalid path containing '\\' to set_cwd", function()
-      test_invalid_symbol("\\")
     end)
   end
 
@@ -431,42 +426,30 @@ do
     assert.equals(4, count, "iteration count")
   end)
 
+  for _, data in ipairs{
+    {label = "attempt to remove dir being enumerated", func = function()
+      fs:remove("/foo")
+    end},
+    {label = "attempt to add_file to dir being enumerated", func = function()
+      fs:add_file("/foo/bar")
+    end},
+    {label = "attempt to add_dir to dir being enumerated", func = function()
+      fs:add_dir("/foo/bar")
+    end},
+    {label = "attempt to add_symlink to dir being enumerated", func = function()
+      fs:add_symlink("/foo", "/foo/bar")
+    end},
+  }
   do
-    local function test_modification_during_enumeration(func)
+    add_test(data.label, function()
       fs:add_dir("/foo")
       local enumerator = fs:enumerate("/foo")
       assert.errors(
         "Attempt to modify directory '/foo' while it is being enumerated by 1 enumerators%.",
-        function()
-          func()
-        end
+        data.func
       )
-      enumerator()
-      func() -- should not error
-    end
-
-    add_test("attempt to remove dir being enumerated", function()
-      test_modification_during_enumeration(function()
-        fs:remove("/foo")
-      end)
-    end)
-
-    add_test("attempt to add_file to dir dir being enumerated", function()
-      test_modification_during_enumeration(function()
-        fs:add_file("/foo/bar")
-      end)
-    end)
-
-    add_test("attempt to add_dir to dir dir being enumerated", function()
-      test_modification_during_enumeration(function()
-        fs:add_dir("/foo/bar")
-      end)
-    end)
-
-    add_test("attempt to add_symlink to dir dir being enumerated", function()
-      test_modification_during_enumeration(function()
-        fs:add_symlink("/foo", "/foo/bar")
-      end)
+      enumerator() -- since the dir should be empty, this should end iteration
+      data.func() -- should not error
     end)
   end
 end

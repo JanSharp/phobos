@@ -9,6 +9,7 @@ local ast = require("ast_util")
 local error_code_util = require("error_code_util")
 
 local stack = require("stack")
+local util = require("util")
 local tutil = require("testing_util")
 local append_stat = ast.append_stat
 local test_source = tutil.test_source
@@ -153,7 +154,10 @@ do
       local next_index = 1
       function next_token()
         next_index = next_index + 1
-        return tokens[next_index - 1]
+        return util.debug_assert(
+          tokens[next_index - 1],
+          "Attempt to use more tokens than there are when generating the expected AST for a test."
+        )
       end
       function peek_next_token()
         return tokens[next_index]
@@ -336,7 +340,7 @@ do
         end
       )
 
-      local function add_ifstat_without_else_but_with(last_keyword)
+      for _, last_keyword in ipairs{"else", "end"} do
         add_test(
           "ifstat without 'then' but with '"..last_keyword.."'",
           "if true "..last_keyword,
@@ -369,8 +373,6 @@ do
           end
         )
       end
-      add_ifstat_without_else_but_with("else")
-      add_ifstat_without_else_but_with("end")
 
       add_test(
         "ifstat without 'end'",
@@ -676,10 +678,14 @@ do
         end
       )
 
-      local function add_forlist_with_x_names_test(name_count, names_str)
+      for _, data in ipairs{
+        {label = "2 names", name_count = 2, names_str = "foo, bar"},
+        {label = "3 names", name_count = 3, names_str = "foo, bar, baz"},
+      }
+      do
         add_test(
-          "forlist with "..name_count.." names",
-          "for "..names_str.." in true do ; end",
+          "forlist with "..data.label,
+          "for "..data.names_str.." in true do ; end",
           function()
             local stat = nodes.new_forlist{
               parent_scope = fake_main,
@@ -688,7 +694,7 @@ do
               exp_list = {prevent_assert},
               exp_list_comma_tokens = empty_table_or_nil(),
             }
-            for i = 1, name_count do
+            for i = 1, data.name_count do
               if i ~= 1 then
                 stat.comma_tokens[i - 1] = next_token_node()
               end
@@ -706,8 +712,6 @@ do
           end
         )
       end
-      add_forlist_with_x_names_test(2, "foo, bar")
-      add_forlist_with_x_names_test(3, "foo, bar, baz")
 
       add_test(
         "forlist with invalid name list",
@@ -1046,16 +1050,21 @@ do
     end -- end funcstat
 
     do -- localstat
-      local function add_localstat_with_x_names_test(name_count, names_str)
+      for _, data in ipairs{
+        {label = "1 name", name_count = 1, names_str = "foo"},
+        {label = "2 names", name_count = 2, names_str = "foo, bar"},
+        {label = "3 names", name_count = 3, names_str = "foo, bar, baz"},
+      }
+      do
         add_test(
-          "localstat with "..name_count.." name"..(name_count == 1 and "" or "s"),
-          "local "..names_str..";",
+          "localstat with "..data.label,
+          "local "..data.names_str..";",
           function()
             local local_token = next_token_node()
             local lhs = {}
             -- both `{}` and `nil` are valid (if name_count == 1)
-            local lhs_comma_tokens = name_count == 1 and empty_table_or_nil() or {}
-            for i = 1, name_count do
+            local lhs_comma_tokens = data.name_count == 1 and empty_table_or_nil() or {}
+            for i = 1, data.name_count do
               if i ~= 1 then
                 lhs_comma_tokens[i - 1] = next_token_node()
               end
@@ -1079,9 +1088,6 @@ do
           end
         )
       end
-      add_localstat_with_x_names_test(1, "foo")
-      add_localstat_with_x_names_test(2, "foo, bar")
-      add_localstat_with_x_names_test(3, "foo, bar, baz")
 
       add_test(
         "localstat with rhs",
@@ -2346,29 +2352,30 @@ do
         )
       end
 
-      local function add_func_proto_test_with_x_params(params_str, num_params)
+      for _, data in ipairs{
+        {label = "0 params", params_str = "", num_params = 0},
+        {label = "1 param", params_str = "foo", num_params = 1},
+        {label = "2 params", params_str = "foo, bar", num_params = 2},
+        {label = "3 params", params_str = "foo, bar, baz", num_params = 3},
+      }
+      do
         add_func_proto_test(
-          "func_proto with "..num_params.." param"..(num_params == 1 and "" or "s"),
-          params_str,
+          "func_proto with "..data.label,
+          data.params_str,
           function(scope)
-            if num_params > 1 then
+            if data.num_params > 1 then
               scope.param_comma_tokens = {}
             end
-            for i = 1, num_params do
+            for i = 1, data.num_params do
               scope.locals[i], scope.params[i] = ast.create_local(next_token(), scope)
               scope.locals[i].whole_block = true
-              if i ~= num_params then
+              if i ~= data.num_params then
                 scope.param_comma_tokens[i] = next_token_node()
               end
             end
           end
         )
       end
-
-      add_func_proto_test_with_x_params("", 0)
-      add_func_proto_test_with_x_params("foo", 1)
-      add_func_proto_test_with_x_params("foo, bar", 2)
-      add_func_proto_test_with_x_params("foo, bar, baz", 3)
 
       add_func_proto_test(
         "func_proto with vararg param",
@@ -2890,10 +2897,31 @@ do
         end
       )
 
-      local function add_call_with_self_without_ident_but_continuing_test(str, func)
+      for _, data in ipairs{
+        {str = "()", func = function(expr)
+          expr.open_paren_token = next_token_node()
+          expr.close_paren_token = next_token_node()
+        end},
+        {str = [[""]], func = function(expr)
+          expr.args = {nodes.new_string{
+            position = next_token(),
+            value = "",
+            src_value = "",
+            src_quote = [["]],
+          }}
+        end},
+        {str = "{}", func = function(expr)
+          expr.args = {nodes.new_constructor{
+            open_token = next_token_node(),
+            comma_tokens = empty_table_or_nil(),
+            close_token = next_token_node(),
+          }}
+        end},
+      }
+      do
         add_test_with_repeatstat(
-          "call with self without ident but continuing with '"..str.."'",
-          "(true):"..str,
+          "call with self without ident but continuing with '"..data.str.."'",
+          "(true):"..data.str,
           function()
             local expr = nodes.new_call{
               ex = next_wrapped_true_node(),
@@ -2905,30 +2933,11 @@ do
               ),
               args_comma_tokens = empty_table_or_nil(),
             }
-            func(expr)
+            data.func(expr)
             return expr
           end
         )
       end
-      add_call_with_self_without_ident_but_continuing_test("()", function(expr)
-        expr.open_paren_token = next_token_node()
-        expr.close_paren_token = next_token_node()
-      end)
-      add_call_with_self_without_ident_but_continuing_test([[""]], function(expr)
-        expr.args = {nodes.new_string{
-          position = next_token(),
-          value = "",
-          src_value = "",
-          src_quote = [["]],
-        }}
-      end)
-      add_call_with_self_without_ident_but_continuing_test("{}", function(expr)
-        expr.args = {nodes.new_constructor{
-          open_token = next_token_node(),
-          comma_tokens = empty_table_or_nil(),
-          close_token = next_token_node(),
-        }}
-      end)
 
       add_test_with_repeatstat(
         "call with '(' but without ')'",
@@ -2953,19 +2962,25 @@ do
     end -- end call
 
     do -- expression list
-      local function add_expression_list_test(str, count)
+      for _, data in ipairs{
+        {label = "1 expression", str = "true", count = 1},
+        {label = "2 expressions", str = "true, true", count = 2},
+        {label = "3 expressions", str = "true, true, true", count = 3},
+        {label = "4 expressions", str = "true, true, true, true", count = 4},
+      }
+      do
         add_test_with_repeatstat(
-          "expression list with "..count.." expression"..(count == 1 and "" or "s").." (tested with call)",
-          "(true)("..str..")",
+          "expression list with "..data.label.." (tested with call)",
+          "(true)("..data.str..")",
           function()
             local expr = nodes.new_call{
               ex = next_wrapped_true_node(),
               open_paren_token = next_token_node(),
-              args_comma_tokens = count <= 1 and empty_table_or_nil() or {},
+              args_comma_tokens = data.count <= 1 and empty_table_or_nil() or {},
             }
-            for i = 1, count do
+            for i = 1, data.count do
               expr.args[i] = next_true_node()
-              if i ~= count then
+              if i ~= data.count then
                 expr.args_comma_tokens[i] = next_token_node()
               end
             end
@@ -2974,10 +2989,6 @@ do
           end
         )
       end
-      add_expression_list_test("true", 1)
-      add_expression_list_test("true, true", 2)
-      add_expression_list_test("true, true, true", 3)
-      add_expression_list_test("true, true, true, true", 4)
     end -- end expression list
 
     pop_scope()

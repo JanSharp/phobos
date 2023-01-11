@@ -666,14 +666,18 @@ do
     assert_action_counts(1, 0, 0)
   end)
 
+  for _, data in ipairs{
+    {label = "include 2 files with the exact same inject scripts", do_copy = false},
+    {label = "include 2 files with the same inject scripts but different table instances", do_copy = true},
+  }
   do
-    local function test_inject_script_instances(do_copy)
+    add_test(data.label, function()
       create_source_file("foo")
       create_source_file("bar")
       create_inject_script_file("inject")
       local inject_scripts = {"scripts/inject".._pho}
       include_file("foo", {inject_scripts = inject_scripts})
-      include_file("bar", {inject_scripts = do_copy and util.shallow_copy(inject_scripts) or inject_scripts})
+      include_file("bar", {inject_scripts = data.do_copy and util.shallow_copy(inject_scripts) or inject_scripts})
       run()
       assert_lua_output_file("foo")
       assert_lua_output_file("bar")
@@ -681,7 +685,7 @@ do
       local bar_options = get_compile_options("bar")
       assert_inject_scripts(foo_options, inject_scripts)
       assert_inject_scripts(bar_options, inject_scripts)
-      if do_copy then
+      if data.do_copy then
         assert.not_equals(foo_options.inject_scripts, bar_options.inject_scripts,
           "inject_scripts table instance"
         )
@@ -692,14 +696,6 @@ do
         assert.equals(foo_options.inject_scripts, bar_options.inject_scripts, "inject_scripts table instance")
       end
       assert_action_counts(2, 0, 0)
-    end
-
-    add_test("include 2 files with the exact same inject scripts", function()
-      test_inject_script_instances(false)
-    end)
-
-    add_test("include 2 files with the same inject scripts but different table instances", function()
-      test_inject_script_instances(true)
     end)
   end
 
