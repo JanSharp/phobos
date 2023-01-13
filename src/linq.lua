@@ -54,7 +54,7 @@ local linq_meta = {__index = linq_meta_index}
 -- [x] single
 -- [x] skip
 -- [ ] skip_last
--- [ ] skip_while
+-- [x] skip_while
 -- [ ] sort
 -- [ ] sum
 -- [x] take
@@ -959,6 +959,31 @@ function linq_meta_index:skip(count)
   return self
 end
 ---@diagnostic enable: duplicate-set-field
+
+---@generic T
+---@param self LinqObj|T[]
+---@param condition fun(value: T, i: integer): boolean
+---@return LinqObj|T[]
+function linq_meta_index:skip_while(condition)
+  self.__count = nil
+  local inner_iter = self.__iter
+  local done_skipping = false
+  self.__iter = function()
+    if not done_skipping then
+      done_skipping = true
+      local i = 1
+      local value
+      while true do
+        value = inner_iter()
+        if value == nil then return end
+        if not condition(value, i) then return value end
+        i = i + 1
+      end
+    end
+    return inner_iter()
+  end
+  return self
+end
 
 -- the language server says that this function has a duplicate set on the `__iter` field... it's drunk
 

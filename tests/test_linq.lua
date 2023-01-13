@@ -1028,6 +1028,32 @@ do
     end
   end
 
+  for _, data in ipairs{
+    {skip_count = 0, expected = get_test_strings(), condition = function(value) return false end},
+    {skip_count = 1, expected = {"bar", false, "baz"}, condition = function(value) return value == "foo" end},
+    {skip_count = 3, expected = {"baz"}, condition = function(value) return value ~= "baz" end},
+    {skip_count = 4, expected = {}, condition = function(value) return true end},
+  }
+  do
+    add_test("skip_while "..data.skip_count.." out of 4 values", function()
+      local obj = linq(get_test_strings()):skip_while(data.condition)
+      assert_iteration(obj, data.expected)
+    end)
+  end
+
+  add_test("skip_while with condition using index arg", function()
+    linq(get_test_strings()):skip_while(assert_sequential_factory(function(assert_sequential, value, i)
+      assert_sequential(value, i)
+      return true
+    end))
+  end)
+
+  add_test("skip_while makes __count unknown", function()
+    local obj = linq(get_test_strings()):skip_while(function() return true end)
+    local got = obj.__count
+    assert.equals(nil, got, "internal __count")
+  end)
+
   add_test("take 0 values", function()
     local obj = linq(get_test_strings()):take(0)
     assert.equals(0, obj.__count, "internal __count after take")
