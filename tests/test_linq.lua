@@ -367,7 +367,13 @@ do
 
   add_test("group_by with selector using index arg", function()
     local obj = linq(get_test_strings())
-    assert_sequential_helper(obj, obj.group_by, function() return 0 end)
+    assert_sequential_helper(obj, obj.group_by, function() return "key" end)
+  end)
+
+  add_test("group_by makes __count unknown", function()
+    local obj = linq(get_test_strings()):group_by(function() return "key" end)
+    local got = obj.__count
+    assert.equals(nil, got, "internal __count")
   end)
 
   add_test("group_join associates one inner (an array) to one outer", function()
