@@ -28,7 +28,7 @@ local linq_meta = {__index = linq_meta_index}
 -- [x] group_by
 -- [x] group_by_select
 -- [x] group_join
--- [ ] index_of (wrapper around `first`)
+-- [x] index_of (more performant than using `first`)
 -- [ ] index_of_last (wrapper around `last`)
 -- [ ] insert
 -- [ ] insert_range
@@ -505,6 +505,20 @@ function linq_meta_index:group_join(inner_collection, outer_key_selector, inner_
     return result
   end
   return self
+end
+
+---@generic T
+---@param self LinqObj|T[]
+---@param value T
+---@return integer?
+function linq_meta_index:index_of(value)
+  local i = 1
+  for v in self.__iter do
+    if v == value then
+      return i
+    end
+    i = i + 1
+  end
 end
 
 ---@diagnostic disable: duplicate-set-field

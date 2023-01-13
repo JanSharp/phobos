@@ -542,6 +542,21 @@ do
     iterate(obj)
   end)
 
+  add_test("index_of where the value exists in the sequence", function()
+    local got = linq(get_test_strings()):index_of(false)
+    assert.equals(3, got, "result of 'index_of'")
+  end)
+
+  add_test("index_of finds the first value in the sequence", function()
+    local got = linq{"foo", "bar", "baz", "bar", "bat"}:index_of("bar")
+    assert.equals(2, got, "result of 'index_of'")
+  end)
+
+  add_test("index_of where the value does not exist in the sequence", function()
+    local got = linq(get_test_strings()):index_of("hello")
+    assert.equals(nil, got, "result of 'index_of'")
+  end)
+
   add_test("intersect with strings and 'false'", function()
     local obj = linq(get_test_strings()):intersect(get_test_strings())
     assert_iteration(obj, get_test_strings())
