@@ -51,7 +51,7 @@ local linq_meta = {__index = linq_meta_index}
 -- [x] select
 -- [x] select_many
 -- [x] sequence_equal
--- [ ] single
+-- [x] single
 -- [ ] skip
 -- [ ] skip_last
 -- [ ] skip_while
@@ -891,6 +891,44 @@ function linq_meta_index:sequence_equal(collection)
   -- if self.__count is not nil then we know both the count and all values are equal
   -- if the count is unknown then we must call the iterator one more time to check if it has reached the end
   return self.__count and true or self.__iter() == nil
+end
+
+---@generic T
+---@param self LinqObj|T[]
+---@param condition (fun(value: T, i: integer):boolean)?
+---@return T
+function linq_meta_index:single(condition)
+  if condition then
+    local result
+    local i = 0
+    for value in self.__iter do
+      i = i + 1
+      if condition(value, i) then
+        if result == nil then
+          result = value
+        else
+          error("Expected a single value in the sequence to match the condition, got multiple.")
+        end
+      end
+    end
+    if result == nil then
+      error("Expected a single value in the sequence to match the condition, got zero.")
+    end
+    return result
+  end
+
+  if self.__count and self.__count ~= 1 then
+    error("Expected a single value in the sequence, got "..self.__count..".")
+  end
+  local result = self.__iter()
+  if not self.__count then
+    if result == nil then
+      error("Expected a single value in the sequence, got zero.")
+    elseif self.__iter() ~= nil then
+      error("Expected a single value in the sequence, got multiple.")
+    end
+  end
+  return result
 end
 
 -- the language server says that this function has a duplicate set on the `__iter` field... it's drunk

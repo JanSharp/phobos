@@ -16,10 +16,10 @@ local function get_test_strings()
 end
 
 local known_or_unknown_count_dataset = {
-  {label = "known __count", make_obj = function(values)
+  {label = "known __count", knows_count = true, make_obj = function(values)
     return linq(values)
   end},
-  {label = "unknown __count", make_obj = function(values)
+  {label = "unknown __count", knows_count = false, make_obj = function(values)
     local obj = linq(values)
     obj.__count = nil
     return obj
@@ -955,6 +955,60 @@ do
       end
     end
   end
+
+  for _, outer in ipairs(known_or_unknown_count_dataset) do
+    local err_msg_prefix = "Expected a single value in the sequence, got "
+    for _, data in ipairs{
+      {label = "0 values", values = {}, error = outer.knows_count and "0" or "zero"},
+      {label = "1 value", values = {"foo"}, error = nil},
+      {label = "2 values", values = {"foo", "bar"}, error = outer.knows_count and "2" or "multiple"},
+      {label = "3 values", values = {"foo", "bar", "baz"}, error = outer.knows_count and "3" or "multiple"},
+    }
+    do
+      add_test("single with "..outer.label.." without condition with "..data.label, function()
+        local obj = outer.make_obj(data.values)
+        if data.error then
+          assert.errors(err_msg_prefix..data.error.."%.", function()
+            obj:single()
+          end)
+        else
+          local got = obj:single()
+          assert.equals(data.values[1], got, "result of 'single'")
+        end
+      end)
+    end
+  end
+
+  for _, data in ipairs{
+    {label = "0 matching values", error = "zero", condition = function() return false end},
+    {label = "1 matching value", expected = "foo", condition = function(value) return value == "foo" end},
+    {label = "2 matching values", error = "multiple", condition = function(value)
+      return type(value) == "string" and value:sub(1, 1) == "b"
+    end},
+  }
+  do
+    add_test("single with condition with "..data.label, function()
+      local obj = linq(get_test_strings())
+      if data.error then
+        assert.errors(
+          "Expected a single value in the sequence to match the condition, got "..data.error.."%.",
+          function()
+            obj:single(data.condition)
+          end
+        )
+      else
+        local got = obj:single(data.condition)
+        assert.equals(data.expected, got, "result of 'single'")
+      end
+    end)
+  end
+
+  add_test("single with condition using index arg", function()
+    linq(get_test_strings()):single(assert_sequential_factory(function(assert_sequential, value, i)
+      assert_sequential(value, i)
+      return value == "baz"
+    end))
+  end)
 
   add_test("take 0 values", function()
     local obj = linq(get_test_strings()):take(0)
