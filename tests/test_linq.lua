@@ -1010,6 +1010,24 @@ do
     end))
   end)
 
+  for _, outer in ipairs(known_or_unknown_count_dataset) do
+    for _, data in ipairs{
+      {skip_count = 0, expected_count = 4, expected = get_test_strings()},
+      {skip_count = 1, expected_count = 3, expected = {"bar", false, "baz"}},
+      {skip_count = 3, expected_count = 1, expected = {"baz"}},
+      {skip_count = 4, expected_count = 0, expected = {}},
+      {skip_count = 5, expected_count = 0, expected = {}},
+    }
+    do
+      add_test("skip "..data.skip_count.." out of 4 values, self has "..outer.label, function()
+        local obj = outer.make_obj(get_test_strings()):skip(data.skip_count)
+        local expected_count = outer.knows_count and data.expected_count or nil
+        assert.equals(expected_count, obj.__count, "internal __count after skip")
+        assert_iteration(obj, data.expected)
+      end)
+    end
+  end
+
   add_test("take 0 values", function()
     local obj = linq(get_test_strings()):take(0)
     assert.equals(0, obj.__count, "internal __count after take")
