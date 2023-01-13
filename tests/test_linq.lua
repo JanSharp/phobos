@@ -557,6 +557,21 @@ do
     assert.equals(nil, got, "result of 'index_of'")
   end)
 
+  add_test("index_of_last where the value exists in the sequence", function()
+    local got = linq(get_test_strings()):index_of_last(false)
+    assert.equals(3, got, "result of 'index_of'")
+  end)
+
+  add_test("index_of_last finds the last value in the sequence", function()
+    local got = linq{"foo", "bar", "baz", "bar", "bat"}:index_of_last("bar")
+    assert.equals(4, got, "result of 'index_of'")
+  end)
+
+  add_test("index_of_last where the value does not exist in the sequence", function()
+    local got = linq(get_test_strings()):index_of_last("hello")
+    assert.equals(nil, got, "result of 'index_of'")
+  end)
+
   add_test("intersect with strings and 'false'", function()
     local obj = linq(get_test_strings()):intersect(get_test_strings())
     assert_iteration(obj, get_test_strings())

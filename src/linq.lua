@@ -29,7 +29,7 @@ local linq_meta = {__index = linq_meta_index}
 -- [x] group_by_select
 -- [x] group_join
 -- [x] index_of (more performant than using `first`)
--- [ ] index_of_last (wrapper around `last`)
+-- [x] index_of_last (more performant than using `last`)
 -- [ ] insert
 -- [ ] insert_range
 -- [x] intersect
@@ -518,6 +518,29 @@ function linq_meta_index:index_of(value)
       return i
     end
     i = i + 1
+  end
+end
+
+---@generic T
+---@param self LinqObj|T[]
+---@param value T
+---@return integer?
+function linq_meta_index:index_of_last(value)
+  local values = {}
+  local values_count = 0
+  for v in self.__iter do
+    values_count = values_count + 1
+    values[values_count] = v
+  end
+
+  if values_count == 0 then
+    return
+  end
+
+  for i = values_count, 1, -1 do
+    if values[i] == value then
+      return i
+    end
   end
 end
 
