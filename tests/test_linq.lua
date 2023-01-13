@@ -1004,10 +1004,8 @@ do
   end
 
   add_test("single with condition using index arg", function()
-    linq(get_test_strings()):single(assert_sequential_factory(function(assert_sequential, value, i)
-      assert_sequential(value, i)
-      return value == "baz"
-    end))
+    local obj = linq(get_test_strings())
+    assert_sequential_helper(obj, obj.single, function(value) return value == "baz" end)
   end)
 
   for _, outer in ipairs(known_or_unknown_count_dataset) do
@@ -1042,10 +1040,8 @@ do
   end
 
   add_test("skip_while with condition using index arg", function()
-    linq(get_test_strings()):skip_while(assert_sequential_factory(function(assert_sequential, value, i)
-      assert_sequential(value, i)
-      return true
-    end))
+    local obj = linq(get_test_strings())
+    assert_sequential_helper(obj, obj.skip_while, function() return true end)
   end)
 
   add_test("skip_while makes __count unknown", function()
