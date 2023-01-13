@@ -26,6 +26,7 @@ local linq_meta = {__index = linq_meta_index}
 -- [x] first
 -- [x] for_each
 -- [x] group_by
+-- [x] group_by_select
 -- [x] group_join
 -- [ ] index_of (wrapper around `first`)
 -- [ ] index_of_last (wrapper around `last`)
@@ -373,15 +374,7 @@ function linq_meta_index:for_each(action)
   end
 end
 
--- TODO: probably add an element selector to group_by, effectively performing a
--- select before putting the elements inside of the grouping results
-
----@generic T
----@generic TKey
----@param self LinqObj|T[]
----@param key_selector fun(value: T, index: integer): TKey
----@return LinqObj|(({key: TKey, count: integer}|T[])[])
-function linq_meta_index:group_by(key_selector)
+local function group_by(self, key_selector, element_selector)
   self.__count = nil
   local inner_iter = self.__iter
   local i = 0
@@ -395,6 +388,9 @@ function linq_meta_index:group_by(key_selector)
       for value in inner_iter do
         i = i + 1
         local key = key_selector(value, i)
+        if element_selector then
+          value = element_selector(value, i)
+        end
         local group = groups_lut[key]
         if group then
           local count = group.count + 1
@@ -417,6 +413,27 @@ function linq_meta_index:group_by(key_selector)
     return groups[groups_index]
   end
   return self
+end
+
+---@generic T
+---@generic TKey
+---@param self LinqObj|T[]
+---@param key_selector fun(value: T, index: integer): TKey
+---@return LinqObj|(({key: TKey, count: integer}|T[])[])
+function linq_meta_index:group_by(key_selector)
+  return group_by(self, key_selector)
+end
+
+---Needs to be a separate function because of different generic types and with it different return types
+---@generic T
+---@generic TKey
+---@generic TElement
+---@param self LinqObj|T[]
+---@param key_selector fun(value: T, index: integer): TKey
+---@param element_selector fun(value: T, index: integer): TElement
+---@return LinqObj|(({key: TKey, count: integer}|TElement[])[])
+function linq_meta_index:group_by_select(key_selector, element_selector)
+  return group_by(self, key_selector, element_selector)
 end
 
 ---@generic TOuter

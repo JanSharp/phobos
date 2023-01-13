@@ -376,6 +376,46 @@ do
     assert.equals(nil, got, "internal __count")
   end)
 
+  add_test("group_by_select creating 2 groups", function()
+    local obj = linq(get_test_strings())
+      :group_by_select(
+        function(value) return type(value) end,
+        function(value) return type(value) == "string" and value:sub(1, 2) or value end
+      )
+    ;
+    assert_iteration(obj, {
+      {key = "string", count = 3, "fo", "ba", "ba"},
+      {key = "boolean", count = 1, false},
+    })
+  end)
+
+  add_test("group_by_select with both selectors using index arg", function()
+    local obj = linq(get_test_strings())
+      :group_by_select(
+        assert_sequential_factory(function(assert_sequential, value, i)
+          assert_sequential(value, i)
+          return "key"
+        end),
+        assert_sequential_factory(function(assert_sequential, value, i)
+          assert_sequential(value, i)
+          return value
+        end)
+      )
+    ;
+    iterate(obj)
+  end)
+
+  add_test("group_by_select makes __count unknown", function()
+    local obj = linq(get_test_strings())
+      :group_by_select(
+        function() return "key" end,
+        function() return "value" end
+      )
+    ;
+    local got = obj.__count
+    assert.equals(nil, got, "internal __count")
+  end)
+
   add_test("group_join associates one inner (an array) to one outer", function()
     local obj = linq{{key = 10, value = "hello"}}
       :group_join(
