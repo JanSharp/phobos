@@ -12,12 +12,13 @@ local linq_meta = {__index = linq_meta_index}
 -- [x] any
 -- [x] append
 -- [x] average
--- [ ] ? chunk
+-- [ ] chunk
 -- [x] contains
 -- [x] count
--- [ ] ? default_if_empty
+-- [ ] default_if_empty
 -- [x] distinct
--- [ ] ? element_at
+-- [ ] element_at
+-- [ ] element_at_from_end
 -- [x] except
 -- [x] except_by
 -- [x] except_lut
@@ -26,13 +27,15 @@ local linq_meta = {__index = linq_meta_index}
 -- [x] for_each
 -- [x] group_by
 -- [x] group_join
--- [ ] ? index_of
--- [ ] ? index_of_last
--- [ ] ? insert
--- [ ] ? insert_range
+-- [ ] index_of (wrapper around `first`)
+-- [ ] index_of_last (wrapper around `last`)
+-- [ ] insert
+-- [ ] insert_range
 -- [x] intersect
 -- [x] iterate
 -- [x] join
+-- [ ] keep_at (more performant than using `where`)
+-- [ ] keep_range (more performant than using `where`)
 -- [x] last
 -- [x] max
 -- [x] max_by
@@ -43,10 +46,8 @@ local linq_meta = {__index = linq_meta_index}
 -- [ ] order_desc
 -- [ ] order_desc_by
 -- [x] prepend
--- [ ] ? remove_first
--- [ ] ? remove_last
--- [ ] ? remove_at
--- [ ] ? remove_range
+-- [ ] remove_at (more performant than using `where`)
+-- [ ] remove_range (more performant than using `where`)
 -- [x] reverse
 -- [x] select
 -- [x] select_many
@@ -54,11 +55,13 @@ local linq_meta = {__index = linq_meta_index}
 -- [x] single
 -- [x] skip
 -- [ ] skip_last
+-- [ ] skip_last_while
 -- [x] skip_while
 -- [ ] sort
 -- [ ] sum
 -- [x] take
 -- [ ] take_last
+-- [ ] take_last_while
 -- [x] take_while
 -- [ ] to_array
 -- [ ] to_dict
