@@ -277,6 +277,41 @@ do
     assert.equals(#get_test_strings(), obj:count(), "count")
   end)
 
+  add_test("default_if_empty leaves __count untouched when it is > 0", function()
+    local obj = linq{"foo", "bar"}:default_if_empty("baz")
+    local got = obj.__count
+    assert.equals(2, got, "internal __count after 'default_if_empty'")
+  end)
+
+  add_test("default_if_empty sets __count to 1 when it was 0", function()
+    local obj = linq{}:default_if_empty("baz")
+    local got = obj.__count
+    assert.equals(1, got, "internal __count after 'default_if_empty'")
+  end)
+
+  add_test("default_if_empty doesn't break with unknown __count", function()
+    local obj = linq{}
+    obj.__count = nil
+    obj:default_if_empty("baz")
+    local got = obj.__count
+    assert.equals(nil, got, "internal __count after 'default_if_empty'")
+  end)
+
+  add_test("default_if_empty leaves sequence untouched when it is not empty", function()
+    local obj = linq{false, "foo", "bar"}:default_if_empty("baz")
+    assert_iteration(obj, {false, "foo", "bar"})
+  end)
+
+  add_test("default_if_empty uses default value when sequence is empty", function()
+    local obj = linq{}:default_if_empty(false)
+    assert_iteration(obj, {false})
+  end)
+
+  add_test("default_if_empty uses default value getter function when sequence is empty", function()
+    local obj = linq{}:default_if_empty(function() return false end)
+    assert_iteration(obj, {false})
+  end)
+
   add_test("distinct makes __count unknown", function()
     local obj = linq{}:distinct()
     local got = obj.__count

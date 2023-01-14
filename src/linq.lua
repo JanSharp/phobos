@@ -15,7 +15,7 @@ local linq_meta = {__index = linq_meta_index}
 -- [x] chunk
 -- [x] contains
 -- [x] count
--- [ ] default_if_empty
+-- [x] default_if_empty
 -- [x] distinct
 -- [ ] element_at
 -- [ ] element_at_from_end
@@ -222,6 +222,34 @@ function linq_meta_index:count()
     count = count + 1
   end
   return count
+end
+
+---@diagnostic disable: duplicate-set-field
+---@generic T
+---@param self LinqObj|T[]
+---@param default any|fun():any @ if this is a function it will be used to lazily get the default value
+---@return LinqObj|T[]
+function linq_meta_index:default_if_empty(default)
+  if self.__count == 0 then
+    self.__count = 1
+  end
+  local inner_iter = self.__iter
+  local is_first = true
+  self.__iter = function()
+    if is_first then
+      is_first = false
+      local value = inner_iter()
+      if value ~= nil then
+        return value
+      end
+      if type(default) == "function" then
+        return default()
+      end
+      return default
+    end
+    return inner_iter()
+  end
+  return self
 end
 
 ---@diagnostic disable: duplicate-set-field
