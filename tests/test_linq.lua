@@ -374,6 +374,18 @@ do
     assert_iteration(obj, get_test_strings())
   end)
 
+  for _, outer in ipairs(known_or_unknown_count_dataset) do
+    add_test("element_at with index past the sequence, self has "..outer.label, function()
+      local got = outer.make_obj(get_test_strings()):element_at(5)
+      assert.equals(nil, got, "result of 'element_at'")
+    end)
+
+    add_test("element_at with index within the sequence, self has "..outer.label, function()
+      local got = outer.make_obj(get_test_strings()):element_at(4)
+      assert.equals("baz", got, "result of 'element_at'")
+    end)
+  end
+
   add_test("except makes __count unknown", function()
     local obj = linq{}:except{}
     local got = obj.__count

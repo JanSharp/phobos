@@ -31,7 +31,7 @@ end
 -- [x] count
 -- [x] default_if_empty
 -- [x] distinct
--- [ ] element_at
+-- [x] element_at
 -- [ ] element_at_from_end
 -- [x] ensure_knows_count
 -- [x] except
@@ -332,6 +332,22 @@ function linq_meta_index:distinct(selector)
   return self
 end
 ---@diagnostic enable: duplicate-set-field
+
+---@generic T
+---@param self LinqObj|T[]
+---@param index integer
+---@return T?
+function linq_meta_index:element_at(index)
+  -- knows count and index is past the sequence, return nil
+  if self.__count and self.__count < index then return end
+  local i = 1
+  for value in self.__iter do
+    if i == index then
+      return value
+    end
+    i = i + 1
+  end
+end
 
 ---Ensures this object knows how many elements are contained in this sequence.
 ---If it is unknown it iterates the sequence, collecting all elements in an array, saves the resulting count
