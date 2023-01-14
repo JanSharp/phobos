@@ -386,6 +386,18 @@ do
     end)
   end
 
+  for _, outer in ipairs(known_or_unknown_count_dataset) do
+    add_test("element_at_from_end with index past the sequence, self has "..outer.label, function()
+      local got = outer.make_obj(get_test_strings()):element_at_from_end(5)
+      assert.equals(nil, got, "result of 'element_at_from_end'")
+    end)
+
+    add_test("element_at_from_end with index within the sequence, self has "..outer.label, function()
+      local got = outer.make_obj{"foo", "bar", "baz", "bat", "hello", "world", "hi"}:element_at_from_end(3)
+      assert.equals("hello", got, "result of 'element_at_from_end'")
+    end)
+  end
+
   add_test("except makes __count unknown", function()
     local obj = linq{}:except{}
     local got = obj.__count

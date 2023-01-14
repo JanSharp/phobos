@@ -32,7 +32,7 @@ end
 -- [x] default_if_empty
 -- [x] distinct
 -- [x] element_at
--- [ ] element_at_from_end
+-- [x] element_at_from_end
 -- [x] ensure_knows_count
 -- [x] except
 -- [x] except_by
@@ -347,6 +347,26 @@ function linq_meta_index:element_at(index)
     end
     i = i + 1
   end
+end
+
+---@generic T
+---@param self LinqObj|T[]
+---@param index integer
+---@return T?
+function linq_meta_index:element_at_from_end(index)
+  if self.__count then
+    local index_from_front = self.__count - index + 1
+    if index_from_front < 0 then return end
+    return self:element_at(index_from_front)
+  end
+
+  local queue = {}
+  local count = 0
+  for value in self.__iter do
+    queue[(count % index) + 1] = value
+    count = count + 1
+  end
+  return queue[(count % index) + 1]
 end
 
 ---Ensures this object knows how many elements are contained in this sequence.
