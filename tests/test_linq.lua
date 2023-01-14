@@ -266,6 +266,25 @@ do
     assert.equals(false, got, "result of 'contains'")
   end)
 
+  add_test("copy creates a new object which can be iterated separately", function()
+    -- this test actually also tests that the wrapped iterator only gets iterated once, because if it didn't
+    -- do that then the second assert_iteration would fail containing zero elements
+    local obj = linq(get_test_strings())
+    local copied = obj:copy()
+    assert_iteration(obj, get_test_strings())
+    assert_iteration(copied, get_test_strings())
+  end)
+
+  add_test("copy makes __count known", function()
+    local obj = linq(get_test_strings())
+    obj.__count = nil
+    local copied = obj:copy()
+    local got = obj.__count
+    local got_copy = copied.__count
+    assert.equals(4, got, "internal __count for original object after 'copy'")
+    assert.equals(4, got_copy, "internal __count for copied object")
+  end)
+
   add_test("count on object with known __count", function()
     local obj = linq(get_test_strings())
     assert.equals(#get_test_strings(), obj:count(), "count")

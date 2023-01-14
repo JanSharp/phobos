@@ -8,12 +8,26 @@
 local linq_meta_index = {}
 local linq_meta = {__index = linq_meta_index}
 
+---@generic T
+---@param array T[]
+---@param count integer
+---@return fun():T
+local function make_array_iter(array, count)
+  local i = 0
+  return function()
+    if i >= count then return end
+    i = i + 1
+    return array[i]
+  end
+end
+
 -- [x] all
 -- [x] any
 -- [x] append
 -- [x] average
 -- [x] chunk
 -- [x] contains
+-- [x] copy
 -- [x] count
 -- [x] default_if_empty
 -- [x] distinct
@@ -208,6 +222,31 @@ function linq_meta_index:contains(value)
     end
   end
   return false
+end
+
+---@generic T
+---@param self LinqObj|T[]
+---@return LinqObj|T[]
+function linq_meta_index:copy()
+  -- NOTE: instead of always creating a new table the linq object could remember if it currently already has
+  -- a backing array. That would only be the case if it was just created from an array and no other functions
+  -- were called on it so far, or copy was just called. This requires almost every other function to
+  -- unset whichever field to store the array.
+  local values = {}
+  local count = 0
+  for value in self.__iter do
+    count = count + 1
+    values[count] = value
+  end
+  self.__count = count
+  -- replace self's iter and create a second one for the copy. that way both can iterate the values separate
+  -- from each other, and the wrapped object only got iterated once, since the values are stored in an array
+  self.__iter = make_array_iter(values, count)
+  return setmetatable({
+    __is_linq = true,
+    __iter = make_array_iter(values, count),
+    __count = count,
+  }, linq_meta)
 end
 
 ---@generic T
@@ -1167,14 +1206,9 @@ end
 local function linq(tab_or_iter, state, starting_value)
   if type(tab_or_iter) == "table" then
     local count = #tab_or_iter
-    local i = 0
     return setmetatable({
       __is_linq = true,
-      __iter = function()
-        if i >= count then return end
-        i = i + 1
-        return tab_or_iter[i]
-      end,
+      __iter = make_array_iter(tab_or_iter, count),
       __count = count,
     }, linq_meta)
   else
