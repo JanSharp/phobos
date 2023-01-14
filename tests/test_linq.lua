@@ -354,6 +354,26 @@ do
     assert_sequential_helper(obj, obj.distinct, function() return 1 end)
   end)
 
+  add_test("ensure_knows_count does nothing if __count is known", function()
+    local obj = linq(get_test_strings())
+    local expected_iter = obj.__iter
+    obj:ensure_knows_count()
+    local got_iter = obj.__iter
+    local got_count = obj.__count
+    assert.equals(4, got_count, "internal __count after 'ensure_knows_count'")
+    assert.equals(expected_iter, got_iter, "internal __iter before and after 'ensure_knows_count'")
+    assert_iteration(obj, get_test_strings())
+  end)
+
+  add_test("ensure_knows_count evaluates count if __count is unknown", function()
+    local obj = linq(get_test_strings())
+    obj.__count = nil
+    obj:ensure_knows_count()
+    local got_count = obj.__count
+    assert.equals(4, got_count, "internal __count after 'ensure_knows_count'")
+    assert_iteration(obj, get_test_strings())
+  end)
+
   add_test("except makes __count unknown", function()
     local obj = linq{}:except{}
     local got = obj.__count

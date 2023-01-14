@@ -33,6 +33,7 @@ end
 -- [x] distinct
 -- [ ] element_at
 -- [ ] element_at_from_end
+-- [x] ensure_knows_count
 -- [x] except
 -- [x] except_by
 -- [x] except_lut
@@ -232,6 +233,7 @@ function linq_meta_index:copy()
   -- a backing array. That would only be the case if it was just created from an array and no other functions
   -- were called on it so far, or copy was just called. This requires almost every other function to
   -- unset whichever field to store the array.
+  -- ensure_knows_count also creates an array, so if this is implemented don't forget about that.
   local values = {}
   local count = 0
   for value in self.__iter do
@@ -330,6 +332,27 @@ function linq_meta_index:distinct(selector)
   return self
 end
 ---@diagnostic enable: duplicate-set-field
+
+---Ensures this object knows how many elements are contained in this sequence.
+---If it is unknown it iterates the sequence, collecting all elements in an array, saves the resulting count
+---and replaces the iterator to iterate the array instead of the previous iterator.
+---@generic T
+---@param self LinqObj|T[]
+---@return LinqObj|T[]
+function linq_meta_index:ensure_knows_count()
+  if self.__count then
+    return self
+  end
+  local values = {}
+  local count = 0
+  for value in self.__iter do
+    count = count + 1
+    values[count] = value
+  end
+  self.__count = count
+  self.__iter = make_array_iter(values, count)
+  return self
+end
 
 ---@generic T
 ---@param collection LinqObj|T[]
