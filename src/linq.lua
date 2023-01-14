@@ -12,7 +12,7 @@ local linq_meta = {__index = linq_meta_index}
 -- [x] any
 -- [x] append
 -- [x] average
--- [ ] chunk
+-- [x] chunk
 -- [x] contains
 -- [x] count
 -- [ ] default_if_empty
@@ -172,6 +172,29 @@ function linq_meta_index:average(selector)
     total = total + value
   end
   return total / i
+end
+
+---@generic T
+---@param self LinqObj|T[]
+---@param size integer
+---@return LinqObj|T[][]
+function linq_meta_index:chunk(size)
+  if self.__count then
+    self.__count = math.ceil(self.__count / size)
+  end
+  local inner_iter = self.__iter
+  self.__iter = function()
+    local value = inner_iter()
+    if value == nil then return end
+    local chunk = {value}
+    for i = 2, size do
+      value = inner_iter()
+      if value == nil then break end
+      chunk[i] = value
+    end
+    return chunk
+  end
+  return self
 end
 
 ---@generic T

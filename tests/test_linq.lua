@@ -211,6 +211,51 @@ do
     assert_sequential_helper(obj, obj.average, function() return 1 end)
   end)
 
+  for _, data in ipairs{
+    {value_count = 0, chunk_size = 1, expected = 0},
+    {value_count = 2, chunk_size = 1, expected = 2},
+    {value_count = 2, chunk_size = 2, expected = 1},
+    {value_count = 2, chunk_size = 3, expected = 1},
+  }
+  do
+    add_test(
+      "chunk calculates the correct __count: "
+        ..data.value_count.." values, chunk size "..data.chunk_size.." = "..data.expected,
+      function()
+        local values = {}
+        for i = 1, data.value_count do
+          values[i] = i
+        end
+        local obj = linq(values):chunk(data.chunk_size)
+        local got = obj.__count
+        assert.equals(data.expected, got, "internal __count after 'chunk'")
+      end
+    )
+  end
+
+  add_test("chunk where self has unknown __count", function()
+    local obj = linq{}
+    obj.__count = nil
+    obj:chunk(1)
+    local got = obj.__count
+    assert.equals(nil, got, "internal __count after 'chunk'")
+  end)
+
+  add_test("chunk where value count is zero", function()
+    local obj = linq{}:chunk(1)
+    assert_iteration(obj, {})
+  end)
+
+  add_test("chunk where value count is a multiple of the chunk size", function()
+    local obj = linq(get_test_strings()):chunk(2)
+    assert_iteration(obj, {{"foo", "bar"}, {false, "baz"}})
+  end)
+
+  add_test("chunk where value count is not a multiple of the chunk size", function()
+    local obj = linq(get_test_strings()):chunk(3)
+    assert_iteration(obj, {{"foo", "bar", false}, {"baz"}})
+  end)
+
   add_test("contains with a value that exists", function()
     local got = linq(get_test_strings()):contains("bar")
     assert.equals(true, got, "result of 'contains'")
