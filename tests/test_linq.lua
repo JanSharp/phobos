@@ -715,6 +715,24 @@ do
     assert.equals(nil, got, "result of 'index_of'")
   end)
 
+  for _, outer in ipairs(known_or_unknown_count_dataset) do
+    for _, data in ipairs{
+      {label = "at the front", index = 1, expected = {"inserted", "foo", "bar", false, "baz"}},
+      {label = "in the middle", index = 3, expected = {"foo", "bar", "inserted", false, "baz"}},
+      {label = "right at the end", index = 5, expected = {"foo", "bar", false, "baz", "inserted"}},
+      {label = "past the end", index = 6, expected = {"foo", "bar", false, "baz", "inserted"}},
+      {label = "further past the end", index = 7, expected = {"foo", "bar", false, "baz", "inserted"}},
+    }
+    do
+      add_test("insert "..data.label.." (count = 4, index = "..data.index.."), self with "..outer.label, function()
+        local obj = outer.make_obj(get_test_strings()):insert(data.index, "inserted")
+        local got_count = obj.__count
+        assert.equals(outer.knows_count and 5 or nil, got_count, "internal __count after 'insert'")
+        assert_iteration(obj, data.expected)
+      end)
+    end
+  end
+
   add_test("intersect with strings and 'false'", function()
     local obj = linq(get_test_strings()):intersect(get_test_strings())
     assert_iteration(obj, get_test_strings())

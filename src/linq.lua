@@ -45,7 +45,7 @@ end
 -- [x] group_join
 -- [x] index_of (more performant than using `first`)
 -- [x] index_of_last (more performant than using `last`)
--- [ ] insert
+-- [x] insert
 -- [ ] insert_range
 -- [x] intersect
 -- [x] iterate
@@ -265,7 +265,6 @@ function linq_meta_index:count()
   return count
 end
 
----@diagnostic disable: duplicate-set-field
 ---@generic T
 ---@param self LinqObj|T[]
 ---@param default any|fun():any @ if this is a function it will be used to lazily get the default value
@@ -692,6 +691,59 @@ function linq_meta_index:index_of_last(value)
     end
   end
 end
+
+---@diagnostic disable: duplicate-set-field
+---@generic T
+---@param self LinqObj|T[]
+---@param index integer @ if this index is past the sequence, the value will be appended
+---@param value T
+---@return LinqObj|T[]
+function linq_meta_index:insert(index, value)
+  if self.__count then
+    self.__count = self.__count + 1
+  end
+  local inner_iter = self.__iter
+
+  if self.__count then
+    if index > self.__count then
+      -- if it ends up appending, set the index to right past the known count of the inner sequence
+      -- (note that __count has already been incremented above)
+      index = self.__count
+    end
+    local i = 0
+    self.__iter = function()
+      i = i + 1
+      if i == index then
+        return value
+      end
+      return inner_iter()
+    end
+    return self
+  end
+
+  local i = 0
+  local did_insert = false
+  self.__iter = function()
+    i = i + 1
+    if i == index then
+      if did_insert then
+        -- this happens when the index is 6 for a sequence of 4 values. the bottom logic inserts the value,
+        -- the next iteration i gets incremented to 6, so we enter this block, but it should not insert again
+        return
+      end
+      did_insert = true
+      return value
+    end
+    local current_value = inner_iter()
+    if current_value == nil and not did_insert then
+      did_insert = true
+      return value
+    end
+    return current_value
+  end
+  return self
+end
+---@diagnostic enable: duplicate-set-field
 
 ---@diagnostic disable: duplicate-set-field
 ---@generic T
