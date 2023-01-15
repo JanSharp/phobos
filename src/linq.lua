@@ -46,7 +46,7 @@ end
 -- [x] index_of (more performant than using `first`)
 -- [x] index_of_last (more performant than using `last`)
 -- [x] insert
--- [ ] insert_range
+-- [x] insert_range
 -- [x] intersect
 -- [x] iterate
 -- [x] join
@@ -742,6 +742,94 @@ function linq_meta_index:insert(index, value)
     return current_value
   end
   return self
+end
+---@diagnostic enable: duplicate-set-field
+
+---@diagnostic disable: duplicate-set-field
+---@generic T
+---@param self LinqObj|T[]
+---@param index integer
+---@param collection LinqObj|T[]
+---@return LinqObj|T[]
+function linq_meta_index:insert_range(index, collection)
+  if collection.__is_linq then -- collection is a linq obj
+    if collection.__count == 0 then
+      -- optimization
+      return self
+    end
+    self.__count = (self.__count and collection.__count) and (self.__count + collection.__count) or nil
+
+    local inner_iter = self.__iter
+    local i = 1
+    local iterating_collection = false
+    local collection_iter = collection.__iter
+    local did_insert = false
+    self.__iter = function()
+      ::entry::
+      if iterating_collection then
+        local value = collection_iter()
+        if value ~= nil then
+          return value
+        end
+        iterating_collection = false
+        did_insert = true
+      end
+
+      if i == index and not did_insert then
+        -- switch to collection
+        iterating_collection = true
+        goto entry
+      end
+      i = i + 1
+      local value = inner_iter()
+      if value == nil and not did_insert then
+        -- switch to collection
+        iterating_collection = true
+        goto entry
+      end
+      return value
+    end
+
+    return self
+  else -- collection is an array
+    local collection_count = #collection
+    if collection_count == 0 then
+      -- this early return is not only better but also required. The iterator below would break without it
+      return self
+    end
+    if self.__count then
+      self.__count = self.__count + collection_count
+    end
+
+    local inner_iter = self.__iter
+    local i = 1
+    local collection_index
+    local did_insert = false
+    self.__iter = function()
+      if collection_index then
+        collection_index = collection_index + 1
+        if collection_index <= collection_count then
+          return collection[collection_index]
+        end
+        collection_index = nil
+        did_insert = true
+      end
+
+      if i == index and not did_insert then
+        collection_index = 1
+        return collection[1]
+      end
+      i = i + 1
+      local value = inner_iter()
+      if value == nil and not did_insert then
+        collection_index = 1
+        return collection[1]
+      end
+      return value
+    end
+
+    return self
+  end
 end
 ---@diagnostic enable: duplicate-set-field
 

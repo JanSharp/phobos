@@ -27,13 +27,13 @@ local known_or_unknown_count_dataset = {
 }
 
 local array_or_obj_with_known_or_unknown_count_dataset = {
-  {label = "an array", make_obj = function(values)
+  {label = "an array", knows_count = true, make_obj = function(values)
     return values
   end},
-  {label = "a linq object with known __count", make_obj = function(values)
+  {label = "a linq object with known __count", knows_count = true, make_obj = function(values)
     return linq(values)
   end},
-  {label = "a linq object with unknown __count", make_obj = function(values)
+  {label = "a linq object with unknown __count", knows_count = false, make_obj = function(values)
     local obj = linq(values)
     obj.__count = nil
     return obj
@@ -730,6 +730,57 @@ do
         assert.equals(outer.knows_count and 5 or nil, got_count, "internal __count after 'insert'")
         assert_iteration(obj, data.expected)
       end)
+    end
+  end
+
+  -- insert_range
+  for _, outer in ipairs(known_or_unknown_count_dataset) do
+    for _, inner in ipairs(array_or_obj_with_known_or_unknown_count_dataset) do
+      for _, data in ipairs{
+        {
+          label = "at the front",
+          index = 1,
+          values = {"hello", false, "world"},
+          expected = {"hello", false, "world", "foo", "bar", false, "baz"},
+        },
+        {
+          label = "in the middle",
+          index = 3,
+          values = {"hello", false, "world"},
+          expected = {"foo", "bar", "hello", false, "world", false, "baz"},
+        },
+        {
+          label = "right at the end",
+          index = 5,
+          values = {"hello", false, "world"},
+          expected = {"foo", "bar", false, "baz", "hello", false, "world"},
+        },
+        {
+          label = "past the end",
+          index = 6,
+          values = {"hello", false, "world"},
+          expected = {"foo", "bar", false, "baz", "hello", false, "world"},
+        },
+        {
+          label = "further past the end",
+          index = 7,
+          values = {"hello", false, "world"},
+          expected = {"foo", "bar", false, "baz", "hello", false, "world"},
+        },
+      }
+      do
+        add_test("insert_range "..inner.label.." "..data.label
+            .." (outer count = 4, index = "..data.index.."), self with "..outer.label,
+          function()
+            local inner_collection = inner.make_obj(data.values)
+            local obj = outer.make_obj(get_test_strings()):insert_range(data.index, inner_collection)
+            local expected_count = (outer.knows_count and inner.knows_count) and (4 + #data.values) or nil
+            local got_count = obj.__count
+            assert.equals(expected_count, got_count, "internal __count after 'insert_range'")
+            assert_iteration(obj, data.expected)
+          end
+        )
+      end
     end
   end
 
