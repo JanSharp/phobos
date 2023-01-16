@@ -51,7 +51,7 @@ end
 -- [x] iterate
 -- [x] join
 -- [x] keep_at (more performant than using `where`)
--- [ ] keep_range (more performant than using `where`)
+-- [x] keep_range (more performant than using `where`)
 -- [x] last
 -- [x] max
 -- [x] max_by
@@ -997,6 +997,39 @@ function linq_meta_index:keep_at(index)
     end
     -- index is out of range of the sequence
     done = true
+  end
+  return self
+end
+---@diagnostic enable: duplicate-set-field
+
+---@diagnostic disable: duplicate-set-field
+---@generic T
+---@param self LinqObj|T[]
+---@param start integer
+---@param stop integer
+---@return LinqObj|T[]
+function linq_meta_index:keep_range(start, stop)
+  if self.__count then
+    if start > self.__count or start > stop then
+      self.__count = 0
+      self.__iter = function() end
+      return self
+    end
+    stop = math.min(self.__count--[[@as integer]], stop)
+    self.__count = stop - start + 1
+  end
+
+  local inner_iter = self.__iter
+  local i = 1
+  self.__iter = function()
+    while i < start do
+      inner_iter()
+      i = i + 1
+    end
+    if i > stop then return end
+    i = i + 1
+    -- if stop is past the sequence, it doesn't matter because the inner iter will just return nil
+    return inner_iter()
   end
   return self
 end

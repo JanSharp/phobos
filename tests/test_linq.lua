@@ -850,6 +850,30 @@ do
     end
   end
 
+  for _, outer in ipairs(known_or_unknown_count_dataset) do
+    for _, data in ipairs{
+      {start = 1, stop = 1, expected_count = 1, expected_results = {"foo"}},
+      {start = 2, stop = 2, expected_count = 1, expected_results = {"bar"}},
+      {start = 1, stop = 3, expected_count = 3, expected_results = {"foo", "bar", false}},
+      {start = 2, stop = 4, expected_count = 3, expected_results = {"bar", false, "baz"}},
+      {start = 3, stop = 5, expected_count = 2, expected_results = {false, "baz"}},
+      {start = 4, stop = 6, expected_count = 1, expected_results = {"baz"}},
+      {start = 5, stop = 7, expected_count = 0, expected_results = {}},
+      {start = 2, stop = 1, expected_count = 0, expected_results = {}},
+      -- with pure math this could result in -1 __count, this test ensures it's 0 instead
+      {start = 3, stop = 1, expected_count = 0, expected_results = {}},
+    }
+    do
+      add_test("keep_range from "..data.start.." to "..data.stop.." out of 4, self has "..outer.label, function()
+        local obj = outer.make_obj(get_test_strings()):keep_range(data.start, data.stop)
+        local expected_count = outer.knows_count and data.expected_count or nil
+        local got_count = obj.__count
+        assert.equals(expected_count, got_count, "internal __count after 'keep_range'")
+        assert_iteration(obj, data.expected_results)
+      end)
+    end
+  end
+
   add_test("last gets the last element", function()
     local got_value, got_index = linq(get_test_strings()):last()
     assert.equals("baz", got_value, "value result of 'last'")
