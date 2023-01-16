@@ -830,6 +830,26 @@ do
     assert.equals(obj.__iter, got_iter, "iterator")
   end)
 
+  for _, outer in ipairs(known_or_unknown_count_dataset) do
+    for _, data in ipairs{
+      {index = 1, expected_count = 1, expected_results = {"foo"}},
+      {index = 2, expected_count = 1, expected_results = {"bar"}},
+      {index = 3, expected_count = 1, expected_results = {false}},
+      {index = 4, expected_count = 1, expected_results = {"baz"}},
+      {index = 5, expected_count = 0, expected_results = {}},
+      {index = 6, expected_count = 0, expected_results = {}},
+    }
+    do
+      add_test("keep_at index "..data.index.." out of 4, self has "..outer.label, function()
+        local obj = outer.make_obj(get_test_strings()):keep_at(data.index)
+        local expected_count = outer.knows_count and data.expected_count or nil
+        local got_count = obj.__count
+        assert.equals(expected_count, got_count, "internal __count after 'keep_at'")
+        assert_iteration(obj, data.expected_results)
+      end)
+    end
+  end
+
   add_test("last gets the last element", function()
     local got_value, got_index = linq(get_test_strings()):last()
     assert.equals("baz", got_value, "value result of 'last'")
@@ -858,6 +878,8 @@ do
     local obj = linq(get_test_strings())
     assert_sequential_helper(obj, obj.last, function() return false end, 4, -1)
   end)
+
+  -- TODO: move the join tests to the correct location
 
   add_test("join makes __count unknown", function()
     local obj = linq{}

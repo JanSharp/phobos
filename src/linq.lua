@@ -50,7 +50,7 @@ end
 -- [x] intersect
 -- [x] iterate
 -- [x] join
--- [ ] keep_at (more performant than using `where`)
+-- [x] keep_at (more performant than using `where`)
 -- [ ] keep_range (more performant than using `where`)
 -- [x] last
 -- [x] max
@@ -968,6 +968,39 @@ function linq_meta_index:join(inner_collection, outer_key_selector, inner_key_se
   end
   return self
 end
+
+---@diagnostic disable: duplicate-set-field
+---@generic T
+---@param self LinqObj|T[]
+---@param index integer
+---@return LinqObj|T[]
+function linq_meta_index:keep_at(index)
+  if self.__count then
+    if index > self.__count then
+      self.__count = 0
+      self.__iter = function() end
+      return self
+    end
+    self.__count = 1
+  end
+  local inner_iter = self.__iter
+  local done = false
+  self.__iter = function()
+    if done then return end
+    local i = 1
+    for value in inner_iter do
+      if i == index then
+        done = true
+        return value
+      end
+      i = i + 1
+    end
+    -- index is out of range of the sequence
+    done = true
+  end
+  return self
+end
+---@diagnostic enable: duplicate-set-field
 
 ---@generic T
 ---@param self LinqObj|T[]
