@@ -1187,6 +1187,25 @@ do
     assert_iteration(obj, {"hello", "world", table.unpack(get_test_strings())})
   end)
 
+  for _, outer in ipairs(known_or_unknown_count_dataset) do
+    for _, data in ipairs{
+      {label = "first value", index = 1, expected_count = 3, expected_results = {"bar", false, "baz"}},
+      {label = "middle value", index = 3, expected_count = 3, expected_results = {"foo", "bar", "baz"}},
+      {label = "last value", index = 4, expected_count = 3, expected_results = {"foo", "bar", false}},
+      {label = "past end", index = 5, expected_count = 4, expected_results = get_test_strings()},
+      {label = "further past end", index = 6, expected_count = 4, expected_results = get_test_strings()},
+    }
+    do
+      add_test("remove_at index "..data.index.." out of 4 ("..data.label.."), self has "..outer.label, function()
+        local obj = outer.make_obj(get_test_strings()):remove_at(data.index)
+        local expected_count = outer.knows_count and data.expected_count or nil
+        local got_count = obj.__count
+        assert.equals(expected_count, got_count, "internal __count after 'remove_at'")
+        assert_iteration(obj, data.expected_results)
+      end)
+    end
+  end
+
   add_test("reverse with 0 values", function()
     local obj = linq{}:reverse()
     assert_iteration(obj, {})

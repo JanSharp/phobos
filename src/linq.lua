@@ -62,7 +62,7 @@ end
 -- [ ] order_desc
 -- [ ] order_desc_by
 -- [x] prepend
--- [ ] remove_at (more performant than using `where`)
+-- [x] remove_at (more performant than using `where`)
 -- [ ] remove_range (more performant than using `where`)
 -- [x] reverse
 -- [x] select
@@ -1182,6 +1182,31 @@ function linq_meta_index:prepend(collection)
       value = current_iter()
     end
     return value
+  end
+  return self
+end
+
+---@generic T
+---@param self LinqObj|T[]
+---@param index integer
+---@return LinqObj|T[]
+function linq_meta_index:remove_at(index)
+  if self.__count then
+    if index > self.__count then
+      -- index is past the sequence, just do nothing
+      return self
+    end
+    self.__count = self.__count - 1
+  end
+  local inner_iter = self.__iter
+  local i = 0
+  self.__iter = function()
+    i = i + 1
+    if i == index then
+      inner_iter()
+      i = i + 1
+    end
+    return inner_iter()
   end
   return self
 end
