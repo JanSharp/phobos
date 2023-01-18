@@ -236,7 +236,7 @@ do
   add_test("chunk where self has unknown __count", function()
     local obj = linq{}
     obj.__count = nil
-    obj:chunk(1)
+    obj = obj:chunk(1)
     local got = obj.__count
     assert.equals(nil, got, "internal __count after 'chunk'")
   end)
@@ -311,7 +311,7 @@ do
   add_test("default_if_empty doesn't break with unknown __count", function()
     local obj = linq{}
     obj.__count = nil
-    obj:default_if_empty("baz")
+    obj = obj:default_if_empty("baz")
     local got = obj.__count
     assert.equals(nil, got, "internal __count after 'default_if_empty'")
   end)
@@ -357,7 +357,7 @@ do
   add_test("ensure_knows_count does nothing if __count is known", function()
     local obj = linq(get_test_strings())
     local expected_iter = obj.__iter
-    obj:ensure_knows_count()
+    obj = obj:ensure_knows_count()
     local got_iter = obj.__iter
     local got_count = obj.__count
     assert.equals(4, got_count, "internal __count after 'ensure_knows_count'")
@@ -368,7 +368,7 @@ do
   add_test("ensure_knows_count evaluates count if __count is unknown", function()
     local obj = linq(get_test_strings())
     obj.__count = nil
-    obj:ensure_knows_count()
+    obj = obj:ensure_knows_count()
     local got_count = obj.__count
     assert.equals(4, got_count, "internal __count after 'ensure_knows_count'")
     assert_iteration(obj, get_test_strings())
