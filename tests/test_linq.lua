@@ -48,7 +48,18 @@ local function assert_iteration(linq_obj, expected_results)
   for value in linq_obj.__iter do
     got_results[#got_results+1] = value
   end
-  assert.contents_equals(expected_results, got_results)
+  assert.contents_equals(expected_results, got_results, "results")
+
+  local values_past_end = {}
+  for i = 1, 10 do
+    values_past_end[i] = linq_obj.__iter()
+  end
+  assert.contents_equals(
+    {},
+    values_past_end,
+    "extra values returned by the iterator after it had already return nil before"
+  )
+
   return got_results
 end
 
@@ -101,10 +112,11 @@ do
   end)
 
   add_test("creating a linq object from an iterator function", function()
-    local state = {some_data = true}
+    local state = {some_data = true, done = false}
     local obj = linq(function(state_arg, value)
       assert.equals(state, state_arg, "state object for the iterator")
-      if value == false then return end
+      if state.done then return end
+      if value == false then state.done = true; return end
       if (value or 0) >= 5 then return false end
       return (value or 0) + 1
     end, state, 2)

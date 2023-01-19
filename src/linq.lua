@@ -1457,10 +1457,15 @@ function linq_meta_index:take_while(condition)
   self.__count = nil
   local inner_iter = self.__iter
   local i = 0
+  local done = false
   self.__iter = function()
+    if done then return end
     local value = inner_iter()
     i = i + 1
-    if value == nil or not condition(value, i) then return end
+    if value == nil or not condition(value, i) then
+      done = true
+      return
+    end
     return value
   end
   return self
