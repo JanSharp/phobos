@@ -63,7 +63,7 @@ end
 -- [ ] order_desc_by
 -- [x] prepend
 -- [x] remove_at (more performant than using `where`)
--- [ ] remove_range (more performant than using `where`)
+-- [x] remove_range (more performant than using `where`)
 -- [x] reverse
 -- [x] select
 -- [x] select_many
@@ -1210,6 +1210,66 @@ function linq_meta_index:remove_at(index)
   end
   return self
 end
+
+---@diagnostic disable: duplicate-set-field
+---@generic T
+---@param self LinqObj|T[]
+---@param start integer
+---@param stop integer
+---@return LinqObj|T[]
+function linq_meta_index:remove_range(start, stop)
+  local count = self.__count
+  if count then
+    stop = math.min(count, stop)
+    count = count - (stop - start + 1)
+    -- if start is 3 and stop is 1, it would add 1 to count. That's why it's >= not just ==
+    if count >= self.__count then
+      -- removes nothing, just return
+      return self
+    end
+    self.__count = count
+    if count == 0 then
+      self.__iter = function() end
+      return self
+    end
+
+    local inner_iter = self.__iter
+    local i = 1
+    self.__iter = function()
+      if i == start then
+        if stop == count then
+          -- don't even iterate the rest if it would skip the rest of the values anyway
+          return
+        end
+        while i <= stop do
+          i = i + 1
+          inner_iter()
+        end
+      end
+      i = i + 1
+      return inner_iter()
+    end
+    return self
+  end
+
+  local inner_iter = self.__iter
+  local i = 0
+  self.__iter = function()
+    i = i + 1
+    if i == start then
+      while i <= stop do
+        if inner_iter() == nil then
+          -- stop could be far past the end of the sequence, so check if that's the case and early return
+          return
+        end
+        i = i + 1
+      end
+    end
+    return inner_iter()
+  end
+  return self
+end
+---@diagnostic enable: duplicate-set-field
 
 ---@generic T
 ---@param self LinqObj|T[]
