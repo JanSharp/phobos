@@ -1414,6 +1414,24 @@ do
     end
   end
 
+  for _, outer in ipairs(known_or_unknown_count_dataset) do
+    for _, data in ipairs{
+      {skip_count = 0, expected_count = 4, expected = get_test_strings()},
+      {skip_count = 1, expected_count = 3, expected = {"foo", "bar", false}},
+      {skip_count = 3, expected_count = 1, expected = {"foo"}},
+      {skip_count = 4, expected_count = 0, expected = {}},
+      {skip_count = 5, expected_count = 0, expected = {}},
+    }
+    do
+      add_test("skip_last "..data.skip_count.." out of 4 values, self has "..outer.label, function()
+        local obj = outer.make_obj(get_test_strings()):skip_last(data.skip_count)
+        local expected_count = outer.knows_count and data.expected_count or nil
+        assert.equals(expected_count, obj.__count, "internal __count after skip")
+        assert_iteration(obj, data.expected)
+      end)
+    end
+  end
+
   for _, data in ipairs{
     {skip_count = 0, expected = get_test_strings(), condition = function(value) return false end},
     {skip_count = 1, expected = {"bar", false, "baz"}, condition = function(value) return value == "foo" end},

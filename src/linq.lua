@@ -70,7 +70,7 @@ end
 -- [x] sequence_equal
 -- [x] single
 -- [x] skip
--- [ ] skip_last
+-- [x] skip_last
 -- [ ] skip_last_while
 -- [x] skip_while
 -- [ ] sort
@@ -1452,6 +1452,55 @@ function linq_meta_index:skip(count)
       done_skipping = true
     end
     return inner_iter()
+  end
+  return self
+end
+---@diagnostic enable: duplicate-set-field
+
+---@diagnostic disable: duplicate-set-field
+---@generic T
+---@param self LinqObj|T[]
+---@param count integer
+---@return LinqObj|T[]
+function linq_meta_index:skip_last(count)
+  if count == 0 then return self end
+  local keep_count
+
+  if self.__count then
+    keep_count = math.max(0, self.__count - count)
+    self.__count = keep_count
+    if keep_count == 0 then
+      self.__iter = function() end
+      return self
+    end
+
+    -- if we know count then we also know when to stop, so no need to create a temporary table
+    local inner_iter = self.__iter
+    local i = 0
+    self.__iter = function()
+      if i >= keep_count then return end
+      i = i + 1
+      return inner_iter()
+    end
+    return self
+  end
+
+  local values
+  local inner_iter = self.__iter
+  local i = 0
+  self.__iter = function()
+    if not values then
+      values = {}
+      local j = 0
+      for value in inner_iter do
+        j = j + 1
+        values[j] = value
+      end
+      keep_count = j - count -- can result in a negative value, but it doesn't matter. see below if check
+    end
+    if i >= keep_count then return end
+    i = i + 1
+    return values[i]
   end
   return self
 end
