@@ -71,7 +71,7 @@ end
 -- [x] single
 -- [x] skip
 -- [x] skip_last
--- [ ] skip_last_while
+-- [x] skip_last_while
 -- [x] skip_while
 -- [ ] sort
 -- [ ] sum
@@ -1505,6 +1505,38 @@ function linq_meta_index:skip_last(count)
   return self
 end
 ---@diagnostic enable: duplicate-set-field
+
+---@generic T
+---@param self LinqObj|T[]
+---@param condition fun(value: T, i: integer): boolean
+---@return LinqObj|T[]
+function linq_meta_index:skip_last_while(condition)
+  self.__count = nil
+  local inner_iter = self.__iter
+  local values
+  local i = 0
+  local keep_count = 0
+  self.__iter = function()
+    if not values then
+      values = {}
+      local count = 0
+      for value in inner_iter do
+        count = count + 1
+        values[count] = value
+      end
+      for j = count, 1, -1 do
+        if not condition(values[j], j) then
+          keep_count = j
+          break
+        end
+      end
+    end
+    if i >= keep_count then return end
+    i = i + 1
+    return values[i]
+  end
+  return self
+end
 
 ---@generic T
 ---@param self LinqObj|T[]
