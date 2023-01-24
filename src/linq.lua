@@ -76,7 +76,7 @@ end
 -- [ ] sort
 -- [ ] sum
 -- [x] take
--- [ ] take_last
+-- [x] take_last
 -- [ ] take_last_while
 -- [x] take_while
 -- [ ] to_array
@@ -1585,6 +1585,50 @@ function linq_meta_index:take(count)
   end
   if self.__count then
     self.__count = math.min(self.__count, count)
+  end
+  return self
+end
+---@diagnostic enable: duplicate-set-field
+
+---@diagnostic disable: duplicate-set-field
+---@generic T
+---@param self LinqObj|T[]
+---@param count integer
+---@return LinqObj|T[]
+function linq_meta_index:take_last(count)
+  if count == 0 then
+    self.__iter = function() end
+    self.__count = 0
+    return self
+  end
+
+  if self.__count then
+    -- really no need to reimplement this, so just call skip
+    return self:skip(math.max(0, self.__count - count))
+  end
+
+  -- Using a queue like data structure because we know the maximum amount of values to iterate
+  -- so only that amount of values need to be kept in a table.
+  -- Reduces the amount of rehashes and total memory usage.
+  local inner_iter = self.__iter
+  local value_queue
+  local queue_end
+  local i = 0
+  self.__iter = function()
+    if not value_queue then
+      value_queue = {}
+      local actual_count = 0
+      for value in inner_iter do
+        value_queue[(actual_count % count) + 1] = value
+        actual_count = actual_count + 1
+      end
+      queue_end = ((actual_count - 1) % count) + 1
+      i = (math.max(0, actual_count - count) % count) + 1
+      return value_queue[i]
+    end
+    if i == queue_end then return end
+    i = (i % count) + 1
+    return value_queue[i]
   end
   return self
 end

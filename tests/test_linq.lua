@@ -1514,6 +1514,25 @@ do
     assert_iteration(obj, {"foo", "bar", false})
   end)
 
+  for _, outer in ipairs(known_or_unknown_count_dataset) do
+    for _, data in ipairs{
+      {take_count = 0, expected_count = 0, makes_count_known = true, expected = {}},
+      {take_count = 1, expected_count = 1, expected = {"baz"}},
+      {take_count = 2, expected_count = 2, expected = {false, "baz"}},
+      {take_count = 3, expected_count = 3, expected = {"bar", false, "baz"}},
+      {take_count = 4, expected_count = 4, expected = get_test_strings()},
+      {take_count = 5, expected_count = 4, expected = get_test_strings()},
+    }
+    do
+      add_test("take_last "..data.take_count.." out of 4 values, self has "..outer.label, function()
+        local obj = outer.make_obj(get_test_strings()):take_last(data.take_count)
+        local expected_count = (outer.knows_count or data.makes_count_known) and data.expected_count or nil
+        assert.equals(expected_count, obj.__count, "internal __count after 'take_last'")
+        assert_iteration(obj, data.expected)
+      end)
+    end
+  end
+
   add_test("take_while makes __count unknown", function()
     local obj = linq(get_test_strings()):take_while(function() return true end)
     local got = obj.__count
