@@ -1533,6 +1533,30 @@ do
     end
   end
 
+  for _, data in ipairs{
+    {take_count = 0, expected = {}, condition = function(value) return false end},
+    {take_count = 1, expected = {"baz"}, condition = function(value) return value == "baz" end},
+    {take_count = 3, expected = {"bar", false, "baz"}, condition = function(value) return value ~= "foo" end},
+    {take_count = 4, expected = get_test_strings(), condition = function(value) return true end},
+  }
+  do
+    add_test("take_last_while keeps "..data.take_count.." out of 4 values", function()
+      local obj = linq(get_test_strings()):take_last_while(data.condition)
+      assert_iteration(obj, data.expected)
+    end)
+  end
+
+  add_test("take_last_while makes __count unknown", function()
+    local obj = linq(get_test_strings()):take_last_while(function() return true end)
+    local got = obj.__count
+    assert.equals(nil, got, "internal __count")
+  end)
+
+  add_test("take_last_while with condition using index arg", function()
+    local obj = linq(get_test_strings())
+    assert_sequential_helper(obj, obj.take_last_while, function() return true end, 4, -1)
+  end)
+
   add_test("take_while makes __count unknown", function()
     local obj = linq(get_test_strings()):take_while(function() return true end)
     local got = obj.__count

@@ -77,7 +77,7 @@ end
 -- [ ] sum
 -- [x] take
 -- [x] take_last
--- [ ] take_last_while
+-- [x] take_last_while
 -- [x] take_while
 -- [ ] to_array
 -- [ ] to_dict
@@ -1633,6 +1633,32 @@ function linq_meta_index:take_last(count)
   return self
 end
 ---@diagnostic enable: duplicate-set-field
+
+---@generic T
+---@param self LinqObj|T[]
+---@param condition fun(value: T, i: integer):boolean
+---@return LinqObj|T[]
+function linq_meta_index:take_last_while(condition)
+  self.__count = nil
+  local inner_iter = self.__iter
+  local values
+  local i = 0
+  self.__iter = function()
+    if not values then
+      values = {}
+      for value in inner_iter do
+        i = i + 1
+        values[i] = value
+      end
+      while i > 0 and condition(values[i], i) do
+        i = i - 1
+      end
+    end
+    i = i + 1
+    return values[i]
+  end
+  return self
+end
 
 ---@generic T
 ---@param self LinqObj|T[]
