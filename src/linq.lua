@@ -74,7 +74,7 @@ end
 -- [x] skip_last_while
 -- [x] skip_while
 -- [ ] sort
--- [ ] sum
+-- [x] sum
 -- [x] take
 -- [x] take_last
 -- [x] take_last_while
@@ -1561,6 +1561,33 @@ function linq_meta_index:skip_while(condition)
     return inner_iter()
   end
   return self
+end
+
+---@generic T
+---@param self LinqObj|T[]
+---@param selector (fun(value: T, index: integer): number)?
+---@return number
+function linq_meta_index:sum(selector)
+  local result = 0
+  if selector then
+    if self.__count then
+      local iter = self.__iter
+      for i = 1, self.__count do
+        result = result + selector(iter(), i)
+      end
+    else
+      local i = 0
+      for value in self.__iter do
+        i = i + 1
+        result = result + selector(value, i)
+      end
+    end
+  else
+    for value in self.__iter do
+      result = result + value
+    end
+  end
+  return result
 end
 
 -- the language server says that this function has a duplicate set on the `__iter` field... it's drunk

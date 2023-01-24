@@ -1480,6 +1480,33 @@ do
     assert.equals(nil, got, "internal __count")
   end)
 
+  for _, outer in ipairs(known_or_unknown_count_dataset) do
+    local function selector(value)
+      return type(value) == "string" and #value or 5
+    end
+    for _, data in ipairs{
+      {label = "of 0 values", values = {}, expected = 0},
+      {label = "of 1 value", values = {100}, expected = 100},
+      {label = "of 2 values", values = {100, 20}, expected = 120},
+      {label = "of 3 values", values = {100, 20, 3}, expected = 123},
+      {label = "of 0 values using selector", values = {}, selector = selector, expected = 0},
+      {label = "of 1 value using selector", values = {"f"}, selector = selector, expected = 1},
+      {label = "of 2 values using selector", values = {"f", "oo"}, selector = selector, expected = 3},
+      {label = "of 4 values using selector", values = get_test_strings(), selector = selector, expected = 14},
+    }
+    do
+      add_test("sum "..data.label..", self has "..outer.label, function()
+        local got = outer.make_obj(data.values):sum(data.selector)
+        assert.equals(data.expected, got, "result of 'sum'")
+      end)
+    end
+
+    add_test("sum with selector using index arg, self has "..outer.label, function()
+      local obj = outer.make_obj(get_test_strings())
+      assert_sequential_helper(obj, obj.sum, function(_, i) return i end)
+    end)
+  end
+
   add_test("take 0 values", function()
     local obj = linq(get_test_strings()):take(0)
     assert.equals(0, obj.__count, "internal __count after take")
