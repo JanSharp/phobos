@@ -1610,6 +1610,65 @@ do
     assert_iteration(obj, {"foo", "bar", false})
   end)
 
+  for _, data in ipairs{
+    {
+      label = "2 empty collections",
+      outer_values = {},
+      inner_values = {},
+      expected = {},
+    },
+    {
+      label = "all unique values",
+      outer_values = get_test_strings(),
+      inner_values = {"hello", "world"},
+      expected = {"foo", "bar", false, "baz", "hello", "world"},
+    },
+    {
+      label = "one duplicate between collections",
+      outer_values = {"foo", "bar"},
+      inner_values = {"hello", "bar", "world"},
+      expected = {"foo", "bar", "hello", "world"},
+    },
+    {
+      label = "all duplicate values",
+      outer_values = get_test_strings(),
+      inner_values = get_test_strings(),
+      expected = get_test_strings(),
+    },
+    {
+      label = "one duplicate within same collection",
+      outer_values = {"foo", "bar", "bar"},
+      inner_values = {"hello", "hello", "world"},
+      expected = {"foo", "bar", "hello", "world"},
+    },
+    {
+      label = "duplicates everywhere",
+      outer_values = {"foo", "bar", "bar"},
+      inner_values = {"hello", "world", "foo", "bar", "bar"},
+      expected = {"foo", "bar", "hello", "world"},
+    },
+    {
+      label = "duplicates everywhere with key_selector",
+      outer_values = {"foo", "bar", "baz"},
+      inner_values = {"hello", "world", "for", "big", "bat"},
+      key_selector = function(value) return value:sub(1, 1) end,
+      expected = {"foo", "bar", "hello", "world"},
+    },
+  }
+  do
+    for _, outer in ipairs(known_or_unknown_count_dataset) do
+      for _, inner in ipairs(array_or_obj_with_known_or_unknown_count_dataset) do
+        add_test("union "..data.label.." with "..inner.label..", self has "..outer.label, function()
+          local collection = inner.make_obj(data.inner_values)
+          local obj = outer.make_obj(data.outer_values):union(collection, data.key_selector)
+          local got_count = obj.__count
+          assert.equals(nil, got_count, "internal __count after 'union'")
+          assert_iteration(obj, data.expected)
+        end)
+      end
+    end
+  end
+
   add_test("where makes __count unknown", function()
     local obj = linq(get_test_strings()):where(function() return true end)
     local got = obj.__count

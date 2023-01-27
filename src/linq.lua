@@ -83,8 +83,7 @@ end
 -- [ ] to_dict
 -- [ ] to_linked_list
 -- [ ] to_lookup
--- [ ] union
--- [ ] union_by
+-- [x] union
 -- [x] where
 
 ---@generic T
@@ -1705,6 +1704,62 @@ function linq_meta_index:take_while(condition)
       return
     end
     return value
+  end
+  return self
+end
+
+---@generic T
+---@generic TKey
+---@param self LinqObj|T[]
+---@param collection LinqObj|T[]
+---@param key_selector (fun(value: T): TKey)? @ no index, because it's used on both collections
+---@return LinqObj|T[]
+function linq_meta_index:union(collection, key_selector)
+  self.__count = nil
+  local iter = self.__iter
+  local iterating_collection = false
+  local lut = {}
+  local collection_is_linq = collection.__is_linq
+  local collection_iter = collection.__iter
+  local collection_index = 0
+  self.__iter = function()
+    ::entry::
+    if iterating_collection then
+      local value
+      while true do
+        if collection_is_linq then
+          value = collection_iter()
+        else
+          collection_index = collection_index + 1
+          value = collection[collection_index]
+        end
+        if value == nil then return end
+        local key = value
+        if key_selector then
+          key = key_selector(value)
+        end
+        if not lut[key] then
+          lut[key] = true
+          return value
+        end
+      end
+    else
+      while true do
+        local value = iter()
+        if value == nil then
+          iterating_collection = true
+          goto entry
+        end
+        local key = value
+        if key_selector then
+          key = key_selector(value)
+        end
+        if not lut[key] then
+          lut[key] = true
+          return value
+        end
+      end
+    end
   end
   return self
 end
