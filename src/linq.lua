@@ -595,6 +595,8 @@ function linq_meta_index:group_join(inner_collection, outer_key_selector, inner_
   local iter = self.__iter
   local results
   local results_index = 0
+  -- capture as upvalue in case inner_collection gets modified, though nobody should do that anyway
+  local inner_iter = inner_collection.__iter
   self.__iter = function()
     if not results then
       local groups_lut = {}
@@ -617,7 +619,7 @@ function linq_meta_index:group_join(inner_collection, outer_key_selector, inner_
 
       if inner_collection.__is_linq then
         i = 0
-        for value in inner_collection.__iter do
+        for value in inner_iter do
           i = i + 1
           local key = inner_key_selector(value, i)
           local group = groups_lut[key]
@@ -843,12 +845,14 @@ function linq_meta_index:intersect(collection, key_selector)
   self.__count = nil
   local inner_iter = self.__iter
   local lut
+  -- capture as upvalue in case collection gets modified, though nobody should do that anyway
+  local collection_iter = collection.__iter
   if key_selector then
     self.__iter = function()
       if not lut then
         lut = {}
         if collection.__is_linq then
-          for value in collection.__iter do
+          for value in collection_iter do
             lut[key_selector(value)] = true
           end
         else
@@ -869,7 +873,7 @@ function linq_meta_index:intersect(collection, key_selector)
       if not lut then
         lut = {}
         if collection.__is_linq then
-          for value in collection.__iter do
+          for value in collection_iter do
             lut[value] = true
           end
         else
@@ -918,12 +922,14 @@ function linq_meta_index:join(inner_collection, outer_key_selector, inner_key_se
   local current_group_index = 0
   local groups_lut
   local results_index = 0
+  -- capture as upvalue in case inner_collection gets modified, though nobody should do that anyway
+  local inner_iter = inner_collection.__iter
   self.__iter = function()
     if not groups_lut then
       groups_lut = {}
       if inner_collection.__is_linq then
         local i = 0
-        for value in inner_collection.__iter do
+        for value in inner_iter do
           i = i + 1
           local key = inner_key_selector(value, i)
           local group = groups_lut[key]
@@ -1720,6 +1726,7 @@ function linq_meta_index:union(collection, key_selector)
   local iterating_collection = false
   local lut = {}
   local collection_is_linq = collection.__is_linq
+  -- capture as upvalue in case collection gets modified, though nobody should do that anyway
   local collection_iter = collection.__iter
   local collection_index = 0
   self.__iter = function()
