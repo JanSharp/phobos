@@ -82,7 +82,7 @@ end
 -- [x] to_array
 -- [x] to_dict
 -- [ ] to_linked_list
--- [ ] to_lookup
+-- [x] to_lookup
 -- [x] union
 -- [x] where
 
@@ -1757,6 +1757,28 @@ function linq_meta_index:to_dict(kvp_selector)
     end
   end
   return dict
+end
+
+---@generic T
+---@generic TKey
+---@param self LinqObj|T[]
+---@param key_selector fun(value: T, i: integer): TKey
+---@return table<TKey, true>
+function linq_meta_index:to_lookup(key_selector)
+  local lookup = {}
+  if self.__count then
+    local iter = self.__iter
+    for i = 1, self.__count do
+      lookup[key_selector(iter(), i)] = true
+    end
+  else
+    local i = 0
+    for inner_value in self.__iter do
+      i = i + 1
+      lookup[key_selector(inner_value, i)] = true
+    end
+  end
+  return lookup
 end
 
 ---@generic T
