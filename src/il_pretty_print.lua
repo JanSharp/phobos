@@ -122,7 +122,7 @@ local instruction_label_getter_lut = {
 local function get_label(instruction, context)
   return (
     instruction_label_getter_lut[instruction.inst_type]
-    or function()
+    or function(_, _)
       return "UNKNOWN"
     end
   )(instruction, context)
