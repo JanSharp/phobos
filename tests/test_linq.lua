@@ -1481,6 +1481,21 @@ do
   end)
 
   for _, outer in ipairs(known_or_unknown_count_dataset) do
+    add_test("sort, self has "..outer.label, function()
+      local obj = outer.make_obj(get_test_strings()):sort(function(left, right)
+        if type(left) == "boolean" then
+          return true
+        end
+        if type(right) == "boolean" then
+          return false
+        end
+        return left < right
+      end)
+      assert_iteration(obj, {false, "bar", "baz", "foo"})
+    end)
+  end
+
+  for _, outer in ipairs(known_or_unknown_count_dataset) do
     local function selector(value)
       return type(value) == "string" and #value or 5
     end

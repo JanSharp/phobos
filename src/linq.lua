@@ -73,7 +73,7 @@ end
 -- [x] skip_last
 -- [x] skip_last_while
 -- [x] skip_while
--- [ ] sort
+-- [x] sort
 -- [x] sum
 -- [x] take
 -- [x] take_last
@@ -1565,6 +1565,30 @@ function linq_meta_index:skip_while(condition)
     end
     return inner_iter()
   end
+  return self
+end
+
+---@generic T
+---@param self LinqObj|T[]
+---@param comparator fun(left: T, right: T): boolean
+---@return LinqObj|T[]
+function linq_meta_index:sort(comparator)
+  local values = {}
+  local count = self.__count
+  if count then
+    local iter = self.__iter
+    for i = 1, count do
+      values[i] = iter()
+    end
+  else
+    count = 0
+    for value in self.__iter do
+      count = count + 1
+      values[count] = value
+    end
+  end
+  table.sort(values, comparator)
+  self.__iter = make_array_iter(values, count)
   return self
 end
 
