@@ -80,7 +80,7 @@ end
 -- [x] take_last_while
 -- [x] take_while
 -- [x] to_array
--- [ ] to_dict
+-- [x] to_dict
 -- [ ] to_linked_list
 -- [ ] to_lookup
 -- [x] union
@@ -1732,6 +1732,31 @@ function linq_meta_index:to_array()
     end
   end
   return array
+end
+
+---@generic T
+---@generic TKey
+---@generic TValue
+---@param self LinqObj|T[]
+---@param kvp_selector fun(value: T, i: integer): TKey, TValue
+---@return table<TKey, TValue>
+function linq_meta_index:to_dict(kvp_selector)
+  local dict = {}
+  if self.__count then
+    local iter = self.__iter
+    for i = 1, self.__count do
+      local key, value = kvp_selector(iter(), i)
+      dict[key] = value
+    end
+  else
+    local i = 0
+    for inner_value in self.__iter do
+      i = i + 1
+      local key, value = kvp_selector(inner_value, i)
+      dict[key] = value
+    end
+  end
+  return dict
 end
 
 ---@generic T

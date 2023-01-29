@@ -1617,6 +1617,20 @@ do
     end)
   end
 
+  for _, outer in ipairs(known_or_unknown_count_dataset) do
+    add_test("to_dict, self has "..outer.label, function()
+      local got = outer.make_obj{{k = "hello", v = "world"}, {k = "foo", v = "bar"}}:to_dict(function(value)
+        return value.k, value.v
+      end)
+      assert.contents_equals({hello = "world", foo = "bar"}, got, "result of 'to_dict'")
+    end)
+
+    add_test("to_dict with selector using index arg, self has "..outer.label, function()
+      local obj = outer.make_obj(get_test_strings())
+      assert_sequential_helper(obj, obj.to_dict, function(value) return value, value end)
+    end)
+  end
+
   -- union
   for _, data in ipairs{
     {
