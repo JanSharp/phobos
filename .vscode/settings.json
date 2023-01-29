@@ -1,6 +1,5 @@
 {
   "Lua.runtime.version": "Lua 5.2",
-  "Lua.runtime.plugin": ".vscode/sumneko_lua_plugin/plugin.lua",
   "Lua.diagnostics.globals": [
     "commands",
     "script",
@@ -78,6 +77,7 @@
     "maxnum",
     "metatostring",
     "mkdir",
+    "newtable",
     "nohuge",
     "numformat",
     "paren",
