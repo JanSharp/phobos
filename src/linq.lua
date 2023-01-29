@@ -79,7 +79,7 @@ end
 -- [x] take_last
 -- [x] take_last_while
 -- [x] take_while
--- [ ] to_array
+-- [x] to_array
 -- [ ] to_dict
 -- [ ] to_linked_list
 -- [ ] to_lookup
@@ -1712,6 +1712,26 @@ function linq_meta_index:take_while(condition)
     return value
   end
   return self
+end
+
+---@generic T
+---@param self LinqObj|T[]
+---@return T[]
+function linq_meta_index:to_array()
+  local array = {}
+  if self.__count then
+    local iter = self.__iter
+    for i = 1, self.__count do
+      array[i] = iter()
+    end
+  else
+    local i = 0
+    for value in self.__iter do
+      i = i + 1
+      array[i] = value
+    end
+  end
+  return array
 end
 
 ---@generic T

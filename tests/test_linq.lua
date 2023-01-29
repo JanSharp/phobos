@@ -1610,6 +1610,14 @@ do
     assert_iteration(obj, {"foo", "bar", false})
   end)
 
+  for _, outer in ipairs(known_or_unknown_count_dataset) do
+    add_test("to_array, self has "..outer.label, function()
+      local got = outer.make_obj(get_test_strings()):to_array()
+      assert.contents_equals(get_test_strings(), got, "result of 'to_array'")
+    end)
+  end
+
+  -- union
   for _, data in ipairs{
     {
       label = "2 empty collections",
