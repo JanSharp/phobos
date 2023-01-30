@@ -1400,7 +1400,9 @@ local function parse(text,source_name)
   error_code_insts = {}
   invalid_token_invalid_node_lut = {}
   local token_iter, index
-  token_iter,token_iter_state,index = tokenize(text)
+  -- technically this doesn't have to pass along source because it gets set int the syntax_error function,
+  -- but it is more correct this way
+  token_iter,token_iter_state,index = tokenize(text, source)
 
 
   function next_token()
