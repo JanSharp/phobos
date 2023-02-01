@@ -9,11 +9,11 @@ local error_code_util = require("error_code_util")
 
 local unsafe = true
 local print_progress = true
-local use_regular_lua_compiler = false
+local use_regular_lua_compiler = true
 local use_phobos_compiler = true
 local use_il = false
 local do_create_inline_iife = false
-local do_fold_const = true
+local do_fold_const = false
 local do_fold_control_statements = true
 local eval_instruction_count = true
 local eval_byte_count = true

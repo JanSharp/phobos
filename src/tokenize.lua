@@ -281,68 +281,50 @@ local function read_block_string(str,index,state)
   end
 end
 
----cSpell:ignore strtod
--- just like Lua, using C99 the `strtod` format (https://en.cppreference.com/w/c/string/byte/strtof)
--- except that the leading + and - are not allowed as well as nan and inf
-local function try_read_number_part(str, index, state, num_pattern, start_prefix, exponent_prefix)
-  -- decimal numbers: "%d*" followed by "%.%d+" followed by "[eE][+-]?%d+"
-  -- "integer part"
-  local num_start,num_end,middle_pos = str:find("^"..start_prefix.."()"..num_pattern.."*",index)
-  if num_start then
-    -- this basically means `num_pattern*` didn't match anything
-    local omitted_integer_part = middle_pos > num_end
-    local _,fractional_end = str:find("^%."..num_pattern.."+",num_end+1)
-    if fractional_end then
-      num_end = fractional_end
-    elseif omitted_integer_part then
-      return false
-    else
-      -- consume trailing dot
-      _, fractional_end = str:find("^%.", num_end + 1)
-      num_end = fractional_end or num_end
-    end
-    local exponent_start,exponent_end = str:find("^"..exponent_prefix.."[%-%+]?"..num_pattern.."+",num_end+1)
-    if exponent_start then
-      num_end = exponent_end
-    end
-    local token = new_token("number",index,state.line,index - state.line_offset)
-    token.src_value = str:sub(num_start,num_end)
-    token.value = tonumber(token.src_value)--[[@as number]]
-    return true, num_end+1,token
-  end
-end
-
 ---@param str string
 ---@param index integer
 ---@param state TokenizeState
 ---@return integer?
 ---@return Token?
-local function try_read_number(str, index, state)
-  local success, result_end, token = try_read_number_part(str, index, state, "%x", "0[xX]", "[pP]")
-  if success then
-    return result_end, token
+local function read_number(str, index, state)
+  local start_index = index
+  ---cSpell:ignore llex
+  -- this parsing matches how Lua parses numbers. While the logic is different, the result is identical
+  -- see llex.c:229 (function "read_numeral")
+  local exponent = "[Ee]"
+  if str:find("^0[Xx]", index) then
+    exponent = "[Pp]"
+    index = index + 2
   end
-  if success == false then
-    -- this actually only ever happens if the number is just 0x or 0X
-    result_end = index + 1
-    token = new_token("invalid",index,state.line,index - state.line_offset)
-    token.value = str:sub(index, result_end)
+  local pattern = "^[%x.]*"..exponent.."[+-]?()"
+  while true do
+    local next_index = str:match(pattern, index)
+    if not next_index then break end
+    index = next_index
+  end
+  index = str:match("^[%x.]*()", index) -- always matches, because of `*` instead of `+`
+
+  local src_value = str:sub(start_index, index - 1)
+  local value = tonumber(src_value)
+  local token
+  if value then
+    token = new_token("number", start_index, state.line, start_index - state.line_offset)
+    token.src_value = src_value
+    token.value = value
+  else
+    token = new_token("invalid", start_index, state.line, start_index - state.line_offset)
+    token.value = src_value
     add_error_code_inst(token, error_code_util.new_error_code{
       error_code = error_code_util.codes.malformed_number,
-      message_args = {token.value},
+      message_args = {src_value},
       source = state.source,
       -- start at the first char of the number
-      start_position = {line = state.line, column = index - state.line_offset},
+      start_position = {line = state.line, column = start_index - state.line_offset},
       -- stop at the last char of the number
-      stop_position = {line = state.line, column = result_end - state.line_offset},
+      stop_position = {line = state.line, column = index - 1 - state.line_offset},
     })
-    return result_end + 1, token
   end
-
-  success, result_end, token = try_read_number_part(str, index, state, "%d", "", "[eE]")
-  if success then
-    return result_end, token
-  end
+  return index, token
 end
 
 ---@param invalid_char string
@@ -361,6 +343,16 @@ local function simple_invalid_token(invalid_char, index, state)
     position = {line = state.line, column = index - state.line_offset},
   })
   return index+1,token
+end
+
+local zero_byte = string.byte("0")
+local nine_byte = string.byte("9")
+---@param str string
+---@param index integer
+---@return boolean
+local function is_digit(str, index)
+  local byte = str:byte(index)
+  return byte and zero_byte <= byte and byte <= nine_byte
 end
 
 ---@param state TokenizeState
@@ -439,27 +431,22 @@ local function next_token(state,index)
       else
         return index+2,new_token("..",index,state.line,index - state.line_offset)
       end
+    elseif is_digit(str, index + 1) then
+      return read_number(str, index, state)
     else
-      local number_end, token = try_read_number(str, index, state)
-      if number_end then
-        return number_end, token
-      end
       return index+1,new_token(".",index,state.line,index - state.line_offset)
     end
   elseif next_char == '"' then
     return read_string(str,index,next_char,state)
   elseif next_char == "'" then
     return read_string(str,index,next_char,state)
+  elseif is_digit(next_char, 1) then
+    return read_number(str, index, state)
   else
-    local number_end, token = try_read_number(str, index, state)
-    if number_end then
-      return number_end, token
-    end
-
     -- try to match keywords/identifiers
     local match_start,match_end,ident = str:find("^([_%a][_%w]*)",index)
     if match_start == index then
-      token = new_token(
+      local token = new_token(
         keywords[ident] and ident or "ident",
         index,state.line,index - state.line_offset
       )
