@@ -1388,12 +1388,15 @@ local function main_func()
 end
 
 local tokenize = require("tokenize")
-local function parse(text,source_name)
+---@param text string
+---@param source_name string
+---@param options Options?
+local function parse(text, source_name, options)
   source = source_name
   prevent_assert = nodes.new_invalid{
     error_code_inst = error_code_util.new_error_code{
       error_code = error_code_util.codes.incomplete_node,
-      source = source_name,
+      source = source,
       position = {line = 0, column = 0},
     }
   }
@@ -1402,7 +1405,7 @@ local function parse(text,source_name)
   local token_iter, index
   -- technically this doesn't have to pass along source because it gets set int the syntax_error function,
   -- but it is more correct this way
-  token_iter,token_iter_state,index = tokenize(text, source)
+  token_iter,token_iter_state,index = tokenize(text, source, options)
 
 
   function next_token()

@@ -307,6 +307,21 @@ local function read_number(str, index, state)
   local src_value = str:sub(start_index, index - 1)
   local value = tonumber(src_value)
   local token
+  local error_code
+  if value and state.use_int32 then
+    if (value % 1) ~= 0
+      or value > 0x7fffffff
+      or src_value:find("%.")
+      or src_value:find(exponent)
+    then
+      if value == 0x80000000 and not src_value:find("%.") and not src_value:find(exponent) then
+        error_code = error_code_util.codes.number_exactly_past_max_int32
+      else
+        error_code = error_code_util.codes.number_must_be_int32
+      end
+      value = nil
+    end
+  end
   if value then
     token = new_token("number", start_index, state.line, start_index - state.line_offset)
     token.src_value = src_value
@@ -315,7 +330,7 @@ local function read_number(str, index, state)
     token = new_token("invalid", start_index, state.line, start_index - state.line_offset)
     token.value = src_value
     add_error_code_inst(token, error_code_util.new_error_code{
-      error_code = error_code_util.codes.malformed_number,
+      error_code = error_code or error_code_util.codes.malformed_number,
       message_args = {src_value},
       source = state.source,
       -- start at the first char of the number
@@ -463,6 +478,7 @@ end
 ---@class TokenizeState
 ---@field str string
 ---@field source string
+---@field use_int32 boolean
 ---@field line integer
 ---@field line_offset integer @ the exact index of the last newline
 ---@field prev_line integer|nil
@@ -472,14 +488,16 @@ end
 
 ---@param str string
 ---@param source? string @ if provided it is used for the `source` field of error code instances
+---@param options Options?
 ---@return fun(state: TokenizeState, index: integer|nil): integer|nil, Token next_token
 ---@return TokenizeState state
 ---@return integer? index
-local function tokenize(str, source)
+local function tokenize(str, source, options)
   local index
   local state = {
     str = str,
     source = source,
+    use_int32 = options and options.use_int32,
     line = 1,
     line_offset = 0, -- pretend the previous character was a newline. not too far fetched
   }

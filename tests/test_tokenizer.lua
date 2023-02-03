@@ -8,8 +8,11 @@ local tokenizer = require("tokenize")
 
 local test_source = "=(test source)"
 
-local function test(str, expected_tokens)
-  local iter, state, index = tokenizer(str, test_source)
+---@param str string
+---@param expected_tokens Token[]
+---@param options Options?
+local function test(str, expected_tokens, options)
+  local iter, state, index = tokenizer(str, test_source, options)
   local got
   index, got = iter(state, index)
   local i = 0
@@ -707,6 +710,59 @@ do
     malformed("0xp1")
     malformed("0xpp")
     malformed("0x1p+1p-1")
+
+    local function valid_int32(str, value)
+      scope:add_test("int32 number '"..str.."'", function()
+        local token = new_token("number", 1, 1, 1)
+        token.value = value
+        token.src_value = str
+        test(str..";", {
+          token,
+          new_token(";", #str + 1, 1, #str + 1),
+        }, {use_int32 = true})
+      end)
+    end
+    valid_int32("1", 1)
+    valid_int32("0x1", 0x1)
+    valid_int32("0x7fffffff", 0x7fffffff)
+
+    local function invalid_int32_internal(label, str, error_code)
+      scope:add_test(label, function()
+        local token = new_token("invalid", 1, 1, 1)
+        token.value = str
+        token.error_code_insts = {error_code_util.new_error_code{
+          error_code = error_code,
+          message_args = {str},
+          source = test_source,
+          start_position = {line = 1, column = 1},
+          stop_position = {line = 1, column = #str},
+        }}
+        test(str..";", {
+          token,
+          new_token(";", #str + 1, 1, #str + 1),
+        }, {use_int32 = true})
+      end)
+    end
+
+    local function invalid_int32(str)
+      invalid_int32_internal("invalid int32 '"..str.."'", str, error_code_util.codes.number_must_be_int32)
+    end
+    invalid_int32("1.0")
+    invalid_int32("0.1")
+    invalid_int32("1.11e1")
+    invalid_int32("1e-1")
+    invalid_int32("0x0.1")
+    invalid_int32("0x0.1p2")
+    -- these are integers in the valid range, but they have an exponent
+    invalid_int32("1e1")
+    invalid_int32("1.1e1")
+    invalid_int32("0x1p1")
+
+    invalid_int32_internal(
+      "invalid int32 '0x80000000' with special error because it may be intended to be the lowest negative number",
+      "0x80000000",
+      error_code_util.codes.number_exactly_past_max_int32
+    )
   end
 
   do

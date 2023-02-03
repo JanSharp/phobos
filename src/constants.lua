@@ -29,6 +29,8 @@ return {
   -- byte lua_number is int? = 0
   -- magic "\x19\x93\r\n\x1a\n"
   lua_header_str = "\x1bLua\x52\0\1\4\8\4\8\0\x19\x93\r\n\x1a\n",
+  -- the same as above, but sizeof(size_t) = 4, sizeof(luaNumber) = 4 and lua_number is int? = 1
+  lua_header_str_int32 = "\x1bLua\x52\0\1\4\4\4\4\1\x19\x93\r\n\x1a\n",
 
   unnamed_register_name = "(unnamed)",
 }
