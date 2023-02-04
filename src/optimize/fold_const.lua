@@ -297,7 +297,12 @@ local on_close = {
   -- calling of specific known-identity, known-const functions?
 }
 
-local function fold_const(main)
+---@param main AstMain
+---@param options Options?
+local function fold_const(main, options)
+  if options and options.use_int32 then
+    error("Constant folding is not supported when using int32 because accurately emulating an int32 machine is difficult.")
+  end
   ast_walker.walk_scope(main, ast_walker.new_context(nil, on_close))
 end
 

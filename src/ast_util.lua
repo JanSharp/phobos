@@ -109,7 +109,7 @@ do
 
     if scope.node_type ~= "env_scope" then
       assert(scope.parent_scope)
-      if current_stat then stack.pop() end
+      if current_stat then stack.pop(stat_stack) end
       local def = try_get_def(scope.parent_scope, stat_stack, name)
       if current_stat then stack.push(stat_stack, current_stat) end
       if def then
@@ -421,7 +421,7 @@ do
     end,
   }
   ---@param node AstNode
-  ---@return Position
+  ---@return Position?
   function ast.get_main_position(node)
     return getter_lut[node.node_type](node)
   end

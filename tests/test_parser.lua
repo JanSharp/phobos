@@ -37,10 +37,10 @@ local function make_fake_main()
   fake_main.eof_token = nodes.new_token({token_type = "eof", leading = {}})
 end
 
-local function get_tokens(str)
+local function get_tokens(str, options)
   local leading = {}
   local tokens = {}
-  for _, token in tokenize(str, test_source) do
+  for _, token in tokenize(str, test_source, options) do
     if token.token_type == "blank" or token.token_type == "comment" then
       leading[#leading+1] = token
     else
@@ -98,9 +98,9 @@ local function before_each()
   expected_parser_errors = {}
 end
 
-local function test_stat(str)
+local function test_stat(str, options)
   assert(fake_main, "must run make_fake_main before each test")
-  local main, got_parser_errors = parser(str, test_source)
+  local main, got_parser_errors = parser(str, test_source, options)
   assert.contents_equals(
     fake_main,
     main,
@@ -147,10 +147,14 @@ do
   local tokens
   local next_token
   local peek_next_token
-  local function add_test(name, str, func)
+  ---@param name string
+  ---@param str string
+  ---@param func fun()
+  ---@param options Options?
+  local function add_test(name, str, func, options)
     current_scope:add_test(name, function()
       before_each()
-      tokens = get_tokens(str)
+      tokens = get_tokens(str, options)
       local next_index = 1
       function next_token()
         next_index = next_index + 1
@@ -163,11 +167,11 @@ do
         return tokens[next_index]
       end
       func()
-      test_stat(str)
+      test_stat(str, options)
     end)
 
     current_formatter_scope:add_test(name, function()
-      local parsed_ast = parser(str, "=("..name..")")
+      local parsed_ast = parser(str, "=("..name..")", options)
       jump_linker(parsed_ast)
       local result = formatter(parsed_ast)
       assert.equals(str, result)
@@ -3030,6 +3034,23 @@ do
         token_node.error_code_insts[2] -- reusing the already existing error_code_inst for correct references
       ))
     end
+  )
+
+  add_test(
+    "invalid number when using int32",
+    "0.5;",
+    function()
+      local token_node = next_token_node()
+      append_stat(fake_main, new_invalid_statement(
+        nil,
+        token_node, -- at '\1'
+        nil,
+        {token_node}, -- consuming '\1'
+        token_node.error_code_insts[1] -- reusing the already existing error_code_inst for correct references
+      ))
+      append_empty(fake_main, next_token_node())
+    end,
+    {use_int32 = true}
   )
 
   add_test(

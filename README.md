@@ -135,7 +135,6 @@ Phobos itself is licensed under the MIT License, see [LICENSE.txt](LICENSE.txt).
 - [LFSClasses](https://github.com/JanSharp/LFSClasses) The Unlicense
 - [LuaArgParser](https://github.com/JanSharp/LuaArgParser) MIT License, Copyright (c) 2021-2022 Jan Mischak
 - [LuaPath](https://github.com/JanSharp/LuaPath) The Unlicense
-- [FactorioSumnekoLuaPlugin](https://github.com/JanSharp/FactorioSumnekoLuaPlugin) MIT License, Copyright (c) 2021-2022 Jan Mischak, justarandomgeek
 - [minimal-no-base-mod](https://github.com/Bilka2/minimal-no-base-mod), Copyright (c) 2020 Erik Wellmann
 - [JanSharpDevEnv](https://github.com/JanSharp/JanSharpDevEnv), Copyright (c) 2020 Jan Mischak
 - [markdown.lua](https://github.com/speedata/luamarkdown), Copyright (c) 2008 Niklas Frykholm
