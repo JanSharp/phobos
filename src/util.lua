@@ -92,6 +92,17 @@ local function invert(t)
   return tt
 end
 
+---@param str string
+---@param omit_quotes boolean? @ should the surrounding `""` be omitted in the resulting string? Useful as an optimization
+---@return string @ a valid Lua string, but containing binary data, not just printable characters.
+---around 40 to 50% smaller than string.format with %q
+local function to_binary_string(str, omit_quotes)
+  -- there really are only 4 characters that require escaping in order for a string to survive a round trip
+  -- through the Lua parser. Pretty nice, tbh
+  str = str:gsub('["\r\n\\]', {['"'] = '\\"', ["\r"] = "\\r", ["\n"] = "\\n", ["\\"] = "\\\\"})
+  return omit_quotes and str or '"'..str..'"'
+end
+
 return {
   number_to_floating_byte = number_to_floating_byte,
   floating_byte_to_number = floating_byte_to_number,
@@ -100,4 +111,5 @@ return {
   replace_table = replace_table,
   shallow_copy = shallow_copy,
   copy = copy,
+  to_binary_string = to_binary_string,
 }

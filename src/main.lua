@@ -13,6 +13,7 @@ local io_util = require("io_util")
 local constants = require("constants")
 local error_code_util = require("error_code_util")
 local phobos_version = require("phobos_version")
+local util = require("util")
 
 local function print_version()
   print(string.format("%d.%d.%d", phobos_version.major, phobos_version.minor, phobos_version.patch))
@@ -493,7 +494,7 @@ if success then
       end
       local output
       if args.use_load then
-        output = string.format("local main_chunk=assert(load(%q,nil,'b'))\nreturn main_chunk(...)", bytecode)
+        output = "local main_chunk=assert(load(\""..util.to_binary_string(bytecode, true).."\",nil,'b'))\nreturn main_chunk(...)"
       else
         output = bytecode
       end
