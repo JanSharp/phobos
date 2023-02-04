@@ -3,7 +3,7 @@ Version: 0.1.4
   Minor Features:
     - Add `--version` argument
     - Add a human readable header stating the Phobos version in output files with `--use-load`
-    - Add '--custom-header' to include a little extra description in the header mentioned above
+    - Add `--custom-header` to include a little extra description in the header mentioned above
     - Support files with a shebang
     - Handle invalid nodes in the formatter
     - Implement parsing and compiling as 32 bit signed integer numbers instead of doubles
@@ -14,7 +14,7 @@ Version: 0.1.4
     - Parse malformed numbers just like Lua parses them resulting in more useful syntax errors
   Bugfixes:
     - Fix 'lua.exe' not finding 'lua52.dll' because it was called 'lua.dll'
-    - Fix '(foo())' being a valid statement
+    - Fix `(foo())` being a valid statement
     - Fix strings in invalid contexts generating invalid AstTokenNodes or failing assertions
     - Fix the local variable for 'fornum' being in the parent scope in the AST
     - Fix unterminated block strings with leading newlines missing said newline in the invalid node
