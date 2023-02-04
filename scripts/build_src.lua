@@ -28,7 +28,7 @@ if not args then return end
 ---@cast args -?
 if args.help then return end
 
-loadfile(assert(package.searchpath("main", package.path)))(table.unpack{
+local main_args = {
   "--source", "src",
   "--output", "out/src/"..args.profile,
   "--temp", "temp/src/"..args.profile,
@@ -41,5 +41,13 @@ loadfile(assert(package.searchpath("main", package.path)))(table.unpack{
   "--source-name", "@src/?",
   "--ignore",
   "control.lua",
-  args.verbose and "--verbose" or nil,
-})
+}
+if args.profile == "debug" then
+  -- HACK: until https://github.com/tomblind/local-lua-debugger-vscode/issues/56 is implemented
+  main_args[#main_args+1] = "--use-load"
+end
+if args.verbose then
+  main_args[#main_args+1] = "--verbose"
+end
+
+loadfile(assert(package.searchpath("main", package.path)))(table.unpack(main_args))
