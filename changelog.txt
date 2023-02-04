@@ -2,6 +2,7 @@
 Version: 0.1.4
   Minor Features:
     - Add `--version` argument
+    - Add a human readable header stating the Phobos version in output files with `--use-load`
     - Support files with a shebang
     - Handle invalid nodes in the formatter
     - Implement parsing and compiling as 32 bit signed integer numbers instead of doubles
