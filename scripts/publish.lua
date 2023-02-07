@@ -246,20 +246,54 @@ if not args.skip_package then
 
   local function chdir(path)
     if args.verbose then
-      print("  Changing working dir to "..path)
+      print("  cd "..path)
     end
     lfs.chdir(path)
   end
 
   local root_path = Path.new(lfs.currentdir():gsub("\\", "/"))
   local root_filenames = {
-    "README.md",
-    "phobos_debug_symbols.md",
+    -- README.md is added separately because it requires modification
     "changelog.txt",
     "LICENSE.txt",
     "LICENSE_THIRD_PARTY.txt",
-    "thumbnail_1080_1080.png",
+    "thumbnail_144_144.png",
   }
+  local function add_root_folder_recursive(path)
+    for entry in lfs.dir(path:str()) do
+      if entry ~= "." and entry ~= ".." then
+        local entry_path = path / entry
+        local mode = entry_path:attr("mode")
+        if mode == "directory" then
+          add_root_folder_recursive(entry_path)
+        elseif mode == "file" then
+          root_filenames[#root_filenames+1] = entry_path:str()
+        end
+      end
+    end
+  end
+  add_root_folder_recursive(Path.new("docs"))
+
+  ---changes the current working directory
+  local add_readme
+  do
+    local readme_path = "temp/publish/README.md"
+    -- replace references to thumbnail_1080_1080.png with thumbnail_144_144.png
+    -- there's really no need to ship the 60 kB that is the big thumbnail. 14 kB is sufficient
+    -- the factorio package ends up getting both the padded and non padded version of the thumbnail, but so be it
+    local file = assert(io.open("README.md", "r"))
+    local readme_contents = file:read("*a")
+    assert(file:close())
+    readme_contents = readme_contents:gsub("thumbnail_1080_1080%.png", "thumbnail_144_144.png")
+    file = assert(io.open(readme_path, "w"))
+    assert(file:write(readme_contents))
+    assert(file:close())
+
+    function add_readme(zip_path)
+      chdir((root_path / "temp/publish"):str())
+      seven_zip("a", "-tzip", "-mx9", escape_arg(zip_path:sub(3):str()), escape_arg("README.md"))
+    end
+  end
 
   local function create_zip(platform, no_lua_binaries)
     local zip_path = Path.combine("temp/publish", "phobos_"..platform.."_"..version_str..".zip")
@@ -271,6 +305,7 @@ if not args.skip_package then
       chdir((root_path / "bin" / platform):str())
       seven_zip("a", "-tzip", "-mx9", "-r", escape_arg(("../.." / zip_path):str()), escape_arg("*"))
     end
+    add_readme(zip_path)
     chdir(root_path:str())
 
     -- not adding src files by default because the chances of someone needing them in
@@ -303,6 +338,7 @@ if not args.skip_package then
     seven_zip("a", "-tzip", "-mx9", "-r",
       escape_arg(("../../../.." / zip_path):str()), escape_arg("thumbnail.png")
     )
+    add_readme(zip_path)
     chdir(root_path:str())
 
     seven_zip((function()
@@ -315,9 +351,10 @@ if not args.skip_package then
       return table.unpack(result)
     end)())
 
-    root_filenames[#root_filenames+1] = "info.json"
+    root_filenames[#root_filenames+1] = "info.json" -- also include `info.json` for the factorio package
     seven_zip("a", "-tzip", "-mx9", escape_arg(zip_path:str()), table.unpack(root_filenames))
     root_filenames[#root_filenames+1] = "thumbnail.png" -- added previously
+    root_filenames[#root_filenames+1] = "README.md" -- added previously, by `add_readme`
 
     -- move all files in the zip archive into a `phobos` sub dir
 
