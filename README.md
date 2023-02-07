@@ -19,6 +19,8 @@ Phobos supports bytecode with the default Lua 5.2 signature.
 - [Ideas and Plans](docs/ideas_and_plans.md)
 - [Contributing](docs/contributing.md)
 - [Building from Source](docs/building_from_source.md)
+- [Running from Source](docs/running_from_source.md)
+- [Running Tests](docs/running_tests.md)
 
 # Libraries, Dependencies and Licenses
 
