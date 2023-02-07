@@ -39,6 +39,7 @@ loadfile(assert(package.searchpath("main", package.path)))(table.unpack{
   "--inject", "scripts/build_factorio_mod_ast_inject.pho",
   "--profile", args.profile,
   "--use-load",
+  "--custom-header", "See source file at src/{filename}",
   "--pho-extension", ".lua",
   "--source-name", "@__phobos__/src/?",
   (function()
