@@ -18,6 +18,7 @@ Version: 0.1.4
     - Implement parsing and compiling as 32 bit signed integer numbers instead of doubles
   Changes:
     - Change output of `--use-load` making it 40-50% smaller, a little bit bigger than raw bytecode
+    - Cleanup, improve and update the README and add a docs folder
     - Emit null strings in bytecode wherever null is valid instead of falling back to ""
     - Replace `stat_elem` internally everywhere by using intrusive linked lists
     - Parse malformed numbers just like Lua parses them resulting in more useful syntax errors

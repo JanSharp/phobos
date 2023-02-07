@@ -1,11 +1,15 @@
 
+# Phobos Debug Symbols
+
+Phobos also provides extra debug information beyond what regular Lua bytecode supports (like instruction column positions). The Lua VM won't do anything with this, but other tools may read this information, such as debuggers.
+
 # General
 
 Endianness is the same as Lua's, so since Phobos only supports little endian right now, everything is little endian in here as well.
 
 Indexes are 0 based. For ranges they are `start`: _including_, `end`: _excluding_.
 
-Strings are encoded the same way as lua strings. See [dump.lua](src/dump.lua). Just like any other string constant it has a trailing `\0` (which also counts towards the string's size).
+Strings are encoded the same way as lua strings. See [dump.lua](../src/dump.lua). Just like any other string constant it has a trailing `\0` (which also counts towards the string's size).
 
 Phobos debug symbols exist per function, including main chunk.
 
@@ -15,7 +19,7 @@ Phobos debug symbols are between the signature and trailing `\0` in binary form.
 
 Phobos Debug Symbols are stored in an extra, unused string constant which is the last constant in the constant table and must start with the signature `"\x1bPho\x10\x42\xf5"` **plus** a version number.
 
-The version number is a single byte counting from 0-254. At 255 it will start using the next byte the same way, so `fe` would be version 254, `ff00` 255, `ff01` 256. (just in case this ever gets that high)
+The version number is a single byte counting from 0-254. 255, so 0xff, is an invalid/undefined version number which if it ever reaches that far would indicate that the next bytes define the actual version number, how exactly is not determined.
 
 ## Collisions
 
@@ -42,7 +46,9 @@ Phobos itself will always output collision free bytecode by adding an unused nil
   - `uint32` source_index - index in `sources`. Instructions from this point forward originate from that source.
     0 stands for the lua_Debug `source` of this function, 1 is the 0th entry in `sources` and so on.
 
-there is an implied first section with `instruction_index` and `source_index` both being `0`.
+There is an implied first section with `instruction_index` and `source_index` both being `0`.
+
+Note that sources and sections are actually completely pointless in `0.1.0` until now (this will be updated once they are useful to state that version, or when they get removed), which I'm a but angry with myself about because who knows when this will be useful, and who knows if it'll actually take the form I've given it already. A dumb decision, but I'm learning.
 
 <!-- Notes:
 
