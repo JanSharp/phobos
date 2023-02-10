@@ -13,6 +13,8 @@
 ---- optimize/fold_const.lua: throw not supported error, because emulating an int32 machine is difficult
 ---- dump.lua: should the int32 signature be used, size_t be uint32 and Lua numbers be signed int32?
 ---@field use_int32 boolean?
+---- compiler: generate `tailcall` instructions where applicable?
+---@field use_tail_calls boolean?
 
 --------------------------------------------------
 -- tokens stuff:

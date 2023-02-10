@@ -158,7 +158,7 @@ local function compile(filename)
   if args.ensure_clean_data then
     prev_ast_str = serpent.block(ast)
   end
-  local compiled_data = compiler(ast, true)
+  local compiled_data = compiler(ast, {use_tail_calls = true})
 
   if args.ensure_clean_data then
     local ast_str = serpent.block(ast)

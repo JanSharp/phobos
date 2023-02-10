@@ -445,7 +445,7 @@ local function compile(filename, source_name, ignore_syntax_errors, accept_bytec
     fold_const(ast)
     fold_control_statements(ast)
   end
-  local compiled = compiler(ast, do_optimize)
+  local compiled = compiler(ast, {use_tail_calls = do_optimize})
   local bytecode = dump(compiled)
   return bytecode
 end

@@ -1751,7 +1751,9 @@ do
       patch_breaks_to_jump_here(stat, func)
     end
   }
-  function generate_code(functiondef, use_tail_calls)
+  ---@param functiondef AstMain|AstFunctionDef
+  ---@param options Options?
+  function generate_code(functiondef, options)
     local stack = create_stack()
     stack.max_stack_size = 2
     local func = {
@@ -1777,7 +1779,7 @@ do
       scope_levels = {},
       label_positions = {}, -- `pc` and `scope` labels are in, needed for backwards jmp `a` and `sbx`
       current_scope = nil, -- managed by generate_scope
-      use_tail_calls = use_tail_calls,
+      use_tail_calls = options and options.use_tail_calls,
     }
 
     local upvals = func.upvals
@@ -1823,7 +1825,7 @@ do
     -- TODO: temp until it can be determined if the end of the function is reachable
     do
       local position = functiondef.body.last
-        and ast.get_main_position(functiondef.body.last)
+        and ast.get_main_position(functiondef.body.last--[[@as AstNode]])
       local line = get_last_used_line(func)
       if line and position and position.line > line then
         line = position.line
