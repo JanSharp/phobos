@@ -1579,9 +1579,9 @@ do
       local is_tail_call = false
 
       if stat.exp_list and stat.exp_list[1] then
-        if func.compiler_options
-          and func.compiler_options.optimizations
-          and func.compiler_options.optimizations.tail_calls
+        if func.options
+          and func.options.optimizations
+          and func.options.optimizations.tail_calls
           and (not stat.exp_list[2])
           and (stat.exp_list[1].node_type == "call")
           and (not stat.exp_list[1].force_single_result)
@@ -1753,7 +1753,9 @@ do
       patch_breaks_to_jump_here(stat, func)
     end
   }
-  function generate_code(functiondef, compiler_options)
+  ---@param functiondef AstMain|AstFunctionDef
+  ---@param options Options?
+  function generate_code(functiondef, options)
     local stack = create_stack()
     stack.max_stack_size = 2
     local func = {
@@ -1779,7 +1781,7 @@ do
       scope_levels = {},
       label_positions = {}, -- `pc` and `scope` labels are in, needed for backwards jmp `a` and `sbx`
       current_scope = nil, -- managed by generate_scope
-      compiler_options = compiler_options,
+      options = options,
     }
 
     local upvals = func.upvals
@@ -1825,7 +1827,7 @@ do
     -- TODO: temp until it can be determined if the end of the function is reachable
     do
       local position = functiondef.body.last
-        and ast.get_main_position(functiondef.body.last)
+        and ast.get_main_position(functiondef.body.last--[[@as AstNode]])
       local line = get_last_used_line(func)
       if line and position and position.line > line then
         line = position.line
@@ -1905,7 +1907,7 @@ do
     func.scope_levels = nil
     func.label_positions = nil
     -- func.current_scope = nil -- is already `nil` after generate_scope
-    func.compiler_options = nil
+    func.options = nil
 
     -- inner_functions
     for i, func_proto in ipairs(functiondef.func_protos) do
