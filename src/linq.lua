@@ -1573,22 +1573,29 @@ end
 ---@param comparator fun(left: T, right: T): boolean
 ---@return LinqObj|T[]
 function linq_meta_index:sort(comparator)
-  local values = {}
-  local count = self.__count
-  if count then
-    local iter = self.__iter
-    for i = 1, count do
-      values[i] = iter()
+  local values
+  local inner_iter = self.__iter
+  local i = 0
+  self.__iter = function()
+    if not values then
+      values = {}
+      local count = self.__count
+      if count then
+        for j = 1, count do
+          values[j] = inner_iter()
+        end
+      else
+        count = 0
+        for value in inner_iter do
+          count = count + 1
+          values[count] = value
+        end
+      end
+      table.sort(values, comparator)
     end
-  else
-    count = 0
-    for value in self.__iter do
-      count = count + 1
-      values[count] = value
-    end
+    i = i + 1
+    return values[i]
   end
-  table.sort(values, comparator)
-  self.__iter = make_array_iter(values, count)
   return self
 end
 
