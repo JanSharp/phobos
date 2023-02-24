@@ -5,6 +5,8 @@
 ---@field __is_linq true
 ---@field __iter fun():any?
 ---@field __count integer? @ `nil` when count is unknown
+---@field __ordering_definitions {descending: boolean, selector: fun(value: any): any}[]
+---@field __ordering_reference_iter (fun():any?)?
 local linq_meta_index = {}
 local linq_meta = {__index = linq_meta_index}
 
@@ -57,10 +59,10 @@ end
 -- [x] max_by
 -- [x] min
 -- [x] min_by
--- [ ] order
--- [ ] order_by
--- [ ] order_desc
--- [ ] order_desc_by
+-- [x] order
+-- [x] order_by
+-- [x] order_descending
+-- [x] order_descending_by
 -- [x] prepend
 -- [x] remove_at (more performant than using `where`)
 -- [x] remove_range (more performant than using `where`)
@@ -79,12 +81,18 @@ end
 -- [x] take_last
 -- [x] take_last_while
 -- [x] take_while
+-- [x] then_by
+-- [x] then_descending_by
 -- [x] to_array
 -- [x] to_dict
 -- [ ] to_linked_list
 -- [x] to_lookup
 -- [x] union
 -- [x] where
+
+-- no need for `then` and `then_descending` because if it was sorting an array of numbers or strings, there's
+-- hardly ever a reason to use a selector for the initial `order` call, and then not use one in a `then`.
+-- meta methods could sometimes make sense, but why would you willingly destroy your performance that badly
 
 ---@generic T
 ---@param self LinqObj|T[]
@@ -1155,6 +1163,95 @@ end
 
 ---@generic T
 ---@param self LinqObj|T[]
+---@return LinqObj|T[]
+local function order_internal(self, first_ordering_definition)
+  local ordering_definitions = {first_ordering_definition}
+  self.__ordering_definitions = ordering_definitions
+  local values
+  local inner_iter = self.__iter
+  local i = 0
+  self.__iter = function()
+    if not values then
+      values = {}
+      local count = self.__count
+      if count then
+        for j = 1, count do
+          values[j] = inner_iter()
+        end
+      else
+        count = 0
+        for value in inner_iter do
+          count = count + 1
+          values[count] = value
+        end
+      end
+      table.sort(values, function(left, right)
+        for _, definition in ipairs(ordering_definitions) do
+          local left_value
+          local right_value
+          local selector = definition.selector
+          if selector then
+            left_value = selector(left)
+            right_value = selector(right)
+          else
+            left_value = left
+            right_value = right
+          end
+          if left_value == right_value then
+            goto continue
+          end
+          if definition.descending then
+            return left_value > right_value
+          else
+            return left_value < right_value
+          end
+          ::continue::
+        end
+        ---@diagnostic disable-next-line: unreachable-code
+        return false -- it is reachable though...
+      end)
+    end
+    i = i + 1
+    return values[i]
+  end
+  self.__ordering_reference_iter = self.__iter
+  return self
+end
+
+---@generic T
+---@param self LinqObj|T[]
+---@return LinqObj|T[]
+function linq_meta_index:order()
+  return order_internal(self, {selector = nil, descending = false})
+end
+
+---@generic T
+---@param self LinqObj|T[]
+---@return LinqObj|T[]
+function linq_meta_index:order_descending()
+  return order_internal(self, {selector = nil, descending = true})
+end
+
+---@generic T
+---@generic TValue
+---@param self LinqObj|T[]
+---@param selector fun(value: T):TValue
+---@return LinqObj|T[]
+function linq_meta_index:order_by(selector)
+  return order_internal(self, {selector = selector, descending = false})
+end
+
+---@generic T
+---@generic TValue
+---@param self LinqObj|T[]
+---@param selector fun(value: T):TValue
+---@return LinqObj|T[]
+function linq_meta_index:order_descending_by(selector)
+  return order_internal(self, {selector = selector, descending = true})
+end
+
+---@generic T
+---@param self LinqObj|T[]
 ---@param collection LinqObj|T[]
 ---@return LinqObj|T[]
 function linq_meta_index:prepend(collection)
@@ -1743,6 +1840,41 @@ function linq_meta_index:take_while(condition)
     return value
   end
   return self
+end
+
+---@generic T
+---@param self LinqObj|T[]
+---@return LinqObj|T[]
+local function then_by_internal(self, next_ordering_definition)
+  -- The comparison of the iter functions isn't perfect because some linq functions don't always
+  -- replace the iterator for optimization reasons. However the check is better than nothing as it still has
+  -- a good chance of catching mistakes during development.
+  if not self.__ordering_definitions or self.__ordering_reference_iter ~= self.__iter then
+    error("'then_by' and 'then_descending_by' must only be used directly after any of the \z
+      'order' functions, or another 'then' function."
+    )
+  end
+  -- see `order_internal` for the implementation
+  self.__ordering_definitions[#self.__ordering_definitions+1] = next_ordering_definition
+  return self
+end
+
+---@generic T
+---@generic TValue
+---@param self LinqObj|T[]
+---@param selector fun(value: T):TValue
+---@return LinqObj|T[]
+function linq_meta_index:then_by(selector)
+  return then_by_internal(self, {selector = selector, descending = false})
+end
+
+---@generic T
+---@generic TValue
+---@param self LinqObj|T[]
+---@param selector fun(value: T):TValue
+---@return LinqObj|T[]
+function linq_meta_index:then_descending_by(selector)
+  return then_by_internal(self, {selector = selector, descending = true})
 end
 
 ---@generic T

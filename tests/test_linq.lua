@@ -4,6 +4,15 @@ local assert = require("assert")
 
 local linq = require("linq")
 
+local function reverse_array(array)
+  local result = {}
+  local count = #array
+  for i = count, 1, -1 do
+    result[count - i + 1] = array[i]
+  end
+  return result
+end
+
 ---@return (string|boolean)[]
 local function get_test_strings()
   return {
@@ -1153,6 +1162,62 @@ do
     end))
   end)
 
+  for _, outer in ipairs(known_or_unknown_count_dataset) do
+    for _, data in ipairs{
+      {label = "no values", values = {}, expected = {}},
+      {label = "one value", values = {1}, expected = {1}},
+      {label = "three values", values = {2, 8, 4}, expected = {2, 4, 8}},
+      {label = "duplicate values", values = {2, 8, 2, 8, 2, 4}, expected = {2, 2, 2, 4, 8, 8}},
+      {label = "five values", values = {4, 2, 10, 6, 8}, expected = {2, 4, 6, 8, 10}},
+    }
+    do
+      add_test("order with "..data.label..", self has "..outer.label, function()
+        local obj = outer.make_obj(data.values):order()
+        assert_iteration(obj, data.expected)
+      end)
+
+      local reverse_expected = {}
+      local count = #data.expected
+      for i = 1, count do
+        reverse_expected[count - i + 1] = data.expected[i]
+      end
+      add_test("order_descending with "..data.label..", self has "..outer.label, function()
+        local obj = outer.make_obj(data.values):order_descending()
+        assert_iteration(obj, reverse_expected)
+      end)
+    end
+  end
+
+  for _, outer in ipairs(known_or_unknown_count_dataset) do
+    -- ordered starting at the second character instead of first
+    for _, data in ipairs{
+      {label = "no values", values = {}, expected = {}},
+      {label = "one value", values = {"hello"}, expected = {"hello"}},
+      {label = "three values", values = {"foo", "bar", "baz"}, expected = {"bar", "baz", "foo"}},
+      {
+        label = "duplicate values",
+        values = {"foo", "bar", "foo", "baz", "baz", "foo"},
+        expected = {"bar", "baz", "baz", "foo", "foo", "foo"},
+      },
+      {
+        label = "five values",
+        values = {"hello", "world", "foo", "baz", "bar"},
+        expected = {"bar", "baz", "hello", "foo", "world"},
+      },
+    }
+    do
+      add_test("order_by with "..data.label..", self has "..outer.label, function()
+        local obj = outer.make_obj(data.values):order_by(function(value) return value:sub(2, -1) end)
+        assert_iteration(obj, data.expected)
+      end)
+
+      add_test("order_descending_by with "..data.label..", self has "..outer.label, function()
+        local obj = outer.make_obj(data.values):order_descending_by(function(value) return value:sub(2, -1) end)
+        assert_iteration(obj, reverse_array(data.expected))
+      end)
+    end
+  end
+
   add_test("prepend an array, self has known __count", function()
     local obj = linq(get_test_strings()):prepend{"hello", "world"}
     assert.equals(6, obj.__count, "internal __count")
@@ -1623,6 +1688,170 @@ do
   add_test("take_while with condition using index arg", function()
     local obj = linq(get_test_strings()):take_while(function(_, i) return i <= 3 end)
     assert_iteration(obj, {"foo", "bar", false})
+  end)
+
+  -- then_by and then_descending_by
+  for _, outer in ipairs(known_or_unknown_count_dataset) do
+    for _, data in ipairs{
+      {
+        label = "0 values",
+        values = {},
+        expected = {},
+        alt_expected = nil, -- the same as 'expected'
+      },
+      {
+        label = "1 value",
+        values = {{first = "hello", second = "world"}},
+        expected = {{first = "hello", second = "world"}},
+        alt_expected = nil, -- the same as 'expected'
+      },
+      {
+        label = "2 values, non equal 'first' and 'second'",
+        values = {
+          {first = "bb", second = "cc"},
+          {first = "aa", second = "dd"},
+        },
+        expected = {
+          {first = "aa", second = "dd"},
+          {first = "bb", second = "cc"},
+        },
+        alt_expected = nil, -- the same as 'expected'
+      },
+      {
+        label = "2 values, non equal 'first', equal 'second'",
+        values = {
+          {first = "bb", second = "cc"},
+          {first = "aa", second = "cc"},
+        },
+        expected = {
+          {first = "aa", second = "cc"},
+          {first = "bb", second = "cc"},
+        },
+        alt_expected = nil, -- the same as 'expected'
+      },
+      {
+        label = "2 values, equal 'first', non equal 'second'",
+        values = {
+          {first = "aa", second = "dd"},
+          {first = "aa", second = "cc"},
+        },
+        expected = {
+          {first = "aa", second = "cc"},
+          {first = "aa", second = "dd"},
+        },
+        alt_expected = {
+          {first = "aa", second = "dd"},
+          {first = "aa", second = "cc"},
+        },
+      },
+      {
+        label = "4 values, 2 middle have equal 'first' and 'second'",
+        values = {
+          {first = "bb", second = "ee"},
+          {first = "cc", second = "dd"},
+          {first = "bb", second = "ee"},
+          {first = "aa", second = "ff"},
+        },
+        expected = {
+          {first = "aa", second = "ff"},
+          {first = "bb", second = "ee"},
+          {first = "bb", second = "ee"},
+          {first = "cc", second = "dd"},
+        },
+        alt_expected = nil, -- the same as 'expected'
+      },
+      {
+        label = "6 values, 3 'first' equal, all different 'second'",
+        values = {
+          {first = "foo", second = "ooo"},
+          {first = "bar", second = "aaa"},
+          {first = "hello", second = "baz"},
+          {first = "world", second = "hello"},
+          {first = "hello", second = "foo"},
+          {first = "hello", second = "bar"},
+        },
+        expected = {
+          {first = "bar", second = "aaa"},
+          {first = "foo", second = "ooo"},
+          {first = "hello", second = "bar"},
+          {first = "hello", second = "baz"},
+          {first = "hello", second = "foo"},
+          {first = "world", second = "hello"},
+        },
+        alt_expected = {
+          {first = "bar", second = "aaa"},
+          {first = "foo", second = "ooo"},
+          {first = "hello", second = "foo"},
+          {first = "hello", second = "baz"},
+          {first = "hello", second = "bar"},
+          {first = "world", second = "hello"},
+        },
+      },
+    }
+    do
+      add_test("order_by + then_by with "..data.label..", self has "..outer.label, function()
+        local obj = outer.make_obj(data.values)
+          :order_by(function(value) return value.first end)
+          :then_by(function(value) return value.second end)
+        ;
+        assert_iteration(obj, data.expected)
+      end)
+
+      add_test("order_by + then_descending_by with "..data.label..", self has "..outer.label, function()
+        local obj = outer.make_obj(data.values)
+          :order_by(function(value) return value.first end)
+          :then_descending_by(function(value) return value.second end)
+        ;
+        -- 'alt_expected' is omitted in the definition if it's the same as 'expected'
+        assert_iteration(obj, data.alt_expected or data.expected)
+      end)
+
+      -- put it a local for reuse, because why not
+      local reverse_expected = reverse_array(data.expected)
+      add_test("order_descending_by + then_by with "..data.label..", self has "..outer.label, function()
+        local obj = outer.make_obj(data.values)
+          :order_descending_by(function(value) return value.first end)
+          :then_by(function(value) return value.second end)
+        ;
+        -- 'alt_expected' is omitted in the definition if it's the same as 'expected'
+        assert_iteration(obj, data.alt_expected and reverse_array(data.alt_expected) or reverse_expected)
+      end)
+
+      add_test("order_descending_by + then_descending_by with "..data.label..", self has "..outer.label, function()
+        local obj = outer.make_obj(data.values)
+          :order_descending_by(function(value) return value.first end)
+          :then_descending_by(function(value) return value.second end)
+        ;
+        assert_iteration(obj, reverse_expected)
+      end)
+    end
+  end
+
+  add_test("order_by + then_by + then_descending_by", function()
+    local obj = linq{
+      "beg",
+      "aeg",
+      "adg",
+      "beh",
+      "adh",
+      "aeh",
+      "bdh",
+      "bdg",
+    }
+      :order_by(function(value) return value:sub(1, 1) end)
+      :then_by(function(value) return value:sub(2, 2) end)
+      :then_descending_by(function(value) return value:sub(3, 3) end)
+    ;
+    assert_iteration(obj, {
+      "adh",
+      "adg",
+      "aeh",
+      "aeg",
+      "bdh",
+      "bdg",
+      "beh",
+      "beg",
+    })
   end)
 
   for _, outer in ipairs(known_or_unknown_count_dataset) do
