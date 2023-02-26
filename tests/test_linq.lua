@@ -4,6 +4,8 @@ local assert = require("assert")
 
 local linq = require("linq")
 
+local ll = require("linked_list")
+
 local function reverse_array(array)
   local result = {}
   local count = #array
@@ -1873,6 +1875,43 @@ do
       local obj = outer.make_obj(get_test_strings())
       assert_sequential_helper(obj, obj.to_dict, function(value) return value, value end)
     end)
+  end
+
+  for _, outer in ipairs(known_or_unknown_count_dataset) do
+    for _, data in ipairs{
+      {label = "tracking liveliness, default name", track_liveliness = true, name = nil},
+      {label = "not tracking liveliness, default name", track_liveliness = false, name = nil},
+      {label = "tracking liveliness, non default name", track_liveliness = true, name = "foo"},
+      {label = "not tracking liveliness, non default name", track_liveliness = false, name = "foo"},
+    }
+    do
+      add_test("to_linked_list 3 values, "..data.label..", self has "..outer.label, function()
+        local nodes = {{foo = 100}, {foo = 200}, {foo = 300}}
+        local got_list = outer.make_obj(nodes)
+          :to_linked_list(data.track_liveliness, data.name)
+        ;
+        local expected = ll.new_list(data.track_liveliness, data.name)
+        ll.append(expected, {foo = 100})
+        ll.append(expected, {foo = 200})
+        ll.append(expected, {foo = 300})
+        expected.alive_nodes = assert.do_not_compare_flag
+        assert.contents_equals(expected, got_list)
+        -- since we can't compare the alive_nodes lookup table, do it using the 'is_alive' function
+        if data.track_liveliness then
+          for i, node in ipairs(nodes) do
+            local got = ll.is_alive(got_list, node)
+            assert.equals(true, got, "result of 'is_alive' for node #"..i)
+          end
+        else
+          assert.errors(
+            "Attempt to check liveliness for a node in a linked list that does not track liveliness%.",
+            function()
+              ll.is_alive(got_list, nodes[1])
+            end
+          )
+        end
+      end)
+    end
   end
 
   for _, outer in ipairs(known_or_unknown_count_dataset) do

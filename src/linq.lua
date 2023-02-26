@@ -1,6 +1,8 @@
 
 -- function names and behavior inspired by C# System.Linq
 
+local ll = require("linked_list")
+
 ---@class LinqObj
 ---@field __is_linq true
 ---@field __iter fun():any?
@@ -85,7 +87,7 @@ end
 -- [x] then_descending_by
 -- [x] to_array
 -- [x] to_dict
--- [ ] to_linked_list
+-- [x] to_linked_list
 -- [x] to_lookup
 -- [x] union
 -- [x] where
@@ -1920,6 +1922,35 @@ function linq_meta_index:to_dict(kvp_selector)
     end
   end
   return dict
+end
+
+---@generic T
+---@param self LinqObj|T[]
+---@param track_liveliness boolean? @ `true` enables usage of `is_alive`
+---@param name string? @ the name used for next and prev keys.
+---@return {first: T?, last: T?}
+function linq_meta_index:to_linked_list(track_liveliness, name)
+  local list = ll.new_list(track_liveliness, name)
+  local next_key = list.next_key
+  local prev_key = list.prev_key
+  local alive_nodes = list.alive_nodes
+  list.first = self.__iter()
+  if track_liveliness then
+    alive_nodes[list.first] = true
+  end
+  local prev = list.first
+  for value in self.__iter do
+    if prev then
+      prev[next_key] = value
+      value[prev_key] = prev
+    end
+    if track_liveliness then
+      alive_nodes[value] = true
+    end
+    prev = value
+  end
+  list.last = prev
+  return list
 end
 
 ---@generic T
