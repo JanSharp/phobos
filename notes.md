@@ -38,6 +38,8 @@ have an understanding of units for numbers. m/s (speed) * s (time) = m (distance
 
 when stripping debug symbols ensure that the last constant in the constant table cannot be mistaken as Phobos debug symbols by appending an unused nil constant if it is the case.
 
+add list of all the features that are implemented in the docs.
+
 
 
 # Language Extensions (not implemented)
