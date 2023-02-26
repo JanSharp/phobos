@@ -1888,7 +1888,7 @@ do
       add_test("to_linked_list 3 values, "..data.label..", self has "..outer.label, function()
         local nodes = {{foo = 100}, {foo = 200}, {foo = 300}}
         local got_list = outer.make_obj(nodes)
-          :to_linked_list(data.track_liveliness, data.name)
+          :to_linked_list(data.name, data.track_liveliness)
         ;
         local expected = ll.new_list(data.name, data.track_liveliness)
         ll.append(expected, {foo = 100})

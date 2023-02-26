@@ -1926,31 +1926,13 @@ end
 
 ---@generic T
 ---@param self LinqObj|T[]
----@param track_liveliness boolean? @ `true` enables usage of `is_alive`
----@param name string? @ the name used for next and prev keys.
+---@param name string? @ (default: `nil`) the name used for next and prev keys.
+---`nil` => `node.next` and `node.prev`\
+---`"sibling"` => `node.next_sibling` and `node.prev_sibling`
+---@param track_liveliness boolean? @ (default: `false`) `true` enables usage of `is_alive`
 ---@return {first: T?, last: T?}
-function linq_meta_index:to_linked_list(track_liveliness, name)
-  local list = ll.new_list(name, track_liveliness)
-  local next_key = list.next_key
-  local prev_key = list.prev_key
-  local alive_nodes = list.alive_nodes
-  list.first = self.__iter()
-  if track_liveliness then
-    alive_nodes[list.first] = true
-  end
-  local prev = list.first
-  for value in self.__iter do
-    if prev then
-      prev[next_key] = value
-      value[prev_key] = prev
-    end
-    if track_liveliness then
-      alive_nodes[value] = true
-    end
-    prev = value
-  end
-  list.last = prev
-  return list
+function linq_meta_index:to_linked_list(name, track_liveliness)
+  return ll.from_iterator(self.__iter, name, track_liveliness)
 end
 
 ---@generic T
