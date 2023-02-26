@@ -1,7 +1,3 @@
-[submodule ".vscode/lua"]
-	path = .vscode/sumneko_lua_plugin
-	url = https://github.com/JanSharp/FactorioSumnekoLuaPlugin.git
-	branch = master
 [submodule "lib/LuaPath"]
 	path = src/lib/LuaPath
 	url = https://github.com/JanSharp/LuaPath.git

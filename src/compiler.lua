@@ -365,30 +365,58 @@ do
     ["not"] = opcodes["not"],
   }
 
-  local function local_or_fetch(expr,func,reg)
+  local function local_or_fetch(expr,func)
     if expr.node_type == "local_ref" then
       return find_local(expr)
     else
-      reg = create_temp_reg(func)
+      local reg = create_temp_reg(func)
       generate_expr(expr,1,func,{reg})
       return reg
     end
   end
 
-  local const_node_types = util.invert{"boolean","nil","string","number"}
-  local function const_or_local_or_fetch(expr,func,reg)
-    if const_node_types[expr.node_type] then
-      return bit32.bor(add_constant(expr,func),0x100), true
+  local function generate_const_code_internal(expr, k, func, reg)
+    if k <= 0x3ffff then
+      func.instructions[#func.instructions+1] = {
+        op = opcodes.loadk, a = use_reg(reg, func), bx = k,
+        line = expr.line, column = expr.column,
+      }
     else
-      return local_or_fetch(expr,func,reg), false
+      func.instructions[#func.instructions+1] = {
+        op = opcodes.loadkx, a = use_reg(reg, func),
+        line = expr.line, column = expr.column,
+      }
+      func.instructions[#func.instructions+1] = {
+        op = opcodes.extraarg, ax = k,
+        line = expr.line, column = expr.column,
+      }
     end
   end
 
-  local function upval_or_local_or_fetch(expr,func,reg)
+  local function generate_const_code(expr,num_results,func,regs)
+    generate_const_code_internal(expr, add_constant(expr, func), func, regs[num_results])
+  end
+
+  local const_node_types = util.invert{"boolean","nil","string","number"}
+  local function const_or_local_or_fetch(expr,func)
+    if const_node_types[expr.node_type] then
+      local k = add_constant(expr, func)
+      if k >= 0x100 then
+        local reg = create_temp_reg(func)
+        generate_const_code_internal(expr, k, func, reg)
+        return reg, false
+      end
+      return bit32.bor(add_constant(expr,func),0x100), true
+    else
+      return local_or_fetch(expr,func), false
+    end
+  end
+
+  local function upval_or_local_or_fetch(expr,func)
     if expr.node_type == "upval_ref" then
       return expr.reference_def.index, true
     else
-      return local_or_fetch(expr,func,reg), false
+      return local_or_fetch(expr,func), false
     end
   end
 
@@ -782,25 +810,6 @@ do
       return test_expr(node, nil, jump_if_true, func)
     end
 
-  end
-
-  local function generate_const_code(expr,num_results,func,regs)
-    local k = add_constant(expr, func)
-    if k <= 0x3ffff then
-      func.instructions[#func.instructions+1] = {
-        op = opcodes.loadk, a = use_reg(regs[num_results], func), bx = k,
-        line = expr.line, column = expr.column,
-      }
-    else
-      func.instructions[#func.instructions+1] = {
-        op = opcodes.loadkx, a = use_reg(regs[num_results], func),
-        line = expr.line, column = expr.column,
-      }
-      func.instructions[#func.instructions+1] = {
-        op = opcodes.extraarg, ax = k,
-        line = expr.line, column = expr.column,
-      }
-    end
   end
 
   local function get_position_for_call_instruction(expr)
@@ -1570,9 +1579,9 @@ do
       local is_tail_call = false
 
       if stat.exp_list and stat.exp_list[1] then
-        if func.compiler_options
-          and func.compiler_options.optimizations
-          and func.compiler_options.optimizations.tail_calls
+        if func.options
+          and func.options.optimizations
+          and func.options.optimizations.tail_calls
           and (not stat.exp_list[2])
           and (stat.exp_list[1].node_type == "call")
           and (not stat.exp_list[1].force_single_result)
@@ -1744,7 +1753,9 @@ do
       patch_breaks_to_jump_here(stat, func)
     end
   }
-  function generate_code(functiondef, compiler_options)
+  ---@param functiondef AstMain|AstFunctionDef
+  ---@param options Options?
+  function generate_code(functiondef, options)
     local stack = create_stack()
     stack.max_stack_size = 2
     local func = {
@@ -1770,7 +1781,7 @@ do
       scope_levels = {},
       label_positions = {}, -- `pc` and `scope` labels are in, needed for backwards jmp `a` and `sbx`
       current_scope = nil, -- managed by generate_scope
-      compiler_options = compiler_options,
+      options = options,
     }
 
     local upvals = func.upvals
@@ -1816,7 +1827,7 @@ do
     -- TODO: temp until it can be determined if the end of the function is reachable
     do
       local position = functiondef.body.last
-        and ast.get_main_position(functiondef.body.last)
+        and ast.get_main_position(functiondef.body.last--[[@as AstNode]])
       local line = get_last_used_line(func)
       if line and position and position.line > line then
         line = position.line
@@ -1896,7 +1907,7 @@ do
     func.scope_levels = nil
     func.label_positions = nil
     -- func.current_scope = nil -- is already `nil` after generate_scope
-    func.compiler_options = nil
+    func.options = nil
 
     -- inner_functions
     for i, func_proto in ipairs(functiondef.func_protos) do

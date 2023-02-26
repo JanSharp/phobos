@@ -62,6 +62,7 @@ require("test_virtual_file_system")
 require("test_virtual_io_util")
 
 -- test src
+require("test_linked_list")
 require("test_tokenizer")
 require("test_parser")
 require("test_jump_linker")

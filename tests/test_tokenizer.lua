@@ -8,8 +8,11 @@ local tokenizer = require("tokenize")
 
 local test_source = "=(test source)"
 
-local function test(str, expected_tokens)
-  local iter, state, index = tokenizer(str, test_source)
+---@param str string
+---@param expected_tokens Token[]
+---@param options Options?
+local function test(str, expected_tokens, options)
+  local iter, state, index = tokenizer(str, test_source, options)
   local got
   index, got = iter(state, index)
   local i = 0
@@ -638,7 +641,7 @@ do
   do
     local scope = main_scope:new_scope("number")
 
-    local function add_test(str, value)
+    local function valid(str, value)
       scope:add_test("number '"..str.."'", function()
         local token = new_token("number", 1, 1, 1)
         token.value = value
@@ -649,25 +652,28 @@ do
         })
       end)
     end
-
-    add_test("1234567890", 1234567890)
-    add_test(".1", .1)
-    add_test("1.1", 1.1)
-    add_test("1e1", 1e1)
-    add_test("1E1", 1E1)
-    add_test("1e+1", 1e+1)
-    add_test("1e-1", 1e-1)
-    add_test("0x1234567890", 0x1234567890)
-    add_test("0xabcdef", 0xabcdef)
-    add_test("0xABCDEF", 0xABCDEF)
-    add_test("0x1aA", 0x1aA)
-    add_test("0X1", 0X1)
-    add_test("0x.1", 0x.1)
-    add_test("0x1.1", 0x1.1)
-    add_test("0x1p1", 0x1p1)
-    add_test("0x1P1", 0x1P1)
-    add_test("0x1p+1", 0x1p+1)
-    add_test("0x1p-1", 0x1p-1)
+    valid("1234567890", 1234567890)
+    valid(".1", .1)
+    valid("1.", 1.) -- I don't really like that this is valid, but it is what it is I guess
+    valid("1.1", 1.1)
+    valid("1e1", 1e1)
+    valid("1E1", 1E1)
+    valid("1e+1", 1e+1)
+    valid("1e-1", 1e-1)
+    valid("0x1234567890", 0x1234567890)
+    valid("0xabcdef", 0xabcdef)
+    valid("0xABCDEF", 0xABCDEF)
+    valid("0x1aA", 0x1aA)
+    valid("0X1", 0X1)
+    valid("0x.1", 0x.1)
+    valid("0x1.1", 0x1.1)
+    valid("0x1p1", 0x1p1)
+    valid("0x1P1", 0x1P1)
+    valid("0x1p+1", 0x1p+1)
+    valid("0x1p-1", 0x1p-1)
+    valid("0x0.1E", 0x0.1E)
+    valid("0x0.1E", 0x0.1E)
+    valid("0x0.1E", 0x0.1E)
 
     local function malformed(str)
       scope:add_test("malformed number '"..str.."'", function()
@@ -678,16 +684,87 @@ do
           message_args = {str},
           source = test_source,
           start_position = {line = 1, column = 1},
-          stop_position = {line = 1, column = 2},
+          stop_position = {line = 1, column = #str},
         }}
         test(str..";", {
           token,
-          new_token(";", 3, 1, 3),
+          new_token(";", #str + 1, 1, #str + 1),
         })
       end)
     end
+    malformed("1.1.1")
+    malformed("1..1")
+    malformed("1..")
+    malformed("1...")
+    malformed("1e")
+    malformed("1E")
+    malformed("1e+")
+    malformed("1e-")
+    malformed("1Ee")
+    malformed("1E+e-")
+    malformed("1E+1e-1")
     malformed("0x")
     malformed("0X")
+    malformed("0xp")
+    malformed("0xP")
+    malformed("0x.")
+    malformed("0x.p1")
+    malformed("0xp1")
+    malformed("0xpp")
+    malformed("0x1p+1p-1")
+
+    local function valid_int32(str, value)
+      scope:add_test("int32 number '"..str.."'", function()
+        local token = new_token("number", 1, 1, 1)
+        token.value = value
+        token.src_value = str
+        test(str..";", {
+          token,
+          new_token(";", #str + 1, 1, #str + 1),
+        }, {use_int32 = true})
+      end)
+    end
+    valid_int32("1", 1)
+    valid_int32("0x1", 0x1)
+    valid_int32("0x7fffffff", 0x7fffffff)
+
+    local function invalid_int32_internal(label, str, error_code)
+      scope:add_test(label, function()
+        local token = new_token("invalid", 1, 1, 1)
+        token.value = str
+        token.error_code_insts = {error_code_util.new_error_code{
+          error_code = error_code,
+          message_args = {str},
+          source = test_source,
+          start_position = {line = 1, column = 1},
+          stop_position = {line = 1, column = #str},
+        }}
+        test(str..";", {
+          token,
+          new_token(";", #str + 1, 1, #str + 1),
+        }, {use_int32 = true})
+      end)
+    end
+
+    local function invalid_int32(str)
+      invalid_int32_internal("invalid int32 '"..str.."'", str, error_code_util.codes.number_must_be_int32)
+    end
+    invalid_int32("1.0")
+    invalid_int32("0.1")
+    invalid_int32("1.11e1")
+    invalid_int32("1e-1")
+    invalid_int32("0x0.1")
+    invalid_int32("0x0.1p2")
+    -- these are integers in the valid range, but they have an exponent
+    invalid_int32("1e1")
+    invalid_int32("1.1e1")
+    invalid_int32("0x1p1")
+
+    invalid_int32_internal(
+      "invalid int32 '0x80000000' with special error because it may be intended to be the lowest negative number",
+      "0x80000000",
+      error_code_util.codes.number_exactly_past_max_int32
+    )
   end -- end number
 
   do
@@ -754,13 +831,14 @@ do
       assert.equals("#!/usr/bin/env lua", state.shebang_line, "state.shebang_line")
     end)
 
-    scope:add_test("number plus ident '0foo'", function()
+    -- can't use foo because the 0f would emit a malformed number invalid token
+    scope:add_test("number plus ident '0oof'", function()
       local token = new_token("number", 1, 1, 1)
       token.value = 0
       token.src_value = "0"
-      test("0foo", {
+      test("0oof", {
         token,
-        new_token("ident", 2, 1, 2, "foo"),
+        new_token("ident", 2, 1, 2, "oof"),
       })
     end)
 
@@ -789,5 +867,31 @@ do
     with_sign()
     with_sign("+")
     with_sign("-")
+
+    -- since dashes - signs for numbers - are also unop and binop, they mustn't be apart of number tokens
+
+    scope:add_test("negate unop followed by number without spaces in between", function()
+      local token = new_token("number", 2, 1, 2)
+      token.value = 0
+      token.src_value = "0"
+      test("-0", {
+        new_token("-", 1, 1, 1),
+        token,
+      })
+    end)
+
+    scope:add_test("subtract binop followed by number without spaces in between", function()
+      local left_token = new_token("number", 1, 1, 1)
+      left_token.value = 0
+      left_token.src_value = "0"
+      local right_token = new_token("number", 3, 1, 3)
+      right_token.value = 0
+      right_token.src_value = "0"
+      test("0-0", {
+        left_token,
+        new_token("-", 2, 1, 2),
+        right_token,
+      })
+    end)
   end -- end other
 end

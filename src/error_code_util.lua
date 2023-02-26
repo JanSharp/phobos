@@ -80,6 +80,21 @@ add_error_code(
 )
 add_error_code(
   types.tokenizer,
+  "number_must_be_int32",
+  "Number musts be an int32 '%s'"
+)
+add_error_code(
+  types.tokenizer,
+  "number_exactly_past_max_int32",
+  "Number musts be an int32 '%s'. The value 0x8000000 is by 1 past the max value of signed 32 bit \z
+    integers, however if it were to be -0x8000000 it would be valid, as that is the min value. \z
+    If this was the goal, then unfortunately you will have to do -0x7ffffff - 1 instead. \z
+    There are ways to allow writing the min value as a constant value, however it is not worth the \z
+    amount of special handling and performance it would require in the tokenizer and or the parser.\z
+  "
+)
+add_error_code(
+  types.tokenizer,
   "invalid_token",
   "Invalid token '%s'"
 )

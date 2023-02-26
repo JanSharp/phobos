@@ -32,6 +32,65 @@ done
 
 when adding anything other than errors as error codes - so infos or warnings - expose severity to build profiles
 
-think of types like rules where each rule just applies one more restriction on an inner type, which is a rule. The inner most type is therefore always `any`.
+expose compile_util options.custom_header to build profiles
 
 have an understanding of units for numbers. m/s (speed) * s (time) = m (distance) for example
+
+when stripping debug symbols ensure that the last constant in the constant table cannot be mistaken as Phobos debug symbols by appending an unused nil constant if it is the case.
+
+add list of all the features that are implemented in the docs.
+
+
+
+# Language Extensions (not implemented)
+
+Phobos syntax is based on Lua 5.2. By default Phobos will always be able to compile raw Lua, but some opt-in syntax may inevitably break compatibility with regular Lua syntax.
+
+## Type System (not implemented)
+
+Phobos is planned to be type aware. The idea is that it can figure out the majority of types on it's own, but there will most likely be ways for you to explicitly tell Phobos what type something should have.
+
+## Safe Chaining Operators (not implemented)
+
+The operators `?.`, `?:`, `?[]` and `?()` to replace the common Lua idiom `foo and foo.bar`. These allow more efficient re-use of intermediate results in deeply nested optional objects. `?.`, `?:` and `?[]` protect an indexing operation, while `?()` protects a function call, calling the function only if it exists (is not `nil` or `false`).
+
+## Block Initializer Clauses (not implemented)
+
+Modified versions of several block constructs are planned to allow defining block locals in the opening condition of the block.
+
+```lua
+if name_list = exp_list then ... end
+
+do
+  local name_list = exp_list
+  if select(1,name_list) then ... end
+end
+```
+
+```lua
+while name_list = exp_list do ... end
+
+do
+  local name_list = exp_list
+  while select(1,name_list) do
+    ...
+    name_list = exp_list
+  end
+end
+```
+
+## Compact Expression-body Lambda (not implemented)
+
+Lua's existing function syntax is already fairly compact, but for the specific case of a function which simply returns an exp_list it can be reduced further:
+
+```lua
+(foo,bar) => foo?[bar]
+```
+
+## Global Definitions
+
+Add a definition statements for globals, like `define global foo` and only then a standalone `foo` expression is a valid index into _ENV. Explicit indexing into _ENV would still be allowed regardless of what globals are defined.
+
+## And More (not implemented)
+
+There are lots of ideas for language extensions which are not listed here in the readme yet.

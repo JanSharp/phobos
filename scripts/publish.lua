@@ -244,7 +244,7 @@ if not args.skip_package then
 
   local function chdir(path)
     if args.verbose then
-      print("  Changing working dir to "..path)
+      print("  cd "..path)
     end
     io_util.set_working_dir(path)
   end

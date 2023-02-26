@@ -7,6 +7,16 @@
 ---@field column integer?
 ---@field index nil @ -- TODO: maybe do add the index to all AstTokenNodes
 
+---@class Options
+---- tokenizer.lua: should numbers be parsed as signed int32 or doubles?
+---- parser.lua: pass it along to the tokenizer
+---- optimize/fold_const.lua: throw not supported error, because emulating an int32 machine is difficult
+---- il_generator.lua: throw not supported error
+---- dump.lua: should the int32 signature be used, size_t be uint32 and Lua numbers be signed int32?
+---@field use_int32 boolean?
+---checked in several different parts during compilation
+---@field optimizations Optimizations
+
 --------------------------------------------------
 -- tokens stuff:
 

@@ -1,9 +1,14 @@
 
 local phobos_consts = require("constants")
 
+local currently_using_int32
+
 ---@return string dumped_integer
 ---@return integer byte_count
-local function dump_int(i)
+local function dump_uint32(i)
+  if i < 0 or i > 0xffffffff or (i % 1) ~= 0 then
+    assert(false, string.format("Attempt to dump value '%f' as a 32 bit unsigned integer.", i))
+  end
   -- int is 4 bytes
   -- **little endian**
   return string.char(
@@ -14,14 +19,30 @@ local function dump_int(i)
   ), 4
 end
 
+local function dump_signed_int32(i)
+  if i < -0x80000000 or i > 0x7fffffff or (i % 1) ~= 0 then
+    assert(false, string.format("Attempt to dump value '%f' as a 32 bit signed integer.", i))
+  end
+  if i < 0 then
+    -- think about it, -1 should become 0xffffffff, the lowest negative number should become 0x8000000
+    -- so the explanation for the line below is "it just works"
+    i = 0x100000000 + i -- i is always negative, addition is always subtraction
+    -- and then after it's converted to a positive number, just dump it as unsigned
+  end
+  return dump_uint32(i)
+end
+
 ---@return string dumped_size
 ---@return integer byte_count
 local function dump_size(s)
+  if currently_using_int32 then
+    return dump_uint32(s)
+  end
   -- size_t is 8 bytes
   -- but i really only support 32bit for now, so just write four extra zeros
   -- maybe expand this one day to 48bit? maybe all the way to 53?
   -- If i'm compiling a program with >4gb strings, something has gone horribly wrong anyway
-  return dump_int(s) .. "\0\0\0\0", 8
+  return dump_uint32(s) .. "\0\0\0\0", 8
 end
 
 local dump_double
@@ -59,9 +80,10 @@ local function dump_string(str)
   -- size_t length (including trailing \0, 0 for nil)
   -- char[] value (not present for nil)
   if not str then
-    return dump_size(0), 8
+    return dump_size(0)
   else
-    return dump_size(#str + 1) .. str .. "\0", 8 + #str + 1
+    local size_str, byte_count = dump_size(#str + 1)
+    return size_str..str.."\0", byte_count + #str + 1
   end
 end
 
@@ -71,8 +93,14 @@ local dump_constant_by_type = {
 --   <boolean> byte value
   ["boolean"] = function(val) return val and "\1\1" or "\1\0" end,
 --   <number> double value
--- dump_double has the \3 type tag already
-  ["number"] = dump_double,
+  ["number"] = function(value)
+    if currently_using_int32 then
+      return "\3"..dump_signed_int32(value)
+    else
+      -- dump_double has the \3 type tag already
+      return dump_double(value)
+    end
+  end,
 --   <string> string value
   ["string"] = function(val) return "\4" .. dump_string(val) end,
 }
@@ -110,23 +138,23 @@ local function dump_phobos_debug_symbols(dump, func)
   end
 
   -- uint32 column_defined (0 for unknown or main chunk)
-  add(dump_int(func.column_defined or 0))
+  add(dump_uint32(func.column_defined or 0))
   -- uint32 last_column_defined (0 for unknown or main chunk)
-  add(dump_int(func.last_column_defined or 0))
+  add(dump_uint32(func.last_column_defined or 0))
 
   -- uint32 num_instruction_positions (always same as num_instructions)
   -- uint32[] column (columns of each instruction)
-  add(dump_int(#func.instructions))
+  add(dump_uint32(#func.instructions))
   for _, inst in ipairs(func.instructions) do
-    add(dump_int(inst.column or 0)) -- 0 for unknown
+    add(dump_uint32(inst.column or 0)) -- 0 for unknown
   end
 
   -- uint32 num_sources
-  add(dump_int(0))
+  add(dump_uint32(0))
   -- string[] source (all sources used in this function)
 
   -- uint32 num_sections
-  add(dump_int(0))
+  add(dump_uint32(0))
   -- (uint32 instruction_index, uint32 file_index)[]
 
   -- close string constant
@@ -256,9 +284,9 @@ end
 local function dump_function(func)
   local dump = {}
   -- int line_defined (0 for unknown or main chunk)
-  dump[#dump+1] = dump_int(func.line_defined or 0)
+  dump[#dump+1] = dump_uint32(func.line_defined or 0)
   -- int last_line_defined (0 for unknown or main chunk)
-  dump[#dump+1] = dump_int(func.last_line_defined or 0)
+  dump[#dump+1] = dump_uint32(func.last_line_defined or 0)
   assert(func.num_params)
   assert(func.max_stack_size >= 2)
   dump[#dump+1] = string.char(
@@ -269,7 +297,7 @@ local function dump_function(func)
 
   -- [code]
   -- int num_instructions
-  dump[#dump+1] = dump_int(#func.instructions)
+  dump[#dump+1] = dump_uint32(#func.instructions)
   -- Instruction[] instructions
   for _,instruction in ipairs(func.instructions) do
     local inst_int = instruction.op.id
@@ -292,13 +320,13 @@ local function dump_function(func)
         end
       end
     end
-    dump[#dump+1] = dump_int(inst_int)
+    dump[#dump+1] = dump_uint32(inst_int)
   end
 
 
   -- [constants]
   -- int num_consts
-  dump[#dump+1] = dump_int(#func.constants + 1) -- + 1 for Phobos debug symbols
+  dump[#dump+1] = dump_uint32(#func.constants + 1) -- + 1 for Phobos debug symbols
   -- TValue[] consts
   for _,constant in ipairs(func.constants) do
     dump[#dump+1] = dump_constant(constant)
@@ -310,7 +338,7 @@ local function dump_function(func)
 
   -- [func_protos]
   -- int num_funcs
-  dump[#dump+1] = dump_int(#func.inner_functions)
+  dump[#dump+1] = dump_uint32(#func.inner_functions)
   -- dump_function[] funcs
   for _,f in ipairs(func.inner_functions) do
     dump[#dump+1] = dump_function(f)
@@ -318,7 +346,7 @@ local function dump_function(func)
 
   -- [upvals]
   -- int num_upvals
-  dump[#dump+1] = dump_int(#func.upvals)
+  dump[#dump+1] = dump_uint32(#func.upvals)
   -- upvals[] upvals
   for _,upval in ipairs(func.upvals) do
     -- byte in_stack (is a local in parent scope, else upvalue in parent scope)
@@ -337,9 +365,9 @@ local function dump_function(func)
 
   -- int num_lines (always same as num_instructions)
   -- int[] lines (line number per instruction)
-  dump[#dump+1] = dump_int(#func.instructions)
+  dump[#dump+1] = dump_uint32(#func.instructions)
   for i, instruction in ipairs(func.instructions) do
-    dump[#dump+1] = dump_int(instruction.line or 0)
+    dump[#dump+1] = dump_uint32(instruction.line or 0)
   end
 
   -- int num_locals
@@ -362,15 +390,15 @@ local function dump_function(func)
         dump[#dump+1] = dump_string(loc.name)
         -- convert from one based including including
         -- to zero based including excluding
-        dump[#dump+1] = dump_int(loc.start_at - 1)
-        dump[#dump+1] = dump_int(loc.stop_at)
+        dump[#dump+1] = dump_uint32(loc.start_at - 1)
+        dump[#dump+1] = dump_uint32(loc.stop_at)
       end
     end
-    dump[num_locals_index] = dump_int(num_locals)
+    dump[num_locals_index] = dump_uint32(num_locals)
   end
 
   -- int num_upvals
-  dump[#dump+1] = dump_int(#func.upvals)
+  dump[#dump+1] = dump_uint32(#func.upvals)
   -- string[] upvals
   for _,u in ipairs(func.upvals) do
     -- stripped Lua bytecode ultimately also ends up loading `null` for upval names
@@ -382,11 +410,14 @@ local function dump_function(func)
 end
 
 local function dump_lua_header()
-  return phobos_consts.lua_header_str
+  return currently_using_int32 and phobos_consts.lua_header_str_int32 or phobos_consts.lua_header_str
 end
 
-local function dump_main(main)
-  return dump_lua_header() .. dump_function(main)
+---@param main CompiledFunc
+---@param options Options?
+local function dump_main(main, options)
+  currently_using_int32 = options and options.use_int32
+  return dump_lua_header()..dump_function(main)
 end
 
 return dump_main

@@ -4,10 +4,13 @@ local nodes = require("nodes")
 local ill = require("indexed_linked_list")
 local consts = require("constants")
 local il = require("il_util")
+local util = require("util")
 
 ---same as in parser
 local prevent_assert = {prevent_assert = true}
 
+---@type Options?
+local current_options
 local generate_expr
 local generate_stat
 local generate_il_func
@@ -286,7 +289,7 @@ do
       add_inst(func, il.new_closure{
         position = expr.func_def.function_token,
         result_reg = reg,
-        func = generate_il_func(expr.func_def, func),
+        func = generate_il_func(expr.func_def, current_options, func),
       })
       return reg
     end,
@@ -833,7 +836,7 @@ do
       add_inst(func, il.new_closure{
         position = stat.func_def.function_token,
         result_reg = reg,
-        func = generate_il_func(stat.func_def, func),
+        func = generate_il_func(stat.func_def, current_options, func),
       })
     end,
     ["label"] = function(stat, func)
@@ -1019,11 +1022,16 @@ do
 end
 
 ---@param functiondef AstFunctionDef
+---@param options Options?
 ---@param parent_func ILFunction?
 ---@return ILFunction
-function generate_il_func(functiondef, parent_func)
+function generate_il_func(functiondef, options, parent_func)
+  current_options = options
+  if options and options.use_int32 then
+    util.debug_abort("Intermediate language does not support compilation as int32.")
+  end
   if not functiondef.is_main then
-    assert(parent_func, "`parent_func` can only be omitted if the given functiondef is a main chunk")
+    util.debug_assert(parent_func, "`parent_func` can only be omitted if the given functiondef is a main chunk")
   end
 
   ---@type ILFunction

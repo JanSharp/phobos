@@ -1,6 +1,5 @@
 {
   "Lua.runtime.version": "Lua 5.2",
-  "Lua.runtime.plugin": ".vscode/sumneko_lua_plugin/plugin.lua",
   "Lua.runtime.pathStrict": true,
   "Lua.runtime.path": [
     "?.lua",
@@ -92,8 +91,10 @@
     "maxnum",
     "metatable",
     "metatables",
+    "metatables",
     "metatostring",
     "mkdir",
+    "newtable",
     "nohuge",
     "numformat",
     "paren",

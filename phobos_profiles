@@ -67,8 +67,8 @@ local function apply_general_changes(profile)
   exclude(profile, "classes"..phobos_extension)
   exclude(profile, "profile_classes"..phobos_extension)
 
+  -- TODO: replace thumbnail_1080_1080.png with thumbnail_144_144.png in the output, without using some hack
   include_copy(profile, "README.md")
-  include_copy(profile, "phobos_debug_symbols.md")
   include_copy(profile, "changelog.txt")
   include_copy(profile, "LICENSE.txt")
   include_copy(profile, "LICENSE_THIRD_PARTY.txt")
@@ -80,10 +80,19 @@ local function apply_general_changes(profile)
   exclude_delete(profile, "docs/concepts.html")
   include_copy(profile, "docs/styles.css")
   include_copy(profile, "docs/images/favicon.png")
+
+  -- NOTE: maybe, probably render these markdown files as html. If so, also render the readme,
+  -- or change it somehow to either be in the docs folder or have a different "index" file in the docs folder
+  profiles.include_copy{
+    profile = profile,
+    source_path = "docs",
+    output_path = "docs",
+    filename_pattern = "%.md$",
+  }
 end
 
 local function copy_emmy_lua_docs(profile)
-  include_copy(profile, "docs/emmy_lua", "docs/emmy_lua")
+  include_copy(profile, "docs/emmy_lua")
   profiles.exclude_copy{
     profile = profile,
     source_path = "docs/emmy_lua/profiles/profile_classes.lua",
