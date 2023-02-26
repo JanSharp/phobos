@@ -76,6 +76,7 @@
     "keyallow",
     "keyignore",
     "kvps",
+    "linq",
     "loadbool",
     "loadk",
     "loadkx",
