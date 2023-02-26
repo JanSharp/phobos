@@ -15,6 +15,7 @@ There are some other ideas and plans aside from a type system, optimizations and
 - Disassembly Language: Have some kind of low level language that directly defines Lua instructions. This is really just an idea, nothing more.
 - English Output: A fun little idea we had was to convert source code into the english language to assist with learning Lua. I don't think a proof of concept would be all that difficult, but making it good and useful could be tricky. Not sure, but it's pretty low priority.
 - Testing Framework: What if Phobos came with a built in testing framework and assertion library? A question I've asked myself, however I've not answered it. I think it could be really nice though.
+- Coverage testing: To check how much of the code is tested by tests. Not thought about it much more that tbh, but it would be useful.
 - Language Server: Another thought I had was a language server. Reading through this list of all the possible features, a lot of them could be used to make a pretty good language server. However actually doing it has a good chance of running into performance issues, so if I were to explore this idea I'd probably have to look into LuaJIT to get around 10x the normal Lua performance. The codebase is not written for LuaJIT at all though. Plus I already know from experience that feature rich language servers are big projects on their own.
 
 And to properly cover the 4 points mentioned in the first paragraph:
