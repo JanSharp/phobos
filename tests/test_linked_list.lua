@@ -8,23 +8,21 @@ local util = require("util")
 
 local track_liveliness = nil
 
-local function make_expected_list(elements)
-  if track_liveliness == nil then
-    util.debug_abort("Must not use 'make_test_list' outside of an 'add_double_test' callback.")
-  end
+local function make_expected_list(elements, next_key, prev_key)
+  next_key = next_key or "next_foo"
+  prev_key = prev_key or "prev_foo"
   local result = {
     first = elements[1],
     last = elements[#elements],
-    next_key = "next_foo",
-    prev_key = "prev_foo",
+    next_key = next_key,
+    prev_key = prev_key,
     alive_nodes = assert.do_not_compare_flag,
-    -- alive_nodes = track_liveliness and util.invert(elements) or nil,
   }
   local prev
   for _, elem in ipairs(elements) do
     if prev then
-      prev.next_foo = elem
-      elem.prev_foo = prev
+      prev[next_key] = elem
+      elem[prev_key] = prev
     end
     prev = elem
   end
@@ -86,43 +84,105 @@ do
     end)
   end
 
-  add_test("new_list, tracking liveliness, default name", function()
-    local got_list = ll.new_list(nil, true)
-    local expected = {
-      next_key = "next",
-      prev_key = "prev",
-      alive_nodes = {},
-    }
-    assert.contents_equals(expected, got_list)
-  end)
+  local new_list_params_dataset = {
+    {
+      label = "default name, not tracking liveliness",
+      name = nil,
+      expected_next_key = "next",
+      expected_prev_key = "prev",
+      track_liveliness = false,
+    },
+    {
+      label = "default name, tracking liveliness",
+      name = nil,
+      expected_next_key = "next",
+      expected_prev_key = "prev",
+      track_liveliness = true,
+    },
+    {
+      label = "custom name, not tracking liveliness",
+      name = "foo",
+      expected_next_key = "next_foo",
+      expected_prev_key = "prev_foo",
+      track_liveliness = false,
+    },
+    {
+      label = "custom name, tracking liveliness",
+      name = "foo",
+      expected_next_key = "next_foo",
+      expected_prev_key = "prev_foo",
+      track_liveliness = true,
+    },
+  }
 
-  add_test("new_list, not tracking liveliness, default name", function()
-    local got_list = ll.new_list(nil, false)
-    local expected = {
-      next_key = "next",
-      prev_key = "prev",
-    }
-    assert.contents_equals(expected, got_list)
-  end)
+  for _, data in ipairs(new_list_params_dataset) do
+    add_test("new_list, "..data.label, function()
+      local got_list = ll.new_list(data.name, data.track_liveliness)
+      local expected = {
+        next_key = data.expected_next_key,
+        prev_key = data.expected_prev_key,
+        alive_nodes = data.track_liveliness and {} or nil
+      }
+      assert.contents_equals(expected, got_list)
+    end)
+  end
 
-  add_test("new_list, tracking liveliness, non default name", function()
-    local got_list = ll.new_list("foo", true)
-    local expected = {
-      next_key = "next_foo",
-      prev_key = "prev_foo",
-      alive_nodes = {},
-    }
-    assert.contents_equals(expected, got_list)
-  end)
+  for _, array_data in ipairs{
+    {label = "empty array", array = {}},
+    {label = "array with 1 value", array = {{foo = 100}}},
+    {label = "array with 2 values", array = {{foo = 100}, {foo = 200}}},
+    {label = "array with 3 values", array = {{foo = 100}, {foo = 200}, {foo = 300}}},
+  }
+  do
+    for _, data in ipairs(new_list_params_dataset) do
+      add_test(
+        "from_array with "..array_data.label..", "..data.label,
+        function()
+          local got_list = ll.from_array(array_data.array, data.name, data.track_liveliness)
+          local expected = make_expected_list(array_data.array, data.expected_next_key, data.expected_prev_key)
+          assert.contents_equals(expected, got_list)
+          if data.track_liveliness then
+            for j, node in ipairs(array_data.array) do
+              assert_is_alive(got_list, node, true, "node #"..j)
+            end
+          else
+            assert_is_alive_errors(got_list, {foo = 100}, "a random node")
+          end
+        end
+      )
+    end
+  end
 
-  add_test("new_list, not tracking liveliness, non default name", function()
-    local got_list = ll.new_list("foo", false)
-    local expected = {
-      next_key = "next_foo",
-      prev_key = "prev_foo",
-    }
-    assert.contents_equals(expected, got_list)
-  end)
+  for _, iterator_data in ipairs{
+    {label = "iterator for 0 values", values = {}},
+    {label = "iterator for 1 values", values = {{foo = 100}}},
+    {label = "iterator for 2 values", values = {{foo = 100}, {foo = 200}}},
+    {label = "iterator for 3 values", values = {{foo = 100}, {foo = 200}, {foo = 300}}},
+  }
+  do
+    for _, data in ipairs(new_list_params_dataset) do
+      local i = 0
+      local function iterator()
+        i = i + 1
+        return iterator_data.values[i]
+      end
+      add_test(
+        "from_iterator with "..iterator_data.label..", "..data.label,
+        function()
+          local got_list = ll.from_iterator(iterator, data.name, data.track_liveliness)
+          local expected = make_expected_list(iterator_data.values, data.expected_next_key, data.expected_prev_key)
+          assert.contents_equals(expected, got_list)
+          if data.track_liveliness then
+            for j, node in ipairs(iterator_data.values) do
+              assert_is_alive(got_list, node, true, "node #"..j)
+            end
+          else
+            assert_is_alive_errors(got_list, {foo = 100}, "a random node")
+          end
+        end
+      )
+    end
+  end
 
   add_test("is_alive errors with lists not tracking liveliness", function()
     local list = ll.new_list("foo", false)

@@ -1,10 +1,10 @@
 
 local util = require("util")
 
----@param name string? @ the name used for next and prev keys.
----`nil` => "next" and "prev"\
----`"sibling"` => "next_sibling" and "prev_sibling"
----@param track_liveliness boolean? @ `true` enables usage of `is_alive`
+---@param name string? @ (default: `nil`) the name used for next and prev keys.
+---`nil` => `node.next` and `node.prev`\
+---`"sibling"` => `node.next_sibling` and `node.prev_sibling`
+---@param track_liveliness boolean? @ (default: `false`) `true` enables usage of `is_alive`
 ---@return table
 local function new_list(name, track_liveliness)
   return {
@@ -13,6 +13,95 @@ local function new_list(name, track_liveliness)
     next_key = name and ("next_"..name) or "next",
     prev_key = name and ("prev_"..name) or "prev",
     alive_nodes = track_liveliness and {} or nil,
+  }
+end
+
+---@generic T
+---@param array T[]
+---@param name string? @ (default: `nil`) the name used for next and prev keys.
+---`nil` => `node.next` and `node.prev`\
+---`"sibling"` => `node.next_sibling` and `node.prev_sibling`
+---@param track_liveliness boolean? @ (default: `false`) `true` enables usage of `is_alive`
+---@return {first: T?, last: T?}
+local function from_array(array, name, track_liveliness)
+  local next_key = name and ("next_"..name) or "next"
+  local prev_key = name and ("prev_"..name) or "prev"
+  local alive_nodes = track_liveliness and {} or nil
+
+  local count = #array
+  local result = {
+    first = array[1],
+    last = array[count],
+    next_key = next_key,
+    prev_key = prev_key,
+    alive_nodes = alive_nodes,
+  }
+
+  local prev
+  for i = 1, count do
+    local elem = array[i]
+    if prev then
+      prev[next_key] = elem
+      elem[prev_key] = prev
+    end
+    if track_liveliness then
+      alive_nodes[elem] = true
+    end
+    prev = elem
+  end
+
+  return result
+end
+
+---@generic T
+---@param iterator fun(): (T?) @
+---Keep in mind that using the return values of `pairs` or `ipairs` basically never makes sense here.
+---The second and third return values do not match the parameters for this function, and it would ultimately
+---create a linked list from the keys in the table. So `ipairs` never makes sense, `pairs` only if it has
+---deterministic iteration order and if the keys are tables.
+---@param name string? @ (default: `nil`) the name used for next and prev keys.
+---`nil` => `node.next` and `node.prev`\
+---`"sibling"` => `node.next_sibling` and `node.prev_sibling`
+---@param track_liveliness boolean? @ (default: `false`) `true` enables usage of `is_alive`
+---@return {first: T?, last: T?}
+local function from_iterator(iterator, name, track_liveliness)
+  local next_key = name and ("next_"..name) or "next"
+  local prev_key = name and ("prev_"..name) or "prev"
+  local alive_nodes = track_liveliness and {} or nil
+
+  local first = iterator()
+  if first == nil then
+    -- must early return because `alive_nodes[nil] = true` is an error
+    return {
+      first = nil,
+      last = nil,
+      next_key = next_key,
+      prev_key = prev_key,
+      alive_nodes = alive_nodes,
+    }
+  end
+
+  if track_liveliness then
+    alive_nodes[first] = true
+  end
+  local prev = first
+  for elem in iterator do
+    if prev then
+      prev[next_key] = elem
+      elem[prev_key] = prev
+    end
+    if track_liveliness then
+      alive_nodes[elem] = true
+    end
+    prev = elem
+  end
+
+  return {
+    first = first,
+    last = prev,
+    next_key = next_key,
+    prev_key = prev_key,
+    alive_nodes = alive_nodes,
   }
 end
 
@@ -158,6 +247,8 @@ end
 
 return {
   new_list = new_list,
+  from_array = from_array,
+  from_iterator = from_iterator,
   append = append,
   prepend = prepend,
   insert_after = insert_after,
