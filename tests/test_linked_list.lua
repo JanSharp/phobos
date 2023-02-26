@@ -87,7 +87,7 @@ do
   end
 
   add_test("new_list, tracking liveliness, default name", function()
-    local got_list = ll.new_list(true)
+    local got_list = ll.new_list(nil, true)
     local expected = {
       next_key = "next",
       prev_key = "prev",
@@ -97,7 +97,7 @@ do
   end)
 
   add_test("new_list, not tracking liveliness, default name", function()
-    local got_list = ll.new_list(false)
+    local got_list = ll.new_list(nil, false)
     local expected = {
       next_key = "next",
       prev_key = "prev",
@@ -106,7 +106,7 @@ do
   end)
 
   add_test("new_list, tracking liveliness, non default name", function()
-    local got_list = ll.new_list(true, "foo")
+    local got_list = ll.new_list("foo", true)
     local expected = {
       next_key = "next_foo",
       prev_key = "prev_foo",
@@ -116,7 +116,7 @@ do
   end)
 
   add_test("new_list, not tracking liveliness, non default name", function()
-    local got_list = ll.new_list(false, "foo")
+    local got_list = ll.new_list("foo", false)
     local expected = {
       next_key = "next_foo",
       prev_key = "prev_foo",
@@ -125,7 +125,7 @@ do
   end)
 
   add_test("is_alive errors with lists not tracking liveliness", function()
-    local list = ll.new_list(false, "foo")
+    local list = ll.new_list("foo", false)
     assert.errors(
       "Attempt to check liveliness for a node in a linked list that does not track liveliness%.",
       function()
@@ -135,7 +135,7 @@ do
   end)
 
   add_test("is_alive returns false for a node not in a given list", function()
-    local list = ll.new_list(true, "foo")
+    local list = ll.new_list("foo", true)
     local got = ll.is_alive(list, {foo = 100})
     assert.equals(false, got, "result of 'is_alive'")
   end)
@@ -337,7 +337,7 @@ do
   end)
 
   add_test("start_tracking_liveliness marks existing nodes as alive", function()
-    local list = ll.new_list(false, "foo")
+    local list = ll.new_list("foo", false)
     local first_node = {foo = 100}
     ll.append(list, first_node)
     local second_node = {foo = 200}
@@ -350,7 +350,7 @@ do
   end)
 
   add_test("start_tracking_liveliness enables tracking for subsequent append (and other) calls", function()
-    local list = ll.new_list(false, "foo")
+    local list = ll.new_list("foo", false)
     ll.start_tracking_liveliness(list)
     local node = {foo = 100}
     ll.append(list, node)
@@ -358,7 +358,7 @@ do
   end)
 
   add_test("stop_tracking_liveliness removes tracked data", function()
-    local list = ll.new_list(true, "foo")
+    local list = ll.new_list("foo", true)
     local first_node = {foo = 100}
     ll.append(list, first_node)
     local second_node = {foo = 200}
@@ -371,7 +371,7 @@ do
   end)
 
   add_test("stop_tracking_liveliness enables tracking for subsequent append (and other) calls", function()
-    local list = ll.new_list(true, "foo")
+    local list = ll.new_list("foo", true)
     ll.stop_tracking_liveliness(list)
     local node = {foo = 100}
     ll.append(list, node)

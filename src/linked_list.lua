@@ -1,12 +1,12 @@
 
 local util = require("util")
 
----@param track_liveliness boolean? @ `true` enables usage of `is_alive`
 ---@param name string? @ the name used for next and prev keys.
 ---`nil` => "next" and "prev"\
 ---`"sibling"` => "next_sibling" and "prev_sibling"
+---@param track_liveliness boolean? @ `true` enables usage of `is_alive`
 ---@return table
-local function new_list(track_liveliness, name)
+local function new_list(name, track_liveliness)
   return {
     first = nil,
     last = nil,

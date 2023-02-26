@@ -1890,7 +1890,7 @@ do
         local got_list = outer.make_obj(nodes)
           :to_linked_list(data.track_liveliness, data.name)
         ;
-        local expected = ll.new_list(data.track_liveliness, data.name)
+        local expected = ll.new_list(data.name, data.track_liveliness)
         ll.append(expected, {foo = 100})
         ll.append(expected, {foo = 200})
         ll.append(expected, {foo = 300})

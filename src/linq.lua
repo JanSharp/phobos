@@ -1930,7 +1930,7 @@ end
 ---@param name string? @ the name used for next and prev keys.
 ---@return {first: T?, last: T?}
 function linq_meta_index:to_linked_list(track_liveliness, name)
-  local list = ll.new_list(track_liveliness, name)
+  local list = ll.new_list(name, track_liveliness)
   local next_key = list.next_key
   local prev_key = list.prev_key
   local alive_nodes = list.alive_nodes
