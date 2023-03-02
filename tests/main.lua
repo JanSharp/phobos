@@ -31,8 +31,7 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
     },
     {
       field = "test_ids",
-      long = "test-ids",
-      short = "i",
+      long = "id",
       description = "Only run tests with the given ids.",
       type = "number",
       optional = true,
