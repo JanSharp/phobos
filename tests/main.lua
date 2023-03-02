@@ -14,11 +14,11 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
       flag = true,
     },
     {
-      field = "print_failed",
-      long = "print-failed",
+      field = "show_failed",
+      long = "failed",
       short = "f",
       description = "Only print tests that failed and scopes containing\n\z
-                     tests that failed, except the root result that\n\z
+                     tests that failed, except the root result which\n\z
                      always gets printed.",
       flag = true,
     },
@@ -111,7 +111,7 @@ util.abort = util.debug_abort
 util.assert = util.debug_assert
 
 local result = framework.scope:run_tests{
-  only_print_failed = args.print_failed,
+  only_show_failed = args.show_failed,
   print_stacktrace = args.print_stacktrace,
   test_ids_to_run = args.test_ids and util.invert(args.test_ids),
   scopes = args.scopes,

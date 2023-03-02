@@ -113,7 +113,7 @@ local function run_tests(scope, options, print_parent_scope_header, state, full_
           err = err and err:match(":%d+: (.*)")
           test.error_message = err
         end
-        if not success or not options.only_print_failed then
+        if not success or not options.only_show_failed then
           print_scope_header()
           print(get_indentation(scope).."  ["..id.."] "..test.name..": "
             ..(success and (green.."passed"..reset) or (
