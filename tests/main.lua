@@ -7,10 +7,10 @@ local util = require("util")
 local args = arg_parser.parse_and_print_on_error_or_help({...}, {
   options = {
     {
-      field = "full_output",
-      long = "full-output",
-      short = "o",
-      description = "Prints full outputs for contents equals by default",
+      field = "verbose",
+      long = "verbose",
+      short = "v",
+      description = "Prints full outputs for contents_equals by default",
       flag = true,
     },
     {
@@ -61,7 +61,7 @@ if args.help then return end
 
 local framework = require("test_framework")
 local assert = require("assert")
-assert.set_print_full_data_on_error_default(args.full_output)
+assert.set_print_full_data_on_error_default(args.verbose)
 
 -- test testing framework
 require("test_virtual_file_system")
