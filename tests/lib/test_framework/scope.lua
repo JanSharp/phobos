@@ -65,6 +65,17 @@ local background_magenta = "\x1b[45m"
 local background_cyan = "\x1b[46m"
 local background_white = "\x1b[47m"
 
+local function should_run_test(full_scope_name, test_name, filters)
+  local full_name = full_scope_name.."/"..test_name
+  if not filters then return true end
+  for _, scope_name in ipairs(filters) do
+    if full_name:find(scope_name) then
+      return true
+    end
+  end
+  return false
+end
+
 local function run_tests(scope, options, print_parent_scope_header, state, full_scope_name, is_root)
   -- header
   local start_time = os and os.clock()
@@ -74,16 +85,6 @@ local function run_tests(scope, options, print_parent_scope_header, state, full_
     printed_scope_header = true
     print_parent_scope_header()
     print(get_indentation(scope)..bold..scope.name..reset..":")
-  end
-
-  local do_run = not options.scopes
-  if not do_run then
-    for _, scope_name in ipairs(options.scopes) do
-      if full_scope_name:find(scope_name) then
-        do_run = true
-        break
-      end
-    end
   end
 
   -- run tests
@@ -97,7 +98,7 @@ local function run_tests(scope, options, print_parent_scope_header, state, full_
       local result = run_tests(test, options, print_scope_header, state, full_scope_name.."/"..test.name)
       count = count + result.count
       failed_count = failed_count + result.failed_count
-    elseif test.is_test and do_run then
+    elseif test.is_test and should_run_test(full_scope_name, test.name, options.filters) then
       local id = state.next_id
       state.next_id = state.next_id + 1
       if not options.test_ids_to_run or options.test_ids_to_run[id] then
@@ -166,7 +167,7 @@ function Scope:run_tests(options)
     self,
     options,
     function() end,
-    {next_id = 1, scopes = options.scopes},
+    {next_id = 1, filters = options.filters},
     self.name,
     true
   )

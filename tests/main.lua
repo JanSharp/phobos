@@ -38,10 +38,11 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
       min_params = 0,
     },
     {
-      field = "scopes",
-      long = "scopes",
-      short = "c",
-      description = "Scopes to run, like 'root/foo/bar'. (Lua patterns)",
+      field = "filters",
+      long = "filter",
+      description = "Only run tests matching any of the given filters\n\z
+                     (Lua patterns). Filters are matched against \n\z
+                     'root/first_scope/second_scope/hello world test'.",
       type = "string",
       optional = true,
       min_params = 0,
@@ -113,7 +114,7 @@ local result = framework.scope:run_tests{
   only_show_failed = args.show_failed,
   show_stacktrace = args.show_stacktrace,
   test_ids_to_run = args.test_ids and util.invert(args.test_ids),
-  scopes = args.scopes,
+  filters = args.filters,
 }
 
 util.debug_abort = util_abort
