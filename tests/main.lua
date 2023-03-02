@@ -23,10 +23,10 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
       flag = true,
     },
     {
-      field = "print_stacktrace",
-      long = "print-stacktrace",
+      field = "show_stacktrace",
+      long = "stacktrace",
       short = "s",
-      description = "Print the stack trace for failed tests.",
+      description = "Print the stack traceback for failed tests.",
       flag = true,
     },
     {
@@ -112,7 +112,7 @@ util.assert = util.debug_assert
 
 local result = framework.scope:run_tests{
   only_show_failed = args.show_failed,
-  print_stacktrace = args.print_stacktrace,
+  show_stacktrace = args.show_stacktrace,
   test_ids_to_run = args.test_ids and util.invert(args.test_ids),
   scopes = args.scopes,
 }

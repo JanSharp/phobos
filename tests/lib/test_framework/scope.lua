@@ -118,7 +118,7 @@ local function run_tests(scope, options, print_parent_scope_header, state, full_
           print(get_indentation(scope).."  ["..id.."] "..test.name..": "
             ..(success and (green.."passed"..reset) or (
               red.."failed"..reset..": "..blue..(err or "<no error message>")..reset
-              ..(options.print_stacktrace and ("\n"..magenta..stacktrace:gsub("\t", "  ")..reset) or " ")
+              ..(options.show_stacktrace and ("\n"..magenta..stacktrace:gsub("\t", "  ")..reset) or " ")
             ))
           )
         end
