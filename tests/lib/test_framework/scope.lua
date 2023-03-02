@@ -141,6 +141,26 @@ local function run_tests(scope, options, print_parent_scope_header, state, full_
   return {count = count, failed_count = failed_count}
 end
 
+local function list_scopes(scope, depth, lines)
+  lines.count = lines.count + 1 -- increment first to reserve the line
+  local line_index = lines.count
+  local count = 0
+  for _, test in ipairs(scope.tests) do
+    count = count + (test.is_test and 1 or test.is_scope and list_scopes(test, depth + 1, lines) or 0)
+  end
+  lines[line_index] = string.rep("  ", depth)..bold..scope.name..reset
+    .." ("..count.." test"..(count == 1 and "" or "s")..")"
+  return count
+end
+
+function Scope:list_scopes()
+  local lines = {count = 0}
+  list_scopes(self, 0, lines)
+  for i = 1, lines.count do
+    print(lines[i])
+  end
+end
+
 function Scope:run_tests(options)
   return run_tests(
     self,

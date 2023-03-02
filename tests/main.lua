@@ -46,7 +46,13 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
       type = "string",
       optional = true,
       min_params = 0,
-    }
+    },
+    {
+      field = "list_scopes",
+      long = "list-scopes",
+      description = "List all scopes and their test counts.",
+      flag = true,
+    },
   },
 }, {label_length = 80 - 4 - 2 - 50})
 if not args then util.abort() end
@@ -93,6 +99,11 @@ require("test_linq")
 -- even the test I've written so far are likely going to change as I clean up the AST
 -- so for now, all of those steps we have have to hope that they "just work", which
 -- is obviously not the case. I'm certain there are bugs in there
+
+if args.list_scopes then
+  framework.scope:list_scopes()
+  return
+end
 
 local util_abort = util.abort
 local util_assert = util.assert
