@@ -1,6 +1,7 @@
 
 local framework = require("test_framework")
 local assert = require("assert")
+local tutil = require("testing_util")
 
 local ll = require("linked_list")
 
@@ -27,6 +28,12 @@ local function make_expected_list(elements, next_key, prev_key)
     prev = elem
   end
   return result
+end
+
+local function make_simple_test_list(elements)
+  local list = make_expected_list(elements)
+  list.alive_nodes = nil
+  return list
 end
 
 local function make_test_list(elements)
@@ -199,6 +206,127 @@ do
     local got = ll.is_alive(list, {foo = 100})
     assert.equals(false, got, "result of 'is_alive'")
   end)
+
+  -- iterate and iterate_reverse
+  for _, data in ipairs{
+    {label = "no nodes", values = {}, reverse = {}},
+    (function()
+      local values = {{foo = 100}}
+      local reverse = {values[1]}
+      return {label = "1 node", values = values, reverse = reverse}
+    end)(),
+    (function()
+      local values = {{foo = 100}, {foo = 200}}
+      local reverse = {values[2], values[1]}
+      return {label = "2 nodes", values = values, reverse = reverse}
+    end)(),
+    (function()
+      local values = {{foo = 100}, {foo = 200}, {foo = 300}}
+      local reverse = {values[3], values[2], values[1]}
+      return {label = "3 nodes", values = values, reverse = reverse}
+    end)(),
+  }
+  do
+    add_test("iterate list with "..data.label, function()
+      local list = make_simple_test_list(data.values)
+      local got_iterator = ll.iterate(list, data.start_at, data.stop_at)
+      tutil.assert_iteration(data.expected or data.values, got_iterator)
+    end)
+
+    add_test("iterate_reverse list with "..data.label, function()
+      local list = make_simple_test_list(data.values)
+      local got_iterator = ll.iterate_reverse(list, data.start_at, data.stop_at)
+      tutil.assert_iteration(data.reverse, got_iterator)
+    end)
+  end
+
+  -- iterate
+  for _, data in ipairs{
+    (function()
+      local values = {{foo = 100}, {foo = 200}, {foo = 300}, {foo = 400}, {foo = 500}}
+      local expected = util.shallow_copy(values)
+      table.remove(expected, 1)
+      return {
+        label = "5 nodes, starting at 2nd node",
+        values = values,
+        start_at = values[2],
+        expected = expected,
+      }
+    end)(),
+    (function()
+      local values = {{foo = 100}, {foo = 200}, {foo = 300}, {foo = 400}, {foo = 500}}
+      local expected = util.shallow_copy(values)
+      expected[5] = nil
+      return {
+        label = "5 nodes, stopping at 4th node",
+        values = values,
+        stop_at = values[4],
+        expected = expected,
+      }
+    end)(),
+    (function()
+      local values = {{foo = 100}, {foo = 200}, {foo = 300}, {foo = 400}, {foo = 500}}
+      local expected = util.shallow_copy(values)
+      expected[5] = nil
+      table.remove(expected, 1)
+      return {
+        label = "5 nodes, starting at 2nd node, stopping at 4th node",
+        values = values,
+        start_at = values[2],
+        stop_at = values[4],
+        expected = expected,
+      }
+    end)(),
+  }
+  do
+    add_test("iterate list with "..data.label, function()
+      local list = make_simple_test_list(data.values)
+      local got_iterator = ll.iterate(list, data.start_at, data.stop_at)
+      tutil.assert_iteration(data.expected, got_iterator)
+    end)
+  end
+
+  -- iterate_reverse
+  for _, data in ipairs{
+    (function()
+      local values = {{foo = 100}, {foo = 200}, {foo = 300}, {foo = 400}, {foo = 500}}
+      local expected = {values[4], values[3], values[2], values[1]}
+      return {
+        label = "5 nodes, starting at 4th node",
+        values = values,
+        start_at = values[4],
+        expected = expected,
+      }
+    end)(),
+    (function()
+      local values = {{foo = 100}, {foo = 200}, {foo = 300}, {foo = 400}, {foo = 500}}
+      local expected = {values[5], values[4], values[3], values[2]}
+      return {
+        label = "5 nodes, stopping at 2nd node",
+        values = values,
+        stop_at = values[2],
+        expected = expected,
+      }
+    end)(),
+    (function()
+      local values = {{foo = 100}, {foo = 200}, {foo = 300}, {foo = 400}, {foo = 500}}
+      local expected = {values[4], values[3], values[2]}
+      return {
+        label = "5 nodes, starting at 4th node, stopping at 2nd node",
+        values = values,
+        start_at = values[4],
+        stop_at = values[2],
+        expected = expected,
+      }
+    end)(),
+  }
+  do
+    add_test("iterate_reverse list with "..data.label, function()
+      local list = make_simple_test_list(data.values)
+      local got_iterator = ll.iterate_reverse(list, data.start_at, data.stop_at)
+      tutil.assert_iteration(data.expected, got_iterator)
+    end)
+  end
 
   add_double_test("append to empty list adds the node", function()
     local got_list = make_test_list{}

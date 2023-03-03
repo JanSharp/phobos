@@ -105,6 +105,37 @@ local function from_iterator(iterator, name, track_liveliness)
   }
 end
 
+local function make_iter(node, stop_at_node, next_or_prev_key)
+  return function()
+    local result = node
+    if result == stop_at_node then
+      node = nil
+      stop_at_node = nil -- also set this to nil to prevent the else block from running in extra calls
+    else
+      node = node[next_or_prev_key]
+    end
+    return result
+  end
+end
+
+---@generic T
+---@param list {first: T?, last: T?}
+---@return fun():(T?) iterator
+local function iterate(list, start_at_node, stop_at_node)
+  ---@diagnostic disable-next-line: undefined-field
+  return make_iter(start_at_node or list.first, stop_at_node, list.next_key)
+end
+
+---@generic T
+---@param list {first: T?, last: T?}
+---@param start_at_node T? @ default: `list.last` (including)
+---@param stop_at_node T? @ default: `nil` (so basically until `list.first`) (including)
+---@return fun():(T?) iterator
+local function iterate_reverse(list, start_at_node, stop_at_node)
+  ---@diagnostic disable-next-line: undefined-field
+  return make_iter(start_at_node or list.last, stop_at_node, list.prev_key)
+end
+
 local function append(list, node)
   if list.last then
     list.last[list.next_key] = node
@@ -249,6 +280,8 @@ return {
   new_list = new_list,
   from_array = from_array,
   from_iterator = from_iterator,
+  iterate = iterate,
+  iterate_reverse = iterate_reverse,
   append = append,
   prepend = prepend,
   insert_after = insert_after,
