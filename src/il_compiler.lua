@@ -6,6 +6,7 @@ local opcodes = opcode_util.opcodes
 local ill = require("indexed_linked_list")
 local il = require("il_util")
 local stack = require("stack")
+local linq = require("linq")
 
 local generate
 do
@@ -1236,14 +1237,15 @@ do
         "the input and output reg groups of an instruction or instruction group must be forcibly linked."
       )
 
-      local count_in_input = util.count_of(input_group.regs, reg)
+      -- only take 2 because all we care about is if there are "none", "a single one" or "multiple"
+      local count_in_input = linq(input_group.regs):where(function(r) return r == reg end):take(2):count()
 
       if count_in_input > 1 then
         return false
       end
 
       if count_in_input == 1 then
-        local index_in_input = util.count_of(input_group.regs, reg)
+        local index_in_input = linq(input_group.regs):index_of(reg)
         local corresponding_reg_in_output = output_group.regs[index_in_input - offset]
         return corresponding_reg_in_output == reg
           or corresponding_reg_in_output.is_gap
@@ -1251,14 +1253,15 @@ do
       end
 
       -- count_in_input == 0
-      local index_in_output = util.index_of(output_group.regs, reg)
+      local index_in_output = linq(output_group.regs):index_of(reg)
       local corresponding_reg_in_input = input_group.regs[index_in_output + offset]
       return corresponding_reg_in_input.is_gap
         or (not corresponding_reg_in_input and not il.is_vararg_list(input_group.regs))
     end
 
     if input_group then
-      return util.count_of(input_group.regs, reg) == 1
+      -- only take 2 because all we care about is if there are "none", "a single one" or "multiple"
+      return linq(input_group.regs):where(function(r) return r == reg end):take(2):count() == 1
     end
 
     return true
