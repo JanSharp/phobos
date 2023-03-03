@@ -120,7 +120,8 @@ end
 
 ---@generic T
 ---@param list {first: T?, last: T?}
----@return fun():(T?) iterator
+---@return fun(_: any? ,_: T?):(T?) iterator @
+---NOTE: doesn't actually take any parameters, just works around an issue with type inference (in 3.6.13)
 local function iterate(list, start_at_node, stop_at_node)
   ---@diagnostic disable-next-line: undefined-field
   return make_iter(start_at_node or list.first, stop_at_node, list.next_key)
@@ -130,7 +131,8 @@ end
 ---@param list {first: T?, last: T?}
 ---@param start_at_node T? @ default: `list.last` (including)
 ---@param stop_at_node T? @ default: `nil` (so basically until `list.first`) (including)
----@return fun():(T?) iterator
+---@return fun(_: any? ,_: T?):(T?) iterator @
+---NOTE: doesn't actually take any parameters, just works around an issue with type inference (in 3.6.13)
 local function iterate_reverse(list, start_at_node, stop_at_node)
   ---@diagnostic disable-next-line: undefined-field
   return make_iter(start_at_node or list.last, stop_at_node, list.prev_key)
