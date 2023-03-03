@@ -179,12 +179,12 @@ add_test_id_input("2")
 add_phobos_profiles{
   name = "tests/main test id",
   main_filename = "tests/main.lua",
-  args = {"--test-ids", "${input:testId1}"}
+  args = {"--id", "${input:testId1}"}
 }
 add_phobos_profiles{
   name = "tests/main test ids",
   main_filename = "tests/main.lua",
-  args = {"--test-ids", "${input:testId1}", "${input:testId2}"}
+  args = {"--id", "${input:testId1}", "${input:testId2}"}
 }
 add_input{
   id = "testScope",
@@ -201,7 +201,7 @@ add_phobos_profiles{
 add_phobos_profiles{
   name = "tests/main test scope and id",
   main_filename = "tests/main.lua",
-  args = {"--scopes", "${input:testScope}", "--test-ids", "${input:testId1}"}
+  args = {"--scopes", "${input:testScope}", "--id", "${input:testId1}"}
 }
 add_phobos_profiles{
   name = "src/main (debug profile)",

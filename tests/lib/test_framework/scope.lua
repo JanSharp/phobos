@@ -65,6 +65,17 @@ local background_magenta = "\x1b[45m"
 local background_cyan = "\x1b[46m"
 local background_white = "\x1b[47m"
 
+local function should_run_test(full_scope_name, test_name, filters)
+  local full_name = full_scope_name.."/"..test_name
+  if not filters then return true end
+  for _, scope_name in ipairs(filters) do
+    if full_name:find(scope_name) then
+      return true
+    end
+  end
+  return false
+end
+
 local function run_tests(scope, options, print_parent_scope_header, state, full_scope_name, is_root)
   -- header
   local start_time = os and os.clock()
@@ -74,16 +85,6 @@ local function run_tests(scope, options, print_parent_scope_header, state, full_
     printed_scope_header = true
     print_parent_scope_header()
     print(get_indentation(scope)..bold..scope.name..reset..":")
-  end
-
-  local do_run = not options.scopes
-  if not do_run then
-    for _, scope_name in ipairs(options.scopes) do
-      if full_scope_name:find(scope_name) then
-        do_run = true
-        break
-      end
-    end
   end
 
   -- run tests
@@ -97,7 +98,7 @@ local function run_tests(scope, options, print_parent_scope_header, state, full_
       local result = run_tests(test, options, print_scope_header, state, full_scope_name.."/"..test.name)
       count = count + result.count
       failed_count = failed_count + result.failed_count
-    elseif test.is_test and do_run then
+    elseif test.is_test and should_run_test(full_scope_name, test.name, options.filters) then
       local id = state.next_id
       state.next_id = state.next_id + 1
       if not options.test_ids_to_run or options.test_ids_to_run[id] then
@@ -113,12 +114,12 @@ local function run_tests(scope, options, print_parent_scope_header, state, full_
           err = err and err:match(":%d+: (.*)")
           test.error_message = err
         end
-        if not success or not options.only_print_failed then
+        if not success or not options.only_show_failed then
           print_scope_header()
           print(get_indentation(scope).."  ["..id.."] "..test.name..": "
             ..(success and (green.."passed"..reset) or (
               red.."failed"..reset..": "..blue..(err or "<no error message>")..reset
-              ..(options.print_stacktrace and ("\n"..magenta..stacktrace:gsub("\t", "  ")..reset) or " ")
+              ..(options.show_stacktrace and ("\n"..magenta..stacktrace:gsub("\t", "  ")..reset) or " ")
             ))
           )
         end
@@ -141,12 +142,32 @@ local function run_tests(scope, options, print_parent_scope_header, state, full_
   return {count = count, failed_count = failed_count}
 end
 
+local function list_scopes(scope, depth, lines)
+  lines.count = lines.count + 1 -- increment first to reserve the line
+  local line_index = lines.count
+  local count = 0
+  for _, test in ipairs(scope.tests) do
+    count = count + (test.is_test and 1 or test.is_scope and list_scopes(test, depth + 1, lines) or 0)
+  end
+  lines[line_index] = string.rep("  ", depth)..bold..scope.name..reset
+    .." ("..count.." test"..(count == 1 and "" or "s")..")"
+  return count
+end
+
+function Scope:list_scopes()
+  local lines = {count = 0}
+  list_scopes(self, 0, lines)
+  for i = 1, lines.count do
+    print(lines[i])
+  end
+end
+
 function Scope:run_tests(options)
   return run_tests(
     self,
     options,
     function() end,
-    {next_id = 1, scopes = options.scopes},
+    {next_id = 1, filters = options.filters},
     self.name,
     true
   )

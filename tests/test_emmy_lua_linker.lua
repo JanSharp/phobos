@@ -364,39 +364,26 @@ do
     assert.equals(sequences[2], sequences[1].fields[1].field_type, "the added field's field_type")
   end)
 
+  for _, data in ipairs{
+    {label = "not adding field because node isn't a funcstat", expr = "func", use_localstat = true},
+    {label = "not adding field because node.name isn't and index", expr = "foo"}, -- foo is a local
+    {label = "not adding field because node.name.suffix isn't a string", expr = "foo[1]"},
+    {label = "not adding field because node.name.suffix isn't an identifier", expr = "foo['2']"},
+    {label = "does not error when the found local doesn't have a class", expr = "foo.baz", do_not_even_make_a_class = true}
+  }
   do
-    local function make_text(expr, use_localstat, do_not_even_make_a_class)
-      return (do_not_even_make_a_class and "" or "---@class foo\nlocal bar\n\n")
-      .."---hello world\n"
-      ..(use_localstat and "local " or "").."function "..expr.."() end"
+    local function make_text()
+      return (data.do_not_even_make_a_class and "" or "---@class foo\nlocal bar\n\n")
+        .."---hello world\n"
+        ..(data.use_localstat and "local " or "").."function "..data.expr.."() end"
     end
 
-    local function test_not_linked(expr, use_localstat, do_not_even_make_a_class)
-      local sequences = parse(make_text(expr, use_localstat, do_not_even_make_a_class))
+    scope:add_test("function sequence "..data.label, function()
+      local sequences = parse(make_text())
       link(sequences)
-      if not do_not_even_make_a_class then
+      if not data.do_not_even_make_a_class then
         assert(not sequences[1].fields[1], "did add the field when it was not supposed to")
       end
-    end
-
-    scope:add_test("function sequence not adding field because node isn't a funcstat", function()
-      test_not_linked("func", true)
-    end)
-
-    scope:add_test("function sequence not adding field because node.name isn't an index", function()
-      test_not_linked("foo") -- foo is a local
-    end)
-
-    scope:add_test("function sequence not adding field because node.name.suffix isn't a string", function()
-      test_not_linked("foo[1]")
-    end)
-
-    scope:add_test("function sequence not adding field because node.name.suffix isn't an identifier", function()
-      test_not_linked("foo['2']")
-    end)
-
-    scope:add_test("function sequence does not error when the found local doesn't have a class", function()
-      test_not_linked("foo.baz", false, true)
     end)
   end
 

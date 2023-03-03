@@ -81,7 +81,7 @@ local function phobos_command(args, silent, measured)
     fold_const(ast)
     fold_control_statements(ast)
   end
-  local compiled = compiler(ast, measured)
+  local compiled = compiler(ast, {use_tail_calls = measured})
   local bytecode = dump(compiled)
   local command, err = load(bytecode, nil, "b", command_env)
   if not command then

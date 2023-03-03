@@ -8,8 +8,11 @@ local tokenizer = require("tokenize")
 
 local test_source = "=(test source)"
 
-local function test(str, expected_tokens)
-  local iter, state, index = tokenizer(str, test_source)
+---@param str string
+---@param expected_tokens Token[]
+---@param options Options?
+local function test(str, expected_tokens, options)
+  local iter, state, index = tokenizer(str, test_source, options)
   local got
   index, got = iter(state, index)
   local i = 0
@@ -113,7 +116,11 @@ do
       end
     end
 
-    local function invalid_token(char)
+    for _, char in ipairs{
+      "~", -- special because of ~= detection
+      "\\", -- all the rest are the same, but testing each one is tedious
+    }
+    do
       scope:add_test("invalid token '"..char.."'", function()
         local invalid = new_token("invalid", 1, 1, 1)
         invalid.value = char
@@ -129,10 +136,7 @@ do
         })
       end)
     end
-
-    invalid_token("~") -- special because of ~= detection
-    invalid_token("\\") -- all the rest are the same, but testing each one is tedious
-  end
+  end -- end basic tokens
 
   do
     local scope = main_scope:new_scope("blank")
@@ -166,7 +170,7 @@ do
         })
       end)
     end
-  end
+  end -- end blank
 
   do
     local scope = main_scope:new_scope("non block comment")
@@ -197,7 +201,7 @@ do
       token.src_is_block_str = nil
       test("--[===", {token})
     end)
-  end
+  end -- end non block comment
 
   do
     local scope = main_scope:new_scope("non block string")
@@ -449,18 +453,28 @@ do
       end
     end)
 
-    local function add_each_syntax_error_in_a_string(func)
-      func("invalid \\x", [[\xha]], error_code_util.codes.invalid_hexadecimal_escape)
-      func("invalid \\500", [[\500]], error_code_util.codes.too_large_decimal_escape)
-      func("invalid escape", [[\_]], error_code_util.codes.unrecognized_escape)
-    end
-    local function initial_syntax_error(label1, str1, error_code1)
-      local function consecutive_syntax_error(label2, str2, error_code2)
-        local function ending_syntax_error_or_end_of_string(label3, str3, error_code3, is_eol)
-          scope:add_test("syntax error chain: "..label1.." + "..label2.." + "..label3, function()
+    local each_syntax_error_in_a_string = {
+      {label = "invalid \\x", str = [[\xha]], error_code = error_code_util.codes.invalid_hexadecimal_escape},
+      {label = "invalid \\500", str = [[\500]], error_code = error_code_util.codes.too_large_decimal_escape},
+      {label = "invalid escape", str = [[\_]], error_code = error_code_util.codes.unrecognized_escape},
+    }
+    for _, initial in ipairs(each_syntax_error_in_a_string) do
+      for _, consecutive in ipairs(each_syntax_error_in_a_string) do
+        for _, ending in ipairs{
+          {label = "regular end of string", str = [["]], error_code = nil},
+          {label = "unterminated at eof", str = "", error_code = error_code_util.codes.unterminated_string},
+          {
+            label = "unterminated at eol",
+            str = "\n",
+            error_code = error_code_util.codes.unterminated_string_at_eol,
+            is_eol = true,
+          },
+        }
+        do
+          scope:add_test("syntax error chain: "..initial.label.." + "..consecutive.label.." + "..ending.label, function()
             local token = new_token("invalid", 1, 1, 1)
-            local str = [["]]..str1..str2
-            token.value = str..(is_eol and "" or str3)
+            local str = [["]]..initial.str..consecutive.str
+            token.value = str..(ending.is_eol and "" or ending.str)
             local function create_error_code_inst(error_code)
               return error_code_util.new_error_code{
                 error_code = error_code,
@@ -475,29 +489,20 @@ do
               }
             end
             token.error_code_insts = {
-              create_error_code_inst(error_code1),
-              create_error_code_inst(error_code2),
-              error_code3 and create_error_code_inst(error_code3),
+              create_error_code_inst(initial.error_code),
+              create_error_code_inst(consecutive.error_code),
+              ending.error_code and create_error_code_inst(ending.error_code),
             }
-            str = str..str3
+            str = str..ending.str
             test(str, {
               token,
-              is_eol and new_token("blank", #str, 1, #str, "\n") or nil
+              ending.is_eol and new_token("blank", #str, 1, #str, "\n") or nil
             })
           end)
         end
-        ending_syntax_error_or_end_of_string("regular end of string", [["]], nil)
-        ending_syntax_error_or_end_of_string("unterminated at eof", "",
-          error_code_util.codes.unterminated_string
-        )
-        ending_syntax_error_or_end_of_string("unterminated at eol", "\n",
-          error_code_util.codes.unterminated_string_at_eol, true
-        )
       end
-      add_each_syntax_error_in_a_string(consecutive_syntax_error)
     end
-    add_each_syntax_error_in_a_string(initial_syntax_error)
-  end
+  end -- end non block string
 
   do
     local scope = main_scope:new_scope("block string")
@@ -603,7 +608,7 @@ do
     add_unterminated_test("unterminated at eof right after start", "[[")
     add_unterminated_test("unterminated at eof with padding", "[===[;")
     add_unterminated_test("unterminated at eof with leading newline", "[[\n;")
-  end
+  end -- end block string
 
   do
     local scope = main_scope:new_scope("block comment")
@@ -631,12 +636,12 @@ do
       }}
       test(str, {token})
     end)
-  end
+  end -- end block comment
 
   do
     local scope = main_scope:new_scope("number")
 
-    local function add_test(str, value)
+    local function valid(str, value)
       scope:add_test("number '"..str.."'", function()
         local token = new_token("number", 1, 1, 1)
         token.value = value
@@ -647,25 +652,28 @@ do
         })
       end)
     end
-
-    add_test("1234567890", 1234567890)
-    add_test(".1", .1)
-    add_test("1.1", 1.1)
-    add_test("1e1", 1e1)
-    add_test("1E1", 1E1)
-    add_test("1e+1", 1e+1)
-    add_test("1e-1", 1e-1)
-    add_test("0x1234567890", 0x1234567890)
-    add_test("0xabcdef", 0xabcdef)
-    add_test("0xABCDEF", 0xABCDEF)
-    add_test("0x1aA", 0x1aA)
-    add_test("0X1", 0X1)
-    add_test("0x.1", 0x.1)
-    add_test("0x1.1", 0x1.1)
-    add_test("0x1p1", 0x1p1)
-    add_test("0x1P1", 0x1P1)
-    add_test("0x1p+1", 0x1p+1)
-    add_test("0x1p-1", 0x1p-1)
+    valid("1234567890", 1234567890)
+    valid(".1", .1)
+    valid("1.", 1.) -- I don't really like that this is valid, but it is what it is I guess
+    valid("1.1", 1.1)
+    valid("1e1", 1e1)
+    valid("1E1", 1E1)
+    valid("1e+1", 1e+1)
+    valid("1e-1", 1e-1)
+    valid("0x1234567890", 0x1234567890)
+    valid("0xabcdef", 0xabcdef)
+    valid("0xABCDEF", 0xABCDEF)
+    valid("0x1aA", 0x1aA)
+    valid("0X1", 0X1)
+    valid("0x.1", 0x.1)
+    valid("0x1.1", 0x1.1)
+    valid("0x1p1", 0x1p1)
+    valid("0x1P1", 0x1P1)
+    valid("0x1p+1", 0x1p+1)
+    valid("0x1p-1", 0x1p-1)
+    valid("0x0.1E", 0x0.1E)
+    valid("0x0.1E", 0x0.1E)
+    valid("0x0.1E", 0x0.1E)
 
     local function malformed(str)
       scope:add_test("malformed number '"..str.."'", function()
@@ -676,17 +684,88 @@ do
           message_args = {str},
           source = test_source,
           start_position = {line = 1, column = 1},
-          stop_position = {line = 1, column = 2},
+          stop_position = {line = 1, column = #str},
         }}
         test(str..";", {
           token,
-          new_token(";", 3, 1, 3),
+          new_token(";", #str + 1, 1, #str + 1),
         })
       end)
     end
+    malformed("1.1.1")
+    malformed("1..1")
+    malformed("1..")
+    malformed("1...")
+    malformed("1e")
+    malformed("1E")
+    malformed("1e+")
+    malformed("1e-")
+    malformed("1Ee")
+    malformed("1E+e-")
+    malformed("1E+1e-1")
     malformed("0x")
     malformed("0X")
-  end
+    malformed("0xp")
+    malformed("0xP")
+    malformed("0x.")
+    malformed("0x.p1")
+    malformed("0xp1")
+    malformed("0xpp")
+    malformed("0x1p+1p-1")
+
+    local function valid_int32(str, value)
+      scope:add_test("int32 number '"..str.."'", function()
+        local token = new_token("number", 1, 1, 1)
+        token.value = value
+        token.src_value = str
+        test(str..";", {
+          token,
+          new_token(";", #str + 1, 1, #str + 1),
+        }, {use_int32 = true})
+      end)
+    end
+    valid_int32("1", 1)
+    valid_int32("0x1", 0x1)
+    valid_int32("0x7fffffff", 0x7fffffff)
+
+    local function invalid_int32_internal(label, str, error_code)
+      scope:add_test(label, function()
+        local token = new_token("invalid", 1, 1, 1)
+        token.value = str
+        token.error_code_insts = {error_code_util.new_error_code{
+          error_code = error_code,
+          message_args = {str},
+          source = test_source,
+          start_position = {line = 1, column = 1},
+          stop_position = {line = 1, column = #str},
+        }}
+        test(str..";", {
+          token,
+          new_token(";", #str + 1, 1, #str + 1),
+        }, {use_int32 = true})
+      end)
+    end
+
+    local function invalid_int32(str)
+      invalid_int32_internal("invalid int32 '"..str.."'", str, error_code_util.codes.number_must_be_int32)
+    end
+    invalid_int32("1.0")
+    invalid_int32("0.1")
+    invalid_int32("1.11e1")
+    invalid_int32("1e-1")
+    invalid_int32("0x0.1")
+    invalid_int32("0x0.1p2")
+    -- these are integers in the valid range, but they have an exponent
+    invalid_int32("1e1")
+    invalid_int32("1.1e1")
+    invalid_int32("0x1p1")
+
+    invalid_int32_internal(
+      "invalid int32 '0x80000000' with special error because it may be intended to be the lowest negative number",
+      "0x80000000",
+      error_code_util.codes.number_exactly_past_max_int32
+    )
+  end -- end number
 
   do
     local scope = main_scope:new_scope("ident")
@@ -718,7 +797,7 @@ do
         new_token(";", 12, 1, 12),
       })
     end)
-  end
+  end -- end ident
 
   do
     local scope = main_scope:new_scope("other")
@@ -752,13 +831,14 @@ do
       assert.equals("#!/usr/bin/env lua", state.shebang_line, "state.shebang_line")
     end)
 
-    scope:add_test("number plus ident '0foo'", function()
+    -- can't use foo because the 0f would emit a malformed number invalid token
+    scope:add_test("number plus ident '0oof'", function()
       local token = new_token("number", 1, 1, 1)
       token.value = 0
       token.src_value = "0"
-      test("0foo", {
+      test("0oof", {
         token,
-        new_token("ident", 2, 1, 2, "foo"),
+        new_token("ident", 2, 1, 2, "oof"),
       })
     end)
 
@@ -787,5 +867,31 @@ do
     with_sign()
     with_sign("+")
     with_sign("-")
-  end
+
+    -- since dashes - signs for numbers - are also unop and binop, they mustn't be apart of number tokens
+
+    scope:add_test("negate unop followed by number without spaces in between", function()
+      local token = new_token("number", 2, 1, 2)
+      token.value = 0
+      token.src_value = "0"
+      test("-0", {
+        new_token("-", 1, 1, 1),
+        token,
+      })
+    end)
+
+    scope:add_test("subtract binop followed by number without spaces in between", function()
+      local left_token = new_token("number", 1, 1, 1)
+      left_token.value = 0
+      left_token.src_value = "0"
+      local right_token = new_token("number", 3, 1, 3)
+      right_token.value = 0
+      right_token.src_value = "0"
+      test("0-0", {
+        left_token,
+        new_token("-", 2, 1, 2),
+        right_token,
+      })
+    end)
+  end -- end other
 end

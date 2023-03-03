@@ -5,6 +5,8 @@ local arg_parser = require("lib.LuaArgParser.arg_parser")
 local util = require("util")
 local serialize = require("serialize")
 local assert = require("assert")
+local il_blocks = require("il_blocks")
+local cyclomatic_complexity = require("il_cyclomatic_complexity")
 
 local args = arg_parser.parse_and_print_on_error_or_help({...}, {
   options = {
@@ -64,7 +66,14 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
       short = "i",
       description = "Use the IL compiler instead of the AST compiler",
       flag = true,
-    }
+    },
+    {
+      field = "check_cyclomatic_complexity",
+      long = "check-cyclomatic-complexity",
+      short = "x",
+      description = "Evaluates the cyclomatic complexity for all functions and orders them",
+      flag = true,
+    },
   },
 })
 if not args then util.abort() end
@@ -142,6 +151,8 @@ end
 
 local serpent = require("lib.serpent")
 
+local cyclomatic_complexity_values = {}
+
 local function compile(filename)
   local file = assert(io.open(filename,"r"))
   local text = file:read("*a")
@@ -177,6 +188,22 @@ local function compile(filename)
   local compiled_data
   if args.use_il then
     local il = il_generator(ast)
+    if args.check_cyclomatic_complexity and cyclomatic_complexity_values then
+      il_blocks(il)
+      ---@param func ILFunction
+      local function recurse(func)
+        local index = #cyclomatic_complexity_values + 1
+        cyclomatic_complexity_values[index] = {
+          index = index,
+          func = func,
+          cc = cyclomatic_complexity(func),
+        }
+        for _, inner_func in ipairs(func.inner_functions) do
+          recurse(inner_func)
+        end
+      end
+      recurse(il)
+    end
     compiled_data = il_compiler(il)
   else
     compiled_data = compiler(ast, {
@@ -265,6 +292,26 @@ local lua_result = compiled
 local lua_raw_result = raw_compiled
 
 print("compilation time ~ "..(os.clock() - start_time).."s")
+
+if args.check_cyclomatic_complexity then
+  table.sort(cyclomatic_complexity_values, function(left, right)
+    if left.cc == right.cc then
+      return left.index < right.index
+    end
+    return left.cc > right.cc
+  end)
+  print()
+  print("top 32 cyclomatic complexity:")
+  for i = 1, math.min(32, #cyclomatic_complexity_values) do
+    local ccv = cyclomatic_complexity_values[i]
+    ccv.file = ccv.func.source
+    ccv.line = ccv.func.defined_position and ccv.func.defined_position.line or 0
+    print(util.format_interpolated("{cc:%3d} {file}:{line:%d}", ccv))
+  end
+  print()
+end
+cyclomatic_complexity_values = nil
+
 print("--------")
 print("compiling using Phobos compiled by Phobos:")
 start_time = os.clock()
