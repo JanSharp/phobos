@@ -2036,7 +2036,6 @@ end
 
 ---@generic T
 ---@generic TState
----@generic TKey
 ---@param tab_or_iter T[]|fun(state: TState, key: T?):(T?) @ an array or an iterator returning a single value
 ---@param state TState? @ used if this is an iterator
 ---@param starting_value T? @ used if this is an iterator
