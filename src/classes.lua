@@ -575,14 +575,14 @@
 --------------------------------------------------
 -- intermediate language:
 
----@class ILLinkedRegisterGroup
+---@class ILLinkedRegisterGroupsGroup
 ---@field groups_lut table<ILRegisterGroup, true>
 ---@field groups ILRegisterGroup[] @ sorted by `group.inst.index` ascending
 -- ---@field forced_offsets ILLinkedRegisterGroup.ForcedOffsets[]
 
 ---This data structure is created right before compilation as it is only needed during compilation
 ---@class ILRegisterGroup
----@field linked_groups ILLinkedRegisterGroup
+---@field linked_groups ILLinkedRegisterGroupsGroup
 ---@field inst ILInstruction?
 ---@field regs ILRegister[]
 ---@field is_input boolean @ `false` means "is output"

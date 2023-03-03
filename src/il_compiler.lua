@@ -1078,29 +1078,50 @@ do
     end,
   }
 
-  ---@param linked_groups ILLinkedRegisterGroup
-  local function populate_sorted_groups_list(linked_groups)
-    local groups = {}
-    linked_groups.groups = groups
-    for group in pairs(linked_groups.groups_lut) do
-      groups[#groups+1] = group
-    end
-    table.sort(groups, function(left, right)
-      -- apparently it can ask if the same value that only exists once in the list should be
-      -- positioned to the left of itself. It makes no sense, but I tested it and to make it
-      -- a stable sort it must return false in this case. returning true or having the normal
-      -- logic handle it makes it straight up put elements out of order
-      if left == right then return false end
-      if left.inst.index == right.inst.index then
-        return left.is_input
+  ---@param data ILCompilerData
+  local function create_register_groups(data)
+    local inst = data.func.instructions.first
+    while inst do
+      if inst.inst_group then
+        local inst_group_create_reg_group = inst_group_create_reg_group_lut[inst.inst_group.group_type]
+        if inst_group_create_reg_group then
+          inst_group_create_reg_group(data, inst.inst_group)
+        end
+        inst = inst.inst_group.stop.next
+      else
+        local inst_create_reg_group = inst_create_reg_group_lut[inst.inst_type]
+        if inst_create_reg_group then
+          inst_create_reg_group(data, inst)
+        end
+        inst = inst.next
       end
-      return left.inst.index < right.inst.index
-    end)
+    end
+  end
+
+  ---@param linked_groups ILLinkedRegisterGroupsGroup
+  local function populate_sorted_groups_list(linked_groups)
+    linked_groups.groups = linq(util.iterate_keys(linked_groups.groups_lut))
+      :sort(function(left, right)
+        -- apparently it can ask if the same value that only exists once in the list should be
+        -- positioned to the left of itself. It makes no sense, but I tested it and to make it
+        -- a stable sort it must return false in this case. returning true or having the normal
+        -- logic handle it makes it straight up put elements out of order
+        if left == right then return false end
+        if left.inst.index == right.inst.index then
+          return left.is_input
+        end
+        return left.inst.index < right.inst.index
+      end)
+      :to_array()
+    ;
   end
 
   ---@param data ILCompilerData
-  ---@param linked_groups ILLinkedRegisterGroup
+  ---@param linked_groups ILLinkedRegisterGroupsGroup
   local function split_linked_groups_recursive(data, linked_groups)
+    -- the next part needs the first and last group, so we must create the ordered array
+    populate_sorted_groups_list(linked_groups)
+
     -- find all regs and determine which require moves no matter what
     ---@type ILRegister[]
     local all_regs = {}
@@ -1108,23 +1129,20 @@ do
     do
       local first_index = linked_groups.groups[1].inst.index
       local last_index = linked_groups.groups[#linked_groups.groups].inst.index
-      local all_regs_lut = {}
-      for i = 1, #linked_groups.groups do
-        local group = linked_groups.groups[i]
-        for _, reg in ipairs(group.regs) do
-          if not all_regs_lut[reg] then
-            all_regs_lut[reg] = true
-            all_regs[#all_regs+1] = reg
+      for reg in linq(linked_groups.groups)
+        :select_many(function(group) return group.regs end)
+        :distinct()
+        :iterate()
+      do
+        all_regs[#all_regs+1] = reg
 
-            -- TODO: somehow improve this condition to not leave big gaps in the stack
-            if not reg.requires_move_into_register_group
-              and reg.start_at.index < first_index
-              and reg.stop_at.index > last_index
-            then
-              reg.requires_move_into_register_group = true
-              did_mark_a_new_register_to_require_move_into_register_group = true
-            end
-          end
+        -- TODO: somehow improve this condition to not leave big gaps in the stack
+        if not reg.requires_move_into_register_group
+          and reg.start_at.index < first_index
+          and reg.stop_at.index > last_index
+        then
+          reg.requires_move_into_register_group = true
+          did_mark_a_new_register_to_require_move_into_register_group = true
         end
       end
     end
@@ -1142,8 +1160,7 @@ do
     -- make the linked group no longer exist
     data.all_linked_groups_lut[linked_groups] = nil
 
-    -- the next part cares about iteration order, so we must create the ordered array
-    populate_sorted_groups_list(linked_groups)
+    -- the next part cares about iteration order, the ordered array was already created though so nothing to do
 
     -- recreate all groups creating new links in the process
     local prev_group_has_forced_offset = false
@@ -1319,7 +1336,7 @@ do
       return result
     end
 
-    ---@param linked_group ILLinkedRegisterGroup
+    ---@param linked_group ILLinkedRegisterGroupsGroup
     function determine_best_offsets(linked_group)
       ---@type DetermineBestOffsetsUnknownData[]
       local unknowns = {}
@@ -1373,6 +1390,7 @@ do
       end
       local total_moves_count = 0
 
+      ---@type table<ILRegister, integer>
       local winning_reg_indexes
       local winning_score
 
@@ -1577,49 +1595,28 @@ do
 
   ---@param data ILCompilerData
   function pre_compilation_process(data)
-    local inst = data.func.instructions.first
-
     -- TODO: remove once I'm sure the is_parameter flag on registers is good
     -- group_registers(data, nil, false, data.func.param_regs, 1)
 
-    -- create register groups
-    while inst do
-      if inst.inst_group then
-        local inst_group_create_reg_group = inst_group_create_reg_group_lut[inst.inst_group.group_type]
-        if inst_group_create_reg_group then
-          inst_group_create_reg_group(data, inst.inst_group)
-        end
-        inst = inst.inst_group.stop.next
-      else
-        local inst_create_reg_group = inst_create_reg_group_lut[inst.inst_type]
-        if inst_create_reg_group then
-          inst_create_reg_group(data, inst)
-        end
-        inst = inst.next
-      end
-    end
+    create_register_groups(data)
 
-    do
-      local initial_groups_lut = util.shallow_copy(data.all_linked_groups_lut)
-      for linked_groups in pairs(initial_groups_lut) do
-        populate_sorted_groups_list(linked_groups)
-        split_linked_groups_recursive(data, linked_groups)
-      end
+    -- shallow copy because splitting ends up modifying the lut, but we need iterate the original
+    for linked_groups in pairs(util.shallow_copy(data.all_linked_groups_lut)) do
+      split_linked_groups_recursive(data, linked_groups)
     end
 
     -- populate groups list from groups_lut
     for linked_groups in pairs(data.all_linked_groups_lut) do
-      populate_sorted_groups_list(linked_groups)
+      if not linked_groups.groups then
+        populate_sorted_groups_list(linked_groups)
+      end
     end
 
     -- convert all_linked_groups_lut into a list
-    local all_linked_groups = {}
-    for linked_groups in pairs(data.all_linked_groups_lut) do
-      all_linked_groups[#all_linked_groups+1] = linked_groups
-    end
-    table.sort(all_linked_groups, function(left, right)
-      return left.groups[1].inst.index < right.groups[1].inst.index
-    end)
+    local all_linked_groups = linq(util.iterate_keys(data.all_linked_groups_lut))
+      :order_by(function(linked) return linked.groups[1].inst.index end)
+      :to_array()
+    ;
 
     -- determine best relative register indexes within linked groups
     for _, linked_group in ipairs(all_linked_groups) do
@@ -1656,7 +1653,7 @@ end
 ---@field all_jumps (ILJump|ILTest)[]
 ---@field all_jumps_count integer
 ---@field snapshots ILCompilerDataSnapshot[]
----@field all_linked_groups_lut table<ILLinkedRegisterGroup, true>
+---@field all_linked_groups_lut table<ILLinkedRegisterGroupsGroup, true>
 
 ---@param func ILFunction
 local function compile(func)
