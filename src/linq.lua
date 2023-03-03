@@ -906,9 +906,7 @@ end
 
 ---@generic T
 ---@param self LinqObj|T[]
----@return fun(state: nil, index: integer?):integer?, T? iter
----@return nil state
----@return nil key
+---@return fun(state: nil, index: integer?): (T?) iterator
 function linq_meta_index:iterate()
   return self.__iter
 end

@@ -156,6 +156,21 @@ local function replace_range(target, range, start_index, stop_index, range_start
   end
 end
 
+---must use the letter K for the generic type parameter, otherwise it won't infer the type of the key (in 3.6.13)
+---@generic K
+---@param tab table<K, any>
+---@param start_key? K
+---@return fun(_: any? ,_: K?):(K?) iterator @
+---NOTE: doesn't actually take any parameters, just works around an issue with type inference (in 3.6.13)
+local function iterate_keys(tab, start_key)
+  local key = start_key
+  return function()
+    local result = key
+    key = next(tab, key)
+    return result
+  end
+end
+
 ---@generic T
 ---@param array T[]
 ---@param value T
@@ -357,6 +372,7 @@ return {
   insert_range = insert_range,
   remove_range = remove_range,
   replace_range = replace_range,
+  iterate_keys = iterate_keys,
   index_of = index_of,
   count_of = count_of,
   debug_abort = debug_abort,
