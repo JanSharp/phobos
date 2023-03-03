@@ -494,6 +494,7 @@ do
     return result or 0
   end
 
+  ---@type table<ILInstructionType, fun(data: ILCompilerData, inst: ILInstruction): ILInstruction>
   generate_inst_lut = {
     ---@param inst ILMove
     ["move"] = function(data, inst)
@@ -682,6 +683,7 @@ do
       -- pre-process step (removing the `not reg.temporary` check, or so)
       local vararg_args = inst.arg_ptrs[1] and (inst.arg_ptrs[#inst.arg_ptrs]--[[@as ILRegister]]).is_vararg
       local vararg_result = inst.result_regs[1] and inst.result_regs[#inst.result_regs].is_vararg
+      ---@diagnostic disable-next-line: undefined-field
       local func_reg_index = inst.register_list_index -- FIXME: rely on register groups
       local func_reg = ensure_is_exact_reg_for_get_pre(data, inst.func_reg.current_reg, func_reg_index)
       add_new_inst(data, inst.position, opcodes.call, {
@@ -719,6 +721,7 @@ do
     ["vararg"] = function(data, inst)
       local is_vararg = inst.result_regs[#inst.result_regs].is_vararg
       add_new_inst(data, inst.position, opcodes.vararg, {
+        ---@diagnostic disable-next-line: undefined-field
         a = inst.register_list_index, -- FIXME: rely on register groups
         b = is_vararg and 0 or (#inst.result_regs + 1),
       })
@@ -752,12 +755,12 @@ do
       util.abort("Standalone 'to_number' il instructions cannot be compiled. There is no Lua opcode for it. \z
         'to_number' is used inside of forprep instruction groups to represent Lua's implementation of the \z
         forprep opcode."
-      )
+      ) ---@diagnostic disable-line: missing-return
     end,
   }
 
+  ---@type table<ILInstructionGroupType, fun(data: ILCompilerData, inst_group: ILInstructionGroup): ILInstruction>
   generate_inst_group_lut = {
-    ---@param data ILCompilerData
     ---@param inst_group ILForprepGroup
     ["forprep"] = function(data, inst_group)
       inst_group.loop_jump.jump_inst = add_new_inst(data, inst_group.position, opcodes.forprep, {
@@ -769,7 +772,6 @@ do
       data.all_jumps[data.all_jumps_count] = inst_group.loop_jump
       return inst_group.start.prev
     end,
-    ---@param data ILCompilerData
     ---@param inst_group ILForloopGroup
     ["forloop"] = function(data, inst_group)
       inst_group.loop_jump.jump_inst = add_new_inst(data, inst_group.position, opcodes.forloop, {
@@ -781,13 +783,11 @@ do
       data.all_jumps[data.all_jumps_count] = inst_group.loop_jump
       return inst_group.start.prev
     end,
-    ---@param data ILCompilerData
     ---@param inst_group ILTforcallGroup
     ["tforcall"] = function(data, inst_group)
       util.debug_abort("-- TODO: not implemented")
       return inst_group.start.prev
     end,
-    ---@param data ILCompilerData
     ---@param inst_group ILTforloopGroup
     ["tforloop"] = function(data, inst_group)
       util.debug_abort("-- TODO: not implemented")
@@ -1700,8 +1700,8 @@ local function compile(func)
     end
   end
 
-  for _, reg in ipairs(data.compiled_registers) do
-    ---@cast reg ILCompiledRegister|CompiledRegister
+  -- convert ILCompiledRegisters to CompiledRegisters
+  for _, reg in ipairs(data.compiled_registers--[=[@as (ILCompiledRegister|CompiledRegister)[]]=]) do
     reg.index = reg.reg_index
     reg.reg_index = nil
     reg.start_at = reg.start_at.inst_index
