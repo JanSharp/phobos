@@ -2039,6 +2039,9 @@ local function update_intermediate_data(func, inst)
   if func.has_reg_usage then
     determine_reg_usage_for_inst(inst)
   end
+  if func.has_blocks then
+    normalize_blocks_for_inst(inst)
+  end
 end
 
 ---@param func ILFunction
