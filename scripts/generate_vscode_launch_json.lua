@@ -187,21 +187,21 @@ add_phobos_profiles{
   args = {"--id", "${input:testId1}", "${input:testId2}"}
 }
 add_input{
-  id = "testScope",
+  id = "testFilter",
   type = "promptString",
-  description = "The scope to run.",
+  description = "Which tests to run (Lua pattern).",
   default = nil,
   password = false,
 }
 add_phobos_profiles{
-  name = "tests/main test scope",
+  name = "tests/main test with filter",
   main_filename = "tests/main.lua",
-  args = {"--scopes", "${input:testScope}"}
+  args = {"--filter", "${input:testFilter}"}
 }
 add_phobos_profiles{
-  name = "tests/main test scope and id",
+  name = "tests/main test with filter and id",
   main_filename = "tests/main.lua",
-  args = {"--scopes", "${input:testScope}", "--id", "${input:testId1}"}
+  args = {"--filter", "${input:testFilter}", "--id", "${input:testId1}"}
 }
 add_phobos_profiles{
   name = "src/main (debug profile)",
