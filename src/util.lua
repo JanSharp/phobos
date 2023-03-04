@@ -170,6 +170,21 @@ local function iterate_keys(tab, prev_key)
   end
 end
 
+---must use the letter K for the generic type parameter, otherwise it won't infer the type of the key (in 3.6.13)
+---@generic K
+---@param tab table<K, any>
+---@param prev_key? K @ this key will not be iterated, it will start at the next one.
+---@return fun(_: any? ,_: K?):(K?) iterator @
+---NOTE: doesn't actually take any parameters, just works around an issue with type inference (in 3.6.13)
+local function iterate_values(tab, prev_key)
+  local key = prev_key
+  return function()
+    local value
+    key, value = next(tab, key)
+    return value
+  end
+end
+
 local function debug_abort(message)
   return error(message)
 end
