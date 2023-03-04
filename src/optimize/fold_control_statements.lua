@@ -8,7 +8,7 @@ local remove_func_defs_in_scope
 do
   local function delete_func_base_node(node, context)
     -- save the ast walker some unnecessary work
-    node.func_def.body = ill.new(true)
+    node.func_def.body = ill.new()
     local func_def = context.parent_func_def
     for i, func_proto in ipairs(func_def.func_protos) do
       if func_proto == node.func_def then

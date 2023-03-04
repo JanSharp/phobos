@@ -122,7 +122,7 @@ do
   ---@field start_at ILCompiledInstruction @ inclusive
   ---@field stop_at ILCompiledInstruction? @ exclusive. When `nil` stops at the very end
 
-  ---@class ILCompiledInstruction : IntrusiveILLNode, Instruction
+  ---@class ILCompiledInstruction : ILLNode, Instruction
   ---@field inst_index integer
 
   ---@param data ILCompilerData
@@ -1399,7 +1399,7 @@ local function compile(func)
     func = func,
     local_reg_count = 0,
     local_reg_gaps = {},
-    compiled_instructions = ill.new(true),
+    compiled_instructions = ill.new(),
     compiled_registers = {},
     compiled_registers_count = 0,
     constant_lut = {},

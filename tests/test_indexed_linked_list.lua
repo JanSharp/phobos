@@ -7,8 +7,8 @@ local ill = require("indexed_linked_list")
 
 local util = require("util")
 
-local function make_test_list(intrusive, values)
-  local list = ill.new(intrusive)
+local function make_test_list(values)
+  local list = ill.new()
   for _, value in ipairs(values) do
     ill.append(list, value)
   end
@@ -47,13 +47,13 @@ do
   do
     local data_copy = util.copy(data)
     add_test("iterate list with "..data_copy.label, function()
-      local list = make_test_list(true, data_copy.values)
+      local list = make_test_list(data_copy.values)
       local got_iterator = ill.iterate(list)
       tutil.assert_iteration(data_copy.values, got_iterator)
     end)
 
     add_test("iterate_reverse list with "..data.label, function()
-      local list = make_test_list(true, data.values)
+      local list = make_test_list(data.values)
       local got_iterator = ill.iterate_reverse(list)
       tutil.assert_iteration(data.reverse, got_iterator)
     end)
@@ -99,7 +99,7 @@ do
   }
   do
     add_test("iterate list with "..data.label, function()
-      local list = make_test_list(true, data.values)
+      local list = make_test_list(data.values)
       local got_iterator = ill.iterate(list, data.start_at, data.stop_at)
       tutil.assert_iteration(data.expected, got_iterator)
     end)
@@ -141,7 +141,7 @@ do
   }
   do
     add_test("iterate_reverse list with "..data.label, function()
-      local list = make_test_list(true, data.values)
+      local list = make_test_list(data.values)
       local got_iterator = ill.iterate_reverse(list, data.start_at, data.stop_at)
       tutil.assert_iteration(data.expected, got_iterator)
     end)

@@ -41,7 +41,7 @@ do
 
   function eval_blocks(data)
     local inst = data.func.instructions.first
-    local blocks = ill.new(true)
+    local blocks = ill.new()
     data.blocks = blocks
     while inst do
       local block = create_block(data, inst)

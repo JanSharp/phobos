@@ -20,25 +20,15 @@ local index_spacing = 2 ^ 4
 local ill = {}
 
 local function new_node(list, value, index, prev, next)
-  if list.intrusive then
-    value = value or {}
-    if value.list then
-      util.debug_abort("Attempt to add the same table to some intrusive list multiple times.")
-    end
-    value.list = list
-    value.index = index
-    value.prev = prev
-    value.next = next
-    return value
-  else
-    return {
-      list = list,
-      value = value,
-      index = index,
-      prev = prev,
-      next = next,
-    }
+  value = value or {}
+  if value.list then
+    util.debug_abort("Attempt to add the same table to some intrusive list multiple times.")
   end
+  value.list = list
+  value.index = index
+  value.prev = prev
+  value.next = next
+  return value
 end
 
 local function re_index(self)
@@ -153,69 +143,20 @@ local function add_first(self, value)
   return node
 end
 
----@class ILLNodeBase
----@field list IndexedLinkedListBase @ back reference
+---@class ILLNode
 ---@field index integer @ non sequential but ordered index
----@field prev ILLNodeBase? @ `nil` if this is the first node
----@field next ILLNodeBase? @ `nil` if this is the last node
-
----@class IntrusiveILLNode : ILLNodeBase
 ---@field list IntrusiveIndexedLinkedList @ back reference
----@field prev IntrusiveILLNode? @ `nil` if this is the first node
----@field next IntrusiveILLNode? @ `nil` if this is the last node
-
----@class ILLNode : ILLNodeBase
----@field list IndexedLinkedList @ back reference
----@field value any
 ---@field prev ILLNode? @ `nil` if this is the first node
 ---@field next ILLNode? @ `nil` if this is the last node
 
----@class IndexedLinkedListBase
----@field intrusive boolean
+---@class IntrusiveIndexedLinkedList
 ---@field count integer @ if 0, `first` and `last` are `nil`
----@field first ILLNodeBase?
----@field last ILLNodeBase?
----@field lookup table<integer, ILLNodeBase> @ indexed by `ILLNodeBase.index`
-
----@class IntrusiveIndexedLinkedList : IndexedLinkedListBase
----@field intrusive true
----@field first IntrusiveILLNode?
----@field last IntrusiveILLNode?
----@field lookup table<integer, IntrusiveILLNode> @ indexed by `IntrusiveILLNode.index`
-
----@class IndexedLinkedList : IndexedLinkedListBase
----@field intrusive false
 ---@field first ILLNode?
 ---@field last ILLNode?
 ---@field lookup table<integer, ILLNode> @ indexed by `ILLNode.index`
 
----cSpell:ignore jank
--- An attempt at using generics. God they are jank and 3/4 things that I tested
--- and I wanted to use them for are simply broken
-
--- ---list: back reference\
--- ---index: non sequential but ordered index\
--- ---prev: `nil` if this is the first node\
--- ---next: `nil` if this is the last node
--- ---@class IntrusiveILLNode<T> : { list: IntrusiveIndexedLinkedList<T>, index: integer, prev: T?, next: T? }
-
--- ---count: if 0, `first` and `last` are `nil`\
--- ---lookup: indexed by `IntrusiveILLNode.index`
--- ---@class IntrusiveIndexedLinkedList<T> : { count: integer, first: T?, last: T?, lookup: table<integer, T> }
-
--- ---list: back reference\
--- ---index: non sequential but ordered index\
--- ---prev: `nil` if this is the first node\
--- ---next: `nil` if this is the last node
--- ---@class ILLNode<T> : { list: IndexedLinkedList<T>, value: T, index: integer, prev: ILLNode<T>?, next: ILLNode<T>? }
-
--- ---count: if 0, `first` and `last` are `nil`\
--- ---lookup: indexed by `ILLNode.index`
--- ---@class IndexedLinkedList<T> : { count: integer, first: ILLNode<T>?, last: ILLNode<T>?, lookup: table<integer, ILLNode<T>> }
-
-function ill.new(intrusive)
+function ill.new()
   return {
-    intrusive = intrusive or false,
     count = 0,
     first = nil,
     last = nil,
@@ -223,35 +164,28 @@ function ill.new(intrusive)
   }
 end
 
----@param list IndexedLinkedListBase
----@param node ILLNode|IntrusiveILLNode
----@param stop_at_node (ILLNode|IntrusiveILLNode)?
+---@param node ILLNode
+---@param stop_at_node ILLNode?
 ---@param next_or_prev_key "next"|"prev"
-local function make_iter(list, node, stop_at_node, next_or_prev_key)
+local function make_iter(node, stop_at_node, next_or_prev_key)
   return function()
     local result = node
     if result == stop_at_node then
-      node = (nil)--[[@as ILLNode|IntrusiveILLNode]]
+      node = (nil)--[[@as ILLNode]]
       stop_at_node = nil -- also set this to nil to prevent the else block from running in extra calls
     else
       node = node[next_or_prev_key]
     end
-    if list.intrusive then
-      return result
-    else
-      return result and result.value
-    end
+    return result
   end
 end
-
--- it's not like IndexedLinkedListBase<T> actually works, but it looks neat :)
 
 ---@generic T
 ---@return fun(_: any? ,_: T?):(T?) iterator @
 ---NOTE: doesn't actually take any parameters, just works around an issue with type inference (in 3.6.13)
 function ill:iterate(start_at_node, stop_at_node)
   ---@diagnostic disable-next-line: undefined-field
-  return make_iter(self, start_at_node or self.first, stop_at_node, "next")
+  return make_iter(start_at_node or self.first, stop_at_node, "next")
 end
 
 ---@generic T
@@ -259,7 +193,7 @@ end
 ---NOTE: doesn't actually take any parameters, just works around an issue with type inference (in 3.6.13)
 function ill:iterate_reverse(start_at_node, stop_at_node)
   ---@diagnostic disable-next-line: undefined-field
-  return make_iter(self, start_at_node or self.last, stop_at_node, "prev")
+  return make_iter(start_at_node or self.last, stop_at_node, "prev")
 end
 
 function ill:prepend(value)
