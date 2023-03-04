@@ -1039,7 +1039,7 @@ function generate_il_func(functiondef, options, parent_func)
   local func = {
     parent_func = parent_func,
     inner_functions = {},
-    instructions = ill.new(true),
+    instructions = ill.new(),
     temp = {
       local_reg_lut = {},
       upval_def_lut = {},

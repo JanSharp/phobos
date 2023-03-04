@@ -642,7 +642,7 @@
           // main_filename
           "tests/main.lua",
           // arguments passed along to the main file
-          "--test-ids",
+          "--id",
           "${input:testId1}",
         ],
         "program": {
@@ -661,7 +661,7 @@
           // main_filename
           "tests/main.lua",
           // arguments passed along to the main file
-          "--test-ids",
+          "--id",
           "${input:testId1}",
         ],
         "program": {
@@ -680,7 +680,7 @@
           // main_filename
           "tests/main.lua",
           // arguments passed along to the main file
-          "--test-ids",
+          "--id",
           "${input:testId1}",
         ],
         "program": {
@@ -705,7 +705,7 @@
           // main_filename
           "tests/main.lua",
           // arguments passed along to the main file
-          "--test-ids",
+          "--id",
           "${input:testId1}",
         ],
         "program": {
@@ -724,7 +724,7 @@
           // main_filename
           "tests/main.lua",
           // arguments passed along to the main file
-          "--test-ids",
+          "--id",
           "${input:testId1}",
         ],
         "program": {
@@ -743,7 +743,7 @@
           // main_filename
           "tests/main.lua",
           // arguments passed along to the main file
-          "--test-ids",
+          "--id",
           "${input:testId1}",
         ],
         "program": {
@@ -767,7 +767,7 @@
           // main_filename
           "tests/main.lua",
           // arguments passed along to the main file
-          "--test-ids",
+          "--id",
           "${input:testId1}",
           "${input:testId2}",
         ],
@@ -787,7 +787,7 @@
           // main_filename
           "tests/main.lua",
           // arguments passed along to the main file
-          "--test-ids",
+          "--id",
           "${input:testId1}",
           "${input:testId2}",
         ],
@@ -807,7 +807,7 @@
           // main_filename
           "tests/main.lua",
           // arguments passed along to the main file
-          "--test-ids",
+          "--id",
           "${input:testId1}",
           "${input:testId2}",
         ],
@@ -833,7 +833,7 @@
           // main_filename
           "tests/main.lua",
           // arguments passed along to the main file
-          "--test-ids",
+          "--id",
           "${input:testId1}",
           "${input:testId2}",
         ],
@@ -853,7 +853,7 @@
           // main_filename
           "tests/main.lua",
           // arguments passed along to the main file
-          "--test-ids",
+          "--id",
           "${input:testId1}",
           "${input:testId2}",
         ],
@@ -873,7 +873,7 @@
           // main_filename
           "tests/main.lua",
           // arguments passed along to the main file
-          "--test-ids",
+          "--id",
           "${input:testId1}",
           "${input:testId2}",
         ],
@@ -884,7 +884,7 @@
       },
     },
     {
-      "name": "Lua tests/main test scope",
+      "name": "Lua tests/main test with filter",
       "type": "lua-local",
       "request": "launch",
       "linux": {
@@ -898,8 +898,8 @@
           // main_filename
           "tests/main.lua",
           // arguments passed along to the main file
-          "--scopes",
-          "${input:testScope}",
+          "--filter",
+          "${input:testFilter}",
         ],
         "program": {
           "file": "src/entry_point.lua",
@@ -917,8 +917,8 @@
           // main_filename
           "tests/main.lua",
           // arguments passed along to the main file
-          "--scopes",
-          "${input:testScope}",
+          "--filter",
+          "${input:testFilter}",
         ],
         "program": {
           "file": "src/entry_point.lua",
@@ -936,8 +936,8 @@
           // main_filename
           "tests/main.lua",
           // arguments passed along to the main file
-          "--scopes",
-          "${input:testScope}",
+          "--filter",
+          "${input:testFilter}",
         ],
         "program": {
           "file": "src/entry_point.lua",
@@ -946,7 +946,7 @@
       },
     },
     {
-      "name": "Phobos tests/main test scope",
+      "name": "Phobos tests/main test with filter",
       "type": "lua-local",
       "request": "launch",
       "preLaunchTask": "Build Debug",
@@ -961,8 +961,8 @@
           // main_filename
           "tests/main.lua",
           // arguments passed along to the main file
-          "--scopes",
-          "${input:testScope}",
+          "--filter",
+          "${input:testFilter}",
         ],
         "program": {
           "file": "out/debug/entry_point.lua",
@@ -980,8 +980,8 @@
           // main_filename
           "tests/main.lua",
           // arguments passed along to the main file
-          "--scopes",
-          "${input:testScope}",
+          "--filter",
+          "${input:testFilter}",
         ],
         "program": {
           "file": "out/debug/entry_point.lua",
@@ -999,8 +999,8 @@
           // main_filename
           "tests/main.lua",
           // arguments passed along to the main file
-          "--scopes",
-          "${input:testScope}",
+          "--filter",
+          "${input:testFilter}",
         ],
         "program": {
           "file": "out/debug/entry_point.lua",
@@ -1009,7 +1009,7 @@
       },
     },
     {
-      "name": "Lua tests/main test scope and id",
+      "name": "Lua tests/main test with filter and id",
       "type": "lua-local",
       "request": "launch",
       "linux": {
@@ -1023,9 +1023,9 @@
           // main_filename
           "tests/main.lua",
           // arguments passed along to the main file
-          "--scopes",
-          "${input:testScope}",
-          "--test-ids",
+          "--filter",
+          "${input:testFilter}",
+          "--id",
           "${input:testId1}",
         ],
         "program": {
@@ -1044,9 +1044,9 @@
           // main_filename
           "tests/main.lua",
           // arguments passed along to the main file
-          "--scopes",
-          "${input:testScope}",
-          "--test-ids",
+          "--filter",
+          "${input:testFilter}",
+          "--id",
           "${input:testId1}",
         ],
         "program": {
@@ -1065,9 +1065,9 @@
           // main_filename
           "tests/main.lua",
           // arguments passed along to the main file
-          "--scopes",
-          "${input:testScope}",
-          "--test-ids",
+          "--filter",
+          "${input:testFilter}",
+          "--id",
           "${input:testId1}",
         ],
         "program": {
@@ -1077,7 +1077,7 @@
       },
     },
     {
-      "name": "Phobos tests/main test scope and id",
+      "name": "Phobos tests/main test with filter and id",
       "type": "lua-local",
       "request": "launch",
       "preLaunchTask": "Build Debug",
@@ -1092,9 +1092,9 @@
           // main_filename
           "tests/main.lua",
           // arguments passed along to the main file
-          "--scopes",
-          "${input:testScope}",
-          "--test-ids",
+          "--filter",
+          "${input:testFilter}",
+          "--id",
           "${input:testId1}",
         ],
         "program": {
@@ -1113,9 +1113,9 @@
           // main_filename
           "tests/main.lua",
           // arguments passed along to the main file
-          "--scopes",
-          "${input:testScope}",
-          "--test-ids",
+          "--filter",
+          "${input:testFilter}",
+          "--id",
           "${input:testId1}",
         ],
         "program": {
@@ -1134,9 +1134,9 @@
           // main_filename
           "tests/main.lua",
           // arguments passed along to the main file
-          "--scopes",
-          "${input:testScope}",
-          "--test-ids",
+          "--filter",
+          "${input:testFilter}",
+          "--id",
           "${input:testId1}",
         ],
         "program": {
@@ -1577,9 +1577,9 @@
       "password": false,
     },
     {
-      "id": "testScope",
+      "id": "testFilter",
       "type": "promptString",
-      "description": "The scope to run.",
+      "description": "Which tests to run (Lua pattern).",
       "password": false,
     },
   ],

@@ -171,7 +171,7 @@
 ---can be any expression
 ---@field consumed_nodes AstNode[]|nil
 
----@class AstStatement : AstNode, IntrusiveILLNode<AstStatement>
+---@class AstStatement : AstNode, ILLNode<AstStatement>
 ---@field list AstStatementList @ (overridden) back reference
 ---@field prev AstStatement? @ (overridden) `nil` if this is the first node
 ---@field next AstStatement? @ (overridden) `nil` if this is the last node
@@ -773,7 +773,7 @@
 ---@class ILTforloopGroup : ILInstructionGroup
 ---@field group_type "tforloop"
 
----@class ILInstruction : IntrusiveILLNode<ILInstruction>
+---@class ILInstruction : ILLNode<ILInstruction>
 ---@field list ILInstructionList @ (overridden) back reference
 ---@field prev ILInstruction? @ (overridden) `nil` if this is the first node
 ---@field next ILInstruction? @ (overridden) `nil` if this is the last node
@@ -934,7 +934,7 @@
 ---temp compilation data
 ---@field closure_index integer @ **zero based** needed for closure instructions to know the function index
 
----@class ILBlock : IntrusiveILLNode<ILBlock>
+---@class ILBlock : ILLNode<ILBlock>
 ---@field list ILBLockList @ (overridden) back reference
 ---@field prev ILBlock? @ (overridden) `nil` if this is the first node
 ---@field next ILBlock? @ (overridden) `nil` if this is the last node

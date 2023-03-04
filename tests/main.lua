@@ -69,6 +69,7 @@ require("test_virtual_io_util")
 
 -- test src
 require("test_linked_list")
+require("test_indexed_linked_list")
 require("test_tokenizer")
 require("test_parser")
 require("test_jump_linker")
@@ -85,7 +86,6 @@ require("test_linq")
 -- TODO: next ones to test:
 -- ast_util
 -- error_code_util
--- indexed_linked_list
 -- io_util?
 -- nodes (the parts that actually contain logic)
 -- opcode_util
