@@ -622,7 +622,7 @@
 ---@field current_reg ILCompiledRegister
 ---temp compilation data
 ---@field reg_groups ILRegisterGroup[]?
----@field index_in_reg_group integer?
+---@field index_in_linked_groups integer?
 
 ---@class ILVarargRegister : ILRegister
 ---@field name nil

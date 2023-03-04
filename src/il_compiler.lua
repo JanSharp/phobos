@@ -1302,6 +1302,9 @@ do
         usable_in_place = false,
         movable = true,
       }
+      if reg.requires_move_into_register_group then
+        return result
+      end
       if group.is_input then
         if is_same_inst_group(group.inst, reg.stop_at) -- is this group the _last_ one using the register
           or input_and_output_reg_index_is_the_same(group.inst, reg) -- or input and output are the same index
@@ -1334,6 +1337,17 @@ do
         inst = (inst.inst_group and inst.inst_group.stop.next or inst.next)--[[@as ILInstruction]]
       end
       return result
+    end
+
+    ---@param reg ILRegister
+    ---@param other_reg ILRegister
+    local function register_lifetime_overlaps(reg, other_reg)
+      return not ( -- the conditions below check if they are not overlapping, so just invert the whole result
+        is_same_inst_group(reg.stop_at, other_reg.start_at)
+          or is_same_inst_group(other_reg.stop_at, reg.start_at)
+          or reg.stop_at.index < other_reg.start_at.index
+          or other_reg.stop_at.index < reg.start_at.index
+      )
     end
 
     ---@param linked_group ILLinkedRegisterGroupsGroup
@@ -1378,6 +1392,8 @@ do
 
       ---@type table<ILRegister, integer>
       local reg_indexes = {}
+      ---@type table<integer, ILRegister[]>
+      local regs_at_index_lut = {}
       ---@type type<ILRegisterGroup, integer>
       local group_indexes = {}
       local group_indexes_count = 0
@@ -1442,7 +1458,25 @@ do
       ---@param to_revert table @ state to pass to `revert_changes`
       ---@return boolean success
       function set_reg_index(reg, reg_index, to_revert)
+        if reg.requires_move_into_register_group then
+          util.debug_abort("Attempt to set index for a register that requires a move into register group.")
+        end
         reg_indexes[reg] = reg_index
+        local regs_at_index = regs_at_index_lut[reg_index]
+        if not regs_at_index then
+          regs_at_index = {}
+          regs_at_index_lut[reg_index] = regs_at_index
+        end
+        regs_at_index[#regs_at_index+1] = reg
+        for other_reg in linq(regs_at_index):skip_last(1):iterate() do
+          if other_reg == reg then
+            util.debug_abort("Calling set_reg_index for a register which already has a fixed index is not allowed.")
+          end
+          if register_lifetime_overlaps(reg, other_reg) then
+            return false -- if they overlap, we can't use the same index
+          end
+        end
+
         to_revert[#to_revert+1] = {
           type = "set_reg_index",
           reg = reg,
@@ -1471,7 +1505,16 @@ do
         for i = #to_revert, 1, -1 do
           local action = to_revert[i]
           if action.type == "set_reg_index" then
+            local reg_index = reg_indexes[action.reg]
             reg_indexes[action.reg] = nil
+            local regs = regs_at_index_lut[reg_index]
+            if regs[#regs] ~= action.reg then
+              util.debug_abort(
+                "The most recently set register should also be the last one in the array in regs_at_index_lut."
+              )
+            end
+            -- keep the empty array around - if it ends up being empty -, good chance it'll be used again
+            regs[#regs] = nil
           elseif action.type == "set_group_index" then
             group_indexes[action.group] = nil
             group_indexes_count = group_indexes_count - 1
@@ -1589,7 +1632,20 @@ do
         )
       end
 
-      -- TODO: save the winning indexes somewhere somehow
+      -- save the winning indexes on the registers
+      local adjustment_index_offset = -linq(util.iterate_values(winning_reg_indexes)):min()
+      for reg in linq(linked_group.groups)
+        :select_many(function(group) return group.regs end)
+        :distinct()
+        :iterate()
+      do
+        local relative_index = winning_reg_indexes[reg]
+        if relative_index then
+          reg.index_in_linked_groups = relative_index + adjustment_index_offset
+        else
+          reg.requires_move_into_register_group = true
+        end
+      end
     end
   end
 
