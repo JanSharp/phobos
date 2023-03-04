@@ -223,6 +223,45 @@ function ill.new(intrusive)
   }
 end
 
+---@param list IndexedLinkedListBase
+---@param node ILLNode|IntrusiveILLNode
+---@param stop_at_node (ILLNode|IntrusiveILLNode)?
+---@param next_or_prev_key "next"|"prev"
+local function make_iter(list, node, stop_at_node, next_or_prev_key)
+  return function()
+    local result = node
+    if result == stop_at_node then
+      node = (nil)--[[@as ILLNode|IntrusiveILLNode]]
+      stop_at_node = nil -- also set this to nil to prevent the else block from running in extra calls
+    else
+      node = node[next_or_prev_key]
+    end
+    if list.intrusive then
+      return result
+    else
+      return result and result.value
+    end
+  end
+end
+
+-- it's not like IndexedLinkedListBase<T> actually works, but it looks neat :)
+
+---@generic T
+---@return fun(_: any? ,_: T?):(T?) iterator @
+---NOTE: doesn't actually take any parameters, just works around an issue with type inference (in 3.6.13)
+function ill:iterate(start_at_node, stop_at_node)
+  ---@diagnostic disable-next-line: undefined-field
+  return make_iter(self, start_at_node or self.first, stop_at_node, "next")
+end
+
+---@generic T
+---@return fun(_: any? ,_: T?):(T?) iterator @
+---NOTE: doesn't actually take any parameters, just works around an issue with type inference (in 3.6.13)
+function ill:iterate_reverse(start_at_node, stop_at_node)
+  ---@diagnostic disable-next-line: undefined-field
+  return make_iter(self, start_at_node or self.last, stop_at_node, "prev")
+end
+
 function ill:prepend(value)
   if self.count == 0 then
     return add_first(self, value)
