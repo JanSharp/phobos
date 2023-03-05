@@ -1352,8 +1352,8 @@ do
       )
     end
 
-    ---@param linked_group ILLinkedRegisterGroupsGroup
-    function determine_best_offsets(linked_group)
+    ---@param linked_groups ILLinkedRegisterGroupsGroup
+    function determine_best_offsets(linked_groups)
       ---@type DetermineBestOffsetsUnknownData[]
       local unknowns = {}
       ---@type DetermineBestOffsetsUnknownData[]
@@ -1364,12 +1364,12 @@ do
       ---@type table<ILRegisterGroup, DetermineBestOffsetsUnknownData[]>
       local unknowns_by_group = {}
 
-      local first_inst = linked_group.groups[1].inst.prev
-      local last_inst = linked_group.groups[#linked_group.groups].inst.next
+      local first_inst = linked_groups.groups[1].inst.prev
+      local last_inst = linked_groups.groups[#linked_groups.groups].inst.next
 
-      for i, group in ipairs(linked_group.groups) do
-        group.prev_group = linked_group.groups[i - 1]
-        group.next_group = linked_group.groups[i + 1]
+      for i, group in ipairs(linked_groups.groups) do
+        group.prev_group = linked_groups.groups[i - 1]
+        group.next_group = linked_groups.groups[i + 1]
         if group.offset_to_next_group then
           group.next_group.offset_to_prev_group = -group.offset_to_next_group
         end
@@ -1593,7 +1593,7 @@ do
 
       local attempt_count = 0
 
-      local groups_count = #linked_group.groups
+      local groups_count = #linked_groups.groups
       local function eval_score()
         attempt_count = attempt_count + 1
         print(attempt_count..": "..group_indexes_count.."/"..groups_count.." "
@@ -1621,7 +1621,7 @@ do
         use_move(unknown, i)
       end
 
-      set_group_index(linked_group.groups[1], 0, {})
+      set_group_index(linked_groups.groups[1], 0, {})
       walk(1)
 
       if not winning_score then
@@ -1636,7 +1636,7 @@ do
 
       -- save the winning indexes on the registers
       local adjustment_index_offset = -linq(util.iterate_values(winning_reg_indexes)):min()
-      for reg in linq(linked_group.groups)
+      for reg in linq(linked_groups.groups)
         :select_many(function(group) return group.regs end)
         :distinct()
         :iterate()
@@ -1762,8 +1762,8 @@ do
     ;
 
     -- determine best relative register indexes within linked groups
-    for _, linked_group in ipairs(all_linked_groups) do
-      determine_best_offsets(linked_group)
+    for _, linked_groups in ipairs(all_linked_groups) do
+      determine_best_offsets(linked_groups)
     end
 
     evaluate_indexes_for_regs_outside_of_groups(data)
