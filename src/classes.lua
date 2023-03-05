@@ -623,6 +623,7 @@
 ---temp compilation data
 ---@field reg_groups ILRegisterGroup[]?
 ---@field index_in_linked_groups integer?
+---@field predetermined_reg_index integer
 
 ---@class ILVarargRegister : ILRegister
 ---@field name nil

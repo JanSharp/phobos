@@ -1138,8 +1138,10 @@ do
 
         -- TODO: somehow improve this condition to not leave big gaps in the stack
         if not reg.requires_move_into_register_group
-          and reg.start_at.index < first_index
-          and reg.stop_at.index > last_index
+          and (
+            (reg.start_at.index < first_index and reg.stop_at.index > last_index)
+              or reg.captured_as_upval
+          )
         then
           reg.requires_move_into_register_group = true
           did_mark_a_new_register_to_require_move_into_register_group = true
@@ -1650,6 +1652,91 @@ do
   end
 
   ---@param data ILCompilerData
+  local function evaluate_indexes_for_regs_outside_of_groups(data)
+    local empty = {}
+    local used_reg_indexes = {}
+    local used_reg_indexes_for_upvals = {}
+    local top = -1
+
+    local function use_reg(start_index)
+      local index = start_index or 0
+      while used_reg_indexes[index] do
+        index = index + 1
+      end
+      used_reg_indexes[index] = true
+      if index > top then
+        top = index
+      end
+      return index
+    end
+
+    ---get lowest index above all currently alive regs for upvals
+    local function use_reg_for_upval()
+      local index = top
+      while not used_reg_indexes_for_upvals[index] and index > 0 do -- this loop counts down to 0
+        index = index - 1
+      end
+      index = use_reg(index)
+      used_reg_indexes_for_upvals[index] = true
+      return index
+    end
+
+    local function free_reg(index)
+      used_reg_indexes[index] = nil
+      used_reg_indexes_for_upvals[index] = nil
+      while not used_reg_indexes[top] and top >= 0 do -- this loop counts down to -1
+        top = top - 1
+      end
+    end
+
+    for regs_for_inst in linq(ill.iterate_reverse(data.func.instructions)--[[@as fun(): ILInstruction?]])
+      :group_by(function(inst) return inst.inst_group or inst end)
+      :select(function(insts)
+        return {
+          starting_regs_iter = linq(insts)
+            :select_many(function(inst) return inst.regs_start_at_list or empty end)
+            :distinct()
+            -- basically keeps all registers that don't have a fixed index in their linked register groups
+            :where(function(reg) return not reg.reg_groups or reg.requires_move_into_register_group end)
+            :iterate()
+          ,
+          stopping_regs_iter = linq(insts)
+            :select_many(function(inst) return inst.regs_stop_at_list or empty end)
+            :distinct()
+            -- basically keeps all registers that don't have a fixed index in their linked register groups
+            :where(function(reg) return not reg.reg_groups or reg.requires_move_into_register_group end)
+            :select(function(reg, i) reg.index_for_order = i; return reg end)
+            -- no special ordering for upvalues because doing so would create unnecessary gaps
+            -- long lived registers first, putting them lower, resulting in less gaps
+            :order_by(function(reg) return reg.start_at.index end)
+            :then_by(function(reg) return reg.index_for_order end) -- to make it a stable & deterministic sort
+            :select(function(reg) reg.index_for_order = nil; return reg end) -- cleanup
+            :iterate()
+          ,
+        }
+      end)
+      :iterate()
+    do
+      local regs_to_instantly_free_again
+      for reg in regs_for_inst.starting_regs_iter do
+        if reg.predetermined_reg_index then
+          free_reg(reg.predetermined_reg_index)
+        else
+          regs_to_instantly_free_again = regs_to_instantly_free_again or {}
+          regs_to_instantly_free_again[reg] = true
+          util.debug_print("Why and when do registers start and stop at the same instruction?")
+        end
+      end
+      for reg in regs_for_inst.stopping_regs_iter do
+        reg.predetermined_reg_index = reg.captured_as_upval and use_reg_for_upval() or use_reg()
+        if regs_to_instantly_free_again[reg] then
+          free_reg(reg.predetermined_reg_index)
+        end
+      end
+    end
+  end
+
+  ---@param data ILCompilerData
   function pre_compilation_process(data)
     -- TODO: remove once I'm sure the is_parameter flag on registers is good
     -- group_registers(data, nil, false, data.func.param_regs, 1)
@@ -1678,6 +1765,8 @@ do
     for _, linked_group in ipairs(all_linked_groups) do
       determine_best_offsets(linked_group)
     end
+
+    evaluate_indexes_for_regs_outside_of_groups(data)
   end
 end
 
@@ -1733,7 +1822,7 @@ local function compile(func)
   il.determine_reg_usage(func)
   pre_compilation_process(data)
 
-  generate(data)
+  -- generate(data)
 
   for i = data.compiled_registers_count + 1, #data.compiled_registers do
     data.compiled_registers[i] = nil
