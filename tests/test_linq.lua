@@ -2066,11 +2066,17 @@ do
   do
     for _, outer in ipairs(known_or_unknown_count_dataset) do
       for _, inner in ipairs(array_or_obj_with_known_or_unknown_count_dataset) do
-        add_test("union "..data.label.." with "..inner.label..", self has "..outer.label, function()
+        local func_name = data.key_selector and "union_by" or "union"
+        add_test(func_name.." "..data.label.." with "..inner.label..", self has "..outer.label, function()
           local collection = inner.make_obj(data.inner_values)
-          local obj = outer.make_obj(data.outer_values):union(collection, data.key_selector)
+          local obj = outer.make_obj(data.outer_values)
+          if data.key_selector then
+            obj = obj:union_by(collection, data.key_selector)
+          else
+            obj = obj:union(collection)
+          end
           local got_count = obj.__count
-          assert.equals(nil, got_count, "internal __count after 'union'")
+          assert.equals(nil, got_count, "internal __count after '"..func_name.."'")
           assert_iteration(obj, data.expected)
         end)
       end

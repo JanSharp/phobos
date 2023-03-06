@@ -94,6 +94,7 @@ end
 -- [x] to_linked_list
 -- [x] to_lookup
 -- [x] union
+-- [x] union_by
 -- [x] where
 
 -- no need for `then` and `then_descending` because if it was sorting an array of numbers or strings, there's
@@ -2029,7 +2030,7 @@ end
 ---@param collection LinqObj|T[]
 ---@param key_selector (fun(value: T): TKey)? @ no index, because it's used on both collections
 ---@return LinqObj|T[]
-function linq_meta_index:union(collection, key_selector)
+local function union_internal(self, collection, key_selector)
   self.__count = nil
   local iter = self.__iter
   local iterating_collection = false
@@ -2078,6 +2079,24 @@ function linq_meta_index:union(collection, key_selector)
     end
   end
   return self
+end
+
+---@generic T
+---@param self LinqObj|T[]
+---@param collection LinqObj|T[]
+---@return LinqObj|T[]
+function linq_meta_index:union(collection)
+  return union_internal(self, collection)
+end
+
+---@generic T
+---@generic TKey
+---@param self LinqObj|T[]
+---@param collection LinqObj|T[]
+---@param key_selector fun(value: T): TKey @ no index, because it's used on both collections
+---@return LinqObj|T[]
+function linq_meta_index:union_by(collection, key_selector)
+  return union_internal(self, collection, key_selector)
 end
 
 ---@generic T
