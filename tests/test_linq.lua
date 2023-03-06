@@ -210,37 +210,28 @@ do
     assert_iteration(obj, {"foo", "bar", false, "baz", "hello", "world"})
   end)
 
-  for _, outer in ipairs(known_or_unknown_count_dataset) do
-    add_test("average of 5 values with "..outer.label, function()
-      local got = outer.make_obj{1, 3, 5, 18, 32}:average()
-      assert.equals((1 + 3 + 5 + 18 + 32) / 5, got, "result of 'average'")
-    end)
+  add_test("average on object with known __count", function()
+    local got = linq{1, 3, 5, 18, 32}:average()
+    assert.equals((1 + 3 + 5 + 18 + 32) / 5, got, "result of 'average'")
+  end)
 
-    add_test("average of empty collection with "..outer.label, function()
-      local obj = outer.make_obj{}
-      assert.errors("Attempt to evaluate average value on an empty collection%.", function()
-        obj:average()
-      end)
-    end)
-  end
+  add_test("average on object with unknown __count", function()
+    local obj = linq{1, 3, 5, 18, 32}
+    obj.__count = nil
+    local got = obj:average()
+    assert.equals((1 + 3 + 5 + 18 + 32) / 5, got, "result of 'average'")
+  end)
 
-  add_test("average_by of 4 values", function()
+  add_test("average using selector", function()
     local got = linq(get_test_strings())
-      :average_by(function(value) return type(value) == "string" and #value or 100 end)
+      :average(function(value) return type(value) == "string" and #value or 100 end)
     ;
-    assert.equals((3 + 3 + 100 + 3) / 4, got, "result of 'average_by'")
+    assert.equals((3 + 3 + 100 + 3) / 4, got, "result of 'average'")
   end)
 
-  add_test("average_by using selector using index arg", function()
+  add_test("average using selector using index arg", function()
     local obj = linq(get_test_strings())
-    assert_sequential_helper(obj, obj.average_by, function() return 1 end)
-  end)
-
-  add_test("average_by of empty collection", function()
-    local obj = linq{}
-    assert.errors("Attempt to evaluate average value on an empty collection%.", function()
-      obj:average_by(function() return 1 end)
-    end)
+    assert_sequential_helper(obj, obj.average, function() return 1 end)
   end)
 
   for _, data in ipairs{

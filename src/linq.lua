@@ -29,7 +29,6 @@ end
 -- [x] any
 -- [x] append
 -- [x] average
--- [x] average_by
 -- [x] chunk
 -- [x] contains
 -- [x] copy
@@ -170,15 +169,23 @@ end
 
 ---@generic T
 ---@param self LinqObj|T[]
+---@param selector (fun(value: T, index: integer): number)?
 ---@return number
-function linq_meta_index:average()
-  -- technically this function contains the same logic 2 times
+function linq_meta_index:average(selector)
+  -- technically this function contains the same logic 3 times
   -- this is purely for optimization reasons
 
-  if self.__count then
-    if self.__count == 0 then
-      error("Attempt to evaluate average value on an empty collection.")
+  if selector then
+    local i = 0
+    local total = 0
+    for value in self.__iter do
+      i = i + 1
+      total = total + selector(value, i)
     end
+    return total / i
+  end
+
+  if self.__count then
     local total = 0
     for value in self.__iter do
       total = total + value
@@ -191,26 +198,6 @@ function linq_meta_index:average()
   for value in self.__iter do
     i = i + 1
     total = total + value
-  end
-  if i == 0 then
-    error("Attempt to evaluate average value on an empty collection.")
-  end
-  return total / i
-end
-
----@generic T
----@param self LinqObj|T[]
----@param selector fun(value: T, index: integer): number
----@return number
-function linq_meta_index:average_by(selector)
-  local i = 0
-  local total = 0
-  for value in self.__iter do
-    i = i + 1
-    total = total + selector(value, i)
-  end
-  if i == 0 then
-    error("Attempt to evaluate average value on an empty collection.")
   end
   return total / i
 end
