@@ -210,28 +210,57 @@ do
     assert_iteration(obj, {"foo", "bar", false, "baz", "hello", "world"})
   end)
 
-  add_test("average on object with known __count", function()
-    local got = linq{1, 3, 5, 18, 32}:average()
-    assert.equals((1 + 3 + 5 + 18 + 32) / 5, got, "result of 'average'")
-  end)
+  for _, outer in ipairs(known_or_unknown_count_dataset) do
+    add_test("average of 5 values with "..outer.label, function()
+      local got = outer.make_obj{1, 3, 5, 18, 32}:average()
+      assert.equals((1 + 3 + 5 + 18 + 32) / 5, got, "result of 'average'")
+    end)
 
-  add_test("average on object with unknown __count", function()
-    local obj = linq{1, 3, 5, 18, 32}
-    obj.__count = nil
-    local got = obj:average()
-    assert.equals((1 + 3 + 5 + 18 + 32) / 5, got, "result of 'average'")
-  end)
+    add_test("average of empty collection with "..outer.label, function()
+      local obj = outer.make_obj{}
+      assert.errors("Attempt to evaluate average value on an empty collection%.", function()
+        obj:average()
+      end)
+    end)
+  end
 
-  add_test("average using selector", function()
+  add_test("average_by of 4 values", function()
     local got = linq(get_test_strings())
-      :average(function(value) return type(value) == "string" and #value or 100 end)
+      :average_by(function(value) return type(value) == "string" and #value or 100 end)
     ;
-    assert.equals((3 + 3 + 100 + 3) / 4, got, "result of 'average'")
+    assert.equals((3 + 3 + 100 + 3) / 4, got, "result of 'average_by'")
   end)
 
-  add_test("average using selector using index arg", function()
+  add_test("average_by using selector using index arg", function()
     local obj = linq(get_test_strings())
-    assert_sequential_helper(obj, obj.average, function() return 1 end)
+    assert_sequential_helper(obj, obj.average_by, function() return 1 end)
+  end)
+
+  add_test("average_by of empty collection", function()
+    local obj = linq{}
+    assert.errors("Attempt to evaluate average value on an empty collection%.", function()
+      obj:average_by(function() return 1 end)
+    end)
+  end)
+
+  add_test("average_by_or of 4 values", function()
+    local got = linq(get_test_strings())
+      :average_by_or(100, function(value) return type(value) == "string" and #value or 100 end)
+    ;
+    assert.equals((3 + 3 + 100 + 3) / 4, got, "result of 'average_by_or'")
+  end)
+
+  add_test("average_by_or using selector using index arg", function()
+    local obj = linq(get_test_strings())
+    obj:average_by_or(100, assert_sequential_factory(function(assert_sequential, value, i)
+      assert_sequential(value, i)
+      return 1
+    end))
+  end)
+
+  add_test("average_by_or of empty collection", function()
+    local got = linq{}:average_by_or(100, function() return 1 end)
+    assert.equals(100, got, "result of 'average_by_or'")
   end)
 
   for _, data in ipairs{
@@ -365,16 +394,16 @@ do
     assert_iteration(obj, {"hi", "hello", "bye"})
   end)
 
-  add_test("distinct with a selector", function()
+  add_test("distinct_by", function()
     local obj = linq(get_test_strings())
-      :distinct(function(value) return type(value) == "string" and value:sub(1, 2) or value end)
+      :distinct_by(function(value) return type(value) == "string" and value:sub(1, 2) or value end)
     ;
     assert_iteration(obj, {"fo", "ba", false})
   end)
 
-  add_test("distinct with a selector using index arg", function()
+  add_test("distinct_by using index arg", function()
     local obj = linq(get_test_strings())
-    assert_sequential_helper(obj, obj.distinct, function() return 1 end)
+    assert_sequential_helper(obj, obj.distinct_by, function() return 1 end)
   end)
 
   add_test("ensure_knows_count does nothing if __count is known", function()
@@ -833,16 +862,16 @@ do
     assert_iteration(obj, {"world"})
   end)
 
-  add_test("intersect with array collection with key_selector", function()
+  add_test("intersect_by with array collection", function()
     local obj = linq{"hello", "world"}
-      :intersect({"goodbye", "world"}, function(value) return value:sub(1, 3) end)
+      :intersect_by({"goodbye", "world"}, function(value) return value:sub(1, 3) end)
     ;
     assert_iteration(obj, {"world"})
   end)
 
-  add_test("intersect with linq object collection with key_selector", function()
+  add_test("intersect_by with linq object collection", function()
     local obj = linq{"hello", "world"}
-      :intersect(linq{"goodbye", "world"}, function(value) return value:sub(1, 3) end)
+      :intersect_by(linq{"goodbye", "world"}, function(value) return value:sub(1, 3) end)
     ;
     assert_iteration(obj, {"world"})
   end)
@@ -1109,6 +1138,37 @@ do
     end))
   end)
 
+  add_test("max_by_or with 4 values", function()
+    local got = linq(get_test_strings()):max_by_or("hello", function(value)
+      return type(value) == "string" and #value or 0
+    end)
+    assert.equals("foo", got, "result of 'max_by_or'")
+  end)
+
+  add_test("max_by_or with 4 values using custom comparator", function()
+    local got = linq(get_test_strings()):max_by_or("hello", function(value)
+      return type(value) == "string" and #value or 0
+    end, function(left, right)
+      -- 0 beats everything!
+      if left == 0 then return true end
+      if right == 0 then return false end
+      return left > right
+    end)
+    assert.equals(false, got, "result of 'max_by_or'")
+  end)
+
+  add_test("max_by_or with empty collection", function()
+    local got = linq{}:max_by_or("hello", function(value) return value end)
+    assert.equals("hello", got, "result of 'max_by_or'")
+  end)
+
+  add_test("max_by_or with selector using index arg", function()
+    linq{1, 4, 2, 3, 10}:max_by_or("hello", assert_sequential_factory(function(assert_sequential, value, i)
+      assert_sequential(value, i)
+      return value
+    end))
+  end)
+
   add_test("min with 3 values", function()
     local got = linq{2, 1, 3}:min()
     assert.equals(1, got, "result of 'min'")
@@ -1159,6 +1219,37 @@ do
 
   add_test("min_by with selector using index arg", function()
     linq{1, 4, 2, 3, 10}:min_by(assert_sequential_factory(function(assert_sequential, value, i)
+      assert_sequential(value, i)
+      return value
+    end))
+  end)
+
+  add_test("min_by_or with 4 values", function()
+    local got = linq(get_test_strings()):min_by_or("hello", function(value)
+      return type(value) == "string" and #value or 100
+    end)
+    assert.equals("foo", got, "result of 'min_by_or'")
+  end)
+
+  add_test("min_by_or with 4 values using custom comparator", function()
+    local got = linq(get_test_strings()):min_by_or("hello", function(value)
+      return type(value) == "string" and #value or 100
+    end, function(left, right)
+      -- 100 beats everything!
+      if left == 100 then return true end
+      if right == 100 then return false end
+      return left < right
+    end)
+    assert.equals(false, got, "result of 'min_by_or'")
+  end)
+
+  add_test("min_by_or with empty collection", function()
+    local got = linq{}:min_by_or("hello", function(value) return value end)
+    assert.equals("hello", got, "result of 'min_by_or'")
+  end)
+
+  add_test("min_by_or with selector using index arg", function()
+    linq{1, 4, 2, 3, 10}:min_by_or("hello", assert_sequential_factory(function(assert_sequential, value, i)
       assert_sequential(value, i)
       return value
     end))
@@ -1563,29 +1654,40 @@ do
   end
 
   for _, outer in ipairs(known_or_unknown_count_dataset) do
-    local function selector(value)
-      return type(value) == "string" and #value or 5
-    end
     for _, data in ipairs{
       {label = "of 0 values", values = {}, expected = 0},
       {label = "of 1 value", values = {100}, expected = 100},
       {label = "of 2 values", values = {100, 20}, expected = 120},
       {label = "of 3 values", values = {100, 20, 3}, expected = 123},
-      {label = "of 0 values using selector", values = {}, selector = selector, expected = 0},
-      {label = "of 1 value using selector", values = {"f"}, selector = selector, expected = 1},
-      {label = "of 2 values using selector", values = {"f", "oo"}, selector = selector, expected = 3},
-      {label = "of 4 values using selector", values = get_test_strings(), selector = selector, expected = 14},
     }
     do
       add_test("sum "..data.label..", self has "..outer.label, function()
-        local got = outer.make_obj(data.values):sum(data.selector)
+        local got = outer.make_obj(data.values):sum()
         assert.equals(data.expected, got, "result of 'sum'")
       end)
     end
+  end
 
-    add_test("sum with selector using index arg, self has "..outer.label, function()
+  for _, outer in ipairs(known_or_unknown_count_dataset) do
+    local function selector(value)
+      return type(value) == "string" and #value or 5
+    end
+    for _, data in ipairs{
+      {label = "of 0 values", values = {}, selector = selector, expected = 0},
+      {label = "of 1 value", values = {"f"}, selector = selector, expected = 1},
+      {label = "of 2 values", values = {"f", "oo"}, selector = selector, expected = 3},
+      {label = "of 4 values", values = get_test_strings(), selector = selector, expected = 14},
+    }
+    do
+      add_test("sum_by "..data.label..", self has "..outer.label, function()
+        local got = outer.make_obj(data.values):sum_by(data.selector)
+        assert.equals(data.expected, got, "result of 'sum_by'")
+      end)
+    end
+
+    add_test("sum_by using index arg, self has "..outer.label, function()
       local obj = outer.make_obj(get_test_strings())
-      assert_sequential_helper(obj, obj.sum, function(_, i) return i end)
+      assert_sequential_helper(obj, obj.sum_by, function(_, i) return i end)
     end)
   end
 
@@ -1975,11 +2077,17 @@ do
   do
     for _, outer in ipairs(known_or_unknown_count_dataset) do
       for _, inner in ipairs(array_or_obj_with_known_or_unknown_count_dataset) do
-        add_test("union "..data.label.." with "..inner.label..", self has "..outer.label, function()
+        local func_name = data.key_selector and "union_by" or "union"
+        add_test(func_name.." "..data.label.." with "..inner.label..", self has "..outer.label, function()
           local collection = inner.make_obj(data.inner_values)
-          local obj = outer.make_obj(data.outer_values):union(collection, data.key_selector)
+          local obj = outer.make_obj(data.outer_values)
+          if data.key_selector then
+            obj = obj:union_by(collection, data.key_selector)
+          else
+            obj = obj:union(collection)
+          end
           local got_count = obj.__count
-          assert.equals(nil, got_count, "internal __count after 'union'")
+          assert.equals(nil, got_count, "internal __count after '"..func_name.."'")
           assert_iteration(obj, data.expected)
         end)
       end

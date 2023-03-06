@@ -29,12 +29,15 @@ end
 -- [x] any
 -- [x] append
 -- [x] average
+-- [x] average_by
+-- [x] average_by_or (better than select + default_if_empty + average)
 -- [x] chunk
 -- [x] contains
 -- [x] copy
 -- [x] count
 -- [x] default_if_empty
 -- [x] distinct
+-- [x] distinct_by
 -- [x] element_at
 -- [x] element_at_from_end
 -- [x] ensure_knows_count
@@ -52,6 +55,7 @@ end
 -- [x] insert
 -- [x] insert_range
 -- [x] intersect
+-- [x] intersect_by
 -- [x] iterate
 -- [x] join
 -- [x] keep_at (more performant than using `where`)
@@ -59,8 +63,10 @@ end
 -- [x] last
 -- [x] max
 -- [x] max_by
+-- [x] max_by_or (better than select + default_if_empty + max)
 -- [x] min
 -- [x] min_by
+-- [x] min_by_or (better than select + default_if_empty + min)
 -- [x] order
 -- [x] order_by
 -- [x] order_descending
@@ -79,6 +85,7 @@ end
 -- [x] skip_while
 -- [x] sort
 -- [x] sum
+-- [x] sum_by
 -- [x] take
 -- [x] take_last
 -- [x] take_last_while
@@ -90,6 +97,7 @@ end
 -- [x] to_linked_list
 -- [x] to_lookup
 -- [x] union
+-- [x] union_by
 -- [x] where
 
 -- no need for `then` and `then_descending` because if it was sorting an array of numbers or strings, there's
@@ -165,23 +173,15 @@ end
 
 ---@generic T
 ---@param self LinqObj|T[]
----@param selector (fun(value: T, index: integer): number)?
 ---@return number
-function linq_meta_index:average(selector)
-  -- technically this function contains the same logic 3 times
+function linq_meta_index:average()
+  -- technically this function contains the same logic 2 times
   -- this is purely for optimization reasons
 
-  if selector then
-    local i = 0
-    local total = 0
-    for value in self.__iter do
-      i = i + 1
-      total = total + selector(value, i)
-    end
-    return total / i
-  end
-
   if self.__count then
+    if self.__count == 0 then
+      error("Attempt to evaluate average value on an empty collection.")
+    end
     local total = 0
     for value in self.__iter do
       total = total + value
@@ -194,6 +194,44 @@ function linq_meta_index:average(selector)
   for value in self.__iter do
     i = i + 1
     total = total + value
+  end
+  if i == 0 then
+    error("Attempt to evaluate average value on an empty collection.")
+  end
+  return total / i
+end
+
+---@generic T
+---@param self LinqObj|T[]
+---@param selector fun(value: T, index: integer): number
+---@return number
+function linq_meta_index:average_by(selector)
+  local i = 0
+  local total = 0
+  for value in self.__iter do
+    i = i + 1
+    total = total + selector(value, i)
+  end
+  if i == 0 then
+    error("Attempt to evaluate average value on an empty collection.")
+  end
+  return total / i
+end
+
+---@generic T
+---@param self LinqObj|T[]
+---@param default_value_if_empty number
+---@param selector fun(value: T, index: integer): number
+---@return number
+function linq_meta_index:average_by_or(default_value_if_empty, selector)
+  local i = 0
+  local total = 0
+  for value in self.__iter do
+    i = i + 1
+    total = total + selector(value, i)
+  end
+  if i == 0 then
+    return default_value_if_empty
   end
   return total / i
 end
@@ -301,12 +339,11 @@ function linq_meta_index:default_if_empty(default)
   return self
 end
 
----@diagnostic disable: duplicate-set-field
 ---@generic T
 ---@param self LinqObj|T[]
 ---@param selector (fun(value: T, index: integer): any)?
 ---@return LinqObj|T[]
-function linq_meta_index:distinct(selector)
+local function distinct_internal(self, selector)
   self.__count = nil
   local inner_iter = self.__iter
   local visited_lut = {}
@@ -339,7 +376,21 @@ function linq_meta_index:distinct(selector)
   end
   return self
 end
----@diagnostic enable: duplicate-set-field
+
+---@generic T
+---@param self LinqObj|T[]
+---@return LinqObj|T[]
+function linq_meta_index:distinct()
+  return distinct_internal(self)
+end
+
+---@generic T
+---@param self LinqObj|T[]
+---@param selector fun(value: T, index: integer): any
+---@return LinqObj|T[]
+function linq_meta_index:distinct_by(selector)
+  return distinct_internal(self, selector)
+end
 
 ---@generic T
 ---@param self LinqObj|T[]
@@ -844,14 +895,13 @@ function linq_meta_index:insert_range(index, collection)
 end
 ---@diagnostic enable: duplicate-set-field
 
----@diagnostic disable: duplicate-set-field
 ---@generic T
 ---@generic TKey
 ---@param self LinqObj|T[]
 ---@param collection LinqObj|T[]
 ---@param key_selector (fun(value: T): TKey)? @ no index, because it's used on both collections
 ---@return LinqObj|T[]
-function linq_meta_index:intersect(collection, key_selector)
+local function intersect_internal(self, collection, key_selector)
   self.__count = nil
   local inner_iter = self.__iter
   local lut
@@ -902,7 +952,24 @@ function linq_meta_index:intersect(collection, key_selector)
   end
   return self
 end
----@diagnostic enable: duplicate-set-field
+
+---@generic T
+---@param self LinqObj|T[]
+---@param collection LinqObj|T[]
+---@return LinqObj|T[]
+function linq_meta_index:intersect(collection)
+  return intersect_internal(self, collection)
+end
+
+---@generic T
+---@generic TKey
+---@param self LinqObj|T[]
+---@param collection LinqObj|T[]
+---@param key_selector fun(value: T): TKey @ no index, because it's used on both collections
+---@return LinqObj|T[]
+function linq_meta_index:intersect_by(collection, key_selector)
+  return intersect_internal(self, collection, key_selector)
+end
 
 ---@generic T
 ---@param self LinqObj|T[]
@@ -1138,6 +1205,23 @@ function linq_meta_index:max_by(selector, left_is_greater_func)
 end
 
 ---@generic T
+---@generic TValue
+---@param self LinqObj|T[]
+---@param default_value_if_empty T @ Default result if the collection is empty.
+---@param selector fun(value: T, index: integer): TValue
+---@param left_is_greater_func (fun(left: TValue, right: TValue): boolean)?
+---@return T
+function linq_meta_index:max_by_or(default_value_if_empty, selector, left_is_greater_func)
+  local result = max_or_min_by(self, selector, left_is_greater_func or function(left, right)
+    return left > right
+  end)
+  if result == nil then
+    result = default_value_if_empty
+  end
+  return result
+end
+
+---@generic T
 ---@param self LinqObj|T[]
 ---@param left_is_lesser_func (fun(left: T, right: T): boolean)?
 ---@return T
@@ -1158,6 +1242,23 @@ function linq_meta_index:min_by(selector, left_is_lesser_func)
     return left < right
   end)
   if result == nil then error("Attempt to evaluate min value on an empty collection.") end
+  return result
+end
+
+---@generic T
+---@generic TValue
+---@param self LinqObj|T[]
+---@param default_value_if_empty T @ Default result if the collection is empty.
+---@param selector fun(value: T, index: integer): TValue
+---@param left_is_lesser_func (fun(left: TValue, right: TValue): boolean)?
+---@return T
+function linq_meta_index:min_by_or(default_value_if_empty, selector, left_is_lesser_func)
+  local result = max_or_min_by(self, selector, left_is_lesser_func or function(left, right)
+    return left < right
+  end)
+  if result == nil then
+    result = default_value_if_empty
+  end
   return result
 end
 
@@ -1698,26 +1799,31 @@ end
 
 ---@generic T
 ---@param self LinqObj|T[]
----@param selector (fun(value: T, index: integer): number)?
 ---@return number
-function linq_meta_index:sum(selector)
+function linq_meta_index:sum()
   local result = 0
-  if selector then
-    if self.__count then
-      local iter = self.__iter
-      for i = 1, self.__count do
-        result = result + selector(iter(), i)
-      end
-    else
-      local i = 0
-      for value in self.__iter do
-        i = i + 1
-        result = result + selector(value, i)
-      end
+  for value in self.__iter do
+    result = result + value
+  end
+  return result
+end
+
+---@generic T
+---@param self LinqObj|T[]
+---@param selector fun(value: T, index: integer): number
+---@return number
+function linq_meta_index:sum_by(selector)
+  local result = 0
+  if self.__count then
+    local iter = self.__iter
+    for i = 1, self.__count do
+      result = result + selector(iter(), i)
     end
   else
+    local i = 0
     for value in self.__iter do
-      result = result + value
+      i = i + 1
+      result = result + selector(value, i)
     end
   end
   return result
@@ -1961,7 +2067,7 @@ end
 ---@param collection LinqObj|T[]
 ---@param key_selector (fun(value: T): TKey)? @ no index, because it's used on both collections
 ---@return LinqObj|T[]
-function linq_meta_index:union(collection, key_selector)
+local function union_internal(self, collection, key_selector)
   self.__count = nil
   local iter = self.__iter
   local iterating_collection = false
@@ -2010,6 +2116,24 @@ function linq_meta_index:union(collection, key_selector)
     end
   end
   return self
+end
+
+---@generic T
+---@param self LinqObj|T[]
+---@param collection LinqObj|T[]
+---@return LinqObj|T[]
+function linq_meta_index:union(collection)
+  return union_internal(self, collection)
+end
+
+---@generic T
+---@generic TKey
+---@param self LinqObj|T[]
+---@param collection LinqObj|T[]
+---@param key_selector fun(value: T): TKey @ no index, because it's used on both collections
+---@return LinqObj|T[]
+function linq_meta_index:union_by(collection, key_selector)
+  return union_internal(self, collection, key_selector)
 end
 
 ---@generic T
