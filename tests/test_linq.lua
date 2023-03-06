@@ -243,6 +243,26 @@ do
     end)
   end)
 
+  add_test("average_by_or of 4 values", function()
+    local got = linq(get_test_strings())
+      :average_by_or(100, function(value) return type(value) == "string" and #value or 100 end)
+    ;
+    assert.equals((3 + 3 + 100 + 3) / 4, got, "result of 'average_by_or'")
+  end)
+
+  add_test("average_by_or using selector using index arg", function()
+    local obj = linq(get_test_strings())
+    obj:average_by_or(100, assert_sequential_factory(function(assert_sequential, value, i)
+      assert_sequential(value, i)
+      return 1
+    end))
+  end)
+
+  add_test("average_by_or of empty collection", function()
+    local got = linq{}:average_by_or(100, function() return 1 end)
+    assert.equals(100, got, "result of 'average_by_or'")
+  end)
+
   for _, data in ipairs{
     {value_count = 0, chunk_size = 1, expected = 0},
     {value_count = 2, chunk_size = 1, expected = 2},

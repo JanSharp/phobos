@@ -30,6 +30,7 @@ end
 -- [x] append
 -- [x] average
 -- [x] average_by
+-- [x] average_by_or (better than select + default_if_empty + average)
 -- [x] chunk
 -- [x] contains
 -- [x] copy
@@ -209,6 +210,24 @@ function linq_meta_index:average_by(selector)
   end
   if i == 0 then
     error("Attempt to evaluate average value on an empty collection.")
+  end
+  return total / i
+end
+
+---@generic T
+---@param self LinqObj|T[]
+---@param default_value_if_empty number
+---@param selector fun(value: T, index: integer): number
+---@return number
+function linq_meta_index:average_by_or(default_value_if_empty, selector)
+  local i = 0
+  local total = 0
+  for value in self.__iter do
+    i = i + 1
+    total = total + selector(value, i)
+  end
+  if i == 0 then
+    return default_value_if_empty
   end
   return total / i
 end
