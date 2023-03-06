@@ -1109,6 +1109,37 @@ do
     end))
   end)
 
+  add_test("max_by_or with 4 values", function()
+    local got = linq(get_test_strings()):max_by_or("hello", function(value)
+      return type(value) == "string" and #value or 0
+    end)
+    assert.equals("foo", got, "result of 'max_by_or'")
+  end)
+
+  add_test("max_by_or with 4 values using custom comparator", function()
+    local got = linq(get_test_strings()):max_by_or("hello", function(value)
+      return type(value) == "string" and #value or 0
+    end, function(left, right)
+      -- 0 beats everything!
+      if left == 0 then return true end
+      if right == 0 then return false end
+      return left > right
+    end)
+    assert.equals(false, got, "result of 'max_by_or'")
+  end)
+
+  add_test("max_by_or with empty collection", function()
+    local got = linq{}:max_by_or("hello", function(value) return value end)
+    assert.equals("hello", got, "result of 'max_by_or'")
+  end)
+
+  add_test("max_by_or with selector using index arg", function()
+    linq{1, 4, 2, 3, 10}:max_by_or("hello", assert_sequential_factory(function(assert_sequential, value, i)
+      assert_sequential(value, i)
+      return value
+    end))
+  end)
+
   add_test("min with 3 values", function()
     local got = linq{2, 1, 3}:min()
     assert.equals(1, got, "result of 'min'")
@@ -1159,6 +1190,37 @@ do
 
   add_test("min_by with selector using index arg", function()
     linq{1, 4, 2, 3, 10}:min_by(assert_sequential_factory(function(assert_sequential, value, i)
+      assert_sequential(value, i)
+      return value
+    end))
+  end)
+
+  add_test("min_by_or with 4 values", function()
+    local got = linq(get_test_strings()):min_by_or("hello", function(value)
+      return type(value) == "string" and #value or 100
+    end)
+    assert.equals("foo", got, "result of 'min_by_or'")
+  end)
+
+  add_test("min_by_or with 4 values using custom comparator", function()
+    local got = linq(get_test_strings()):min_by_or("hello", function(value)
+      return type(value) == "string" and #value or 100
+    end, function(left, right)
+      -- 100 beats everything!
+      if left == 100 then return true end
+      if right == 100 then return false end
+      return left < right
+    end)
+    assert.equals(false, got, "result of 'min_by_or'")
+  end)
+
+  add_test("min_by_or with empty collection", function()
+    local got = linq{}:min_by_or("hello", function(value) return value end)
+    assert.equals("hello", got, "result of 'min_by_or'")
+  end)
+
+  add_test("min_by_or with selector using index arg", function()
+    linq{1, 4, 2, 3, 10}:min_by_or("hello", assert_sequential_factory(function(assert_sequential, value, i)
       assert_sequential(value, i)
       return value
     end))
