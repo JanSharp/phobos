@@ -63,10 +63,8 @@ end
 -- [x] last
 -- [x] max
 -- [x] max_by
--- [x] max_by_or (better than select + default_if_empty + max)
 -- [x] min
 -- [x] min_by
--- [x] min_by_or (better than select + default_if_empty + min)
 -- [x] order
 -- [x] order_by
 -- [x] order_descending
@@ -1205,23 +1203,6 @@ function linq_meta_index:max_by(selector, left_is_greater_func)
 end
 
 ---@generic T
----@generic TValue
----@param self LinqObj|T[]
----@param default_value_if_empty T @ Default result if the collection is empty.
----@param selector fun(value: T, index: integer): TValue
----@param left_is_greater_func (fun(left: TValue, right: TValue): boolean)?
----@return T
-function linq_meta_index:max_by_or(default_value_if_empty, selector, left_is_greater_func)
-  local result = max_or_min_by(self, selector, left_is_greater_func or function(left, right)
-    return left > right
-  end)
-  if result == nil then
-    result = default_value_if_empty
-  end
-  return result
-end
-
----@generic T
 ---@param self LinqObj|T[]
 ---@param left_is_lesser_func (fun(left: T, right: T): boolean)?
 ---@return T
@@ -1242,23 +1223,6 @@ function linq_meta_index:min_by(selector, left_is_lesser_func)
     return left < right
   end)
   if result == nil then error("Attempt to evaluate min value on an empty collection.") end
-  return result
-end
-
----@generic T
----@generic TValue
----@param self LinqObj|T[]
----@param default_value_if_empty T @ Default result if the collection is empty.
----@param selector fun(value: T, index: integer): TValue
----@param left_is_lesser_func (fun(left: TValue, right: TValue): boolean)?
----@return T
-function linq_meta_index:min_by_or(default_value_if_empty, selector, left_is_lesser_func)
-  local result = max_or_min_by(self, selector, left_is_lesser_func or function(left, right)
-    return left < right
-  end)
-  if result == nil then
-    result = default_value_if_empty
-  end
   return result
 end
 
