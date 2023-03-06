@@ -1,4 +1,5 @@
 
+---@param reg ILRegister
 local function get_reg(reg, context)
   if context.reg_label_lut[reg] then
     return context.reg_label_lut[reg]
@@ -6,7 +7,13 @@ local function get_reg(reg, context)
   local id = context.next_reg_id
   context.next_reg_id = id + 1
   local function make_label(prefix, name)
-    local label = prefix.."("..id..(name and ("|"..name) or "")..")"
+    local label = prefix.."("..id
+      -- FIXME: remove this, or make it prettier, once register indexes are implemented fully
+      ..(reg.index_in_linked_groups and (" <"..reg.index_in_linked_groups..">") or "")
+      ..(reg.requires_move_into_register_group and " <move>" or "")
+      ..(reg.predetermined_reg_index and (" >>"..reg.predetermined_reg_index.."<<") or "")
+      ..(name and ("|"..name) or "")
+      ..")"
     context.reg_label_lut[reg] = label
     return label
   end

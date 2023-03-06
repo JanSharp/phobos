@@ -222,6 +222,15 @@ local function compile(filename)
       -- success, err = pcall(require("il_types"), il)
       -- if not success then print(err) goto finish end
 
+      local compiled
+      success, compiled = pcall(require("il_compiler"), il)
+      local compilation_succeeded = success
+      if success then
+        add_func_to_lines("ILR", compiled)
+      else
+        print(compiled)
+      end
+
       success, err = pcall(function()
         local il_func_id = 0
         local pretty_print = require("il_pretty_print")
@@ -257,16 +266,7 @@ local function compile(filename)
         il_add_func_lines(il)
       end)
       if not success then print(err) goto finish end
-
-      local compiled
-      success, compiled = pcall(require("il_compiler"), il)
-      if not success then print(compiled) goto finish end
-      add_func_to_lines("ILR", compiled)
-      -- for i, reg in ipairs(il.all_regs) do
-      --   print((reg.is_vararg and "VAR" or "R").."("..i..(reg.name and ("|"..reg.name) or "")
-      --     ..", get: "..(reg.total_get_count or "?")..", set: "..(reg.total_set_count or "?")..")"
-      --   )
-      -- end
+      if not compilation_succeeded then goto finish end
 
       local il_dumped
       success, il_dumped = pcall(require("dump"), compiled)

@@ -1822,6 +1822,7 @@ local function compile(func)
   il.determine_reg_usage(func)
   pre_compilation_process(data)
 
+  -- FIXME: uncomment once register indexes are implemented and are ready for compilation
   -- generate(data)
 
   for i = data.compiled_registers_count + 1, #data.compiled_registers do
