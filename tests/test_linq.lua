@@ -862,16 +862,16 @@ do
     assert_iteration(obj, {"world"})
   end)
 
-  add_test("intersect with array collection with key_selector", function()
+  add_test("intersect_by with array collection", function()
     local obj = linq{"hello", "world"}
-      :intersect({"goodbye", "world"}, function(value) return value:sub(1, 3) end)
+      :intersect_by({"goodbye", "world"}, function(value) return value:sub(1, 3) end)
     ;
     assert_iteration(obj, {"world"})
   end)
 
-  add_test("intersect with linq object collection with key_selector", function()
+  add_test("intersect_by with linq object collection", function()
     local obj = linq{"hello", "world"}
-      :intersect(linq{"goodbye", "world"}, function(value) return value:sub(1, 3) end)
+      :intersect_by(linq{"goodbye", "world"}, function(value) return value:sub(1, 3) end)
     ;
     assert_iteration(obj, {"world"})
   end)

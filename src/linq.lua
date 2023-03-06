@@ -54,6 +54,7 @@ end
 -- [x] insert
 -- [x] insert_range
 -- [x] intersect
+-- [x] intersect_by
 -- [x] iterate
 -- [x] join
 -- [x] keep_at (more performant than using `where`)
@@ -880,14 +881,13 @@ function linq_meta_index:insert_range(index, collection)
 end
 ---@diagnostic enable: duplicate-set-field
 
----@diagnostic disable: duplicate-set-field
 ---@generic T
 ---@generic TKey
 ---@param self LinqObj|T[]
 ---@param collection LinqObj|T[]
 ---@param key_selector (fun(value: T): TKey)? @ no index, because it's used on both collections
 ---@return LinqObj|T[]
-function linq_meta_index:intersect(collection, key_selector)
+local function intersect_internal(self, collection, key_selector)
   self.__count = nil
   local inner_iter = self.__iter
   local lut
@@ -938,7 +938,24 @@ function linq_meta_index:intersect(collection, key_selector)
   end
   return self
 end
----@diagnostic enable: duplicate-set-field
+
+---@generic T
+---@param self LinqObj|T[]
+---@param collection LinqObj|T[]
+---@return LinqObj|T[]
+function linq_meta_index:intersect(collection)
+  return intersect_internal(self, collection)
+end
+
+---@generic T
+---@generic TKey
+---@param self LinqObj|T[]
+---@param collection LinqObj|T[]
+---@param key_selector fun(value: T): TKey @ no index, because it's used on both collections
+---@return LinqObj|T[]
+function linq_meta_index:intersect_by(collection, key_selector)
+  return intersect_internal(self, collection, key_selector)
+end
 
 ---@generic T
 ---@param self LinqObj|T[]
