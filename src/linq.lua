@@ -81,7 +81,6 @@ end
 -- [x] skip_while
 -- [x] sort
 -- [x] sum
--- [x] sum_by
 -- [x] take
 -- [x] take_last
 -- [x] take_last_while
@@ -1731,31 +1730,26 @@ end
 
 ---@generic T
 ---@param self LinqObj|T[]
+---@param selector (fun(value: T, index: integer): number)?
 ---@return number
-function linq_meta_index:sum()
+function linq_meta_index:sum(selector)
   local result = 0
-  for value in self.__iter do
-    result = result + value
-  end
-  return result
-end
-
----@generic T
----@param self LinqObj|T[]
----@param selector fun(value: T, index: integer): number
----@return number
-function linq_meta_index:sum_by(selector)
-  local result = 0
-  if self.__count then
-    local iter = self.__iter
-    for i = 1, self.__count do
-      result = result + selector(iter(), i)
+  if selector then
+    if self.__count then
+      local iter = self.__iter
+      for i = 1, self.__count do
+        result = result + selector(iter(), i)
+      end
+    else
+      local i = 0
+      for value in self.__iter do
+        i = i + 1
+        result = result + selector(value, i)
+      end
     end
   else
-    local i = 0
     for value in self.__iter do
-      i = i + 1
-      result = result + selector(value, i)
+      result = result + value
     end
   end
   return result
