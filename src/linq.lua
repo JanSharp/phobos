@@ -37,6 +37,7 @@ end
 -- [x] count
 -- [x] default_if_empty
 -- [x] distinct
+-- [x] distinct_by
 -- [x] element_at
 -- [x] element_at_from_end
 -- [x] ensure_knows_count
@@ -338,12 +339,11 @@ function linq_meta_index:default_if_empty(default)
   return self
 end
 
----@diagnostic disable: duplicate-set-field
 ---@generic T
 ---@param self LinqObj|T[]
 ---@param selector (fun(value: T, index: integer): any)?
 ---@return LinqObj|T[]
-function linq_meta_index:distinct(selector)
+local function distinct_internal(self, selector)
   self.__count = nil
   local inner_iter = self.__iter
   local visited_lut = {}
@@ -376,7 +376,21 @@ function linq_meta_index:distinct(selector)
   end
   return self
 end
----@diagnostic enable: duplicate-set-field
+
+---@generic T
+---@param self LinqObj|T[]
+---@return LinqObj|T[]
+function linq_meta_index:distinct()
+  return distinct_internal(self)
+end
+
+---@generic T
+---@param self LinqObj|T[]
+---@param selector fun(value: T, index: integer): any
+---@return LinqObj|T[]
+function linq_meta_index:distinct_by(selector)
+  return distinct_internal(self, selector)
+end
 
 ---@generic T
 ---@param self LinqObj|T[]

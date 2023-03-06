@@ -394,16 +394,16 @@ do
     assert_iteration(obj, {"hi", "hello", "bye"})
   end)
 
-  add_test("distinct with a selector", function()
+  add_test("distinct_by", function()
     local obj = linq(get_test_strings())
-      :distinct(function(value) return type(value) == "string" and value:sub(1, 2) or value end)
+      :distinct_by(function(value) return type(value) == "string" and value:sub(1, 2) or value end)
     ;
     assert_iteration(obj, {"fo", "ba", false})
   end)
 
-  add_test("distinct with a selector using index arg", function()
+  add_test("distinct_by using index arg", function()
     local obj = linq(get_test_strings())
-    assert_sequential_helper(obj, obj.distinct, function() return 1 end)
+    assert_sequential_helper(obj, obj.distinct_by, function() return 1 end)
   end)
 
   add_test("ensure_knows_count does nothing if __count is known", function()
