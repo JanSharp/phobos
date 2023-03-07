@@ -1,6 +1,8 @@
 
 package.path = package.path..";./tests/lib/test_framework/?.lua;./tests/?.lua"
 
+local shell_util = require("shell_util")
+
 local arg_parser = require("lib.LuaArgParser.arg_parser")
 local util = require("util")
 
@@ -52,6 +54,23 @@ local args = arg_parser.parse_and_print_on_error_or_help({...}, {
       long = "list-scopes",
       description = "List all scopes and their test counts.",
       flag = true,
+    },
+    {
+      field = "diff",
+      long = "diff",
+      description = "Open a diff for failing tests.",
+      flag = true,
+    },
+    {
+      field = "diff_tool",
+      long = "diff-tool",
+      description = "Open an external diff tool for failing tests.\n\z
+                     %expected% and %got% will be substituted with\n\z
+                     properly escaped paths to the files to diff.\n\z
+                     For example: 'code --wait --diff %expected% %got%'",
+      type = "string",
+      single_param = true,
+      optional = true,
     },
   },
 }, {label_length = 80 - 4 - 2 - 50})
@@ -115,11 +134,22 @@ local result = framework.scope:run_tests{
   show_stacktrace = args.show_stacktrace,
   test_ids_to_run = args.test_ids and util.invert(args.test_ids),
   filters = args.filters,
+  diff = args.diff or (args.diff_tool and true) or false,
 }
 
 util.debug_abort = util_abort
 util.debug_assert = util_assert
 
 if result.failed_count > 0 then
+  if args.diff_tool then
+    assert(io.popen((args.diff_tool
+      :gsub("%%expected%%", shell_util.escape_arg("temp/diff/expected.txt"))
+      :gsub("%%got%%", shell_util.escape_arg("temp/diff/got.txt")))
+    )):close()
+  elseif args.diff then
+    assert(io.popen("git diff --minimal --color-moved --color-words --unified=10000 --no-index -- \z
+      temp/diff/expected.txt temp/diff/got.txt", "w"
+    )):close()
+  end
   util.abort()
 end
