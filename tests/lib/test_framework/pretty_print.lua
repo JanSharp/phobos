@@ -1,12 +1,14 @@
 
 local util = require("util")
 local linq = require("linq")
+local stack = require("stack")
 
 ---@type table<string, fun(value:any):string>
 local custom_pretty_printers = {}
 
 local pretty_print
 
+local identifier_pattern = "^[a-zA-Z_][a-zA-Z0-9_]*$"
 local reference_types_lut = util.invert{"table", "function", "userdata", "thread"}
 local function pretty_print_table(tab)
   util.debug_assert(type(tab) == "table", "Attempt to 'pretty_print_table' a '"..type(tab).."'")
@@ -41,21 +43,71 @@ local function pretty_print_table(tab)
   end
   count_references(tab)
 
-  ---@type {value: any, count: integer, index: integer, visited: boolean?}[]
+  ---@type {value: any, count: integer, index: integer, visited: boolean?, location_name: string?}[]
   local multiple_referenced_values = linq(reference_counts)
     :where(function(count_data) return count_data.count > 1 end)
     :select(function(count_data, i) count_data.index = i; return count_data end)
     :to_array()
   ;
-  ---@type table<any, {value: any, count: integer, index: integer, visited: boolean?}>
+  ---@type table<any, {value: any, count: integer, index: integer, visited: boolean?, location_name: string?}>
   local multiple_referenced_values_lut = linq(multiple_referenced_values)
     :to_dict(function(data) return data.value, data end)
   ;
+
+  local next_fallback_location_id = 1
+  local invalid_location = {}
+  local location_key_stack = stack.new_stack()
+  local function get_location_name()
+    local use_fallback = false
+    local name_parts = {}
+    for i = 1, location_key_stack.size do
+      local key = location_key_stack[i]
+      if key == invalid_location then
+        use_fallback = true
+        break
+      end
+      local key_type = type(key)
+      if key_type == "boolean" or key_type == "number" then
+        name_parts[#name_parts+1] = "["..pretty_print(key_type).."]"
+        goto continue
+      elseif key_type ~= "string" then
+        use_fallback = true
+        break
+      end
+      -- key_type == "string"
+      if key:find(identifier_pattern) then
+        if i ~= 1 then -- the first one will always be "root", don't add a "."
+          key = "."..key
+        end
+      elseif key:find("[\n\r]") then
+        use_fallback = true
+        break
+      else
+        key = "["..pretty_print(key).."]"
+      end
+      if #key > 32 then
+        use_fallback = true
+        break
+      end
+      name_parts[#name_parts+1] = key
+      ::continue::
+    end
+    if use_fallback then
+      local id = next_fallback_location_id
+      next_fallback_location_id = id + 1
+      return string.format("reference[%d]", id)
+    end
+    return table.concat(name_parts)
+  end
+
   local out = {}
   local c = 0
   local function pretty_print_recursive(value, depth)
     if multiple_referenced_values_lut[value] and multiple_referenced_values_lut[value].visited then
-      c=c+1;out[c] = string.format("reference[%d]", multiple_referenced_values_lut[value].index)
+      local location_name = get_location_name()
+      c=c+1;out[c] = "--[[ "
+      c=c+1;out[c] = location_name
+      c=c+1;out[c] = " ]]"
       return
     end
     if type(value) ~= "table" then
@@ -66,10 +118,14 @@ local function pretty_print_table(tab)
     c=c+1;out[c] = "{"
     if multiple_referenced_values_lut[value] then
       multiple_referenced_values_lut[value].visited = true
-      c=c+1;out[c] = string.format(" --[[ reference[%d] ]]", multiple_referenced_values_lut[value].index)
+      local location_name = get_location_name()
+      c=c+1;out[c] = " --[[ "
+      c=c+1;out[c] = location_name
+      c=c+1;out[c] = string.format(" (%d) ]]", multiple_referenced_values_lut[value].count)
+      multiple_referenced_values_lut[value].location_name = location_name
     end
     local count = 0
-    for key in linq(util.iterate_keys(value))
+    for key_data in linq(util.iterate_keys(value))
       :group_by(function(key) return type(key) end)
       :order_by(function(group) return group.key end)
       :select_many(function(group)
@@ -82,24 +138,32 @@ local function pretty_print_table(tab)
       :iterate()
     do
       c=c+1;out[c] = "\n"..string.rep("  ", depth + 1)
-      if key.type == "string" and key.key:find("^[a-zA-Z_][a-zA-Z0-9_]*$") then
-        c=c+1;out[c] = key.key
+      if key_data.type == "string" and key_data.key:find(identifier_pattern) then
+        c=c+1;out[c] = key_data.key
         c=c+1;out[c] = " = "
       else
         c=c+1;out[c] = "["
-        pretty_print_recursive(key.key, depth + 1)
+        stack.push(location_key_stack, invalid_location)
+        pretty_print_recursive(key_data.key, depth + 1)
+        stack.pop(location_key_stack)
         c=c+1;out[c] = "] = "
       end
-      pretty_print_recursive(value[key.key], depth + 1)
+      stack.push(location_key_stack, key_data.key)
+      pretty_print_recursive(value[key_data.key], depth + 1)
+      stack.pop(location_key_stack)
       c=c+1;out[c] = ","
       count = count + 1
     end
     if count > 0 then
       c=c+1;out[c] = "\n"..string.rep("  ", depth)
+      if multiple_referenced_values_lut[value] then
+        c=c+1;out[c] = " " -- extra space after --[[ root.foo.bar ]] `location_name`
+      end
     end
     c=c+1;out[c] = "}"
   end
 
+  stack.push(location_key_stack, "root")
   pretty_print_recursive(tab, 0)
 
   return table.concat(out)
