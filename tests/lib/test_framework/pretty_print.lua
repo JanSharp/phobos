@@ -41,20 +41,20 @@ local function pretty_print_table(tab)
   end
   count_references(tab)
 
-  ---@type {value: any, count: integer, index: integer}[]
+  ---@type {value: any, count: integer, index: integer, visited: boolean?}[]
   local multiple_referenced_values = linq(reference_counts)
     :where(function(count_data) return count_data.count > 1 end)
     :select(function(count_data, i) count_data.index = i; return count_data end)
     :to_array()
   ;
-  ---@type table<any, {value: any, count: integer, index: integer}>
+  ---@type table<any, {value: any, count: integer, index: integer, visited: boolean?}>
   local multiple_referenced_values_lut = linq(multiple_referenced_values)
     :to_dict(function(data) return data.value, data end)
   ;
   local out = {}
   local c = 0
-  local function pretty_print_recursive(value, depth, do_not_back_reference)
-    if multiple_referenced_values_lut[value] and not do_not_back_reference then
+  local function pretty_print_recursive(value, depth)
+    if multiple_referenced_values_lut[value] and multiple_referenced_values_lut[value].visited then
       c=c+1;out[c] = string.format("reference[%d]", multiple_referenced_values_lut[value].index)
       return
     end
@@ -64,6 +64,10 @@ local function pretty_print_table(tab)
     end
 
     c=c+1;out[c] = "{"
+    if multiple_referenced_values_lut[value] then
+      multiple_referenced_values_lut[value].visited = true
+      c=c+1;out[c] = string.format(" --[[ reference[%d] ]]", multiple_referenced_values_lut[value].index)
+    end
     local count = 0
     for key in linq(util.iterate_keys(value))
       :group_by(function(key) return type(key) end)
@@ -96,13 +100,6 @@ local function pretty_print_table(tab)
     c=c+1;out[c] = "}"
   end
 
-  for _, data in ipairs(multiple_referenced_values) do
-    c=c+1;out[c] = string.format("reference[%d] = ", data.index)
-    pretty_print_recursive(data.value, 0, true)
-    c=c+1;out[c] = "\n"
-  end
-
-  c=c+1;out[c] = "root = "
   pretty_print_recursive(tab, 0)
 
   return table.concat(out)
