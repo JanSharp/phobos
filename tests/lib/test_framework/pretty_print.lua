@@ -107,7 +107,7 @@ local function pretty_print_table(tab)
   local function pretty_print_recursive(value, depth)
     local multiple_referenced_value = multiple_referenced_values_lut[value]
     if multiple_referenced_value and multiple_referenced_value.visited then
-      c=c+1;out[c] = "--[[ "
+      c=c+1;out[c] = "_--[[ "
       c=c+1;out[c] = multiple_referenced_value.location_name
       c=c+1;out[c] = " ]]"
       return
