@@ -153,9 +153,8 @@ local function pretty_print_table(tab)
     end
     if kvp_count > 0 then
       c=c+1;out[c] = "\n"..string.rep("  ", depth)
-      if multiple_referenced_value then
-        c=c+1;out[c] = " " -- extra space after --[[ root.foo.bar ]] `location_name`
-      end
+    elseif multiple_referenced_value then
+      c=c+1;out[c] = " " -- extra space after --[[ root.foo.bar ]] `location_name`, only for empty tables
     end
     c=c+1;out[c] = "}"
   end
