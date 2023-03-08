@@ -15,7 +15,8 @@ local function pretty_print_table(tab)
   local reference_values_lut = {} ---@type table<any, {value: any, count: integer}>
   local reference_values = {} ---@type {value: any, count: integer}[]
   local function count_references(value)
-    if not reference_types_lut[type(value)] then return end
+    local value_type = type(value)
+    if not reference_types_lut[value_type] then return end
     if reference_values_lut[value] then
       reference_values_lut[value].count = reference_values_lut[value].count + 1
       return
@@ -24,6 +25,7 @@ local function pretty_print_table(tab)
       reference_values_lut[value] = ref_value
       reference_values[#reference_values+1] = ref_value
     end
+    if value_type ~= "table" then return end
     for key in linq(util.iterate_keys(value))
       :group_by(function(key) return type(key) end)
       :order_by(function(group) return group.key end)
