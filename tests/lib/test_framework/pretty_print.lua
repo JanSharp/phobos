@@ -71,7 +71,7 @@ local function pretty_print_table(tab)
       local key = location_key_stack[i]
       local key_type = type(key)
       if key_type == "boolean" or key_type == "number" then
-        name_parts[i + 1] = "["..pretty_print(key_type).."]"
+        name_parts[i + 1] = "["..pretty_print(key).."]"
         goto continue
       elseif key_type ~= "string" then
         return get_fallback_location_name()
