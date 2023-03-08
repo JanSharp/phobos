@@ -13,7 +13,7 @@ local reference_types_lut = util.invert{"table", "function", "userdata", "thread
 local function pretty_print_table(tab)
   util.debug_assert(type(tab) == "table", "Attempt to 'pretty_print_table' a '"..type(tab).."'")
   local reference_counts_lut = {} ---@type table<any, {value: any, count: integer}>
-  local reference_counts = {} ---@type {value: any, count: integer}[]
+  local reference_values = {} ---@type {value: any, count: integer}[]
   local visited = {} ---@type table<any, true>
   local function count_references(t)
     if not reference_types_lut[type(t)] then return end
@@ -22,7 +22,7 @@ local function pretty_print_table(tab)
     else
       local count_data = {value = t, count = 1}
       reference_counts_lut[t] = count_data
-      reference_counts[#reference_counts+1] = count_data
+      reference_values[#reference_values+1] = count_data
     end
     if visited[t] then return end
     visited[t] = true
@@ -44,7 +44,7 @@ local function pretty_print_table(tab)
   count_references(tab)
 
   ---@type {value: any, count: integer, index: integer, visited: boolean?, location_name: string?}[]
-  local multiple_referenced_values = linq(reference_counts)
+  local multiple_referenced_values = linq(reference_values)
     :where(function(count_data) return count_data.count > 1 end)
     :select(function(count_data, i) count_data.index = i; return count_data end)
     :to_array()
@@ -95,28 +95,33 @@ local function pretty_print_table(tab)
 
   local out = {}
   local c = 0
+
+  local function add_back_reference_location(multiple_referenced_value)
+    if not multiple_referenced_value then return end
+    multiple_referenced_value.visited = true
+    multiple_referenced_value.location_name = get_location_name()
+    c=c+1;out[c] = " --[[ "
+    c=c+1;out[c] = multiple_referenced_value.location_name
+    c=c+1;out[c] = string.format(" (%d) ]]", multiple_referenced_value.count)
+  end
+
   local function pretty_print_recursive(value, depth)
-    if multiple_referenced_values_lut[value] and multiple_referenced_values_lut[value].visited then
-      local location_name = get_location_name()
+    local multiple_referenced_value = multiple_referenced_values_lut[value]
+    if multiple_referenced_value and multiple_referenced_value.visited then
       c=c+1;out[c] = "--[[ "
-      c=c+1;out[c] = location_name
+      c=c+1;out[c] = multiple_referenced_value.location_name
       c=c+1;out[c] = " ]]"
       return
     end
+
     if type(value) ~= "table" then
       c=c+1;out[c] = pretty_print(value)
+      add_back_reference_location(multiple_referenced_value)
       return
     end
 
     c=c+1;out[c] = "{"
-    if multiple_referenced_values_lut[value] then
-      multiple_referenced_values_lut[value].visited = true
-      local location_name = get_location_name()
-      c=c+1;out[c] = " --[[ "
-      c=c+1;out[c] = location_name
-      c=c+1;out[c] = string.format(" (%d) ]]", multiple_referenced_values_lut[value].count)
-      multiple_referenced_values_lut[value].location_name = location_name
-    end
+    add_back_reference_location(multiple_referenced_value)
     local kvp_count = 0
     for key_data in linq(util.iterate_keys(value))
       :group_by(function(key) return type(key) end)
@@ -149,7 +154,7 @@ local function pretty_print_table(tab)
     end
     if kvp_count > 0 then
       c=c+1;out[c] = "\n"..string.rep("  ", depth)
-      if multiple_referenced_values_lut[value] then
+      if multiple_referenced_value then
         c=c+1;out[c] = " " -- extra space after --[[ root.foo.bar ]] `location_name`
       end
     end
