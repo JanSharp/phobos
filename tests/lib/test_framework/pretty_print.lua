@@ -12,21 +12,19 @@ local identifier_pattern = "^[a-zA-Z_][a-zA-Z0-9_]*$"
 local reference_types_lut = util.invert{"table", "function", "userdata", "thread"}
 local function pretty_print_table(tab)
   util.debug_assert(type(tab) == "table", "Attempt to 'pretty_print_table' a '"..type(tab).."'")
-  local reference_counts_lut = {} ---@type table<any, {value: any, count: integer}>
+  local reference_values_lut = {} ---@type table<any, {value: any, count: integer}>
   local reference_values = {} ---@type {value: any, count: integer}[]
-  local visited = {} ---@type table<any, true>
-  local function count_references(t)
-    if not reference_types_lut[type(t)] then return end
-    if reference_counts_lut[t] then
-      reference_counts_lut[t].count = reference_counts_lut[t].count + 1
+  local function count_references(value)
+    if not reference_types_lut[type(value)] then return end
+    if reference_values_lut[value] then
+      reference_values_lut[value].count = reference_values_lut[value].count + 1
+      return
     else
-      local count_data = {value = t, count = 1}
-      reference_counts_lut[t] = count_data
-      reference_values[#reference_values+1] = count_data
+      local ref_value = {value = value, count = 1}
+      reference_values_lut[value] = ref_value
+      reference_values[#reference_values+1] = ref_value
     end
-    if visited[t] then return end
-    visited[t] = true
-    for key in linq(util.iterate_keys(t))
+    for key in linq(util.iterate_keys(value))
       :group_by(function(key) return type(key) end)
       :order_by(function(group) return group.key end)
       :select_many(function(group)
@@ -38,18 +36,17 @@ local function pretty_print_table(tab)
       :iterate()
     do
       count_references(key)
-      count_references(t[key])
+      count_references(value[key])
     end
   end
   count_references(tab)
 
-  ---@type {value: any, count: integer, index: integer, visited: boolean?, location_name: string?}[]
+  ---@type {value: any, count: integer, visited: boolean?, location_name: string?}[]
   local multiple_referenced_values = linq(reference_values)
-    :where(function(count_data) return count_data.count > 1 end)
-    :select(function(count_data, i) count_data.index = i; return count_data end)
+    :where(function(ref_value) return ref_value.count > 1 end)
     :to_array()
   ;
-  ---@type table<any, {value: any, count: integer, index: integer, visited: boolean?, location_name: string?}>
+  ---@type table<any, {value: any, count: integer, visited: boolean?, location_name: string?}>
   local multiple_referenced_values_lut = linq(multiple_referenced_values)
     :to_dict(function(data) return data.value, data end)
   ;
