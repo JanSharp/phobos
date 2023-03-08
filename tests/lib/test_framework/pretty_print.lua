@@ -55,47 +55,40 @@ local function pretty_print_table(tab)
   ;
 
   local next_fallback_location_id = 1
-  local invalid_location = {}
+  local invalid_location_count = 0
   local location_key_stack = stack.new_stack()
+  local function get_fallback_location_name()
+    local id = next_fallback_location_id
+    next_fallback_location_id = id + 1
+    return string.format("reference[%d]", id)
+  end
   local function get_location_name()
-    local use_fallback = false
-    local name_parts = {}
+    if invalid_location_count > 0 then
+      return get_fallback_location_name()
+    end
+    local name_parts = {"root"}
     for i = 1, location_key_stack.size do
       local key = location_key_stack[i]
-      if key == invalid_location then
-        use_fallback = true
-        break
-      end
       local key_type = type(key)
       if key_type == "boolean" or key_type == "number" then
-        name_parts[#name_parts+1] = "["..pretty_print(key_type).."]"
+        name_parts[i + 1] = "["..pretty_print(key_type).."]"
         goto continue
       elseif key_type ~= "string" then
-        use_fallback = true
-        break
+        return get_fallback_location_name()
       end
       -- key_type == "string"
       if key:find(identifier_pattern) then
-        if i ~= 1 then -- the first one will always be "root", don't add a "."
-          key = "."..key
-        end
+        key = "."..key
       elseif key:find("[\n\r]") then
-        use_fallback = true
-        break
+        return get_fallback_location_name()
       else
         key = "["..pretty_print(key).."]"
       end
       if #key > 32 then
-        use_fallback = true
-        break
+        return get_fallback_location_name()
       end
-      name_parts[#name_parts+1] = key
+      name_parts[i + 1] = key
       ::continue::
-    end
-    if use_fallback then
-      local id = next_fallback_location_id
-      next_fallback_location_id = id + 1
-      return string.format("reference[%d]", id)
     end
     return table.concat(name_parts)
   end
@@ -124,7 +117,7 @@ local function pretty_print_table(tab)
       c=c+1;out[c] = string.format(" (%d) ]]", multiple_referenced_values_lut[value].count)
       multiple_referenced_values_lut[value].location_name = location_name
     end
-    local count = 0
+    local kvp_count = 0
     for key_data in linq(util.iterate_keys(value))
       :group_by(function(key) return type(key) end)
       :order_by(function(group) return group.key end)
@@ -143,18 +136,18 @@ local function pretty_print_table(tab)
         c=c+1;out[c] = " = "
       else
         c=c+1;out[c] = "["
-        stack.push(location_key_stack, invalid_location)
+        invalid_location_count = invalid_location_count + 1
         pretty_print_recursive(key_data.key, depth + 1)
-        stack.pop(location_key_stack)
+        invalid_location_count = invalid_location_count - 1
         c=c+1;out[c] = "] = "
       end
       stack.push(location_key_stack, key_data.key)
       pretty_print_recursive(value[key_data.key], depth + 1)
       stack.pop(location_key_stack)
       c=c+1;out[c] = ","
-      count = count + 1
+      kvp_count = kvp_count + 1
     end
-    if count > 0 then
+    if kvp_count > 0 then
       c=c+1;out[c] = "\n"..string.rep("  ", depth)
       if multiple_referenced_values_lut[value] then
         c=c+1;out[c] = " " -- extra space after --[[ root.foo.bar ]] `location_name`
@@ -163,7 +156,6 @@ local function pretty_print_table(tab)
     c=c+1;out[c] = "}"
   end
 
-  stack.push(location_key_stack, "root")
   pretty_print_recursive(tab, 0)
 
   return table.concat(out)
