@@ -807,15 +807,49 @@ do
     end
   end
 
-  add_test("intersect with strings and 'false'", function()
-    local obj = linq(get_test_strings()):intersect(get_test_strings())
-    assert_iteration(obj, get_test_strings())
-  end)
-
-  add_test("intersect with empty collections", function()
-    local obj = linq{}:intersect{}
-    assert_iteration(obj, {})
-  end)
+  -- intersect
+  for _, data in ipairs{
+    {
+      label = "strings and 'false'",
+      outer = get_test_strings(),
+      inner = get_test_strings(),
+      expected = get_test_strings(),
+    },
+    {
+      label = "empty collections",
+      outer = {},
+      inner = {},
+      expected = {},
+    },
+    {
+      label = "outer has 2, inner has 2, 1 intersection",
+      outer = {"hello", "world"},
+      inner = {"goodbye", "world"},
+      expected = {"world"},
+    },
+    {
+      label = "outer's value duplicated, distinct in result",
+      outer = {"world", "hello", "world"},
+      inner = {"goodbye", "world"},
+      expected = {"world"},
+    },
+    {
+      label = "inner's value duplicated, distinct in result",
+      outer = {"hello", "world"},
+      inner = {"world", "goodbye", "world"},
+      expected = {"world"},
+    },
+  }
+  do
+    for _, outer in ipairs(known_or_unknown_count_dataset) do
+      for _, inner in ipairs(array_or_obj_with_known_or_unknown_count_dataset) do
+        add_test("intersect with "..data.label.." with "..inner.label..", self has "..outer.label, function()
+          local obj = outer.make_obj(data.outer):intersect(inner.make_obj(data.inner))
+          assert_iteration(obj, data.expected)
+        end)
+      end
+    end
+  end
 
   add_test("intersect makes __count unknown", function()
     local obj = linq{}:intersect{}
@@ -823,28 +857,70 @@ do
     assert.equals(nil, got, "internal __count")
   end)
 
-  add_test("intersect with array collection", function()
-    local obj = linq{"hello", "world"}:intersect{"goodbye", "world"}
-    assert_iteration(obj, {"world"})
+  -- intersect_by
+  for _, data in ipairs{
+    {
+      label = "strings and 'false'",
+      outer = get_test_strings(),
+      inner = {"o", "r", false, "z"},
+      key_selector = function(value)
+        return type(value) == "string" and value:sub(3, 3) or value
+      end,
+      expected = get_test_strings(),
+    },
+    {
+      label = "empty collections",
+      outer = {},
+      inner = {},
+      key_selector = function(value) return value end,
+      expected = {},
+    },
+    {
+      label = "outer has 2, inner has 2, 1 intersection",
+      outer = {"hello", "world"},
+      inner = {"goo", "wor"},
+      key_selector = function(value) return value:sub(1, 3) end,
+      expected = {"world"},
+    },
+    {
+      label = "outer's value duplicated, distinct in result",
+      outer = {"world", "hello", "world"},
+      inner = {"goo", "wor"},
+      key_selector = function(value) return value:sub(1, 3) end,
+      expected = {"world"},
+    },
+    {
+      label = "inner's value duplicated, distinct in result",
+      outer = {"hello", "world"},
+      inner = {"wor", "goo", "wor"},
+      key_selector = function(value) return value:sub(1, 3) end,
+      expected = {"world"},
+    },
+  }
+  do
+    for _, outer in ipairs(known_or_unknown_count_dataset) do
+      for _, inner in ipairs(array_or_obj_with_known_or_unknown_count_dataset) do
+        add_test("intersect_by with "..data.label.." with "..inner.label..", self has "..outer.label, function()
+          local obj = outer.make_obj(data.outer):intersect_by(inner.make_obj(data.inner), data.key_selector)
+          assert_iteration(obj, data.expected)
+        end)
+      end
+    end
+  end
+
+  add_test("intersect_by makes __count unknown", function()
+    local obj = linq{}:intersect_by({}, function(value) return value end)
+    local got = obj.__count
+    assert.equals(nil, got, "internal __count")
   end)
 
-  add_test("intersect with linq object collection", function()
-    local obj = linq{"hello", "world"}:intersect(linq{"goodbye", "world"})
-    assert_iteration(obj, {"world"})
-  end)
-
-  add_test("intersect_by with array collection", function()
-    local obj = linq{"hello", "world"}
-      :intersect_by({"goodbye", "world"}, function(value) return value:sub(1, 3) end)
+  add_test("intersect_by with key_selector using index arg", function()
+    local obj = linq(get_test_strings())
+      :intersect_by(linq{"fo", "ba"}, assert_sequential_factory(function(assert_sequential, value, i)
+        assert_sequential(value, i)
+        return value:sub(1, 2)
+      end))
     ;
-    assert_iteration(obj, {"world"})
-  end)
-
-  add_test("intersect_by with linq object collection", function()
-    local obj = linq{"hello", "world"}
-      :intersect_by(linq{"goodbye", "world"}, function(value) return value:sub(1, 3) end)
-    ;
-    assert_iteration(obj, {"world"})
   end)
 
   add_test("iterate returns the correct iterator", function()

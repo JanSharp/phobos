@@ -863,54 +863,49 @@ end
 ---@generic T
 ---@generic TKey
 ---@param self LinqObj|T[]
----@param collection LinqObj|T[]
----@param key_selector (fun(value: T): TKey)? @ no index, because it's used on both collections
+---@param inner_collection LinqObj|(T|TKey)[]
+---@param key_selector (fun(value: T, index: integer): TKey)?
 ---@return LinqObj|T[]
-local function intersect_internal(self, collection, key_selector)
+local function intersect_internal(self, inner_collection, key_selector)
   self.__count = nil
   local inner_iter = self.__iter
+  local inner_i = 0
   local lut
   -- capture as upvalue in case collection gets modified, though nobody should do that anyway
-  local collection_iter = collection.__iter
-  if key_selector then
-    self.__iter = function()
-      if not lut then
-        lut = {}
-        if collection.__is_linq then
-          for value in collection_iter do
-            lut[key_selector(value)] = true
-          end
-        else
-          for i = 1, #collection do
-            lut[key_selector(collection[i])] = true
-          end
+  local collection_iter = inner_collection.__iter
+  self.__iter = function()
+    if not lut then
+      lut = {}
+      if inner_collection.__is_linq then
+        for value in collection_iter do
+          lut[value] = true
+        end
+      else
+        for i = 1, #inner_collection do
+          lut[inner_collection[i]] = true
         end
       end
+    end
+    if key_selector then
       while true do
         local value = inner_iter()
         if value == nil then return end
-        if lut[key_selector(value)] then return value end
-      end
-    end
-  else
-    -- duplicated for optimization, simply removed calls to `key_selector`
-    self.__iter = function()
-      if not lut then
-        lut = {}
-        if collection.__is_linq then
-          for value in collection_iter do
-            lut[value] = true
-          end
-        else
-          for i = 1, #collection do
-            lut[collection[i]] = true
-          end
+        inner_i = inner_i + 1
+        local key = key_selector(value, inner_i)
+        if lut[key] then
+          lut[key] = nil -- make it distinct
+          return value
         end
       end
+    else
+      -- copy paste for better performance
       while true do
         local value = inner_iter()
-        -- and flipped the order of these if checks for a tiny bit of extra performance
-        if lut[value] then return value end
+        -- flipped the order of these if checks for a tiny bit of extra performance
+        if lut[value] then
+          lut[value] = nil -- make it distinct
+          return value
+        end
         if value == nil then return end
       end
     end
@@ -918,6 +913,7 @@ local function intersect_internal(self, collection, key_selector)
   return self
 end
 
+---Results are distinct.
 ---@generic T
 ---@param self LinqObj|T[]
 ---@param collection LinqObj|T[]
@@ -926,14 +922,15 @@ function linq_meta_index:intersect(collection)
   return intersect_internal(self, collection)
 end
 
+---Results are distinct. If 2 different values select the same key, only the first one will be in the output.
 ---@generic T
 ---@generic TKey
 ---@param self LinqObj|T[]
----@param collection LinqObj|T[]
----@param key_selector fun(value: T): TKey @ no index, because it's used on both collections
+---@param key_collection LinqObj|TKey[]
+---@param key_selector fun(value: T, index: integer): TKey
 ---@return LinqObj|T[]
-function linq_meta_index:intersect_by(collection, key_selector)
-  return intersect_internal(self, collection, key_selector)
+function linq_meta_index:intersect_by(key_collection, key_selector)
+  return intersect_internal(self, key_collection, key_selector)
 end
 
 ---@generic T
