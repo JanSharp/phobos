@@ -1,4 +1,7 @@
 
+local assert = require("assert")
+local io_util = require("io_util")
+
 local Scope = {}
 Scope.__index = Scope
 
@@ -76,6 +79,39 @@ local function should_run_test(full_scope_name, test_name, filters)
   return false
 end
 
+local diff_state
+
+local latest_expected_for_diff
+local latest_got_for_diff
+local function diff_callback(expected, got)
+  latest_expected_for_diff = expected
+  latest_got_for_diff = got
+end
+
+local function print_msg(msg)
+  print(msg)
+  if diff_state then
+    diff_state.expected[#diff_state.expected+1] = msg
+    diff_state.got[#diff_state.got+1] = msg
+  end
+end
+
+local function print_latest_diff_msgs()
+  if diff_state and latest_expected_for_diff and latest_got_for_diff then
+    diff_state.expected[#diff_state.expected+1] = "expected:"
+    diff_state.got[#diff_state.got+1] = "got:"
+    diff_state.expected[#diff_state.expected+1] = latest_expected_for_diff
+    diff_state.got[#diff_state.got+1] = latest_got_for_diff
+    latest_expected_for_diff = nil
+    latest_got_for_diff = nil
+  end
+end
+
+local function write_diff_files()
+  io_util.write_file("temp/diff/expected.txt", table.concat(diff_state.expected, "\n"))
+  io_util.write_file("temp/diff/got.txt", table.concat(diff_state.got, "\n"))
+end
+
 local function run_tests(scope, options, print_parent_scope_header, state, full_scope_name, is_root)
   -- header
   local start_time = os and os.clock()
@@ -84,7 +120,7 @@ local function run_tests(scope, options, print_parent_scope_header, state, full_
     if printed_scope_header then return end
     printed_scope_header = true
     print_parent_scope_header()
-    print(get_indentation(scope)..bold..scope.name..reset..":")
+    print_msg(get_indentation(scope)..bold..scope.name..reset..":")
   end
 
   -- run tests
@@ -116,12 +152,13 @@ local function run_tests(scope, options, print_parent_scope_header, state, full_
         end
         if not success or not options.only_show_failed then
           print_scope_header()
-          print(get_indentation(scope).."  ["..id.."] "..test.name..": "
+          print_msg(get_indentation(scope).."  ["..id.."] "..test.name..": "
             ..(success and (green.."passed"..reset) or (
               red.."failed"..reset..": "..blue..(err or "<no error message>")..reset
               ..(options.show_stacktrace and ("\n"..magenta..stacktrace:gsub("\t", "  ")..reset) or " ")
             ))
           )
+          print_latest_diff_msgs()
         end
       end
     end
@@ -132,7 +169,7 @@ local function run_tests(scope, options, print_parent_scope_header, state, full_
 
   -- footer
   if is_root or printed_scope_header then
-    print(get_indentation(scope)..(count - failed_count).."/"..count.." "..green.."passed"..reset
+    print_msg(get_indentation(scope)..(count - failed_count).."/"..count.." "..green.."passed"..reset
       ..(failed_count > 0 and (" ("..failed_count.." "..faint..red.."failed"..reset..")") or "")
       .." in "..bold..scope.name..reset
       -- this seems to be the max precision of os.clock, at least on my system
@@ -163,7 +200,14 @@ function Scope:list_scopes()
 end
 
 function Scope:run_tests(options)
-  return run_tests(
+  if options.diff then
+    diff_state = {expected = {}, got = {}}
+    assert.set_diff_callback(diff_callback)
+  else
+    diff_state = nil
+    assert.set_diff_callback(nil)
+  end
+  local result = run_tests(
     self,
     options,
     function() end,
@@ -171,6 +215,10 @@ function Scope:run_tests(options)
     self.name,
     true
   )
+  if options.diff then
+    write_diff_files()
+  end
+  return result
 end
 
 return Scope

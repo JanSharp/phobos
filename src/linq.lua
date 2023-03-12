@@ -29,8 +29,6 @@ end
 -- [x] any
 -- [x] append
 -- [x] average
--- [x] average_by
--- [x] average_by_or (better than select + default_if_empty + average)
 -- [x] chunk
 -- [x] contains
 -- [x] copy
@@ -56,6 +54,8 @@ end
 -- [x] insert_range
 -- [x] intersect
 -- [x] intersect_by
+-- [x] intersect_lut
+-- [x] intersect_lut_by
 -- [x] iterate
 -- [x] join
 -- [x] keep_at (more performant than using `where`)
@@ -63,10 +63,8 @@ end
 -- [x] last
 -- [x] max
 -- [x] max_by
--- [x] max_by_or (better than select + default_if_empty + max)
 -- [x] min
 -- [x] min_by
--- [x] min_by_or (better than select + default_if_empty + min)
 -- [x] order
 -- [x] order_by
 -- [x] order_descending
@@ -85,7 +83,8 @@ end
 -- [x] skip_while
 -- [x] sort
 -- [x] sum
--- [x] sum_by
+-- [x] symmetric_difference
+-- [x] symmetric_difference_by
 -- [x] take
 -- [x] take_last
 -- [x] take_last_while
@@ -173,15 +172,23 @@ end
 
 ---@generic T
 ---@param self LinqObj|T[]
+---@param selector (fun(value: T, index: integer): number)?
 ---@return number
-function linq_meta_index:average()
-  -- technically this function contains the same logic 2 times
+function linq_meta_index:average(selector)
+  -- technically this function contains the same logic 3 times
   -- this is purely for optimization reasons
 
-  if self.__count then
-    if self.__count == 0 then
-      error("Attempt to evaluate average value on an empty collection.")
+  if selector then
+    local i = 0
+    local total = 0
+    for value in self.__iter do
+      i = i + 1
+      total = total + selector(value, i)
     end
+    return total / i
+  end
+
+  if self.__count then
     local total = 0
     for value in self.__iter do
       total = total + value
@@ -194,44 +201,6 @@ function linq_meta_index:average()
   for value in self.__iter do
     i = i + 1
     total = total + value
-  end
-  if i == 0 then
-    error("Attempt to evaluate average value on an empty collection.")
-  end
-  return total / i
-end
-
----@generic T
----@param self LinqObj|T[]
----@param selector fun(value: T, index: integer): number
----@return number
-function linq_meta_index:average_by(selector)
-  local i = 0
-  local total = 0
-  for value in self.__iter do
-    i = i + 1
-    total = total + selector(value, i)
-  end
-  if i == 0 then
-    error("Attempt to evaluate average value on an empty collection.")
-  end
-  return total / i
-end
-
----@generic T
----@param self LinqObj|T[]
----@param default_value_if_empty number
----@param selector fun(value: T, index: integer): number
----@return number
-function linq_meta_index:average_by_or(default_value_if_empty, selector)
-  local i = 0
-  local total = 0
-  for value in self.__iter do
-    i = i + 1
-    total = total + selector(value, i)
-  end
-  if i == 0 then
-    return default_value_if_empty
   end
   return total / i
 end
@@ -898,54 +867,67 @@ end
 ---@generic T
 ---@generic TKey
 ---@param self LinqObj|T[]
----@param collection LinqObj|T[]
----@param key_selector (fun(value: T): TKey)? @ no index, because it's used on both collections
+---@param inner_collection (LinqObj|(T|TKey)[])? @ either this
+---@param lut table<(T|TKey), true>? @ or this
+---@param key_selector (fun(value: T, index: integer): TKey)?
 ---@return LinqObj|T[]
-local function intersect_internal(self, collection, key_selector)
+local function intersect_internal(self, inner_collection, lut, key_selector)
   self.__count = nil
+  -- must use a different table for making results distinct when the given lookup table is a parameter,
+  -- because we must not modify the given table
+  local distinct_lut = lut and {} or nil
   local inner_iter = self.__iter
-  local lut
+  local inner_i = 0
+  ---@cast inner_collection -nil
   -- capture as upvalue in case collection gets modified, though nobody should do that anyway
-  local collection_iter = collection.__iter
-  if key_selector then
-    self.__iter = function()
-      if not lut then
-        lut = {}
-        if collection.__is_linq then
-          for value in collection_iter do
-            lut[key_selector(value)] = true
-          end
-        else
-          for i = 1, #collection do
-            lut[key_selector(collection[i])] = true
-          end
+  local collection_iter = not lut and inner_collection.__iter
+  self.__iter = function()
+    if not lut then
+      lut = {}
+      if inner_collection.__is_linq then
+        for value in collection_iter do
+          lut[value] = true
+        end
+      else
+        for i = 1, #inner_collection do
+          lut[inner_collection[i]] = true
         end
       end
+    end
+    if key_selector then
       while true do
         local value = inner_iter()
         if value == nil then return end
-        if lut[key_selector(value)] then return value end
-      end
-    end
-  else
-    -- duplicated for optimization, simply removed calls to `key_selector`
-    self.__iter = function()
-      if not lut then
-        lut = {}
-        if collection.__is_linq then
-          for value in collection_iter do
-            lut[value] = true
-          end
-        else
-          for i = 1, #collection do
-            lut[collection[i]] = true
+        inner_i = inner_i + 1
+        local key = key_selector(value, inner_i)
+        if lut[key] then
+          if distinct_lut then
+            if not distinct_lut[key] then
+              distinct_lut[key] = true
+              return value
+            end
+          else
+            lut[key] = nil -- make it distinct
+            return value
           end
         end
       end
+    else
+      -- copy paste for better performance
       while true do
         local value = inner_iter()
-        -- and flipped the order of these if checks for a tiny bit of extra performance
-        if lut[value] then return value end
+        -- flipped the order of these if checks for a tiny bit of extra performance
+        if lut[value] then
+          if distinct_lut then
+            if not distinct_lut[value] then
+              distinct_lut[value] = true
+              return value
+            end
+          else
+            lut[value] = nil -- make it distinct
+            return value
+          end
+        end
         if value == nil then return end
       end
     end
@@ -953,22 +935,44 @@ local function intersect_internal(self, collection, key_selector)
   return self
 end
 
+---Results are distinct.
 ---@generic T
 ---@param self LinqObj|T[]
 ---@param collection LinqObj|T[]
 ---@return LinqObj|T[]
 function linq_meta_index:intersect(collection)
-  return intersect_internal(self, collection)
+  return intersect_internal(self, collection, nil)
 end
 
+---Results are distinct.
+---@generic T
+---@param self LinqObj|T[]
+---@param lut table<T, true>
+---@return LinqObj|T[]
+function linq_meta_index:intersect_lut(lut)
+  return intersect_internal(self, nil, lut)
+end
+
+---Results are distinct. If 2 different values select the same key, only the first one will be in the output.
 ---@generic T
 ---@generic TKey
 ---@param self LinqObj|T[]
----@param collection LinqObj|T[]
----@param key_selector fun(value: T): TKey @ no index, because it's used on both collections
+---@param key_collection LinqObj|TKey[]
+---@param key_selector fun(value: T, index: integer): TKey
 ---@return LinqObj|T[]
-function linq_meta_index:intersect_by(collection, key_selector)
-  return intersect_internal(self, collection, key_selector)
+function linq_meta_index:intersect_by(key_collection, key_selector)
+  return intersect_internal(self, key_collection, nil, key_selector)
+end
+
+---Results are distinct. If 2 different values select the same key, only the first one will be in the output.
+---@generic T
+---@generic TKey
+---@param self LinqObj|T[]
+---@param lut table<TKey, true>
+---@param key_selector fun(value: T, index: integer): TKey
+---@return LinqObj|T[]
+function linq_meta_index:intersect_lut_by(lut, key_selector)
+  return intersect_internal(self, nil, lut, key_selector)
 end
 
 ---@generic T
@@ -1205,23 +1209,6 @@ function linq_meta_index:max_by(selector, left_is_greater_func)
 end
 
 ---@generic T
----@generic TValue
----@param self LinqObj|T[]
----@param default_value_if_empty T @ Default result if the collection is empty.
----@param selector fun(value: T, index: integer): TValue
----@param left_is_greater_func (fun(left: TValue, right: TValue): boolean)?
----@return T
-function linq_meta_index:max_by_or(default_value_if_empty, selector, left_is_greater_func)
-  local result = max_or_min_by(self, selector, left_is_greater_func or function(left, right)
-    return left > right
-  end)
-  if result == nil then
-    result = default_value_if_empty
-  end
-  return result
-end
-
----@generic T
 ---@param self LinqObj|T[]
 ---@param left_is_lesser_func (fun(left: T, right: T): boolean)?
 ---@return T
@@ -1242,23 +1229,6 @@ function linq_meta_index:min_by(selector, left_is_lesser_func)
     return left < right
   end)
   if result == nil then error("Attempt to evaluate min value on an empty collection.") end
-  return result
-end
-
----@generic T
----@generic TValue
----@param self LinqObj|T[]
----@param default_value_if_empty T @ Default result if the collection is empty.
----@param selector fun(value: T, index: integer): TValue
----@param left_is_lesser_func (fun(left: TValue, right: TValue): boolean)?
----@return T
-function linq_meta_index:min_by_or(default_value_if_empty, selector, left_is_lesser_func)
-  local result = max_or_min_by(self, selector, left_is_lesser_func or function(left, right)
-    return left < right
-  end)
-  if result == nil then
-    result = default_value_if_empty
-  end
   return result
 end
 
@@ -1799,34 +1769,149 @@ end
 
 ---@generic T
 ---@param self LinqObj|T[]
+---@param selector (fun(value: T, index: integer): number)?
 ---@return number
-function linq_meta_index:sum()
+function linq_meta_index:sum(selector)
   local result = 0
-  for value in self.__iter do
-    result = result + value
+  if selector then
+    if self.__count then
+      local iter = self.__iter
+      for i = 1, self.__count do
+        result = result + selector(iter(), i)
+      end
+    else
+      local i = 0
+      for value in self.__iter do
+        i = i + 1
+        result = result + selector(value, i)
+      end
+    end
+  else
+    for value in self.__iter do
+      result = result + value
+    end
   end
   return result
 end
 
 ---@generic T
+---@generic TKey
 ---@param self LinqObj|T[]
----@param selector fun(value: T, index: integer): number
----@return number
-function linq_meta_index:sum_by(selector)
-  local result = 0
-  if self.__count then
-    local iter = self.__iter
-    for i = 1, self.__count do
-      result = result + selector(iter(), i)
+---@param collection LinqObj|T[]
+---@param key_selector (fun(value: T): TKey)? @ no index, because it's used on both collections
+---@return LinqObj|T[]
+local function symmetric_difference_internal(self, collection, key_selector)
+  self.__count = nil
+  local outer_iter = self.__iter
+  -- capture as upvalue in case collection gets modified, though nobody should do that anyway
+  local inner_iter = collection.__iter
+  local inner_i = 0
+  local inner_count = 0
+  local inner_lut
+  local inner_list
+  local inner_key_list
+  local outer_lut
+  local iterating_inner = false
+  self.__iter = function()
+    ::go_again::
+    if iterating_inner then
+      while true do
+        if inner_i == inner_count then return end -- we're done
+        inner_i = inner_i + 1
+        local value = inner_list[inner_i]
+        local key = value
+        if key_selector then
+          key = inner_key_list[inner_i]
+        end
+        if not outer_lut[key] then
+          return value -- inner_list is already distinct
+        end
+      end
+      -- loop is only exited through returns, this is unreachable
     end
-  else
-    local i = 0
-    for value in self.__iter do
-      i = i + 1
-      result = result + selector(value, i)
+
+    if not inner_lut then
+      inner_lut = {}
+      inner_list = {}
+      if key_selector then
+        inner_key_list = {}
+      end
+      if collection.__is_linq then
+        for value in inner_iter do
+          local key = value
+          if key_selector then
+            key = key_selector(value)
+          end
+          if inner_lut[key] then goto continue end -- make it distinct
+          inner_count = inner_count + 1
+          inner_list[inner_count] = value
+          if key_selector then
+            inner_key_list[inner_count] = key
+          end
+          inner_lut[key] = true
+          ::continue::
+        end
+      else
+        -- copy paste for optimization
+        for i = 1, #collection do
+          local value = collection[i]
+          local key = value
+          if key_selector then
+            key = key_selector(value)
+          end
+          if inner_lut[key] then goto continue end -- make it distinct
+          inner_count = inner_count + 1
+          inner_list[inner_count] = value
+          if key_selector then
+            inner_key_list[inner_count] = key
+          end
+          inner_lut[key] = true
+          ::continue::
+        end
+      end
     end
+
+    outer_lut = outer_lut or {}
+    while true do
+      local value = outer_iter()
+      if value == nil then
+        iterating_inner = true
+        goto go_again
+      end
+      local key = value
+      if key_selector then
+        key = key_selector(value)
+      end
+      if not outer_lut[key] then -- make it distinct
+        -- add it to the outer_lut regardless of if it is in inner_lut,
+        -- because when returning inner results it must also exclude these values
+        outer_lut[key] = true
+        if not inner_lut[key] then
+          return value
+        end
+      end
+    end
+    -- loop is only exited through returns or a goto to top, this is unreachable
   end
-  return result
+  return self
+end
+
+---@generic T
+---@param self LinqObj|T[]
+---@param collection LinqObj|T[]
+---@return LinqObj|T[]
+function linq_meta_index:symmetric_difference(collection)
+  return symmetric_difference_internal(self, collection)
+end
+
+---@generic T
+---@generic TKey
+---@param self LinqObj|T[]
+---@param collection LinqObj|T[]
+---@param key_selector fun(value: T): TKey @ no index, because it's used on both collections
+---@return LinqObj|T[]
+function linq_meta_index:symmetric_difference_by(collection, key_selector)
+  return symmetric_difference_internal(self, collection, key_selector)
 end
 
 -- the language server says that this function has a duplicate set on the `__iter` field... it's drunk
@@ -2042,20 +2127,27 @@ end
 ---@generic T
 ---@generic TKey
 ---@param self LinqObj|T[]
----@param key_selector fun(value: T, i: integer): TKey
+---@param key_selector (fun(value: T, i: integer): TKey)?
 ---@return table<TKey, true>
 function linq_meta_index:to_lookup(key_selector)
   local lookup = {}
   if self.__count then
     local iter = self.__iter
     for i = 1, self.__count do
-      lookup[key_selector(iter(), i)] = true
+      local key = iter()
+      if key_selector then
+        key = key_selector(key, i)
+      end
+      lookup[key] = true
     end
   else
     local i = 0
-    for inner_value in self.__iter do
+    for key in self.__iter do
       i = i + 1
-      lookup[key_selector(inner_value, i)] = true
+      if key_selector then
+        key = key_selector(key, i)
+      end
+      lookup[key] = true
     end
   end
   return lookup
@@ -2118,6 +2210,7 @@ local function union_internal(self, collection, key_selector)
   return self
 end
 
+---Results are distinct.
 ---@generic T
 ---@param self LinqObj|T[]
 ---@param collection LinqObj|T[]
@@ -2126,6 +2219,8 @@ function linq_meta_index:union(collection)
   return union_internal(self, collection)
 end
 
+---Results are distinct. If 2 different values select the same key, only the first one will be in the output.
+---`self` first, then `collection`.
 ---@generic T
 ---@generic TKey
 ---@param self LinqObj|T[]

@@ -11,6 +11,15 @@ local function get_print_full_data_on_error_default()
   return print_full_data_on_error_default
 end
 
+---@alias DiffCallback fun(expected: string, got: string)
+
+---@type DiffCallback?
+local diff_callback
+---@param new_diff_callback DiffCallback?
+local function set_diff_callback(new_diff_callback)
+  diff_callback = new_diff_callback
+end
+
 ---@type (fun(msg:string?):string?)[]
 local err_msg_handlers = {}
 
@@ -142,13 +151,21 @@ local function contents_equals(expected, got, msg, options)
     if options.print_full_data_on_error ~= nil then
       print_full_data_on_error = options.print_full_data_on_error
     end
+    local do_pretty_print = print_full_data_on_error or diff_callback
+    local expected_pretty_printed = do_pretty_print and pretty_print(expected, options.serpent_opts)
+    local got_pretty_printed = do_pretty_print and pretty_print(got, options.serpent_opts)
     msg = add_msg(err, msg)
       ..(
         print_full_data_on_error
-          and ("\nexpected: "..pretty_print(expected, options.serpent_opts)
-            .."\n-----\ngot: "..pretty_print(got, options.serpent_opts))
+          and ("\nexpected: "..expected_pretty_printed
+            .."\n-----\ngot: "..got_pretty_printed)
           or ""
       )
+    if diff_callback then
+      ---@cast expected_pretty_printed -nil
+      ---@cast got_pretty_printed -nil
+      diff_callback(expected_pretty_printed, got_pretty_printed)
+    end
     local c = 0
     local add_err_again_at_the_end = false
     for _ in msg:gmatch("\n") do
@@ -189,6 +206,7 @@ end
 return setmetatable({
   set_print_full_data_on_error_default = set_print_full_data_on_error_default,
   get_print_full_data_on_error_default = get_print_full_data_on_error_default,
+  set_diff_callback = set_diff_callback,
   push_err_msg_handler = push_err_msg_handler,
   pop_err_msg_handler = pop_err_msg_handler,
   assert = assert,
