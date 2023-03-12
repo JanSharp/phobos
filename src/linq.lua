@@ -1968,20 +1968,27 @@ end
 ---@generic T
 ---@generic TKey
 ---@param self LinqObj|T[]
----@param key_selector fun(value: T, i: integer): TKey
+---@param key_selector (fun(value: T, i: integer): TKey)?
 ---@return table<TKey, true>
 function linq_meta_index:to_lookup(key_selector)
   local lookup = {}
   if self.__count then
     local iter = self.__iter
     for i = 1, self.__count do
-      lookup[key_selector(iter(), i)] = true
+      local key = iter()
+      if key_selector then
+        key = key_selector(key, i)
+      end
+      lookup[key] = true
     end
   else
     local i = 0
-    for inner_value in self.__iter do
+    for key in self.__iter do
       i = i + 1
-      lookup[key_selector(inner_value, i)] = true
+      if key_selector then
+        key = key_selector(key, i)
+      end
+      lookup[key] = true
     end
   end
   return lookup

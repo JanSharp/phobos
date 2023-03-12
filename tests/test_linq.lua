@@ -1915,12 +1915,22 @@ do
   end
 
   for _, outer in ipairs(known_or_unknown_count_dataset) do
-    add_test("to_lookup, self has "..outer.label, function()
-      local got = outer.make_obj(get_test_strings()):to_lookup(function(value) return value end)
+    add_test("to_lookup, "..outer.label, function()
+      local got = outer.make_obj(get_test_strings()):to_lookup()
       assert.contents_equals({foo = true, bar = true, [false] = true, baz = true}, got, "result of 'to_lookup'")
     end)
 
-    add_test("to_lookup with selector using index arg, self has "..outer.label, function()
+    add_test("to_lookup with key_selector, self has "..outer.label, function()
+      local got = outer.make_obj(get_test_strings()):to_lookup(function(value)
+        if type(value) == "string" then
+          return value:sub(1, 2)
+        end
+        return value
+      end)
+      assert.contents_equals({fo = true, ba = true, [false] = true}, got, "result of 'to_lookup'")
+    end)
+
+    add_test("to_lookup with key_selector using index arg, self has "..outer.label, function()
       local obj = outer.make_obj(get_test_strings())
       assert_sequential_helper(obj, obj.to_lookup, function(value) return value end)
     end)
