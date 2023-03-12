@@ -2048,6 +2048,7 @@ local function union_internal(self, collection, key_selector)
   return self
 end
 
+---Results are distinct.
 ---@generic T
 ---@param self LinqObj|T[]
 ---@param collection LinqObj|T[]
@@ -2056,6 +2057,8 @@ function linq_meta_index:union(collection)
   return union_internal(self, collection)
 end
 
+---Results are distinct. If 2 different values select the same key, only the first one will be in the output.
+---`self` first, then `collection`.
 ---@generic T
 ---@generic TKey
 ---@param self LinqObj|T[]
