@@ -878,6 +878,12 @@ do
     assert.equals(nil, got, "internal __count")
   end)
 
+  add_test("intersect_lut makes __count unknown", function()
+    local obj = linq{}:intersect_lut{}
+    local got = obj.__count
+    assert.equals(nil, got, "internal __count")
+  end)
+
   -- intersect_by
   for _, data in ipairs{
     {
@@ -952,6 +958,12 @@ do
         return value:sub(1, 2)
       end))
     ;
+  end)
+
+  add_test("intersect_lut_by makes __count unknown", function()
+    local obj = linq{}:intersect_lut_by({}, function(value) return value end)
+    local got = obj.__count
+    assert.equals(nil, got, "internal __count")
   end)
 
   add_test("iterate returns the correct iterator", function()
