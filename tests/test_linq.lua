@@ -2188,6 +2188,18 @@ do
     end
   end
 
+  add_test("union makes __count unknown", function()
+    local obj = linq(get_test_strings()):union{"hello", "world"}
+    local got = obj.__count
+    assert.equals(nil, got, "internal __count")
+  end)
+
+  add_test("union_by makes __count unknown", function()
+    local obj = linq(get_test_strings()):union_by({"hello", "world"}, function(value) return value end)
+    local got = obj.__count
+    assert.equals(nil, got, "internal __count")
+  end)
+
   add_test("where makes __count unknown", function()
     local obj = linq(get_test_strings()):where(function() return true end)
     local got = obj.__count
