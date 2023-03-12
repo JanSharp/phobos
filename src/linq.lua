@@ -83,6 +83,8 @@ end
 -- [x] skip_while
 -- [x] sort
 -- [x] sum
+-- [x] symmetric_difference
+-- [x] symmetric_difference_by
 -- [x] take
 -- [x] take_last
 -- [x] take_last_while
@@ -1790,6 +1792,126 @@ function linq_meta_index:sum(selector)
     end
   end
   return result
+end
+
+---@generic T
+---@generic TKey
+---@param self LinqObj|T[]
+---@param collection LinqObj|T[]
+---@param key_selector (fun(value: T): TKey)? @ no index, because it's used on both collections
+---@return LinqObj|T[]
+local function symmetric_difference_internal(self, collection, key_selector)
+  self.__count = nil
+  local outer_iter = self.__iter
+  -- capture as upvalue in case collection gets modified, though nobody should do that anyway
+  local inner_iter = collection.__iter
+  local inner_i = 0
+  local inner_count = 0
+  local inner_lut
+  local inner_list
+  local inner_key_list
+  local outer_lut
+  local iterating_inner = false
+  self.__iter = function()
+    ::go_again::
+    if iterating_inner then
+      while true do
+        if inner_i == inner_count then return end -- we're done
+        inner_i = inner_i + 1
+        local value = inner_list[inner_i]
+        local key = value
+        if key_selector then
+          key = inner_key_list[inner_i]
+        end
+        if not outer_lut[key] then
+          return value -- inner_list is already distinct
+        end
+      end
+      -- loop is only exited through returns, this is unreachable
+    end
+
+    if not inner_lut then
+      inner_lut = {}
+      inner_list = {}
+      if key_selector then
+        inner_key_list = {}
+      end
+      if collection.__is_linq then
+        for value in inner_iter do
+          local key = value
+          if key_selector then
+            key = key_selector(value)
+          end
+          if inner_lut[key] then goto continue end -- make it distinct
+          inner_count = inner_count + 1
+          inner_list[inner_count] = value
+          if key_selector then
+            inner_key_list[inner_count] = key
+          end
+          inner_lut[key] = true
+          ::continue::
+        end
+      else
+        -- copy paste for optimization
+        for i = 1, #collection do
+          local value = collection[i]
+          local key = value
+          if key_selector then
+            key = key_selector(value)
+          end
+          if inner_lut[key] then goto continue end -- make it distinct
+          inner_count = inner_count + 1
+          inner_list[inner_count] = value
+          if key_selector then
+            inner_key_list[inner_count] = key
+          end
+          inner_lut[key] = true
+          ::continue::
+        end
+      end
+    end
+
+    outer_lut = outer_lut or {}
+    while true do
+      local value = outer_iter()
+      if value == nil then
+        iterating_inner = true
+        goto go_again
+      end
+      local key = value
+      if key_selector then
+        key = key_selector(value)
+      end
+      if not outer_lut[key] then -- make it distinct
+        -- add it to the outer_lut regardless of if it is in inner_lut,
+        -- because when returning inner results it must also exclude these values
+        outer_lut[key] = true
+        if not inner_lut[key] then
+          return value
+        end
+      end
+    end
+    -- loop is only exited through returns or a goto to top, this is unreachable
+  end
+  return self
+end
+
+---@generic T
+---@param self LinqObj|T[]
+---@param collection LinqObj|T[]
+---@return LinqObj|T[]
+function linq_meta_index:symmetric_difference(collection)
+  return symmetric_difference_internal(self, collection)
+end
+
+---@generic T
+---@generic TKey
+---@param self LinqObj|T[]
+---@param collection LinqObj|T[]
+---@param key_selector fun(value: T): TKey @ no index, because it's used on both collections
+---@return LinqObj|T[]
+function linq_meta_index:symmetric_difference_by(collection, key_selector)
+  return symmetric_difference_internal(self, collection, key_selector)
 end
 
 -- the language server says that this function has a duplicate set on the `__iter` field... it's drunk

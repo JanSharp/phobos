@@ -1696,6 +1696,85 @@ do
     end)
   end
 
+  for _, data in ipairs{
+    {
+      label = "empty collections",
+      outer_values = {},
+      inner_values = {},
+      expected = {},
+    },
+    {
+      label = "all unique values",
+      outer_values = get_test_strings(),
+      inner_values = {"hello", "world"},
+      expected = {"foo", "bar", false, "baz", "hello", "world"},
+    },
+    {
+      label = "one duplicate between collections",
+      outer_values = {"foo", "bar"},
+      inner_values = {"hello", "bar", "world"},
+      expected = {"foo", "hello", "world"},
+    },
+    {
+      label = "all duplicate values",
+      outer_values = get_test_strings(),
+      inner_values = get_test_strings(),
+      expected = {},
+    },
+    {
+      label = "one duplicate within each same collection",
+      outer_values = {"foo", "bar", "bar"},
+      inner_values = {"hello", "hello", "world"},
+      expected = {"foo", "bar", "hello", "world"},
+    },
+    {
+      label = "duplicates everywhere",
+      outer_values = {"foo", "bar", "bar"},
+      inner_values = {"hello", "world", "foo", "bar", "bar"},
+      expected = {"hello", "world"},
+    },
+    {
+      label = "duplicates everywhere with key_selector",
+      outer_values = {"foo", "bar", "baz"},
+      inner_values = {"hello", "world", "for", "big", "bat"},
+      key_selector = function(value) return value:sub(1, 1) end,
+      expected = {"hello", "world"},
+    },
+  }
+  do
+    for _, outer in ipairs(known_or_unknown_count_dataset) do
+      for _, inner in ipairs(array_or_obj_with_known_or_unknown_count_dataset) do
+        local func_name = data.key_selector and "symmetric_difference_by" or "symmetric_difference"
+        add_test(func_name.." "..data.label.." with "..inner.label..", self has "..outer.label, function()
+          local collection = inner.make_obj(data.inner_values)
+          local obj = outer.make_obj(data.outer_values)
+          if data.key_selector then
+            obj = obj:symmetric_difference_by(collection, data.key_selector)
+          else
+            obj = obj:symmetric_difference(collection)
+          end
+          local got_count = obj.__count
+          assert.equals(nil, got_count, "internal __count after '"..func_name.."'")
+          assert_iteration(obj, data.expected)
+        end)
+      end
+    end
+  end
+
+  add_test("symmetric_difference makes __count unknown", function()
+    local obj = linq(get_test_strings()):symmetric_difference{"hello", "world"}
+    local got = obj.__count
+    assert.equals(nil, got, "internal __count")
+  end)
+
+  add_test("symmetric_difference_by makes __count unknown", function()
+    local obj = linq(get_test_strings())
+      :symmetric_difference_by({"hello", "world"}, function(value) return value end)
+    ;
+    local got = obj.__count
+    assert.equals(nil, got, "internal __count")
+  end)
+
   add_test("take 0 values", function()
     local obj = linq(get_test_strings()):take(0)
     assert.equals(0, obj.__count, "internal __count after take")
@@ -2070,7 +2149,7 @@ do
       expected = get_test_strings(),
     },
     {
-      label = "one duplicate within same collection",
+      label = "one duplicate within each same collection",
       outer_values = {"foo", "bar", "bar"},
       inner_values = {"hello", "hello", "world"},
       expected = {"foo", "bar", "hello", "world"},
