@@ -4,6 +4,7 @@ local assert = require("assert")
 
 local linq = require("linq")
 
+local util = require("util")
 local ll = require("linked_list")
 
 local function reverse_array(array)
@@ -848,6 +849,16 @@ do
           assert_iteration(obj, data.expected)
         end)
       end
+
+      add_test("intersect_lut with "..data.label..", self has "..outer.label, function()
+        local got_lut = util.invert(data.inner)
+        local expected_lut = util.shallow_copy(got_lut)
+        local obj = outer.make_obj(data.outer):intersect_lut(util.invert(data.inner))
+        assert_iteration(obj, data.expected)
+        assert.contents_equals(expected_lut, got_lut,
+          "the lookup table passed to 'intersect_lut' must not be modified"
+        )
+      end)
     end
   end
 
@@ -905,6 +916,16 @@ do
           assert_iteration(obj, data.expected)
         end)
       end
+
+      add_test("intersect_lut_by with "..data.label..", self has "..outer.label, function()
+        local got_lut = util.invert(data.inner)
+        local expected_lut = util.shallow_copy(got_lut)
+        local obj = outer.make_obj(data.outer):intersect_lut_by(got_lut, data.key_selector)
+        assert_iteration(obj, data.expected)
+        assert.contents_equals(expected_lut, got_lut,
+          "the lookup table passed to 'intersect_lut_by' must not be modified"
+        )
+      end)
     end
   end
 

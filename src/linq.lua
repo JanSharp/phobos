@@ -54,6 +54,8 @@ end
 -- [x] insert_range
 -- [x] intersect
 -- [x] intersect_by
+-- [x] intersect_lut
+-- [x] intersect_lut_by
 -- [x] iterate
 -- [x] join
 -- [x] keep_at (more performant than using `where`)
@@ -863,16 +865,20 @@ end
 ---@generic T
 ---@generic TKey
 ---@param self LinqObj|T[]
----@param inner_collection LinqObj|(T|TKey)[]
+---@param inner_collection (LinqObj|(T|TKey)[])? @ either this
+---@param lut table<(T|TKey), true>? @ or this
 ---@param key_selector (fun(value: T, index: integer): TKey)?
 ---@return LinqObj|T[]
-local function intersect_internal(self, inner_collection, key_selector)
+local function intersect_internal(self, inner_collection, lut, key_selector)
   self.__count = nil
+  -- must use a different table for making results distinct when the given lookup table is a parameter,
+  -- because we must not modify the given table
+  local distinct_lut = lut and {} or nil
   local inner_iter = self.__iter
   local inner_i = 0
-  local lut
+  ---@cast inner_collection -nil
   -- capture as upvalue in case collection gets modified, though nobody should do that anyway
-  local collection_iter = inner_collection.__iter
+  local collection_iter = not lut and inner_collection.__iter
   self.__iter = function()
     if not lut then
       lut = {}
@@ -893,8 +899,15 @@ local function intersect_internal(self, inner_collection, key_selector)
         inner_i = inner_i + 1
         local key = key_selector(value, inner_i)
         if lut[key] then
-          lut[key] = nil -- make it distinct
-          return value
+          if distinct_lut then
+            if not distinct_lut[key] then
+              distinct_lut[key] = true
+              return value
+            end
+          else
+            lut[key] = nil -- make it distinct
+            return value
+          end
         end
       end
     else
@@ -903,8 +916,15 @@ local function intersect_internal(self, inner_collection, key_selector)
         local value = inner_iter()
         -- flipped the order of these if checks for a tiny bit of extra performance
         if lut[value] then
-          lut[value] = nil -- make it distinct
-          return value
+          if distinct_lut then
+            if not distinct_lut[value] then
+              distinct_lut[value] = true
+              return value
+            end
+          else
+            lut[value] = nil -- make it distinct
+            return value
+          end
         end
         if value == nil then return end
       end
@@ -919,7 +939,16 @@ end
 ---@param collection LinqObj|T[]
 ---@return LinqObj|T[]
 function linq_meta_index:intersect(collection)
-  return intersect_internal(self, collection)
+  return intersect_internal(self, collection, nil)
+end
+
+---Results are distinct.
+---@generic T
+---@param self LinqObj|T[]
+---@param lut table<T, true>
+---@return LinqObj|T[]
+function linq_meta_index:intersect_lut(lut)
+  return intersect_internal(self, nil, lut)
 end
 
 ---Results are distinct. If 2 different values select the same key, only the first one will be in the output.
@@ -930,7 +959,18 @@ end
 ---@param key_selector fun(value: T, index: integer): TKey
 ---@return LinqObj|T[]
 function linq_meta_index:intersect_by(key_collection, key_selector)
-  return intersect_internal(self, key_collection, key_selector)
+  return intersect_internal(self, key_collection, nil, key_selector)
+end
+
+---Results are distinct. If 2 different values select the same key, only the first one will be in the output.
+---@generic T
+---@generic TKey
+---@param self LinqObj|T[]
+---@param lut table<TKey, true>
+---@param key_selector fun(value: T, index: integer): TKey
+---@return LinqObj|T[]
+function linq_meta_index:intersect_lut_by(lut, key_selector)
+  return intersect_internal(self, nil, lut, key_selector)
 end
 
 ---@generic T
