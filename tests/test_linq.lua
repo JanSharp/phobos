@@ -476,13 +476,23 @@ do
   end)
 
   add_test("except_lut is nearly identical to except", function()
-    local obj = linq(get_test_strings()):except_lut{bar = true, [false] = true}
+    local got_lut = {bar = true, [false] = true}
+    local expected_lut = util.shallow_copy(got_lut)
+    local obj = linq(get_test_strings()):except_lut(got_lut)
     assert_iteration(obj, {"foo", "baz"})
+    assert.contents_equals(expected_lut, got_lut,
+      "the lookup table passed to 'except_lut' must not be modified"
+    )
   end)
 
   add_test("except_lut_by is nearly identical to except_by", function()
-    local obj = linq{"hi", "there", "friend"}:except_lut_by({[5] = true}, function(value) return #value end)
+    local got_lut = {[5] = true}
+    local expected_lut = util.shallow_copy(got_lut)
+    local obj = linq{"hi", "there", "friend"}:except_lut_by(got_lut, function(value) return #value end)
     assert_iteration(obj, {"hi", "friend"})
+    assert.contents_equals(expected_lut, got_lut,
+      "the lookup table passed to 'except_lut_by' must not be modified"
+    )
   end)
 
   add_test("first gets the first element", function()
