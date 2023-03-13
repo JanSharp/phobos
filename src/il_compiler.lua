@@ -1696,6 +1696,10 @@ do
       end
     end
 
+    for _, reg in ipairs(data.func.param_regs) do
+      reg.predetermined_reg_index = use_reg()
+    end
+
     for regs_for_inst in linq(ill.iterate_reverse(data.func.instructions)--[[@as fun(): ILInstruction?]])
       :group_by(function(inst) return inst.inst_group or inst end)
       :select(function(insts)
