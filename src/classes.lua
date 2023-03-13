@@ -614,6 +614,8 @@
 ---@class ILRegister : ILPointer
 ---@field ptr_type "reg"
 ---@field name string|nil
+---`requires_move_into_register_group` is always true for param regs because
+---parameters can never be used in place in reg groups
 ---@field is_parameter boolean
 ---@field requires_move_into_register_group boolean
 ---@field is_vararg boolean

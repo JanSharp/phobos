@@ -1097,6 +1097,7 @@ function generate_il_func(functiondef, options, parent_func)
   if functiondef.is_method then
     local reg = il.new_reg("self")
     reg.is_parameter = true
+    reg.requires_move_into_register_group = true -- parameters can never be used in place in reg groups
     func.param_regs[1] = reg
     func.temp.local_reg_lut[functiondef.locals[1]] = func.param_regs[1]
   end
@@ -1104,6 +1105,7 @@ function generate_il_func(functiondef, options, parent_func)
   for i, param in ipairs(functiondef.params) do
     local reg = il.new_reg(param.name)
     reg.is_parameter = true
+    reg.requires_move_into_register_group = true -- parameters can never be used in place in reg groups
     func.param_regs[i + param_offset] = reg
     set_local_reg(param, func.param_regs[i + param_offset], func)
   end
