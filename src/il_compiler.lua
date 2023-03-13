@@ -1729,7 +1729,7 @@ do
       end
       for reg in regs_for_inst.stopping_regs_iter do
         reg.predetermined_reg_index = reg.captured_as_upval and use_reg_for_upval() or use_reg()
-        if regs_to_instantly_free_again[reg] then
+        if regs_to_instantly_free_again and regs_to_instantly_free_again[reg] then
           free_reg(reg.predetermined_reg_index)
         end
       end
