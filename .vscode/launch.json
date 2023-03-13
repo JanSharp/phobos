@@ -176,6 +176,125 @@
       },
     },
     {
+      "name": "Lua debugging/main other file",
+      "type": "lua-local",
+      "request": "launch",
+      "linux": {
+        "args": [
+          // root
+          "src",
+          // c_lib_root
+          "bin/linux",
+          // c_lib_extension
+          ".so",
+          // main_filename
+          "debugging/main.lua",
+          // arguments passed along to the main file
+          "${input:debuggingOtherFile}",
+        ],
+        "program": {
+          "file": "src/entry_point.lua",
+          "lua": "bin/linux/lua",
+        },
+      },
+      "osx": {
+        "args": [
+          // root
+          "src",
+          // c_lib_root
+          "bin/osx",
+          // c_lib_extension
+          ".so",
+          // main_filename
+          "debugging/main.lua",
+          // arguments passed along to the main file
+          "${input:debuggingOtherFile}",
+        ],
+        "program": {
+          "file": "src/entry_point.lua",
+          "lua": "bin/osx/lua",
+        },
+      },
+      "windows": {
+        "args": [
+          // root
+          "src",
+          // c_lib_root
+          "bin/windows",
+          // c_lib_extension
+          ".dll",
+          // main_filename
+          "debugging/main.lua",
+          // arguments passed along to the main file
+          "${input:debuggingOtherFile}",
+        ],
+        "program": {
+          "file": "src/entry_point.lua",
+          "lua": "bin/windows/lua",
+        },
+      },
+    },
+    {
+      "name": "Phobos debugging/main other file",
+      "type": "lua-local",
+      "request": "launch",
+      "preLaunchTask": "Build Debug",
+      "linux": {
+        "args": [
+          // root
+          "out/debug",
+          // c_lib_root
+          "bin/linux",
+          // c_lib_extension
+          ".so",
+          // main_filename
+          "debugging/main.lua",
+          // arguments passed along to the main file
+          "${input:debuggingOtherFile}",
+        ],
+        "program": {
+          "file": "out/debug/entry_point.lua",
+          "lua": "bin/linux/lua",
+        },
+      },
+      "osx": {
+        "args": [
+          // root
+          "out/debug",
+          // c_lib_root
+          "bin/osx",
+          // c_lib_extension
+          ".so",
+          // main_filename
+          "debugging/main.lua",
+          // arguments passed along to the main file
+          "${input:debuggingOtherFile}",
+        ],
+        "program": {
+          "file": "out/debug/entry_point.lua",
+          "lua": "bin/osx/lua",
+        },
+      },
+      "windows": {
+        "args": [
+          // root
+          "out/debug",
+          // c_lib_root
+          "bin/windows",
+          // c_lib_extension
+          ".dll",
+          // main_filename
+          "debugging/main.lua",
+          // arguments passed along to the main file
+          "${input:debuggingOtherFile}",
+        ],
+        "program": {
+          "file": "out/debug/entry_point.lua",
+          "lua": "bin/windows/lua",
+        },
+      },
+    },
+    {
       "name": "Lua debugging/formatter",
       "type": "lua-local",
       "request": "launch",
@@ -1564,6 +1683,12 @@
     },
   ],
   "inputs": [
+    {
+      "id": "debuggingOtherFile",
+      "type": "promptString",
+      "description": "The name of the file to pass to debugging/main.lua.",
+      "password": false,
+    },
     {
       "id": "testId1",
       "type": "promptString",
