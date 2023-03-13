@@ -41,7 +41,9 @@
   "cSpell.words": [
     "binop",
     "binops",
+    "bnot",
     "breakstat",
+    "bxor",
     "bytecode",
     "chdir",
     "concat",
@@ -90,7 +92,6 @@
     "maxlevel",
     "maxnum",
     "metatable",
-    "metatables",
     "metatables",
     "metatostring",
     "mkdir",

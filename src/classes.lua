@@ -579,6 +579,9 @@
 ---@field groups_lut table<ILRegisterGroup, true>
 ---@field groups ILRegisterGroup[] @ sorted by `group.inst.index` ascending
 -- ---@field forced_offsets ILLinkedRegisterGroup.ForcedOffsets[]
+---
+---Evaluated in the step after best register indexes within the linked groups have been determined
+---@field predetermined_base_index integer @ zero based
 
 ---This data structure is created right before compilation as it is only needed during compilation
 ---@class ILRegisterGroup
@@ -590,10 +593,13 @@
 -- ---@field first_reg_index integer?
 ---@field offset_to_next_group integer?
 ---
----Temporary during reg group index evaluation
+---Temporary during determination of best index offsets
 ---@field offset_to_prev_group integer?
 ---@field prev_group ILRegisterGroup?
 ---@field next_group ILRegisterGroup?
+---
+---Set when/after best register indexes have been determined
+---@field index_in_linked_groups integer @ zero based
 
 ---@alias ILPointerType
 ---| "reg"
@@ -622,8 +628,10 @@
 ---@field current_reg ILCompiledRegister
 ---temp compilation data
 ---@field reg_groups ILRegisterGroup[]?
+---zero based\
+---when not `nil` then there's at least 1 register group this register must not be moved into/has a fixed index
 ---@field index_in_linked_groups integer?
----@field predetermined_reg_index integer
+---@field predetermined_reg_index integer @ zero based
 
 ---@class ILVarargRegister : ILRegister
 ---@field name nil
@@ -787,6 +795,7 @@
 ---@field regs_start_at_lut table<ILRegister, boolean>?
 ---@field regs_stop_at_list ILRegister[]?
 ---@field regs_stop_at_lut table<ILRegister, boolean>?
+---All regs alive at this instruction, including ones starting or stopping at it. Has no guaranteed order.
 ---@field live_regs ILRegister[]
 ---@field pre_state ILState
 ---@field post_state ILState
@@ -794,8 +803,8 @@
 ---@field output_reg_group ILRegisterGroup?
 
 ---@class ILInstructionList : IntrusiveIndexedLinkedList<ILInstruction>
----@field first ILInstruction? @ (overridden)
----@field last ILInstruction? @ (overridden)
+---@field first ILInstruction @ (overridden) empty instruction lists are malformed, therefore never `nil`
+---@field last ILInstruction @ (overridden) empty instruction lists are malformed, therefore never `nil`
 
 ---@class ILState
 ---@field reg_types table<ILRegister, ILType>

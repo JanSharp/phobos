@@ -3,6 +3,7 @@ local util = require("util")
 local number_ranges = require("number_ranges")
 local error_code_util = require("error_code_util")
 local ill = require("indexed_linked_list")
+local linq = require("linq")
 
 ----------------------------------------------------------------------------------------------------
 -- instructions
@@ -439,6 +440,156 @@ local function new_nil()
   ---@type ILNil
   local ptr = new_ptr("nil")
   return ptr
+end
+
+----------------------------------------------------------------------------------------------------
+-- instruction helpers
+----------------------------------------------------------------------------------------------------
+
+---@param inst_or_group ILInstruction|ILInstructionGroup
+---@return boolean
+local function is_inst_group(inst_or_group)
+  return inst_or_group.group_type--[[@as boolean]]
+end
+
+---@param inst_or_group ILInstruction|ILInstructionGroup
+---@return ILInstruction|ILInstructionGroup
+local function get_inst_or_group(inst_or_group)
+  return is_inst_group(inst_or_group) and inst_or_group
+    or inst_or_group.inst_group or inst_or_group
+end
+
+---@param inst_or_group ILInstruction|ILInstructionGroup
+---@return ILInstruction|ILInstructionGroup?
+local function get_prev_inst_or_group(inst_or_group)
+  if is_inst_group(inst_or_group) then
+    return get_inst_or_group(inst_or_group.start.prev)
+  else
+    return get_inst_or_group(inst_or_group.prev)
+  end
+end
+
+---@param inst_or_group ILInstruction|ILInstructionGroup
+---@return ILInstruction|ILInstructionGroup?
+local function get_next_inst_or_group(inst_or_group)
+  if is_inst_group(inst_or_group) then
+    return get_inst_or_group(inst_or_group.stop.next)
+  else
+    return get_inst_or_group(inst_or_group.next)
+  end
+end
+
+---Iterates instructions, but when encountering an instruction which is apart of an instruction group, it
+---returns that group instead, followed by the first instruction or group past that group.\
+---Effectively seeing instruction groups as single instructions
+---@param il_func ILFunction
+---@param start_inst_or_group ILInstruction|ILInstructionGroup?
+---@param stop_inst_or_group ILInstruction|ILInstructionGroup?
+---@return fun(): (ILInstruction|ILInstructionGroup?) iterator
+local function iterate_insts_and_groups(il_func, start_inst_or_group, stop_inst_or_group)
+  start_inst_or_group = start_inst_or_group or il_func.instructions.first
+  stop_inst_or_group = stop_inst_or_group or il_func.instructions.last
+  local current_inst_or_group = get_inst_or_group(start_inst_or_group)
+  stop_inst_or_group = get_inst_or_group(stop_inst_or_group)
+  return function()
+    local result = current_inst_or_group
+    if current_inst_or_group == stop_inst_or_group then
+      current_inst_or_group = (nil)--[[@as ILInstruction|ILInstructionGroup]]
+      stop_inst_or_group = nil
+      return result
+    end
+    ---@cast current_inst_or_group -nil
+    current_inst_or_group = get_inst_or_group((is_inst_group(current_inst_or_group)
+      and current_inst_or_group.stop.next
+      or current_inst_or_group.next)--[[@as ILInstruction]])
+    return result
+  end
+end
+
+---@param inst_group ILInstructionGroup
+---@return fun(): (ILInstruction?)
+local function iterate_insts_in_group(inst_group)
+  return ill.iterate(inst_group.start.list, inst_group.start, inst_group.stop)
+end
+
+---@param inst_or_group ILInstruction|ILInstructionGroup
+---@return ILRegister[]
+local function get_live_regs(inst_or_group)
+  if is_inst_group(inst_or_group) then
+    ---@cast inst_or_group ILInstructionGroup
+    if inst_or_group.start == inst_or_group.stop then
+      util.debug_abort("Hold up, why is there an instruction _group_ with only _one_ instruction?!")
+      return inst_or_group.start.live_regs
+    end
+    return linq(inst_or_group.start.live_regs)
+      :union(inst_or_group.stop.live_regs)
+      -- remove all regs that are only alive within the inst group
+      -- TODO: add and use internal flag on registers for this check instead of this range logic
+      :except(
+        linq(inst_or_group.start.regs_start_at_list)
+          :where(function(reg) return reg.stop_at.index <= inst_or_group.stop.index end)
+          :append(linq(inst_or_group.stop.regs_stop_at_list)
+            :where(function(reg) return inst_or_group.start.index <= reg.start_at.index end)
+        )
+      )
+    ;
+  else
+    return inst_or_group.live_regs
+  end
+end
+
+---@param inst_or_group ILInstruction|ILInstructionGroup
+---@return ILRegister[]
+local function get_regs_stop_at_list(inst_or_group)
+  if is_inst_group(inst_or_group) then
+    ---@cast inst_or_group ILInstructionGroup
+    return linq(iterate_insts_in_group(inst_or_group))
+      :select_many(function(inst) return inst.regs_stop_at_list end)
+      :to_array()
+    ;
+  else
+    return inst_or_group.regs_stop_at_list
+  end
+end
+
+---@param inst_or_group ILInstruction|ILInstructionGroup
+---@return table<ILRegister, true>
+local function get_regs_stop_at_lut(inst_or_group)
+  if is_inst_group(inst_or_group) then
+    ---@cast inst_or_group ILInstructionGroup
+    return linq(iterate_insts_in_group(inst_or_group))
+      :select_many(function(inst) return inst.regs_stop_at_list end)
+      :to_lookup()
+    ;
+  else
+    return inst_or_group.regs_stop_at_lut
+  end
+end
+
+---@param inst_or_group ILInstruction|ILInstructionGroup
+---@return ILRegister[]
+local function get_regs_start_at_list(inst_or_group)
+  if is_inst_group(inst_or_group) then
+    ---@cast inst_or_group ILInstructionGroup
+    return linq(iterate_insts_in_group(inst_or_group))
+      :select_many(function(inst) return inst.regs_start_at_list end)
+      :to_array()
+  else
+    return inst_or_group.regs_start_at_list
+  end
+end
+
+---@param inst_or_group ILInstruction|ILInstructionGroup
+---@return table<ILRegister, true>
+local function get_regs_start_at_lut(inst_or_group)
+  if is_inst_group(inst_or_group) then
+    ---@cast inst_or_group ILInstructionGroup
+    return linq(iterate_insts_in_group(inst_or_group))
+      :select_many(function(inst) return inst.regs_start_at_list end)
+      :to_lookup()
+  else
+    return inst_or_group.regs_start_at_lut
+  end
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -1369,7 +1520,7 @@ do
       end
     end
     if bit32.band(base_type.type_flags, string_flag) then
-      util.debug_print("-- TODO: newindex into strings might be possible with a '__newindex', \z
+      util.debug_print("-- TODO: new index into strings might be possible with a '__newindex', \z
         but it's a really dumb thing to do so this should probably warn regardless. To handle it \z
         properly we need an understanding of globals to check if '_ENV.string` has a '__newindex'."
       )
@@ -2127,6 +2278,20 @@ return {
   new_string = new_string,
   new_boolean = new_boolean,
   new_nil = new_nil,
+
+  -- instruction helpers
+
+  is_inst_group = is_inst_group,
+  get_inst_or_group = get_inst_or_group,
+  get_prev_inst_or_group = get_prev_inst_or_group,
+  get_next_inst_or_group = get_next_inst_or_group,
+  iterate_insts_and_groups = iterate_insts_and_groups,
+  iterate_insts_in_group = iterate_insts_in_group,
+  get_live_regs = get_live_regs,
+  get_regs_stop_at_list = get_regs_stop_at_list,
+  get_regs_stop_at_lut = get_regs_stop_at_lut,
+  get_regs_start_at_list = get_regs_start_at_list,
+  get_regs_start_at_lut = get_regs_start_at_lut,
 
   -- types
 

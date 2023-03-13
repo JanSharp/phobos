@@ -1410,6 +1410,8 @@ do
 
       ---@type table<ILRegister, integer>
       local winning_reg_indexes
+      ---@type table<ILRegisterGroup, integer>
+      local winning_group_indexes
       local winning_score
 
       local set_reg_index
@@ -1612,6 +1614,7 @@ do
           local score = eval_score()
           if score and (not winning_score or score < winning_score) then
             winning_reg_indexes = util.shallow_copy(reg_indexes)
+            winning_group_indexes = util.shallow_copy(group_indexes)
             winning_score = score
           end
           return
@@ -1635,10 +1638,14 @@ do
       end
 
       -- save the winning indexes on the registers
-      local adjustment_index_offset = -linq(util.iterate_values(winning_reg_indexes)):min()
+      local adjustment_index_offset = -linq(util.iterate_values(winning_group_indexes)):min()
+      for _, group in ipairs(linked_groups.groups) do
+        group.index_in_linked_groups = winning_group_indexes[group] + adjustment_index_offset
+      end
       for reg in linq(linked_groups.groups)
         :select_many(function(group) return group.regs end)
         :distinct()
+        :where(function(reg) return not reg.is_gap end)
         :iterate()
       do
         local relative_index = winning_reg_indexes[reg]
@@ -1737,6 +1744,83 @@ do
   end
 
   ---@param data ILCompilerData
+  ---@param linked_groups ILLinkedRegisterGroupsGroup
+  local function determine_indexes_for_linked_groups(data, linked_groups)
+    local empty = {}
+    ---@param start_inst ILInstruction
+    ---@param stop_inst ILInstruction
+    local function get_highest_predetermined_index_in_range(start_inst, stop_inst)
+      local start = il.get_inst_or_group(start_inst)
+      local stop = il.get_inst_or_group(stop_inst)
+      if start == stop then
+        return linq(il.get_live_regs(start))
+          :except_lut(il.get_regs_stop_at_list(start) or empty)
+          :except_lut(il.get_regs_start_at_list(start) or empty)
+          -- gaps don't exist in live_regs, but even if they did they'd just return -1
+          :select(function(reg) return reg.predetermined_reg_index or -1 end)
+          :default_if_empty(-1)
+          :max()
+        ;
+      end
+
+      return linq(il.get_live_regs(start))
+        :except_lut(il.get_regs_stop_at_lut(start) or empty)
+        :append(
+          -- get_prev_inst_or_group because we don't want to include the regs that start at the last instruction.
+          -- regs starting at start_inst are already included live_regs, but we can't skip it because that
+          -- could cause the start instruction to be past the stop instruction for the iterator, so it would
+          -- never reach the stop instruction resulting in an error.
+          linq(il.iterate_insts_and_groups(data.func, start, il.get_prev_inst_or_group(stop)))
+            :skip(1) -- the first one's start at list is already included in the initial live_regs
+            -- we don't care when they stop
+            :select_many(function(inst_or_group) return il.get_regs_start_at_list(inst_or_group) or empty end)
+        )
+        -- gaps don't exist in live_regs nor start at lists, but even if they did they'd just return -1
+        :select(function(reg) return reg.predetermined_reg_index or -1 end)
+        :default_if_empty(-1)
+        :max()
+      ;
+    end
+
+    local regs = linq(linked_groups.groups)
+      :select_many(function(group) return group.regs end)
+      :distinct()
+      :where(function(reg) return reg.index_in_linked_groups and not reg.is_gap or false end)
+    ;
+
+    local base_index = regs:copy()
+      :select(function(reg) -- select the lowest index this register could be at
+        return linq(reg.reg_groups)
+          :where(function(reg_group)
+            -- only check groups which are actually apart of this these linked groups
+            -- and where the register doesn't require a move into the register list, so it is usd in place
+            return reg_group.linked_groups == linked_groups and linq(reg_group.regs):any(function(r, index)
+              return r == reg and (reg_group.index_in_linked_groups + index - 1 == reg.index_in_linked_groups)
+            end)
+          end)
+          :select(function(reg_group) -- it must have enough room under it in each group it is apart of
+            return get_highest_predetermined_index_in_range(reg_group.inst, reg_group.inst)
+              + 1 - reg.index_in_linked_groups
+          end)
+          :append{ -- and it must be above all other registers during its entire lifetime
+            get_highest_predetermined_index_in_range(reg.start_at, reg.stop_at)
+              + 1 - reg.index_in_linked_groups,
+          }
+          :max()
+        ;
+      end)
+      :max()
+    ;
+
+    linked_groups.predetermined_base_index = base_index
+    for reg in regs:iterate() do
+      reg.predetermined_reg_index = base_index + reg.index_in_linked_groups
+    end
+
+    -- TODO: detect if there is a MOVE loop which will require a temporary register. If yes, increment base_index once
+  end
+
+  ---@param data ILCompilerData
   function pre_compilation_process(data)
     -- TODO: remove once I'm sure the is_parameter flag on registers is good
     -- group_registers(data, nil, false, data.func.param_regs, 1)
@@ -1747,6 +1831,9 @@ do
     for linked_groups in pairs(util.shallow_copy(data.all_linked_groups_lut)) do
       split_linked_groups_recursive(data, linked_groups)
     end
+
+    -- TODO: make sure all of these functions can handle linked groups with just one group
+    -- and linked groups where all registers require moves
 
     -- populate groups list from groups_lut
     for linked_groups in pairs(data.all_linked_groups_lut) do
@@ -1767,6 +1854,11 @@ do
     end
 
     evaluate_indexes_for_regs_outside_of_groups(data)
+    for _, linked_groups in ipairs(all_linked_groups) do
+      determine_indexes_for_linked_groups(data, linked_groups)
+    end
+
+    -- TODO: insert moves for registers which require moves into or out of register groups
   end
 end
 
