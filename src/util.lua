@@ -45,6 +45,7 @@ local function clear_array(t)
   end
 end
 
+---Uses `table.remove`.
 ---@generic T
 ---@param array T[]
 ---@param element T
@@ -52,6 +53,21 @@ local function remove_from_array(array, element)
   for i = 1, #array do
     if array[i] == element then
       table.remove(array, i)
+      break
+    end
+  end
+end
+
+---Moves the last element into the gap instead of using `table.remove`.
+---@generic T
+---@param array T[]
+---@param element T
+local function remove_from_array_fast(array, element)
+  local count = #array
+  for i = 1, count  do
+    if array[i] == element then
+      array[i] = array[count]
+      array[count] = nil
       break
     end
   end
@@ -351,6 +367,7 @@ return {
   clear_table = clear_table,
   clear_array = clear_array,
   remove_from_array = remove_from_array,
+  remove_from_array_fast = remove_from_array_fast,
   replace_table = replace_table,
   shallow_copy = shallow_copy,
   optional_shallow_copy = optional_shallow_copy,

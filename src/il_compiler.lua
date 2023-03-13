@@ -1743,6 +1743,90 @@ do
     end
   end
 
+  ---@param linked_groups ILLinkedRegisterGroupsGroup
+  ---@param reg_group ILRegisterGroup
+  ---@return {from_index: integer, to_index: integer, reg: ILRegister}[] @
+  ---Wether the `reg` is the source or the target of the move depends on if the group is an input or output
+  ---group. If it is an input group, it is the source reg. If it is an output group, it is the target reg.
+  local function get_moves_required_for_group(linked_groups, reg_group)
+    local moves_data = {}
+    local group_base_index = linked_groups.predetermined_base_index + reg_group.index_in_linked_groups
+    local inside_index_key = reg_group.is_input and "from_index" or "to_index"
+    local outside_index_key = reg_group.is_input and "to_index" or "from_index"
+    for i, reg in ipairs(reg_group.regs) do
+      if reg.is_gap then goto continue end
+      local inside_index = group_base_index + i - 1
+      local outside_index = reg.predetermined_reg_index
+      if inside_index ~= outside_index then
+        moves_data[#moves_data+1] = {
+          reg = reg,
+          [inside_index_key] = inside_index,
+          [outside_index_key] = outside_index,
+        }
+      end
+      ::continue::
+    end
+    return moves_data
+  end
+
+  ---@param linked_groups ILLinkedRegisterGroupsGroup
+  ---@param reg_group ILRegisterGroup
+  ---@return {moves: {from_index: integer, to_index: integer, reg: ILRegister}[], is_circular: boolean}[]
+  local function get_linked_moves_required_for_group(linked_groups, reg_group)
+    local all_linked_moves = {}
+    local linked_moves_lut = {}
+    local function add_to_linked(linked, move)
+      linked_moves_lut[move.from_index] = linked
+      linked_moves_lut[move.to_index] = linked
+      linked.moves[#linked.moves+1] = move
+      local from_and_to_counts = linked.from_and_to_counts
+      from_and_to_counts[move.from_index] = (from_and_to_counts[move.from_index] or 0) + 1
+      from_and_to_counts[move.to_index] = (from_and_to_counts[move.to_index] or 0) + 1
+    end
+    local function make_new_linked(move)
+      local linked = {moves = {}, from_and_to_counts = {}}
+      all_linked_moves[#all_linked_moves+1] = linked
+      add_to_linked(linked, move)
+    end
+    local function merge_linked(base, to_merge)
+      local base_moves_count = #base.moves
+      for i, move in ipairs(to_merge.moves) do
+        base.moves[base_moves_count + i] = move
+      end
+      local counts = base.from_and_to_counts
+      for reg_index, count in pairs(to_merge.from_and_to_counts) do
+        counts[reg_index] = (counts[reg_index] or 0) + count
+      end
+      util.remove_from_array_fast(all_linked_moves, to_merge)
+    end
+
+    for _, move in ipairs(get_moves_required_for_group(linked_groups, reg_group)) do
+      local from_linked = linked_moves_lut[move.from_index]
+      local to_linked = linked_moves_lut[move.to_index]
+      if from_linked and to_linked then
+        if from_linked ~= to_linked then
+          merge_linked(from_linked, to_linked)
+        end
+        add_to_linked(from_linked, move)
+      elseif from_linked or to_linked then
+        add_to_linked(from_linked or to_linked, move)
+      else
+        make_new_linked(move)
+      end
+    end
+
+    if linq(all_linked_moves)
+      :any(function(linked)
+        return linq(util.iterate_values(linked.from_and_to_counts))
+          :all(function(count) return count >= 2 end)
+      end)
+    then
+      all_linked_moves.is_circular = true
+    end
+
+    return all_linked_moves
+  end
+
   ---@param data ILCompilerData
   ---@param linked_groups ILLinkedRegisterGroupsGroup
   local function determine_indexes_for_linked_groups(data, linked_groups)
@@ -1782,13 +1866,14 @@ do
       ;
     end
 
-    local regs = linq(linked_groups.groups)
+    local relevant_regs = linq(linked_groups.groups)
       :select_many(function(group) return group.regs end)
       :distinct()
       :where(function(reg) return reg.index_in_linked_groups and not reg.is_gap or false end)
+      :to_array()
     ;
 
-    local base_index = regs:copy()
+    local base_index = linq(relevant_regs)
       :select(function(reg) -- select the lowest index this register could be at
         return linq(reg.reg_groups)
           :where(function(reg_group)
@@ -1812,12 +1897,36 @@ do
       :max()
     ;
 
-    linked_groups.predetermined_base_index = base_index
-    for reg in regs:iterate() do
-      reg.predetermined_reg_index = base_index + reg.index_in_linked_groups
+    local function apply_base_index()
+      linked_groups.predetermined_base_index = base_index
+      for i, reg in ipairs(relevant_regs) do
+        reg.predetermined_reg_index = base_index + reg.index_in_linked_groups
+      end
     end
+    apply_base_index()
 
-    -- TODO: detect if there is a MOVE loop which will require a temporary register. If yes, increment base_index once
+    -- NOTE: the loop detection logic is entirely untested as of yet, because I can't easily create a test case.
+
+    -- detect if there is a circular MOVE which will require a temp reg. If yes, increment base_index
+    for _, group in ipairs(linked_groups.groups) do
+      if linq(group.regs):any(function(reg) return reg.is_gap end)
+        -- ^ There's a gap in the regs somewhere. If all non loop moves are done first then by the time any
+        -- move loops have to move stuff around the gap will be free no matter what.
+        or get_highest_predetermined_index_in_range(group.inst, group.inst) + 1 < base_index
+        -- ^ there's room under the reg group
+      then
+        -- There is a free register for potential move loops to use, this group is fine as is. Next.
+        goto continue
+      end
+
+      local all_linked_moves = get_linked_moves_required_for_group(linked_groups, group)
+      if linq(all_linked_moves):any(function(linked) return linked.is_circular end) then
+        base_index = base_index + 1
+        apply_base_index()
+        break
+      end
+      ::continue::
+    end
   end
 
   ---@param data ILCompilerData
