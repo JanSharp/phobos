@@ -2012,6 +2012,7 @@ local function compile(func)
     func = func,
     local_reg_count = 0,
     local_reg_gaps = {},
+    -- TODO: check if the `index` is even used. If not, just use a plain linked list
     compiled_instructions = ill.new(),
     compiled_registers = {},
     compiled_registers_count = 0,

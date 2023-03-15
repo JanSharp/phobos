@@ -2190,9 +2190,6 @@ local function update_intermediate_data(func, inst)
   if func.has_reg_usage then
     determine_reg_usage_for_inst(inst)
   end
-  if func.has_blocks then
-    normalize_blocks_for_inst(inst)
-  end
 end
 
 ---@param func ILFunction
@@ -2205,6 +2202,9 @@ local function insert_after_inst(func, inst, inserted_inst)
   end
   ill.insert_after(inst, inserted_inst)
   update_intermediate_data(func, inserted_inst)
+  if func.has_blocks then
+    normalize_blocks_for_inst(inserted_inst)
+  end
   return inserted_inst
 end
 
@@ -2218,6 +2218,9 @@ local function insert_before_inst(func, inst, inserted_inst)
   end
   ill.insert_before(inst, inserted_inst)
   update_intermediate_data(func, inserted_inst)
+  if func.has_blocks then
+    normalize_blocks_for_inst(inserted_inst)
+  end
   return inserted_inst
 end
 
@@ -2227,6 +2230,9 @@ end
 local function prepend_inst(func, inserted_inst)
   ill.prepend(func.instructions, inserted_inst)
   update_intermediate_data(func, inserted_inst)
+  if func.has_blocks then
+    normalize_blocks_for_inst(inserted_inst)
+  end
   return inserted_inst
 end
 
@@ -2236,6 +2242,9 @@ end
 local function append_inst(func, inserted_inst)
   ill.append(func.instructions, inserted_inst)
   update_intermediate_data(func, inserted_inst)
+  if func.has_blocks then
+    normalize_blocks_for_inst(inserted_inst)
+  end
   return inserted_inst
 end
 
