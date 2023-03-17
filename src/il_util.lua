@@ -2196,7 +2196,7 @@ local function insert_after_inst(func, inst, inserted_inst)
   ill.insert_after(func.instructions, inst, inserted_inst)
   update_intermediate_data(func, inserted_inst)
   if func.has_blocks then
-    normalize_blocks_for_inst(inserted_inst)
+    normalize_blocks_for_inst(func, inserted_inst)
   end
   return inserted_inst
 end
@@ -2212,7 +2212,7 @@ local function insert_before_inst(func, inst, inserted_inst)
   ill.insert_before(func.instructions, inst, inserted_inst)
   update_intermediate_data(func, inserted_inst)
   if func.has_blocks then
-    normalize_blocks_for_inst(inserted_inst)
+    normalize_blocks_for_inst(func, inserted_inst)
   end
   return inserted_inst
 end
@@ -2224,7 +2224,7 @@ local function prepend_inst(func, inserted_inst)
   ill.prepend(func.instructions, inserted_inst)
   update_intermediate_data(func, inserted_inst)
   if func.has_blocks then
-    normalize_blocks_for_inst(inserted_inst)
+    normalize_blocks_for_inst(func, inserted_inst)
   end
   return inserted_inst
 end
@@ -2236,7 +2236,7 @@ local function append_inst(func, inserted_inst)
   ill.append(func.instructions, inserted_inst)
   update_intermediate_data(func, inserted_inst)
   if func.has_blocks then
-    normalize_blocks_for_inst(inserted_inst)
+    normalize_blocks_for_inst(func, inserted_inst)
   end
   return inserted_inst
 end
