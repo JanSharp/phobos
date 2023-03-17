@@ -147,6 +147,18 @@ add_phobos_profiles{
   main_filename = "debugging/main.lua",
   args = {"temp/test.lua"},
 }
+add_input{
+  id = "debuggingOtherFile",
+  type = "promptString",
+  description = "The name of the file to pass to debugging/main.lua.",
+  default = nil,
+  password = false,
+}
+add_phobos_profiles{
+  name = "debugging/main other file",
+  main_filename = "debugging/main.lua",
+  args = {"${input:debuggingOtherFile}"},
+}
 add_phobos_profiles{
   name = "debugging/formatter",
   main_filename = "debugging/formatter.lua",

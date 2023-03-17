@@ -49,7 +49,7 @@ local on_open = {
     if ast.is_falsy(node.condition) then -- falsy
       local func_def = ast.get_functiondef(node) -- node/whilestat is a scope
       remove_func_defs_in_scope(func_def, node)
-      ast.remove_stat(node) -- remove is the last operation on the body
+      ast.remove_stat(func_def.body, node) -- remove is the last operation on the body
     elseif ast.is_const_node(node.condition) then -- truthy
       node.node_type = "loopstat"
       node.do_jump_back = true
@@ -102,7 +102,7 @@ local on_open = {
         end
         testblock.then_token = nil
         testblock.end_token = node.end_token
-        ast.insert_after_stat(node, testblock)
+        ast.insert_after_stat(func_def.body, node, testblock)
         break
       end
       i = i + 1
@@ -120,7 +120,7 @@ local on_open = {
         elseblock.end_token = node.end_token
         ast.replace_stat(node, elseblock)
       else
-        ast.remove_stat(node) -- remove is the last operation on the body
+        ast.remove_stat(func_def.body, node) -- remove is the last operation on the body
       end
     end
   end,

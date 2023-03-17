@@ -234,40 +234,46 @@ function ill:clear()
   self.lookup = {}
 end
 
-function ill.insert_before(node, value)
-  if node.prev then
-    return insert_between(node.list, node.prev, node, value, false)
+---If `node` is `nil` it will append
+function ill:insert_before(node, value)
+  if not node then
+    return ill.append(self, value)
+  elseif node.prev then
+    return insert_between(self, node.prev, node, value, false)
   else
-    return ill.prepend(node.list, value)
+    return ill.prepend(self, value)
   end
 end
 
-function ill.insert_after(node, value)
-  if node.next then
-    return insert_between(node.list, node, node.next, value, true)
+---If `node` is `nil` it will prepend
+function ill:insert_after(node, value)
+  if not node then
+    return ill.prepend(self, value)
+  elseif node.next then
+    return insert_between(self, node, node.next, value, true)
   else
-    return ill.append(node.list, value)
+    return ill.append(self, value)
   end
 end
 
-function ill.remove(node)
-  node.list.lookup[node.index] = nil
+function ill:remove(node)
+  self.lookup[node.index] = nil
   if node.next then
     node.next.prev = node.prev
   else
-    node.list.last = node.prev
+    self.last = node.prev
   end
   if node.prev then
     node.prev.next = node.next
   else
-    node.list.first = node.next
+    self.first = node.next
   end
-  node.list.count = node.list.count - 1
+  self.count = self.count - 1
   return node
 end
 
-function ill.is_alive(node)
-  return node.list.lookup[node.index] == node
+function ill:is_alive(node)
+  return self.lookup[node.index] == node
 end
 
 return ill

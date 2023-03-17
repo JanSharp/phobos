@@ -1596,8 +1596,9 @@ local function create_links_for_block(block)
 end
 
 local block_ends = util.invert{"jump", "test", "ret"}
+---@param func ILFunction
 ---@param inst ILInstruction
-local function normalize_blocks_for_inst(inst)
+local function normalize_blocks_for_inst(func, inst)
   -- determine if we can connect with the block of the previous instruction
   local can_use_prev_block = inst.prev and not block_ends[inst.prev.inst_type] and inst.inst_type ~= "label"
   -- determine if we can connect with the block of the next instruction
@@ -1617,15 +1618,7 @@ local function normalize_blocks_for_inst(inst)
   end
   -- can't use either of them, create new block
   local block = new_block(inst, inst)
-  if inst.prev then
-    ill.insert_after(inst.prev.block, block)
-  elseif inst.next then
-    ill.insert_before(inst.next.block, block)
-  else
-    util.debug_abort("It's currently impossible for an ILFunction to not have any instructions \z
-      which means an instruction without prev and without next is impossible."
-    )
-  end
+  ill.insert_after(func.blocks, inst.prev and inst.prev.block, block)
   -- deal with source_links
   if inst.prev then
     if inst.prev.inst_type ~= "jump" and inst.prev.inst_type ~= "ret" then
@@ -2200,7 +2193,7 @@ local function insert_after_inst(func, inst, inserted_inst)
   if inst.inst_group and inst ~= inst.inst_group.stop then
     util.debug_abort("Attempt to insert an instruction inside of an inst_group (which are immutable).")
   end
-  ill.insert_after(inst, inserted_inst)
+  ill.insert_after(func.instructions, inst, inserted_inst)
   update_intermediate_data(func, inserted_inst)
   if func.has_blocks then
     normalize_blocks_for_inst(inserted_inst)
@@ -2216,7 +2209,7 @@ local function insert_before_inst(func, inst, inserted_inst)
   if inst.inst_group and inst ~= inst.inst_group.start then
     util.debug_abort("Attempt to insert an instruction inside of an inst_group (which are immutable).")
   end
-  ill.insert_before(inst, inserted_inst)
+  ill.insert_before(func.instructions, inst, inserted_inst)
   update_intermediate_data(func, inserted_inst)
   if func.has_blocks then
     normalize_blocks_for_inst(inserted_inst)

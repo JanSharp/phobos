@@ -234,6 +234,7 @@ function ast.get_parent_scope(scope, node_type)
   return scope
 end
 
+---@return AstFunctionDef
 function ast.get_functiondef(scope)
   return ast.get_parent_scope(scope, "functiondef")
 end
