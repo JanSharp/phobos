@@ -254,7 +254,7 @@ function walk_stat(stat, context)
   stack.push(context.node_stack, stat)
   stack.push(context.stat_stack, stat)
   dispatch(context.on_open, stat, context, true)
-  if ill.is_alive(stat) then
+  if ill.is_alive(stat.list, stat) then
     stats[stat.node_type](stat, context)
   end
   dispatch(context.on_close, stat, context, true)

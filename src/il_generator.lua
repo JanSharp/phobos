@@ -317,9 +317,8 @@ do
       local instruction_before_set_list
       local function generate_set_list(position)
         ill.insert_after(
-          use_same_behavior_as_lua
-            and func.instructions.last
-            or instruction_before_set_list,
+          func.instructions,
+          use_same_behavior_as_lua and func.instructions.last or instruction_before_set_list,
           il.new_set_list{
             position = position or instruction_before_set_list.position,
             table_reg = table_reg,
