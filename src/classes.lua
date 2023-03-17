@@ -586,7 +586,7 @@
 ---This data structure is created right before compilation as it is only needed during compilation
 ---@class ILRegisterGroup
 ---@field linked_groups ILLinkedRegisterGroupsGroup
----@field inst ILInstruction?
+---@field inst ILInstruction
 ---@field regs ILRegister[]
 ---@field is_input boolean @ `false` means "is output"
 ---the index for the first register in the `regs` array, once it has been determined
@@ -597,6 +597,10 @@
 ---@field offset_to_prev_group integer?
 ---@field prev_group ILRegisterGroup?
 ---@field next_group ILRegisterGroup?
+---
+---Temporary during insertion of move instructions
+---@field replaced_regs ({index: integer, old_reg: ILRegister}[])?
+---@field replaced_regs_lut table<integer, ILRegister>?
 ---
 ---Set when/after best register indexes have been determined
 ---@field index_in_linked_groups integer @ zero based

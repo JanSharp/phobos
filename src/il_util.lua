@@ -2241,6 +2241,238 @@ local function append_inst(func, inserted_inst)
   return inserted_inst
 end
 
+---@param func ILFunction
+---@param forprep_group ILForprepGroup
+---@param new_index_reg ILRegister
+local function replace_forprep_index_reg(func, forprep_group, new_index_reg)
+  local old_reg = forprep_group.index_reg
+  forprep_group.index_reg = new_index_reg
+
+  local iter = ill.iterate(func.instructions, forprep_group.start)
+  do -- to_number for index_reg
+    local inst = iter()--[[@as ILToNumber]]
+    remove_reg_from_inst_get(func, inst, old_reg)
+    inst.right_ptr = new_index_reg
+    add_reg_to_inst_get(func, inst, new_index_reg)
+    remove_reg_from_inst_set(func, inst, old_reg)
+    inst.result_reg = new_index_reg
+    add_reg_to_inst_set(func, inst, new_index_reg)
+  end
+  iter() -- skip to_number for limit_reg
+  iter() -- skip to_number for step_reg
+  do -- binop to subtract step from index
+    local inst = iter()--[[@as ILBinop]]
+    remove_reg_from_inst_get(func, inst, old_reg)
+    inst.left_ptr = new_index_reg
+    add_reg_to_inst_get(func, inst, new_index_reg)
+    remove_reg_from_inst_set(func, inst, old_reg)
+    inst.result_reg = new_index_reg
+    add_reg_to_inst_set(func, inst, new_index_reg)
+  end
+end
+
+---@param func ILFunction
+---@param forprep_group ILForprepGroup
+---@param new_limit_reg ILRegister
+local function replace_forprep_limit_reg(func, forprep_group, new_limit_reg)
+  local old_reg = forprep_group.limit_reg
+  forprep_group.limit_reg = new_limit_reg
+
+  local iter = ill.iterate(func.instructions, forprep_group.start)
+  iter() -- skip to_number for index_reg
+  do -- to_number for limit_reg
+    local inst = iter()--[[@as ILToNumber]]
+    remove_reg_from_inst_get(func, inst, old_reg)
+    inst.right_ptr = new_limit_reg
+    add_reg_to_inst_get(func, inst, new_limit_reg)
+    remove_reg_from_inst_set(func, inst, old_reg)
+    inst.result_reg = new_limit_reg
+    add_reg_to_inst_set(func, inst, new_limit_reg)
+  end
+end
+
+---@param func ILFunction
+---@param forprep_group ILForprepGroup
+---@param new_step_reg ILRegister
+local function replace_forprep_step_reg(func, forprep_group, new_step_reg)
+  local old_reg = forprep_group.step_reg
+  forprep_group.step_reg = new_step_reg
+
+  local iter = ill.iterate(func.instructions, forprep_group.start)
+  iter() -- skip to_number for index_reg
+  iter() -- skip to_number for limit_reg
+  do -- to_number for step_reg
+    local inst = iter()--[[@as ILToNumber]]
+    remove_reg_from_inst_get(func, inst, old_reg)
+    inst.right_ptr = new_step_reg
+    add_reg_to_inst_get(func, inst, new_step_reg)
+    remove_reg_from_inst_set(func, inst, old_reg)
+    inst.result_reg = new_step_reg
+    add_reg_to_inst_set(func, inst, new_step_reg)
+  end
+  do -- binop to subtract step from index
+    local inst = iter()--[[@as ILBinop]]
+    remove_reg_from_inst_get(func, inst, old_reg)
+    inst.right_ptr = new_step_reg
+    add_reg_to_inst_get(func, inst, new_step_reg)
+  end
+end
+
+---@param func ILFunction
+---@param forloop_group ILForloopGroup
+---@param new_index_reg ILRegister
+local function replace_forloop_index_reg(func, forloop_group, new_index_reg)
+  local old_reg = forloop_group.index_reg
+  forloop_group.index_reg = new_index_reg
+
+  local iter = ill.iterate(func.instructions, forloop_group.start)
+  do -- binop incrementing index_reg (saved to temp reg)
+    local inst = iter()--[[@as ILBinop]]
+    remove_reg_from_inst_get(func, inst, old_reg)
+    inst.left_ptr = new_index_reg
+    add_reg_to_inst_get(func, inst, new_index_reg)
+  end
+  iter() -- skip binop for test `step > 0`
+  iter() -- skip test for test `step > 0`
+  -- in the branch: `if step <= 0 then`
+  iter() -- skip binop for `if index < limit then break end`
+  iter() -- skip test for `if index < limit then break end`
+  iter() -- skip jump for `if index < limit then break end`
+
+  iter() -- skip label - jump target for second branch
+  -- in the branch: `if step > 0 then`
+  iter() -- skip binop for `if index > limit then break end`
+  iter() -- skip test for `if index > limit then break end`
+
+  iter() -- skip label - jump target for first branch (on success)
+  do -- move `index = incremented_index`
+    local inst = iter()--[[@as ILMove]]
+    remove_reg_from_inst_set(func, inst, old_reg)
+    inst.result_reg = new_index_reg
+    add_reg_to_inst_set(func, inst, new_index_reg)
+  end
+  -- commented out because they're not needed, but kept for the comments
+  -- iter() -- skip move `local_var = incremented_index`
+  -- iter() -- skip jump back up, next loop iteration (the target label isn't apart of the group)
+
+  -- iter() -- skip label - jump target for leave and break jumps
+end
+
+---@param func ILFunction
+---@param forloop_group ILForloopGroup
+---@param new_limit_reg ILRegister
+local function replace_forloop_limit_reg(func, forloop_group, new_limit_reg)
+  local old_reg = forloop_group.limit_reg
+  forloop_group.limit_reg = reg
+
+  local iter = ill.iterate(func.instructions, forloop_group.start)
+  iter() -- skip binop incrementing index_reg (saved to temp reg)
+  iter() -- skip binop for test `step > 0`
+  iter() -- skip test for test `step > 0`
+  -- in the branch: `if step <= 0 then`
+  do -- binop for `if index < limit then break end`
+    local inst = iter()--[[@as ILBinop]]
+    remove_reg_from_inst_get(func, inst, old_reg)
+    inst.left_ptr = new_limit_reg
+    add_reg_to_inst_get(func, inst, new_limit_reg)
+  end
+  iter() -- skip test for `if index < limit then break end`
+  iter() -- skip jump for `if index < limit then break end`
+
+  iter() -- skip label - jump target for second branch
+  -- in the branch: `if step > 0 then`
+  do -- binop for `if index > limit then break end`
+    local inst = iter()--[[@as ILBinop]]
+    remove_reg_from_inst_get(func, inst, old_reg)
+    inst.left_ptr = new_limit_reg
+    add_reg_to_inst_get(func, inst, new_limit_reg)
+  end
+  -- commented out because they're not needed, but kept for the comments
+  -- iter() -- skip test for `if index > limit then break end`
+
+  -- iter() -- skip label - jump target for first branch (on success)
+  -- iter() -- skip move `index = incremented_index`
+  -- iter() -- skip move `local_var = incremented_index`
+  -- iter() -- skip jump back up, next loop iteration (the target label isn't apart of the group)
+
+  -- iter() -- skip label - jump target for leave and break jumps
+end
+
+---@param func ILFunction
+---@param forloop_group ILForloopGroup
+---@param new_step_reg ILRegister
+local function replace_forloop_step_reg(func, forloop_group, new_step_reg)
+  local old_reg = forloop_group.step_reg
+  forloop_group.step_reg = new_step_reg
+
+  local iter = ill.iterate(func.instructions, forloop_group.start)
+  do -- incrementing index_reg (saved to temp reg)
+    local inst = iter()--[[@as ILBinop]]
+    remove_reg_from_inst_get(func, inst, old_reg)
+    inst.left_ptr = new_step_reg
+    add_reg_to_inst_get(func, inst, new_step_reg)
+  end
+  do -- binop for test `step > 0`
+    local inst = iter()--[[@as ILBinop]]
+    remove_reg_from_inst_get(func, inst, old_reg)
+    inst.left_ptr = new_step_reg
+    add_reg_to_inst_get(func, inst, new_step_reg)
+  end
+  -- commented out because they're not needed, but kept for the comments
+  -- iter() -- skip test for test `step > 0`
+  -- -- in the branch: `if step <= 0 then`
+  -- iter() -- skip binop for `if index < limit then break end`
+  -- iter() -- skip test for `if index < limit then break end`
+  -- iter() -- skip jump for `if index < limit then break end`
+
+  -- iter() -- skip label - jump target for second branch
+  -- -- in the branch: `if step > 0 then`
+  -- iter() -- skip binop for `if index > limit then break end`
+  -- iter() -- skip test for `if index > limit then break end`
+
+  -- iter() -- skip label - jump target for first branch (on success)
+  -- iter() -- skip move `index = incremented_index`
+  -- iter() -- skip move `local_var = incremented_index`
+  -- iter() -- skip jump back up, next loop iteration (the target label isn't apart of the group)
+
+  -- iter() -- skip label - jump target for leave and break jumps
+end
+
+---@param func ILFunction
+---@param forloop_group ILForloopGroup
+---@param new_local_reg ILRegister
+local function replace_forloop_local_reg(func, forloop_group, new_local_reg)
+  local old_reg = forloop_group.local_reg
+  forloop_group.local_reg = new_local_reg
+
+  local iter = ill.iterate(func.instructions, forloop_group.start)
+  iter() -- skip incrementing index_reg (saved to temp reg)
+  iter() -- skip binop for test `step > 0`
+  iter() -- skip test for test `step > 0`
+  -- in the branch: `if step <= 0 then`
+  iter() -- skip binop for `if index < limit then break end`
+  iter() -- skip test for `if index < limit then break end`
+  iter() -- skip jump for `if index < limit then break end`
+
+  iter() -- skip label - jump target for second branch
+  -- in the branch: `if step > 0 then`
+  iter() -- skip binop for `if index > limit then break end`
+  iter() -- skip test for `if index > limit then break end`
+
+  iter() -- skip label - jump target for first branch (on success)
+  iter() -- skip move `index = incremented_index`
+  do -- move `local_var = incremented_index`
+    local inst = iter()--[[@as ILMove]]
+    remove_reg_from_inst_set(func, inst, old_reg)
+    inst.result_reg = new_local_reg
+    add_reg_to_inst_set(func, inst, new_local_reg)
+  end
+  -- commented out because they're not needed, but kept for the comments
+  -- iter() -- skip jump back up, next loop iteration (the target label isn't apart of the group)
+
+  -- iter() -- skip label - jump target for leave and break jumps
+end
+
 return {
 
   -- instructions
@@ -2356,4 +2588,12 @@ return {
   insert_before_inst = insert_before_inst,
   prepend_inst = prepend_inst,
   append_inst = append_inst,
+
+  replace_forprep_index_reg = replace_forprep_index_reg,
+  replace_forprep_limit_reg = replace_forprep_limit_reg,
+  replace_forprep_step_reg = replace_forprep_step_reg,
+  replace_forloop_index_reg = replace_forloop_index_reg,
+  replace_forloop_limit_reg = replace_forloop_limit_reg,
+  replace_forloop_step_reg = replace_forloop_step_reg,
+  replace_forloop_local_reg = replace_forloop_local_reg,
 }

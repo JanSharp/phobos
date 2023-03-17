@@ -1062,21 +1062,174 @@ do
     end,
     ["forloop"] = function(data, inst_group)
       validate_forprep_and_forloop_regs(inst_group)
-      local regs = {inst_group.index_reg, inst_group.limit_reg, inst_group.step_reg}
+      local input_regs = {inst_group.index_reg, inst_group.limit_reg, inst_group.step_reg}
+      local output_regs = {inst_group.index_reg, il.gap_reg, il.gap_reg, inst_group.local_reg}
       set_forced_offset_for_groups(
         data,
-        group_registers(data, inst_group.start, true, regs, 1),
-        group_registers(
-          data,
-          inst_group.stop,
-          false,
-          {inst_group.index_reg, il.gap_reg, il.gap_reg, inst_group.local_reg},
-          1
-        ),
+        group_registers(data, inst_group.start, true, input_regs, 1),
+        group_registers(data, inst_group.stop, false, output_regs, 1),
         0
       )
     end,
   }
+
+  ---@type table<ILInstructionType, fun(func: ILFunction, inst: ILInstruction, reg_group: ILRegisterGroup, index_in_group: integer, reg: ILRegister)>
+  local replace_reg_in_reg_group_inst_lut = {
+    ---@param inst ILSetList
+    ["set_list"] = function(func, inst, reg_group, index_in_group, reg)
+      if index_in_group == 1 then -- the first one in the group must always be the table reg
+        il.remove_reg_from_inst_get(func, inst, inst.table_reg)
+        inst.table_reg = reg
+        il.add_reg_to_inst_get(func, inst, reg)
+      else
+        local index_in_right_ptrs = index_in_group - 1
+        il.remove_reg_from_inst_get(func, inst, inst.right_ptrs[index_in_right_ptrs]--[[@as ILRegister]])
+        inst.right_ptrs[index_in_right_ptrs] = reg
+        il.add_reg_to_inst_get(func, inst, reg)
+      end
+    end,
+    ---@param inst ILConcat
+    ["concat"] = function(func, inst, reg_group, index_in_group, reg)
+      if reg_group.is_input then
+        il.remove_reg_from_inst_get(func, inst, inst.right_ptrs[index_in_group]--[[@as ILRegister]])
+        inst.right_ptrs[index_in_group] = reg
+        il.add_reg_to_inst_get(func, inst, reg)
+      else -- output reg group
+        util.debug_assert(index_in_group == 1, "The output reg group of concat insts should only ever contain 1 reg.")
+        il.remove_reg_from_inst_set(func, inst, inst.result_reg)
+        inst.result_reg = reg
+        il.add_reg_to_inst_set(func, inst, reg)
+      end
+    end,
+    ---@param inst ILCall
+    ["call"] = function(func, inst, reg_group, index_in_group, reg)
+      if reg_group.is_input then
+        if index_in_group == 1 then -- the first one in the group must always be the func reg
+          il.remove_reg_from_inst_get(func, inst, inst.func_reg)
+          inst.func_reg = reg
+          il.add_reg_to_inst_get(func, inst, reg)
+        else
+          local index_in_arg_ptrs = index_in_group - 1
+          il.remove_reg_from_inst_get(func, inst, inst.arg_ptrs[index_in_arg_ptrs]--[[@as ILRegister]])
+          inst.arg_ptrs[index_in_arg_ptrs] = reg
+          il.add_reg_to_inst_get(func, inst, reg)
+        end
+      else -- output reg group
+        il.remove_reg_from_inst_get(func, inst, inst.result_regs[index_in_group])
+        inst.result_regs[index_in_group] = reg
+        il.add_reg_to_inst_get(func, inst, reg)
+      end
+    end,
+    ---@param inst ILRet
+    ["ret"] = function(func, inst, reg_group, index_in_group, reg)
+      il.remove_reg_from_inst_get(func, inst, inst.ptrs[index_in_group]--[[@as ILRegister]])
+      inst.ptrs[index_in_group] = reg
+      il.add_reg_to_inst_get(func, inst, reg)
+    end,
+    ---@param inst ILVararg
+    ["vararg"] = function(func, inst, reg_group, index_in_group, reg)
+      il.remove_reg_from_inst_get(func, inst, inst.result_regs[index_in_group])
+      inst.result_regs[index_in_group] = reg
+      il.add_reg_to_inst_get(func, inst, reg)
+    end,
+  }
+
+  local replace_forprep_reg_lut = {
+    [1] = il.replace_forprep_index_reg,
+    [2] = il.replace_forprep_limit_reg,
+    [3] = il.replace_forprep_step_reg,
+  }
+
+  local replace_forloop_reg_lut = {
+    [1] = il.replace_forloop_index_reg,
+    [2] = il.replace_forloop_limit_reg,
+    [3] = il.replace_forloop_step_reg,
+    [4] = il.replace_forloop_local_reg,
+  }
+
+  local replace_reg_in_reg_group_recursive
+
+  ---@param inst_group ILInstructionGroup
+  ---@param reg_group ILRegisterGroup
+  ---@return ILRegisterGroup
+  local function get_opposite_reg_group_for_inst_group(inst_group, reg_group)
+    return reg_group.is_input
+      and inst_group.stop.output_reg_group--[[@as ILRegisterGroup]]
+      or inst_group.start.input_reg_group--[[@as ILRegisterGroup]]
+  end
+
+  ---@type table<ILInstructionGroupType, fun(func: ILFunction, inst_group: ILInstructionGroup, reg_group: ILRegisterGroup, index_in_group: integer, reg: ILRegister, is_original_call: boolean)>
+  local replace_reg_in_reg_group_inst_group_lut = {
+    ---@param inst_group ILForprepGroup
+    ["forprep"] = function(func, inst_group, reg_group, index_in_group, reg, is_original_call)
+      -- both input and output have all 3 registers in the same location, so just do this regardless of that
+      local replace_forprep_reg = replace_forprep_reg_lut[index_in_group]
+      replace_forprep_reg(func, inst_group, reg)
+
+      if not is_original_call then return end -- do not recurse if we already came from a recursive call
+      local opposite_reg_group = get_opposite_reg_group_for_inst_group(inst_group, reg_group)
+      replace_reg_in_reg_group_recursive(func, opposite_reg_group, index_in_group, reg, false)
+    end,
+    ---@param inst_group ILForloopGroup
+    ["forloop"] = function(func, inst_group, reg_group, index_in_group, reg, is_original_call)
+      -- both input and output have all 3 registers in the same location, so just do this regardless of that
+      local replace_forloop_reg = replace_forloop_reg_lut[index_in_group]
+      replace_forloop_reg(func, inst_group, reg)
+
+      if not is_original_call then return end -- do not recurse if we already came from a recursive call
+      if index_in_group == 1 then return end -- only the first register is shared between the 2 reg groups
+      local opposite_reg_group = get_opposite_reg_group_for_inst_group(inst_group, reg_group)
+      replace_reg_in_reg_group_recursive(func, opposite_reg_group, index_in_group, reg, false)
+    end,
+  }
+
+  ---@param func ILFunction
+  ---@param reg_group ILRegisterGroup
+  ---@param index_in_group integer
+  ---@param reg ILRegister
+  ---@param is_original_call boolean
+  function replace_reg_in_reg_group_recursive(func, reg_group, index_in_group, reg, is_original_call)
+    local inst = reg_group.inst
+    if inst.inst_group then
+      local group_type = inst.inst_group.group_type
+      local replace_reg_in_reg_group_inst_group = replace_reg_in_reg_group_inst_group_lut[group_type]
+      replace_reg_in_reg_group_inst_group(func, inst.inst_group, reg_group, index_in_group, reg, is_original_call)
+    else
+      local replace_reg_in_reg_group_inst = replace_reg_in_reg_group_inst_lut[inst.inst_type]
+      replace_reg_in_reg_group_inst(func, inst, reg_group, index_in_group, reg)
+    end
+
+    if not is_original_call then
+      -- if this function was called due to inst groups's reg groups being linked and using the same registers
+      -- (which means that if a register gets replaced in one group, it also has to be replaced in the other
+      -- one (the 2 groups in question are the input and output groups for inst groups))
+      -- then we have to remember that this was an "implied" replacement to then inform future processing
+      -- of this register group that a register was replaced so it can decide if it has to insert another
+      -- move instruction to or from this register.
+      -- this allows the input or output reg group for the inst group to be processed in any order, so long
+      -- as they are not processed multiple times, because this extra data stored here cannot be cleaned up
+      -- TODO: change this comment if the insert move logic can clean up all of the temp data
+      local old_reg = reg_group.regs[index_in_group]
+      reg_group.replaced_regs = reg_group.replaced_regs or {}
+      reg_group.replaced_regs_lut = reg_group.replaced_regs_lut or {}
+      if not reg_group.replaced_regs_lut[index_in_group] then
+        reg_group.replaced_regs[#reg_group.replaced_regs+1] = {
+          index = index_in_group,
+          old_reg = old_reg,
+        }
+        reg_group.replaced_regs_lut[index_in_group] = old_reg
+      end
+    end
+    reg_group.regs[index_in_group] = reg
+  end
+
+  ---@param func ILFunction
+  ---@param reg_group ILRegisterGroup
+  ---@param index_in_group integer
+  ---@param reg ILRegister
+  local function replace_reg_in_reg_group(func, reg_group, index_in_group, reg)
+    replace_reg_in_reg_group_recursive(func, reg_group, index_in_group, reg, true)
+  end
 
   ---@param data ILCompilerData
   local function create_register_groups(data)
@@ -1747,9 +1900,14 @@ do
     end
   end
 
+  ---@class ILMoveData
+  ---@field from_index integer
+  ---@field to_index integer
+  ---@field reg ILRegister
+
   ---@param linked_groups ILLinkedRegisterGroupsGroup
   ---@param reg_group ILRegisterGroup
-  ---@return {from_index: integer, to_index: integer, reg: ILRegister}[] @
+  ---@return ILMoveData[] @
   ---Wether the `reg` is the source or the target of the move depends on if the group is an input or output
   ---group. If it is an input group, it is the source reg. If it is an output group, it is the target reg.
   local function get_moves_required_for_group(linked_groups, reg_group)
@@ -1757,6 +1915,7 @@ do
     local group_base_index = linked_groups.predetermined_base_index + reg_group.index_in_linked_groups
     local inside_index_key = reg_group.is_input and "from_index" or "to_index"
     local outside_index_key = reg_group.is_input and "to_index" or "from_index"
+    -- TODO: use replaced_regs if present (pretty sure it needs to be used here, not somewhere else)
     for i, reg in ipairs(reg_group.regs) do
       if reg.is_gap then goto continue end
       local inside_index = group_base_index + i - 1
@@ -1775,8 +1934,15 @@ do
 
   ---@param linked_groups ILLinkedRegisterGroupsGroup
   ---@param reg_group ILRegisterGroup
-  ---@return {moves: {from_index: integer, to_index: integer, reg: ILRegister}[], is_circular: boolean}[]
+  ---@return {moves: ILMoveData[], from_and_to_counts: table<integer, integer>, is_circular: boolean}[] @
+  ---`from_and_to_counts` is reg index => count of reads or writes to that register. Usually capped at 2,
+  ---one read one write, but for input groups it could be reading from the same register multiple times.
   local function get_linked_moves_required_for_group(linked_groups, reg_group)
+    -- TODO: redo this whole thing because 2 moves taking from the same register is more troublesome than expected.
+    -- if 2 are taking from the same register then we cannot easily detect if it is circular or not. It's kind of like
+    -- the register index becomes part of multiple move "trees" and even if there is one end with only 1 usage of
+    -- a register, that doesn't mean there's a loop somewhere else, because the register that's read multiple times
+    -- isn't free yet, therefore cannot be written to.
     local all_linked_moves = {}
     local linked_moves_lut = {}
     local function add_to_linked(linked, move)
@@ -1934,6 +2100,84 @@ do
   end
 
   ---@param data ILCompilerData
+  ---@param linked_groups ILLinkedRegisterGroupsGroup
+  ---@param reg_group ILRegisterGroup
+  local function insert_moves_in_or_out_of_reg_group(data, linked_groups, reg_group)
+    local temp_reg_index_for_circular_moves_cache
+    local function get_temp_reg_index_for_circular_moves()
+      if temp_reg_index_for_circular_moves_cache then
+        return temp_reg_index_for_circular_moves_cache
+      end
+      local _, reg_index = linq(reg_group.regs):first(function(reg) return reg.is_gap end)
+      if reg_index then
+        -- minus 1 because reg_index is (naturally) 1 based, however 0 would be its real reg index
+        reg_index = linked_groups.predetermined_base_index + reg_group.index_in_linked_groups + reg_index - 1
+      else
+        -- right before the group. it was previously ensured that there is space here
+        reg_index = linked_groups.predetermined_base_index + reg_group.index_in_linked_groups - 1
+      end
+      temp_reg_index_for_circular_moves_cache = reg_index
+      return reg_index
+    end
+
+    local function insert_non_circular_linked_moves(moves)
+      local to_lut = {}
+      local from_lut = {}
+      for _, move in ipairs(moves) do
+        to_lut[move.to_index] = move
+        from_lut[move.from_index] = move
+      end
+      local inst_to_insert_before = reg_group.is_input and reg_group.inst or reg_group.inst.next
+      -- find the the move which moves to a register no other move takes from
+      local move = linq(moves):single(function(move) return not from_lut[move.to_index] end)
+      repeat
+        -- this register will replace the reg in the register group.
+        -- which means for input groups this is the target reg, for output groups this is the source reg
+        local inserted_reg = il.new_reg()
+        inserted_reg.predetermined_reg_index = reg_group.is_input and move.to_index or move.from_index
+        local move_inst = il.insert_before_inst(data.func, inst_to_insert_before, il.new_move{
+          position = reg_group.inst.position,
+          right_ptr = reg_group.is_input and move.reg or inserted_reg,
+          result_reg = reg_group.is_input and inserted_reg or move.reg,
+        })
+        il.update_intermediate_data(data.func, move_inst)
+        -- plus 1 because we're converting zero based to one based
+        local index_in_group = inserted_reg.predetermined_reg_index
+          - (linked_groups.predetermined_base_index + reg_group.index_in_linked_groups) + 1
+        replace_reg_in_reg_group(data.func, reg_group, index_in_group, inserted_reg)
+
+        move = to_lut[move.from_index]
+      until not move
+    end
+
+    local function insert_circular_linked_moves(moves)
+      util.debug_abort("-- TODO: implement")
+    end
+
+    local all_linked_moves = get_linked_moves_required_for_group(linked_groups, reg_group)
+    for linked in linq(all_linked_moves)
+      :select(function(linked, i) linked.i = i return linked end)
+      :order_by(function(linked) return linked.is_circular and 1 or 0 end)
+      :then_by(function(linked) return linked.i end)
+      :iterate()
+    do -- non circular moves first
+      if linked.is_circular then
+        insert_circular_linked_moves(linked.moves)
+      else
+        insert_non_circular_linked_moves(linked.moves)
+      end
+    end
+  end
+
+  ---@param data ILCompilerData
+  ---@param linked_groups ILLinkedRegisterGroupsGroup
+  local function insert_moves_in_and_out_of_reg_groups(data, linked_groups)
+    for _, reg_group in ipairs(linked_groups.groups) do
+      insert_moves_in_or_out_of_reg_group(data, linked_groups, reg_group)
+    end
+  end
+
+  ---@param data ILCompilerData
   function pre_compilation_process(data)
     -- TODO: remove once I'm sure the is_parameter flag on registers is good
     -- group_registers(data, nil, false, data.func.param_regs, 1)
@@ -1971,7 +2215,10 @@ do
       determine_indexes_for_linked_groups(data, linked_groups)
     end
 
-    -- TODO: insert moves for registers which require moves into or out of register groups
+    -- insert moves for registers which require moves into or out of register groups
+    for _, linked_groups in ipairs(all_linked_groups) do
+      insert_moves_in_and_out_of_reg_groups(data, linked_groups)
+    end
   end
 end
 

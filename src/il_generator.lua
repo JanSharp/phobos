@@ -545,17 +545,17 @@ do
       local forprep_group_start = add_inst(func, il.new_to_number{
         position = stat.for_token,
         result_reg = index_reg,
-        right_ptr = index_reg
+        right_ptr = index_reg,
       })
       add_inst(func, il.new_to_number{
         position = stat.for_token,
         result_reg = limit_reg,
-        right_ptr = limit_reg
+        right_ptr = limit_reg,
       })
       add_inst(func, il.new_to_number{
         position = stat.for_token,
         result_reg = step_reg,
-        right_ptr = step_reg
+        right_ptr = step_reg,
       })
 
       -- subtract step from index once to match the forprep instruction
