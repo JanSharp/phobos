@@ -1548,6 +1548,10 @@ end
 -- il blocks
 ----------------------------------------------------------------------------------------------------
 
+-- TODO: either add a function or change normalize_blocks to handle changing the jump target of tests/jumps
+-- (since that change the links between blocks)
+-- TODO: add a function to handle removal of instructions, potentially merging or removing blocks
+
 local function new_block(start_inst, stop_inst)
   return {
     source_links = {},
