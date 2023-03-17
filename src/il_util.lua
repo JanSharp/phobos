@@ -2186,11 +2186,11 @@ local function update_intermediate_data(func, inst)
 end
 
 ---@param func ILFunction
----@param inst ILInstruction
+---@param inst ILInstruction?
 ---@param inserted_inst ILInstruction
 ---@return ILInstruction
 local function insert_after_inst(func, inst, inserted_inst)
-  if inst.inst_group and inst ~= inst.inst_group.stop then
+  if inst and inst.inst_group and inst ~= inst.inst_group.stop then
     util.debug_abort("Attempt to insert an instruction inside of an inst_group (which are immutable).")
   end
   ill.insert_after(func.instructions, inst, inserted_inst)
@@ -2202,11 +2202,11 @@ local function insert_after_inst(func, inst, inserted_inst)
 end
 
 ---@param func ILFunction
----@param inst ILInstruction
+---@param inst ILInstruction?
 ---@param inserted_inst ILInstruction
 ---@return ILInstruction
 local function insert_before_inst(func, inst, inserted_inst)
-  if inst.inst_group and inst ~= inst.inst_group.start then
+  if inst and inst.inst_group and inst ~= inst.inst_group.start then
     util.debug_abort("Attempt to insert an instruction inside of an inst_group (which are immutable).")
   end
   ill.insert_before(func.instructions, inst, inserted_inst)
