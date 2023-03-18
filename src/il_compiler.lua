@@ -1915,9 +1915,14 @@ do
     local group_base_index = linked_groups.predetermined_base_index + reg_group.index_in_linked_groups
     local inside_index_key = reg_group.is_input and "from_index" or "to_index"
     local outside_index_key = reg_group.is_input and "to_index" or "from_index"
-    -- TODO: use replaced_regs if present (pretty sure it needs to be used here, not somewhere else)
+    local replaced_regs_lut = reg_group.replaced_regs_lut
     for i, reg in ipairs(reg_group.regs) do
       if reg.is_gap then goto continue end
+      if replaced_regs_lut and replaced_regs_lut[i] then
+        -- If the regs have already been replaced in this group due to it being forcibly linked with another
+        -- group then we must use the register before it was replaced. This lookup table contains those regs.
+        reg = replaced_regs_lut[i]
+      end
       local inside_index = group_base_index + i - 1
       local outside_index = reg.predetermined_reg_index
       if inside_index ~= outside_index then
