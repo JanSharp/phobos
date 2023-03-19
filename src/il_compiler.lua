@@ -2131,9 +2131,12 @@ do
       return reg_index
     end
 
-    local function insert_non_circular_linked_moves(moves)
-      local inst_to_insert_before = reg_group.is_input and reg_group.inst or reg_group.inst.next
-      for _, move in ipairs(moves) do
+    local inst_to_insert_before = reg_group.is_input and reg_group.inst or reg_group.inst.next
+
+    ---@param moves ILMoveData[]
+    local function insert_non_circular_linked_moves(moves, start_index)
+      for i = start_index or 1, #moves do
+        local move = moves[i]
         -- this register will replace the reg in the register group.
         -- which means for input groups this is the target reg, for output groups this is the source reg
         local inserted_reg = il.new_reg()
@@ -2150,8 +2153,32 @@ do
       end
     end
 
+    ---@param moves ILMoveData[]
     local function insert_circular_linked_moves(moves)
-      util.debug_abort("-- TODO: implement")
+      local first_move = moves[1]
+      -- this register will replace the reg in the register group.
+      -- which means for input groups this is the target reg, for output groups this is the source reg
+      local inserted_reg = il.new_reg()
+      inserted_reg.predetermined_reg_index = reg_group.is_input and first_move.to_index or first_move.from_index
+
+      local temp_reg = il.new_reg()
+      temp_reg.predetermined_reg_index = get_temp_reg_index_for_circular_moves()
+      il.insert_before_inst(data.func, inst_to_insert_before, il.new_move{
+        position = reg_group.inst.position,
+        right_ptr = reg_group.is_input and first_move.reg or inserted_reg,
+        result_reg = temp_reg,
+      })
+      insert_non_circular_linked_moves(moves, 2)
+      il.insert_before_inst(data.func, inst_to_insert_before, il.new_move{
+        position = reg_group.inst.position,
+        right_ptr = temp_reg,
+        result_reg = reg_group.is_input and inserted_reg or first_move.reg,
+      })
+
+      -- plus 1 because we're converting zero based to one based
+      local index_in_group = inserted_reg.predetermined_reg_index
+        - (linked_groups.predetermined_base_index + reg_group.index_in_linked_groups) + 1
+      replace_reg_in_reg_group(data.func, reg_group, index_in_group, inserted_reg)
     end
 
     local non_circular_moves, circular_moves = get_linked_moves_required_for_group(linked_groups, reg_group)
