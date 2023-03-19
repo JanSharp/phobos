@@ -1484,17 +1484,16 @@ do
       return result
     end
 
+    ---@param data ILCompilerData
     ---@param start_inst ILInstruction
     ---@param stop_inst ILInstruction
-    local function count_instructions_from_to(start_inst, stop_inst)
+    local function count_instructions_from_to(data, start_inst, stop_inst)
       if start_inst.index > stop_inst.index then
         return 0
       end
-      local inst = start_inst
-      local result = 1
-      while inst ~= stop_inst and (not inst.inst_group or inst.inst_group ~= stop_inst.inst_group) do
+      local result = 0
+      for _ in il.iterate_insts_and_groups(data.func, start_inst, stop_inst) do
         result = result + 1
-        inst = (inst.inst_group and inst.inst_group.stop.next or inst.next)--[[@as ILInstruction]]
       end
       return result
     end
@@ -1510,8 +1509,9 @@ do
       )
     end
 
+    ---@param data ILCompilerData
     ---@param linked_groups ILLinkedRegisterGroupsGroup
-    function determine_best_offsets(linked_groups)
+    function determine_best_offsets(data, linked_groups)
       ---@type DetermineBestOffsetsUnknownData[]
       local unknowns = {}
       ---@type DetermineBestOffsetsUnknownData[]
@@ -1536,8 +1536,8 @@ do
         for j = 1, #group.regs do
           local reg = group.regs[j]
           local unknown = what_can_we_do(group, j)
-          unknown.lifetime_before = first_inst and count_instructions_from_to(reg.start_at, first_inst) or 0
-          unknown.lifetime_after = last_inst and count_instructions_from_to(last_inst, reg.stop_at) or 0
+          unknown.lifetime_before = first_inst and count_instructions_from_to(data, reg.start_at, first_inst) or 0
+          unknown.lifetime_after = last_inst and count_instructions_from_to(data, last_inst, reg.stop_at) or 0
           if unknown.usable_in_place then
             unknowns[#unknowns+1] = unknown
             unknowns_by_group[group][#unknowns_by_group[group]+1] = unknown
@@ -2321,7 +2321,7 @@ do
 
     -- determine best relative register indexes within linked groups
     for _, linked_groups in ipairs(all_linked_groups) do
-      determine_best_offsets(linked_groups)
+      determine_best_offsets(data, linked_groups)
     end
 
     evaluate_indexes_for_regs_outside_of_groups(data)
