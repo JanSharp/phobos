@@ -909,7 +909,7 @@ do
   end
 
   ---@param data ILCompilerData
-  ---@param inst ILInstruction?
+  ---@param inst ILInstruction
   ---@param is_input boolean
   ---@param regs ILRegister[]
   ---@param start_index integer @ start index in `regs`
@@ -2293,9 +2293,6 @@ do
 
   ---@param data ILCompilerData
   function pre_compilation_process(data)
-    -- TODO: remove once I'm sure the is_parameter flag on registers is good
-    -- group_registers(data, nil, false, data.func.param_regs, 1)
-
     create_register_groups(data)
 
     -- shallow copy because splitting ends up modifying the lut, but we need iterate the original
