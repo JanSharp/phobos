@@ -729,8 +729,10 @@ do
     end,
     ---@param inst ILCloseUp
     ["close_up"] = function(data, inst)
-      -- TODO: ensure there are no other registers that are captured as upvalues above the ones closed here [...]
-      -- this also needs to be done for all other places upvalues get closed (so for jumps and labels)
+      -- NOTE: it is currently guaranteed that registers requiring closing do not have any registers above them
+      -- because the initial predetermined_reg_index evaluation logic makes sure of that, and that logic
+      -- ultimately handles _all_ registers captured as upvalues because said registers are currently never
+      -- used in place in register_groups
       local a
       for _, reg in ipairs(inst.regs) do
         if reg.captured_as_upval and (not a or reg.current_reg.reg_index < a) then
