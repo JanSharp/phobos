@@ -2138,12 +2138,11 @@ do
         -- which means for input groups this is the target reg, for output groups this is the source reg
         local inserted_reg = il.new_reg()
         inserted_reg.predetermined_reg_index = reg_group.is_input and move.to_index or move.from_index
-        local move_inst = il.insert_before_inst(data.func, inst_to_insert_before, il.new_move{
+        il.insert_before_inst(data.func, inst_to_insert_before, il.new_move{
           position = reg_group.inst.position,
           right_ptr = reg_group.is_input and move.reg or inserted_reg,
           result_reg = reg_group.is_input and inserted_reg or move.reg,
         })
-        il.update_intermediate_data(data.func, move_inst)
         -- plus 1 because we're converting zero based to one based
         local index_in_group = inserted_reg.predetermined_reg_index
           - (linked_groups.predetermined_base_index + reg_group.index_in_linked_groups) + 1
