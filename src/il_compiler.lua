@@ -1904,6 +1904,7 @@ do
   ---@field from_index integer
   ---@field to_index integer
   ---@field reg ILRegister
+  ---@field used boolean?
 
   ---@param linked_groups ILLinkedRegisterGroupsGroup
   ---@param reg_group ILRegisterGroup
@@ -1939,67 +1940,72 @@ do
 
   ---@param linked_groups ILLinkedRegisterGroupsGroup
   ---@param reg_group ILRegisterGroup
-  ---@return {moves: ILMoveData[], from_and_to_counts: table<integer, integer>, is_circular: boolean}[] @
-  ---`from_and_to_counts` is reg index => count of reads or writes to that register. Usually capped at 2,
-  ---one read one write, but for input groups it could be reading from the same register multiple times.
+  ---@return ILMoveData[] non_circular_moves
+  ---@return ILMoveData[] circular_moves @
+  ---the intent is to move the first one in these arrays int a temp reg, then do the rest of the moves, and
+  ---lastly move from the temp reg to the first one's target
   local function get_linked_moves_required_for_group(linked_groups, reg_group)
-    -- TODO: redo this whole thing because 2 moves taking from the same register is more troublesome than expected.
+    -- 2 moves taking from the same register is more troublesome than expected.
     -- if 2 are taking from the same register then we cannot easily detect if it is circular or not. It's kind of like
     -- the register index becomes part of multiple move "trees" and even if there is one end with only 1 usage of
     -- a register, that doesn't mean there's a loop somewhere else, because the register that's read multiple times
     -- isn't free yet, therefore cannot be written to.
-    local all_linked_moves = {}
-    local linked_moves_lut = {}
-    local function add_to_linked(linked, move)
-      linked_moves_lut[move.from_index] = linked
-      linked_moves_lut[move.to_index] = linked
-      linked.moves[#linked.moves+1] = move
-      local from_and_to_counts = linked.from_and_to_counts
-      from_and_to_counts[move.from_index] = (from_and_to_counts[move.from_index] or 0) + 1
-      from_and_to_counts[move.to_index] = (from_and_to_counts[move.to_index] or 0) + 1
-    end
-    local function make_new_linked(move)
-      local linked = {moves = {}, from_and_to_counts = {}}
-      all_linked_moves[#all_linked_moves+1] = linked
-      add_to_linked(linked, move)
-    end
-    local function merge_linked(base, to_merge)
-      local base_moves_count = #base.moves
-      for i, move in ipairs(to_merge.moves) do
-        base.moves[base_moves_count + i] = move
+    local from_counts = {}
+    local to_lut = {}
+    local moves_with_free_target = {}
+
+    local all_moves = get_moves_required_for_group(linked_groups, reg_group)
+    for _, move in ipairs(all_moves) do
+      from_counts[move.from_index] = (from_counts[move.from_index] or 0) + 1
+      to_lut[move.to_index] = move
+
+      if to_lut[move.from_index] and to_lut[move.from_index].index_in_moves_with_free_target then
+        local other_move = to_lut[move.from_index]
+        local i = other_move.index_in_moves_with_free_target
+        local top_move = moves_with_free_target[#moves_with_free_target]
+        top_move.index_in_moves_with_free_target = i
+        moves_with_free_target[i] = top_move
+        moves_with_free_target[#moves_with_free_target] = nil
+        other_move.index_in_moves_with_free_target = nil
       end
-      local counts = base.from_and_to_counts
-      for reg_index, count in pairs(to_merge.from_and_to_counts) do
-        counts[reg_index] = (counts[reg_index] or 0) + count
+
+      if not from_counts[move.to_index] then
+        local i = #moves_with_free_target + 1
+        moves_with_free_target[i] = move
+        move.index_in_moves_with_free_target = i
       end
-      util.remove_from_array_fast(all_linked_moves, to_merge)
     end
 
-    for _, move in ipairs(get_moves_required_for_group(linked_groups, reg_group)) do
-      local from_linked = linked_moves_lut[move.from_index]
-      local to_linked = linked_moves_lut[move.to_index]
-      if from_linked and to_linked then
-        if from_linked ~= to_linked then
-          merge_linked(from_linked, to_linked)
+    local non_circular_moves = {}
+    for i, move in ipairs(moves_with_free_target) do
+      local moves = {}
+      non_circular_moves[i] = moves
+      repeat
+        moves[#moves+1] = move
+        move.used = true
+        if from_counts[move.from_index] > 1 then
+          from_counts[move.from_index] = from_counts[move.from_index] - 1
+        else
+          move = to_lut[move.from_index]
         end
-        add_to_linked(from_linked, move)
-      elseif from_linked or to_linked then
-        add_to_linked(from_linked or to_linked, move)
-      else
-        make_new_linked(move)
-      end
+      until not move
     end
 
-    if linq(all_linked_moves)
-      :any(function(linked)
-        return linq(util.iterate_values(linked.from_and_to_counts))
-          :all(function(count) return count >= 2 end)
-      end)
-    then
-      all_linked_moves.is_circular = true
+    local circular_moves = {}
+    for _, move in ipairs(all_moves) do
+      if move.used then goto continue end
+      local moves = {move}
+      circular_moves[#circular_moves+1] = moves
+      local current_move = to_lut[move.from_index]
+      repeat
+        current_move.used = true
+        moves[#moves+1] = current_move
+        current_move = to_lut[current_move.from_index]
+      until current_move == move
+      ::continue::
     end
 
-    return all_linked_moves
+    return non_circular_moves, circular_moves
   end
 
   ---@param data ILCompilerData
@@ -2094,8 +2100,8 @@ do
         goto continue
       end
 
-      local all_linked_moves = get_linked_moves_required_for_group(linked_groups, group)
-      if linq(all_linked_moves):any(function(linked) return linked.is_circular end) then
+      local _, circular_moves = get_linked_moves_required_for_group(linked_groups, group)
+      if circular_moves[1] then
         base_index = base_index + 1
         apply_base_index()
         break
@@ -2126,16 +2132,8 @@ do
     end
 
     local function insert_non_circular_linked_moves(moves)
-      local to_lut = {}
-      local from_lut = {}
-      for _, move in ipairs(moves) do
-        to_lut[move.to_index] = move
-        from_lut[move.from_index] = move
-      end
       local inst_to_insert_before = reg_group.is_input and reg_group.inst or reg_group.inst.next
-      -- find the the move which moves to a register no other move takes from
-      local move = linq(moves):single(function(move) return not from_lut[move.to_index] end)
-      repeat
+      for _, move in ipairs(moves) do
         -- this register will replace the reg in the register group.
         -- which means for input groups this is the target reg, for output groups this is the source reg
         local inserted_reg = il.new_reg()
@@ -2150,27 +2148,19 @@ do
         local index_in_group = inserted_reg.predetermined_reg_index
           - (linked_groups.predetermined_base_index + reg_group.index_in_linked_groups) + 1
         replace_reg_in_reg_group(data.func, reg_group, index_in_group, inserted_reg)
-
-        move = to_lut[move.from_index]
-      until not move
+      end
     end
 
     local function insert_circular_linked_moves(moves)
       util.debug_abort("-- TODO: implement")
     end
 
-    local all_linked_moves = get_linked_moves_required_for_group(linked_groups, reg_group)
-    for linked in linq(all_linked_moves)
-      :select(function(linked, i) linked.i = i return linked end)
-      :order_by(function(linked) return linked.is_circular and 1 or 0 end)
-      :then_by(function(linked) return linked.i end)
-      :iterate()
-    do -- non circular moves first
-      if linked.is_circular then
-        insert_circular_linked_moves(linked.moves)
-      else
-        insert_non_circular_linked_moves(linked.moves)
-      end
+    local non_circular_moves, circular_moves = get_linked_moves_required_for_group(linked_groups, reg_group)
+    for _, moves in ipairs(non_circular_moves) do
+      insert_non_circular_linked_moves(moves)
+    end
+    for _, moves in ipairs(circular_moves) do
+      insert_circular_linked_moves(moves)
     end
   end
 
