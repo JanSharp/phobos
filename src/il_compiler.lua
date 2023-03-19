@@ -2201,6 +2201,94 @@ do
     end
   end
 
+  ---Returns the highest `predetermined_reg_index` of all live register that don't start or stop at the given
+  ---instruction. If there are none, returns `-1`.
+  ---@param inst ILInstruction
+  local function get_highest_reg_index_at_inst(inst)
+    local empty = {}
+    return linq(inst.live_regs)
+      :except_lut(inst.regs_start_at_lut or empty)
+      :except_lut(inst.regs_stop_at_lut or empty)
+      :select(function(reg) return reg.predetermined_reg_index end)
+      :default_if_empty(-1)
+      :max()
+  end
+
+  ---@param data ILCompilerData
+  ---@param inst ILNewTable|ILConcat|ILClosure
+  ---@param current_top_index integer @
+  ---give this the result of `get_highest_reg_index_at_inst` before any changes were made to inst
+  local function change_result_reg_to_be_at_top(data, inst, current_top_index)
+    local temp_reg = il.new_reg()
+    temp_reg.predetermined_reg_index = current_top_index + 1
+    il.insert_after_inst(data.func, inst, il.new_move{
+      position = inst.position,
+      right_ptr = temp_reg,
+      result_reg = inst.result_reg,
+    })
+    il.remove_reg_from_inst_set(data.func, inst, inst.result_reg)
+    inst.result_reg = temp_reg
+    il.add_reg_to_inst_set(data.func, inst, temp_reg)
+  end
+
+  ---@type table<ILInstructionType, fun(data: ILCompilerData, inst: ILInstruction)?>
+  local ensure_inst_is_at_top_lut = {
+    ---@param inst ILNewTable
+    ["new_table"] = function(data, inst)
+      local top_index = get_highest_reg_index_at_inst(inst)
+      if top_index <= inst.result_reg.predetermined_reg_index then return end
+      change_result_reg_to_be_at_top(data, inst, top_index)
+    end,
+    ---@param inst ILConcat
+    ["concat"] = function(data, inst)
+      local top_index = get_highest_reg_index_at_inst(inst)
+      if top_index <= inst.result_reg.predetermined_reg_index then return end
+
+      -- this is a gigantic waste of move instructions and it should be handled differently. However I
+      -- honestly don't know how exactly. note that linked groups do not enforce concats being at top in
+      -- any way, neither does the logic position linked groups "relative to each other", which at the time
+      -- of writing this is actually just iterating through all of them and putting them as low as possible
+      -- with respect to all already positioned groups, and therefore their registers.
+
+      for i = #inst.right_ptrs, 1, -1 do
+        local old_reg = inst.right_ptrs[i]--[[@as ILRegister]]
+        local temp_reg = il.new_reg()
+        temp_reg.predetermined_reg_index = top_index + i
+        il.insert_before_inst(data.func, inst, il.new_move{
+          position = inst.position,
+          right_ptr = old_reg,
+          result_reg = temp_reg,
+        })
+        il.remove_reg_from_inst_get(data.func, inst, old_reg)
+        inst.right_ptrs[i] = temp_reg
+        il.add_reg_to_inst_set(data.func, inst, temp_reg)
+      end
+
+      change_result_reg_to_be_at_top(data, inst, top_index)
+    end,
+    ---@param inst ILClosure
+    ["closure"] = function(data, inst)
+      local top_index = get_highest_reg_index_at_inst(inst)
+      if top_index <= inst.result_reg.predetermined_reg_index then return end
+      change_result_reg_to_be_at_top(data, inst, top_index)
+    end,
+  }
+
+  ---`new_table`, `concat` and `closure` run a garbage collection step above their result register after
+  ---they are done. Therefore we must ensure that they are at the top of the stack.
+  ---@param data ILCompilerData
+  local function ensure_gc_insts_are_at_top(data)
+    for inst_or_group in il.iterate_insts_and_groups(data.func) do
+      if not il.is_inst_group(inst_or_group) then
+        ---@cast inst_or_group ILInstruction
+        local ensure_inst_is_at_top = ensure_inst_is_at_top_lut[inst_or_group.inst_type]
+        if ensure_inst_is_at_top then
+          ensure_inst_is_at_top(data, inst_or_group)
+        end
+      end
+    end
+  end
+
   ---@param data ILCompilerData
   function pre_compilation_process(data)
     -- TODO: remove once I'm sure the is_parameter flag on registers is good
@@ -2243,6 +2331,8 @@ do
     for _, linked_groups in ipairs(all_linked_groups) do
       insert_moves_in_and_out_of_reg_groups(data, linked_groups)
     end
+
+    ensure_gc_insts_are_at_top(data)
   end
 end
 
