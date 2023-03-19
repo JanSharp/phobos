@@ -2188,6 +2188,9 @@ do
     for _, moves in ipairs(circular_moves) do
       insert_circular_linked_moves(moves)
     end
+
+    -- TODO: handle reg groups where their instruction is a jump or test, as such the inserted move insts
+    -- must be in a different location (for jumps) or duplicated (for tests)
   end
 
   ---@param data ILCompilerData
