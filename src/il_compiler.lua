@@ -4,6 +4,7 @@ local util = require("util")
 local opcode_util = require("opcode_util")
 local opcodes = opcode_util.opcodes
 local ill = require("indexed_linked_list")
+local ll = require("linked_list")
 local il = require("il_util")
 local stack = require("stack")
 local linq = require("linq")
@@ -25,7 +26,7 @@ do
   ---@param data ILCompilerData
   ---@param inst ILCompiledInstruction
   local function add_inst(data, inst)
-    ill.prepend(data.compiled_instructions, inst)
+    ll.prepend(data.compiled_instructions, inst)
   end
 
   ---@param data ILCompilerData
@@ -51,8 +52,10 @@ do
   ---@field start_at ILCompiledInstruction @ inclusive
   ---@field stop_at ILCompiledInstruction? @ exclusive. When `nil` stops at the very end
 
-  ---@class ILCompiledInstruction : ILLNode, Instruction
+  ---@class ILCompiledInstruction : Instruction
   ---@field inst_index integer
+  ---@field prev ILCompiledInstruction?
+  ---@field next ILCompiledInstruction?
 
   ---@param data ILCompilerData
   ---@return ILCompiledRegister
@@ -2353,7 +2356,9 @@ end
 -- ---@field stack table
 ---@field local_reg_count integer
 ---@field local_reg_gaps table<integer, true>
----@field compiled_instructions IntrusiveIndexedLinkedList
+---While it starts off with both being nil, every function has at least 1 instruction,
+---so `first` and `last` will be non nil real early and stay that way.
+---@field compiled_instructions {first: ILCompiledInstruction, last: ILCompiledInstruction}
 ---@field compiled_registers ILCompiledRegister[]
 ---@field compiled_registers_count integer
 ---@field constant_lut table<number|string|boolean, integer>
@@ -2372,8 +2377,7 @@ local function compile(func)
     func = func,
     local_reg_count = 0,
     local_reg_gaps = {},
-    -- TODO: check if the `index` is even used. If not, just use a plain linked list
-    compiled_instructions = ill.new(),
+    compiled_instructions = ll.new_list(),
     compiled_registers = {},
     compiled_registers_count = 0,
     constant_lut = {},
