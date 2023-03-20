@@ -2121,8 +2121,8 @@ end
 ---@param inst ILInstruction
 ---@param reg ILRegister
 ---@param get_set 1|2|3
-local function add_reg_to_inst(func, inst, reg, get_set)
-  if inst.inst_group then
+local function add_reg_to_inst(func, inst, reg, get_set, allow_modifying_inst_group)
+  if inst.inst_group and not allow_modifying_inst_group then
     util.debug_abort("Attempt to add a register to an inst in inst_group (which are immutable).")
   end
   if func.has_start_stop_insts then
@@ -2137,23 +2137,26 @@ end
 ---@param func ILFunction
 ---@param inst ILInstruction
 ---@param reg ILRegister
-local function add_reg_to_inst_get(func, inst, reg)
-  add_reg_to_inst(func, inst, reg, 1)
+---@param allow_modifying_inst_group boolean? @ only ever set this to true if you're certain it's correct
+local function add_reg_to_inst_get(func, inst, reg, allow_modifying_inst_group)
+  add_reg_to_inst(func, inst, reg, 1, allow_modifying_inst_group)
 end
 
 ---@param func ILFunction
 ---@param inst ILInstruction
 ---@param reg ILRegister
-local function add_reg_to_inst_set(func, inst, reg)
-  add_reg_to_inst(func, inst, reg, 2)
+---@param allow_modifying_inst_group boolean? @ only ever set this to true if you're certain it's correct
+local function add_reg_to_inst_set(func, inst, reg, allow_modifying_inst_group)
+  add_reg_to_inst(func, inst, reg, 2, allow_modifying_inst_group)
 end
 
 ---@param func ILFunction
 ---@param inst ILInstruction
 ---@param reg ILRegister
 ---@param get_set 1|2|3
-local function remove_reg_from_inst(func, inst, reg, get_set)
-  if inst.inst_group then
+---@param allow_modifying_inst_group boolean?
+local function remove_reg_from_inst(func, inst, reg, get_set, allow_modifying_inst_group)
+  if inst.inst_group and not allow_modifying_inst_group then
     util.debug_abort("Attempt to remove a register from an inst in inst_group (which are immutable).")
   end
   if func.has_start_stop_insts then
@@ -2168,15 +2171,17 @@ end
 ---@param func ILFunction
 ---@param inst ILInstruction
 ---@param reg ILRegister
-local function remove_reg_from_inst_get(func, inst, reg)
-  remove_reg_from_inst(func, inst, reg, 1)
+---@param allow_modifying_inst_group boolean? @ only ever set this to true if you're certain it's correct
+local function remove_reg_from_inst_get(func, inst, reg, allow_modifying_inst_group)
+  remove_reg_from_inst(func, inst, reg, 1, allow_modifying_inst_group)
 end
 
 ---@param func ILFunction
 ---@param inst ILInstruction
 ---@param reg ILRegister
-local function remove_reg_from_inst_set(func, inst, reg)
-  remove_reg_from_inst(func, inst, reg, 2)
+---@param allow_modifying_inst_group boolean? @ only ever set this to true if you're certain it's correct
+local function remove_reg_from_inst_set(func, inst, reg, allow_modifying_inst_group)
+  remove_reg_from_inst(func, inst, reg, 2, allow_modifying_inst_group)
 end
 
 ---@param func ILFunction
@@ -2257,23 +2262,23 @@ local function replace_forprep_index_reg(func, forprep_group, new_index_reg)
   local iter = ill.iterate(func.instructions, forprep_group.start)
   do -- to_number for index_reg
     local inst = iter()--[[@as ILToNumber]]
-    remove_reg_from_inst_get(func, inst, old_reg)
+    remove_reg_from_inst_get(func, inst, old_reg, true)
     inst.right_ptr = new_index_reg
-    add_reg_to_inst_get(func, inst, new_index_reg)
-    remove_reg_from_inst_set(func, inst, old_reg)
+    add_reg_to_inst_get(func, inst, new_index_reg, true)
+    remove_reg_from_inst_set(func, inst, old_reg, true)
     inst.result_reg = new_index_reg
-    add_reg_to_inst_set(func, inst, new_index_reg)
+    add_reg_to_inst_set(func, inst, new_index_reg, true)
   end
   iter() -- skip to_number for limit_reg
   iter() -- skip to_number for step_reg
   do -- binop to subtract step from index
     local inst = iter()--[[@as ILBinop]]
-    remove_reg_from_inst_get(func, inst, old_reg)
+    remove_reg_from_inst_get(func, inst, old_reg, true)
     inst.left_ptr = new_index_reg
-    add_reg_to_inst_get(func, inst, new_index_reg)
-    remove_reg_from_inst_set(func, inst, old_reg)
+    add_reg_to_inst_get(func, inst, new_index_reg, true)
+    remove_reg_from_inst_set(func, inst, old_reg, true)
     inst.result_reg = new_index_reg
-    add_reg_to_inst_set(func, inst, new_index_reg)
+    add_reg_to_inst_set(func, inst, new_index_reg, true)
   end
 end
 
@@ -2288,12 +2293,12 @@ local function replace_forprep_limit_reg(func, forprep_group, new_limit_reg)
   iter() -- skip to_number for index_reg
   do -- to_number for limit_reg
     local inst = iter()--[[@as ILToNumber]]
-    remove_reg_from_inst_get(func, inst, old_reg)
+    remove_reg_from_inst_get(func, inst, old_reg, true)
     inst.right_ptr = new_limit_reg
-    add_reg_to_inst_get(func, inst, new_limit_reg)
-    remove_reg_from_inst_set(func, inst, old_reg)
+    add_reg_to_inst_get(func, inst, new_limit_reg, true)
+    remove_reg_from_inst_set(func, inst, old_reg, true)
     inst.result_reg = new_limit_reg
-    add_reg_to_inst_set(func, inst, new_limit_reg)
+    add_reg_to_inst_set(func, inst, new_limit_reg, true)
   end
 end
 
@@ -2309,18 +2314,18 @@ local function replace_forprep_step_reg(func, forprep_group, new_step_reg)
   iter() -- skip to_number for limit_reg
   do -- to_number for step_reg
     local inst = iter()--[[@as ILToNumber]]
-    remove_reg_from_inst_get(func, inst, old_reg)
+    remove_reg_from_inst_get(func, inst, old_reg, true)
     inst.right_ptr = new_step_reg
-    add_reg_to_inst_get(func, inst, new_step_reg)
-    remove_reg_from_inst_set(func, inst, old_reg)
+    add_reg_to_inst_get(func, inst, new_step_reg, true)
+    remove_reg_from_inst_set(func, inst, old_reg, true)
     inst.result_reg = new_step_reg
-    add_reg_to_inst_set(func, inst, new_step_reg)
+    add_reg_to_inst_set(func, inst, new_step_reg, true)
   end
   do -- binop to subtract step from index
     local inst = iter()--[[@as ILBinop]]
-    remove_reg_from_inst_get(func, inst, old_reg)
+    remove_reg_from_inst_get(func, inst, old_reg, true)
     inst.right_ptr = new_step_reg
-    add_reg_to_inst_get(func, inst, new_step_reg)
+    add_reg_to_inst_get(func, inst, new_step_reg, true)
   end
 end
 
@@ -2334,9 +2339,9 @@ local function replace_forloop_index_reg(func, forloop_group, new_index_reg)
   local iter = ill.iterate(func.instructions, forloop_group.start)
   do -- binop incrementing index_reg (saved to temp reg)
     local inst = iter()--[[@as ILBinop]]
-    remove_reg_from_inst_get(func, inst, old_reg)
+    remove_reg_from_inst_get(func, inst, old_reg, true)
     inst.left_ptr = new_index_reg
-    add_reg_to_inst_get(func, inst, new_index_reg)
+    add_reg_to_inst_get(func, inst, new_index_reg, true)
   end
   iter() -- skip binop for test `step > 0`
   iter() -- skip test for test `step > 0`
@@ -2353,9 +2358,9 @@ local function replace_forloop_index_reg(func, forloop_group, new_index_reg)
   iter() -- skip label - jump target for first branch (on success)
   do -- move `index = incremented_index`
     local inst = iter()--[[@as ILMove]]
-    remove_reg_from_inst_set(func, inst, old_reg)
+    remove_reg_from_inst_set(func, inst, old_reg, true)
     inst.result_reg = new_index_reg
-    add_reg_to_inst_set(func, inst, new_index_reg)
+    add_reg_to_inst_set(func, inst, new_index_reg, true)
   end
   -- commented out because they're not needed, but kept for the comments
   -- iter() -- skip move `local_var = incremented_index`
@@ -2378,9 +2383,9 @@ local function replace_forloop_limit_reg(func, forloop_group, new_limit_reg)
   -- in the branch: `if step <= 0 then`
   do -- binop for `if index < limit then break end`
     local inst = iter()--[[@as ILBinop]]
-    remove_reg_from_inst_get(func, inst, old_reg)
+    remove_reg_from_inst_get(func, inst, old_reg, true)
     inst.left_ptr = new_limit_reg
-    add_reg_to_inst_get(func, inst, new_limit_reg)
+    add_reg_to_inst_get(func, inst, new_limit_reg, true)
   end
   iter() -- skip test for `if index < limit then break end`
   iter() -- skip jump for `if index < limit then break end`
@@ -2389,9 +2394,9 @@ local function replace_forloop_limit_reg(func, forloop_group, new_limit_reg)
   -- in the branch: `if step > 0 then`
   do -- binop for `if index > limit then break end`
     local inst = iter()--[[@as ILBinop]]
-    remove_reg_from_inst_get(func, inst, old_reg)
+    remove_reg_from_inst_get(func, inst, old_reg, true)
     inst.left_ptr = new_limit_reg
-    add_reg_to_inst_get(func, inst, new_limit_reg)
+    add_reg_to_inst_get(func, inst, new_limit_reg, true)
   end
   -- commented out because they're not needed, but kept for the comments
   -- iter() -- skip test for `if index > limit then break end`
@@ -2414,15 +2419,15 @@ local function replace_forloop_step_reg(func, forloop_group, new_step_reg)
   local iter = ill.iterate(func.instructions, forloop_group.start)
   do -- incrementing index_reg (saved to temp reg)
     local inst = iter()--[[@as ILBinop]]
-    remove_reg_from_inst_get(func, inst, old_reg)
+    remove_reg_from_inst_get(func, inst, old_reg, true)
     inst.left_ptr = new_step_reg
-    add_reg_to_inst_get(func, inst, new_step_reg)
+    add_reg_to_inst_get(func, inst, new_step_reg, true)
   end
   do -- binop for test `step > 0`
     local inst = iter()--[[@as ILBinop]]
-    remove_reg_from_inst_get(func, inst, old_reg)
+    remove_reg_from_inst_get(func, inst, old_reg, true)
     inst.left_ptr = new_step_reg
-    add_reg_to_inst_get(func, inst, new_step_reg)
+    add_reg_to_inst_get(func, inst, new_step_reg, true)
   end
   -- commented out because they're not needed, but kept for the comments
   -- iter() -- skip test for test `step > 0`
@@ -2469,9 +2474,9 @@ local function replace_forloop_local_reg(func, forloop_group, new_local_reg)
   iter() -- skip move `index = incremented_index`
   do -- move `local_var = incremented_index`
     local inst = iter()--[[@as ILMove]]
-    remove_reg_from_inst_set(func, inst, old_reg)
+    remove_reg_from_inst_set(func, inst, old_reg, true)
     inst.result_reg = new_local_reg
-    add_reg_to_inst_set(func, inst, new_local_reg)
+    add_reg_to_inst_set(func, inst, new_local_reg, true)
   end
   -- commented out because they're not needed, but kept for the comments
   -- iter() -- skip jump back up, next loop iteration (the target label isn't apart of the group)
