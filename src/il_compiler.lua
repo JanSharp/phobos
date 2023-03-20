@@ -2091,7 +2091,7 @@ do
       if linq(group.regs):any(function(reg) return reg.is_gap end)
         -- ^ There's a gap in the regs somewhere. If all non loop moves are done first then by the time any
         -- move loops have to move stuff around the gap will be free no matter what.
-        or get_highest_predetermined_index_in_range(group.inst, group.inst) + 1 < base_index
+        or get_highest_predetermined_index_in_range(group.inst, group.inst) + 1 < base_index + group.index_in_linked_groups
         -- ^ there's room under the reg group
       then
         -- There is a free register for potential move loops to use, this group is fine as is. Next.
