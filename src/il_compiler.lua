@@ -2073,12 +2073,18 @@ do
           :max()
         ;
       end)
+      -- to handle groups where all their registers require moves
+      :append(linq(linked_groups.groups)
+        :select(function(group)
+          return get_highest_predetermined_index_in_range(group.inst, group.inst) + 1
+        end)
+      )
       :max()
     ;
 
     local function apply_base_index()
       linked_groups.predetermined_base_index = base_index
-      for i, reg in ipairs(relevant_regs) do
+      for _, reg in ipairs(relevant_regs) do
         reg.predetermined_reg_index = base_index + reg.index_in_linked_groups
       end
     end
@@ -2295,9 +2301,6 @@ do
     for linked_groups in pairs(util.shallow_copy(data.all_linked_groups_lut)) do
       split_linked_groups_recursive(data, linked_groups)
     end
-
-    -- TODO: make sure all of these functions can handle linked groups with just one group
-    -- and linked groups where all registers require moves
 
     -- populate groups list from groups_lut
     for linked_groups in pairs(data.all_linked_groups_lut) do

@@ -575,6 +575,9 @@
 --------------------------------------------------
 -- intermediate language:
 
+---these are totally valid:
+---- only containing one group
+---- purely containing registers which require moves (all of their `index_in_linked_groups` is `nil`)
 ---@class ILLinkedRegisterGroupsGroup
 ---@field groups_lut table<ILRegisterGroup, true>
 ---@field groups ILRegisterGroup[] @ sorted by `group.inst.index` ascending
