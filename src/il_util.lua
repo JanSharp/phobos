@@ -2375,7 +2375,7 @@ end
 ---@param new_limit_reg ILRegister
 local function replace_forloop_limit_reg(func, forloop_group, new_limit_reg)
   local old_reg = forloop_group.limit_reg
-  forloop_group.limit_reg = reg
+  forloop_group.limit_reg = new_limit_reg
 
   local iter = ill.iterate(func.instructions, forloop_group.start)
   iter() -- skip binop incrementing index_reg (saved to temp reg)
