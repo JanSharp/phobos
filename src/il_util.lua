@@ -538,13 +538,15 @@ local function get_live_regs(inst_or_group)
   end
 end
 
+local empty = {}
+
 ---@param inst_or_group ILInstruction|ILInstructionGroup
 ---@return ILRegister[]
 local function get_regs_stop_at_list(inst_or_group)
   if is_inst_group(inst_or_group) then
     ---@cast inst_or_group ILInstructionGroup
     return linq(iterate_insts_in_group(inst_or_group))
-      :select_many(function(inst) return inst.regs_stop_at_list end)
+      :select_many(function(inst) return inst.regs_stop_at_list or empty end)
       :to_array()
     ;
   else
@@ -558,7 +560,7 @@ local function get_regs_stop_at_lut(inst_or_group)
   if is_inst_group(inst_or_group) then
     ---@cast inst_or_group ILInstructionGroup
     return linq(iterate_insts_in_group(inst_or_group))
-      :select_many(function(inst) return inst.regs_stop_at_list end)
+      :select_many(function(inst) return inst.regs_stop_at_list or empty end)
       :to_lookup()
     ;
   else
@@ -572,7 +574,7 @@ local function get_regs_start_at_list(inst_or_group)
   if is_inst_group(inst_or_group) then
     ---@cast inst_or_group ILInstructionGroup
     return linq(iterate_insts_in_group(inst_or_group))
-      :select_many(function(inst) return inst.regs_start_at_list end)
+      :select_many(function(inst) return inst.regs_start_at_list or empty end)
       :to_array()
   else
     return inst_or_group.regs_start_at_list
@@ -585,7 +587,7 @@ local function get_regs_start_at_lut(inst_or_group)
   if is_inst_group(inst_or_group) then
     ---@cast inst_or_group ILInstructionGroup
     return linq(iterate_insts_in_group(inst_or_group))
-      :select_many(function(inst) return inst.regs_start_at_list end)
+      :select_many(function(inst) return inst.regs_start_at_list or empty end)
       :to_lookup()
   else
     return inst_or_group.regs_start_at_lut
