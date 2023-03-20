@@ -1912,8 +1912,8 @@ do
   local function get_moves_required_for_group(linked_groups, reg_group)
     local moves_data = {}
     local group_base_index = linked_groups.predetermined_base_index + reg_group.index_in_linked_groups
-    local inside_index_key = reg_group.is_input and "from_index" or "to_index"
-    local outside_index_key = reg_group.is_input and "to_index" or "from_index"
+    local inside_index_key = reg_group.is_input and "to_index" or "from_index"
+    local outside_index_key = reg_group.is_input and "from_index" or "to_index"
     local replaced_regs_lut = reg_group.replaced_regs_lut
     for i, reg in ipairs(reg_group.regs) do
       if reg.is_gap then goto continue end
