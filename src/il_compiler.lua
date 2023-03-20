@@ -6,7 +6,6 @@ local opcodes = opcode_util.opcodes
 local ill = require("indexed_linked_list")
 local ll = require("linked_list")
 local il = require("il_util")
-local stack = require("stack")
 local linq = require("linq")
 
 local generate
@@ -2342,18 +2341,6 @@ do
   end
 end
 
----@class ILCompilerDataSnapshot
----@field first_inst ILCompiledInstruction
----@field compiled_registers_count integer
----@field local_reg_gaps table<integer, true>
----@field local_reg_count integer
----@field constants_count integer
----@field nil_constant_idx integer?
----@field nan_constant_idx integer?
----@field all_jumps (ILJump|ILTest)[]
----@field max_stack_size integer
----@field current_inst ILInstruction
-
 ---@class ILCompilerData
 ---@field func ILFunction
 ---@field result CompiledFunc
@@ -2371,7 +2358,6 @@ end
 ---@field nan_constant_idx integer?
 ---@field all_jumps (ILJump|ILTest)[]
 ---@field all_jumps_count integer
----@field snapshots ILCompilerDataSnapshot[]
 ---@field all_linked_groups_lut table<ILLinkedRegisterGroupsGroup, true>
 
 ---@param func ILFunction
@@ -2388,7 +2374,6 @@ local function compile(func)
     constants_count = 0,
     all_jumps = {},
     all_jumps_count = 0,
-    snapshots = stack.new_stack(),
     all_linked_groups_lut = {},
   }
   func.is_compiling = true
