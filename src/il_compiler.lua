@@ -945,6 +945,7 @@ do
     inst[is_input and "input_reg_group" or "output_reg_group"] = group
 
     for _, reg in ipairs(regs) do
+      if reg.is_gap then goto continue end
       if not reg.reg_groups then
         reg.reg_groups = {group}
       else
@@ -958,6 +959,7 @@ do
         end
         reg.reg_groups[#reg.reg_groups+1] = group
       end
+      ::continue::
     end
 
     if not group.linked_groups then
@@ -1287,6 +1289,7 @@ do
       for reg in linq(linked_groups.groups)
         :select_many(function(group) return group.regs end)
         :distinct()
+        :where(function(reg) return not reg.is_gap end)
         :iterate()
       do
         all_regs[#all_regs+1] = reg
@@ -1532,6 +1535,7 @@ do
 
         for j = 1, #group.regs do
           local reg = group.regs[j]
+          if reg.is_gap then goto continue end
           local unknown = what_can_we_do(group, j)
           unknown.lifetime_before = first_inst and count_instructions_from_to(data, reg.start_at, first_inst) or 0
           unknown.lifetime_after = last_inst and count_instructions_from_to(data, last_inst, reg.stop_at) or 0
@@ -1544,6 +1548,7 @@ do
             -- NOTE: currently useless
             can_only_move[#can_only_move+1] = unknown
           end
+          ::continue::
         end
       end
 
