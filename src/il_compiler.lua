@@ -875,13 +875,14 @@ do
   local function link_register_groups(data, left_group, right_group)
     if left_group.linked_groups then
       if right_group.linked_groups then
+        -- already linked
+        if left_group.linked_groups == right_group.linked_groups then return end
         -- merge linked groups
-        local linked_groups = left_group.linked_groups
-        for other_group in pairs(right_group.linked_groups.groups_lut) do
-          linked_groups.groups_lut[other_group] = true
-        end
         data.all_linked_groups_lut[right_group.linked_groups] = nil
-        right_group.linked_groups = linked_groups
+        for other_group in pairs(right_group.linked_groups.groups_lut) do
+          left_group.linked_groups.groups_lut[other_group] = true
+          other_group.linked_groups = left_group.linked_groups
+        end
       else
         -- reuse left linked groups
         right_group.linked_groups = left_group.linked_groups
@@ -905,9 +906,7 @@ do
   ---@param right_group ILRegisterGroup
   ---@param offset integer
   local function set_forced_offset_for_groups(data, left_group, right_group, offset)
-    if left_group.linked_groups ~= right_group.linked_groups then
-      link_register_groups(data, left_group, right_group)
-    end
+    link_register_groups(data, left_group, right_group)
     left_group.offset_to_next_group = offset
   end
 
@@ -943,23 +942,21 @@ do
       regs = regs,
       is_input = is_input,
     }
-    if inst then
-      inst[is_input and "input_reg_group" or "output_reg_group"] = group
-    end
+    inst[is_input and "input_reg_group" or "output_reg_group"] = group
 
     for _, reg in ipairs(regs) do
-      if not reg.is_parameter and not reg.requires_move_into_register_group then
-        if not reg.reg_groups then
-          reg.reg_groups = {group}
-        else
+      if not reg.reg_groups then
+        reg.reg_groups = {group}
+      else
+        if not reg.is_parameter and not reg.requires_move_into_register_group then
           if reg.is_vararg then
             local prev_group = reg.reg_groups[#reg.reg_groups]
             set_forced_offset_for_groups(data, prev_group, group, #prev_group.regs - #group.regs)
           else
             link_register_groups(data, reg.reg_groups[1], group)
           end
-          reg.reg_groups[#reg.reg_groups+1] = group
         end
+        reg.reg_groups[#reg.reg_groups+1] = group
       end
     end
 
