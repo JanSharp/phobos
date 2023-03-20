@@ -617,6 +617,7 @@ do
       -- increment index using a temporary register to match the internal implementation of forloop
       -- it only writes the new value of the index to the index register if it continues looping
       local incremented_index_reg = il.new_reg()
+      incremented_index_reg.is_internal = true
       local forloop_group_start = add_inst(func, il.new_binop{
         position = stat.do_token,
         result_reg = incremented_index_reg,
@@ -628,6 +629,7 @@ do
 
       -- test `step > 0`
       local temp_reg = il.new_reg()
+      temp_reg.is_internal = true
       add_inst(func, il.new_binop{
         position = stat.for_token,
         result_reg = temp_reg,
@@ -646,6 +648,7 @@ do
       -- this is the branch: `if step <= 0 then`
       -- and this does `if index < limit then break end`
       temp_reg = il.new_reg()
+      temp_reg.is_internal = true
       add_inst(func, il.new_binop{
         position = stat.for_token,
         result_reg = temp_reg,
@@ -671,6 +674,7 @@ do
       -- this is the branch: `if step > 0 then`
       -- and this does `if index > limit then break end`
       temp_reg = il.new_reg()
+      temp_reg.is_internal = true
       add_inst(func, il.new_binop{
         position = stat.for_token,
         result_reg = temp_reg,

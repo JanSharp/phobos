@@ -627,6 +627,7 @@
 ---@field requires_move_into_register_group boolean
 ---@field is_vararg boolean
 ---@field is_gap boolean? @ indicates a gap in register lists
+---@field is_internal boolean? @ registers purely internal inside of instruction groups
 ---post IL generation data
 ---@field start_at ILInstruction
 ---@field stop_at ILInstruction

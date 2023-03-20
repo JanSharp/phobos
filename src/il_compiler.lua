@@ -1859,14 +1859,18 @@ do
             :select_many(function(inst) return inst.regs_start_at_list or empty end)
             :distinct()
             -- basically keeps all registers that don't have a fixed index in their linked register groups
-            :where(function(reg) return not reg.reg_groups or reg.requires_move_into_register_group end)
+            :where(function(reg) return not reg.is_internal
+              and (not reg.reg_groups or reg.requires_move_into_register_group)
+            end)
             :iterate()
           ,
           stopping_regs_iter = linq(insts)
             :select_many(function(inst) return inst.regs_stop_at_list or empty end)
             :distinct()
             -- basically keeps all registers that don't have a fixed index in their linked register groups
-            :where(function(reg) return not reg.reg_groups or reg.requires_move_into_register_group end)
+            :where(function(reg) return not reg.is_internal
+              and (not reg.reg_groups or reg.requires_move_into_register_group)
+            end)
             :select(function(reg, i) reg.index_for_order = i; return reg end)
             -- no special ordering for upvalues because doing so would create unnecessary gaps
             -- long lived registers first, putting them lower, resulting in less gaps
