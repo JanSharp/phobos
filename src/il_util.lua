@@ -525,15 +525,7 @@ local function get_live_regs(inst_or_group)
     end
     return linq(inst_or_group.start.live_regs)
       :union(inst_or_group.stop.live_regs)
-      -- remove all regs that are only alive within the inst group
-      -- TODO: add and use internal flag on registers for this check instead of this range logic
-      :except(
-        linq(inst_or_group.start.regs_start_at_list or empty)
-          :where(function(reg) return reg.stop_at.index <= inst_or_group.stop.index end)
-          :append(linq(inst_or_group.stop.regs_stop_at_list or empty)
-            :where(function(reg) return inst_or_group.start.index <= reg.start_at.index end)
-          )
-      )
+      :where(function(reg) return not reg.is_internal end)
       :to_array()
     ;
   else
