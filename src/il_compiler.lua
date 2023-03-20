@@ -2006,6 +2006,10 @@ do
     return non_circular_moves, circular_moves
   end
 
+  local insert_moves_in_and_out_of_reg_groups
+
+  ---Also inserts move instructions otherwise it would position linked groups inside of each other
+  ---because the temporary registers for move instructions are not allocated yet.
   ---@param data ILCompilerData
   ---@param linked_groups ILLinkedRegisterGroupsGroup
   local function determine_indexes_for_linked_groups(data, linked_groups)
@@ -2112,6 +2116,8 @@ do
       end
       ::continue::
     end
+
+    insert_moves_in_and_out_of_reg_groups(data, linked_groups)
   end
 
   ---@param data ILCompilerData
@@ -2199,7 +2205,7 @@ do
 
   ---@param data ILCompilerData
   ---@param linked_groups ILLinkedRegisterGroupsGroup
-  local function insert_moves_in_and_out_of_reg_groups(data, linked_groups)
+  function insert_moves_in_and_out_of_reg_groups(data, linked_groups)
     for _, reg_group in ipairs(linked_groups.groups) do
       insert_moves_in_or_out_of_reg_group(data, linked_groups, reg_group)
     end
@@ -2322,12 +2328,7 @@ do
 
     evaluate_indexes_for_regs_outside_of_groups(data)
     for _, linked_groups in ipairs(all_linked_groups) do
-      determine_indexes_for_linked_groups(data, linked_groups)
-    end
-
-    -- insert moves for registers which require moves into or out of register groups
-    for _, linked_groups in ipairs(all_linked_groups) do
-      insert_moves_in_and_out_of_reg_groups(data, linked_groups)
+      determine_indexes_for_linked_groups(data, linked_groups) -- this also inserts move instructions
     end
 
     ensure_gc_insts_are_at_top(data)
