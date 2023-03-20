@@ -1603,6 +1603,7 @@ local function normalize_blocks_for_inst(func, inst)
   -- determine if we can connect with the block of the next instruction
   local can_use_next_block = inst.next and not block_ends[inst.inst_type] and inst.next.inst_type ~= "label"
   -- determine if we have to split a block due to this insertion
+  -- TODO: this doesn't actually split the blocks at all.
   if can_use_prev_block then
     inst.block = inst.prev.block
     if inst.block.stop_inst == inst.prev then
