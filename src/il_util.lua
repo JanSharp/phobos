@@ -1869,7 +1869,7 @@ do
         if reg.start_at then
           util.remove_from_array(reg.start_at.regs_start_at_list, reg)
           reg.start_at.regs_start_at_lut[reg] = nil
-          add_to_live_regs(inst.next, reg.start_at.prev)
+          add_to_live_regs(inst.next, reg.start_at)
         end
         inst.regs_start_at_list = inst.regs_start_at_list or {}
         inst.regs_start_at_list[#inst.regs_start_at_list+1] = reg
