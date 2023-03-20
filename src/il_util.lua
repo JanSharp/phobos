@@ -446,6 +446,8 @@ end
 -- instruction helpers
 ----------------------------------------------------------------------------------------------------
 
+local empty = {}
+
 ---@param inst_or_group ILInstruction|ILInstructionGroup
 ---@return boolean
 local function is_inst_group(inst_or_group)
@@ -526,19 +528,18 @@ local function get_live_regs(inst_or_group)
       -- remove all regs that are only alive within the inst group
       -- TODO: add and use internal flag on registers for this check instead of this range logic
       :except(
-        linq(inst_or_group.start.regs_start_at_list)
+        linq(inst_or_group.start.regs_start_at_list or empty)
           :where(function(reg) return reg.stop_at.index <= inst_or_group.stop.index end)
-          :append(linq(inst_or_group.stop.regs_stop_at_list)
+          :append(linq(inst_or_group.stop.regs_stop_at_list or empty)
             :where(function(reg) return inst_or_group.start.index <= reg.start_at.index end)
-        )
+          )
       )
+      :to_array()
     ;
   else
     return inst_or_group.live_regs
   end
 end
-
-local empty = {}
 
 ---@param inst_or_group ILInstruction|ILInstructionGroup
 ---@return ILRegister[]
