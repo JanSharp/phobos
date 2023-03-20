@@ -1557,13 +1557,6 @@ do
       ---@type type<ILRegisterGroup, integer>
       local group_indexes = {}
       local group_indexes_count = 0
-      ---@type table<ILRegister, table<integer, true>>
-      local disallowed_indexes = {}
-      for _, unknown in ipairs(unknowns) do
-        if not disallowed_indexes[unknown.reg] then
-          disallowed_indexes[unknown.reg] = {}
-        end
-      end
       local total_moves_count = 0
 
       ---@type table<ILRegister, integer>
