@@ -1624,6 +1624,7 @@ local function normalize_blocks_for_inst(func, inst)
   end
   -- can't use either of them, create new block
   local block = new_block(inst, inst)
+  inst.block = block
   ill.insert_after(func.blocks, inst.prev and inst.prev.block, block)
   -- deal with source_links
   if inst.prev then
