@@ -1747,6 +1747,7 @@ do
             :distinct()
             -- basically keeps all registers that don't have a fixed index in their linked register groups
             :where(function(reg) return not reg.is_internal
+              and not reg.is_parameter
               and (not reg.reg_groups or reg.requires_move_into_register_group)
             end)
             :iterate()
@@ -1756,6 +1757,7 @@ do
             :distinct()
             -- basically keeps all registers that don't have a fixed index in their linked register groups
             :where(function(reg) return not reg.is_internal
+              and not reg.is_parameter
               and (not reg.reg_groups or reg.requires_move_into_register_group)
             end)
             :select(function(reg, i) reg.index_for_order = i; return reg end)
