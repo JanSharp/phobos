@@ -112,28 +112,17 @@ do
   local generate_inst
   local generate_inst_group
   do
-    ---@class ILRegisterWithTempSortIndex : ILRegister
-    ---@field temp_sort_index integer
-
-    local regs = {} ---@type ILRegisterWithTempSortIndex[]
+    local regs = {} ---@type ILRegister[]
 
     local function fill_regs_using_regs_list(list)
       for _, reg in ipairs(list) do
-        reg.temp_sort_index = #regs + 1
-        regs[reg.temp_sort_index] = reg
+        regs[#regs+1] = reg
       end
     end
 
     local function sort_regs()
       table.sort(regs, function(left, right)
-        if left.start_at.index ~= right.start_at.index then
-          return left.start_at.index < right.start_at.index
-        end
-        if left.stop_at.index ~= right.stop_at.index then
-          return left.start_at.index > right.start_at.index
-        end
-        -- to make it a stable sort
-        return left.temp_sort_index < right.temp_sort_index
+        return left.predetermined_reg_index < right.predetermined_reg_index
       end)
     end
 
@@ -141,31 +130,28 @@ do
 
     ---@param data ILCompilerData
     ---@param reg_list ILRegister[]
-    local function stop_local_regs_for_list(data, reg_list)
+    local function stop_regs_for_list(data, reg_list)
       fill_regs_using_regs_list(reg_list)
       local reg_count = #regs
       if reg_count == 0 then return end
       table.sort(regs, function(left, right)
         return left.current_reg.reg_index > right.current_reg.reg_index
       end)
-      -- sort_regs()
       for i = reg_count, 1, -1 do
         stop_reg(data, regs[i].current_reg)
-        regs[i].temp_sort_index = nil
         regs[i] = nil
       end
     end
 
-    local function stop_local_regs(data, inst)
-      if inst.regs_start_at_list then
-        stop_local_regs_for_list(data, inst.regs_start_at_list)
-      end
+    local function stop_regs_for_inst(data, inst)
+      if not inst.regs_start_at_list then return end
+      stop_regs_for_list(data, inst.regs_start_at_list)
     end
 
     ---@param data ILCompilerData
     ---@param position Position
     ---@param reg_list ILRegister[]
-    local function start_local_regs_for_list(data, position, reg_list)
+    local function start_regs_for_list(data, position, reg_list)
       fill_regs_using_regs_list(reg_list)
       local reg_count = #regs
       if reg_count == 0 then return end
@@ -174,15 +160,7 @@ do
       for i = 1, reg_count do
         local reg = regs[i]
         regs[i] = nil
-        local reg_index = data.local_reg_count
-        if next(data.local_reg_gaps) then
-          reg_index = 0
-          while not data.local_reg_gaps[reg_index] do
-            reg_index = reg_index + 1
-          end
-        end
-        reg.current_reg = create_compiled_reg(data, reg_index, reg.name)
-        reg.temp_sort_index = nil
+        reg.current_reg = create_compiled_reg(data, reg.predetermined_reg_index, reg.name)
         if reg.captured_as_upval and not reg_index_to_close_upvals_from then
           reg_index_to_close_upvals_from = reg.current_reg.reg_index
         end
@@ -198,115 +176,34 @@ do
 
     ---@param data ILCompilerData
     ---@param inst ILInstruction
-    local function start_local_regs(data, inst)
+    local function start_regs_for_inst(data, inst)
       if not inst.regs_stop_at_list then return end
-      start_local_regs_for_list(data, inst.position, inst.regs_stop_at_list)
-    end
-
-    ---@param inst_group ILInstructionGroup
-    local function get_total_reg_start_and_stop_at_lists_for_inst_group(inst_group)
-      local start_at_lut = {}
-      local stop_at_lut = {}
-      local inst = inst_group.start
-      while inst ~= inst_group.stop.next do
-        if inst.regs_start_at_list then
-          for _, reg in ipairs(inst.regs_start_at_list) do
-            start_at_lut[reg] = true
-          end
-        end
-        if inst.regs_stop_at_list then
-          for _, reg in ipairs(inst.regs_stop_at_list) do
-            stop_at_lut[reg] = true
-          end
-      end
-        inst = inst.next
-      end
-      local start_at_list = {}
-      local stop_at_list = {}
-      inst = inst_group.start
-      while inst ~= inst_group.stop.next do
-        if inst.regs_start_at_list then
-          for _, reg in ipairs(inst.regs_start_at_list) do
-            if not stop_at_lut[reg] then
-              start_at_list[#start_at_list+1] = reg
-            end
-          end
-        end
-        if inst.regs_stop_at_list then
-          for _, reg in ipairs(inst.regs_stop_at_list) do
-            if not start_at_lut[reg] then
-              stop_at_list[#stop_at_list+1] = reg
-            end
-          end
-        end
-        inst = inst.next
-      end
-      return start_at_list, stop_at_list
+      start_regs_for_list(data, inst.position, inst.regs_stop_at_list)
     end
 
     ---@param data ILCompilerData
     ---@param inst_group ILInstructionGroup
     function generate_inst_group(data, inst_group)
-      local start_at_list, stop_at_list = get_total_reg_start_and_stop_at_lists_for_inst_group(inst_group)
-      stop_local_regs_for_list(data, start_at_list)
-      start_local_regs_for_list(data, inst_group.start.position, stop_at_list)
+      local start_at_list = il.get_regs_start_at_list(inst_group)
+      local stop_at_list = il.get_regs_stop_at_list(inst_group)
+      stop_regs_for_list(data, start_at_list)
+      start_regs_for_list(data, inst_group.start.position, stop_at_list)
       return generate_inst_group_lut[inst_group.group_type](data, inst_group)
     end
 
     ---@param inst ILInstruction
     function generate_inst(data, inst)
-      stop_local_regs(data, inst)
-      start_local_regs(data, inst)
+      stop_regs_for_inst(data, inst)
+      start_regs_for_inst(data, inst)
       return generate_inst_lut[inst.inst_type](data, inst)
     end
   end
 
   ---@param data ILCompilerData
   ---@param reg ILCompiledRegister
-  ---@return ILCompiledRegister top_reg
-  local function ensure_is_top_reg_for_set_pre(data, position, reg)
-    if reg.reg_index >= data.local_reg_count - 1 then
-      return reg
-    else
-      local temp_reg = create_new_reg_at_top(data)
-      add_new_inst(data, position, opcodes.move, {
-        a = reg.reg_index,
-        b = temp_reg.reg_index,
-      })
-      return temp_reg
-    end
-  end
-
-  ---@param data ILCompilerData
-  ---@param initial_reg ILCompiledRegister
-  ---@param top_reg ILCompiledRegister
-  local function ensure_is_top_reg_for_set_post(data, initial_reg, top_reg)
-    if top_reg ~= initial_reg then
-      stop_reg(data, top_reg)
-    end
-  end
-
-  ---@param data ILCompilerData
-  ---@param reg ILCompiledRegister
-  ---@return ILCompiledRegister top_reg
-  local function ensure_is_exact_reg_for_get_pre(data, reg, reg_index)
-    if reg.reg_index == reg_index then
-      return reg
-    else
-      return create_compiled_reg(data, reg_index)
-    end
-  end
-
-  ---@param data ILCompilerData
-  ---@param initial_reg ILCompiledRegister
-  ---@param exact_reg ILCompiledRegister
-  local function ensure_is_exact_reg_for_get_post(data, position, initial_reg, exact_reg)
-    if exact_reg ~= initial_reg then
-      add_new_inst(data, position, opcodes.move, {
-        a = exact_reg.reg_index,
-        b = initial_reg.reg_index,
-      })
-      stop_reg(data, exact_reg)
+  local function ensure_reg_is_at_top(data, reg)
+    if reg.reg_index < data.local_reg_count - 1 then
+      util.debug_abort("The pre process steps didn't ensure that the result reg for new_table and concat are at top.")
     end
   end
 
@@ -559,25 +456,21 @@ do
     ---@param inst ILSetList
     ["set_list"] = function(data, inst)
       local is_vararg = (inst.right_ptrs[#inst.right_ptrs]--[[@as ILRegister]]).is_vararg
-      local table_reg_index = (inst.right_ptrs[1]--[[@as ILRegister]]).current_reg.reg_index - 1
-      local table_reg = ensure_is_exact_reg_for_get_pre(data, inst.table_reg.current_reg, table_reg_index)
       add_new_inst(data, inst.position, opcodes.setlist, {
-        a = table_reg_index,
+        a = inst.table_reg.current_reg.reg_index,
         b = is_vararg and 0 or #inst.right_ptrs,
         c = ((inst.start_index - 1) / phobos_consts.fields_per_flush) + 1,
       })
-      ensure_is_exact_reg_for_get_post(data, inst.position, inst.table_reg.current_reg, table_reg)
       return inst.prev
     end,
     ---@param inst ILNewTable
     ["new_table"] = function(data, inst)
-      local reg = ensure_is_top_reg_for_set_pre(data, inst.position, inst.result_reg.current_reg)
+      ensure_reg_is_at_top(data, inst.result_reg.current_reg)
       add_new_inst(data, inst.position, opcodes.newtable, {
-        a = reg.reg_index,
+        a = inst.result_reg.current_reg.reg_index,
         b = util.number_to_floating_byte(inst.array_size),
         c = util.number_to_floating_byte(inst.hash_size),
       })
-      ensure_is_top_reg_for_set_post(data, inst.result_reg.current_reg, reg)
       return inst.prev
     end,
     ---@param inst ILConcat
@@ -685,15 +578,11 @@ do
       -- pre-process step (removing the `not reg.temporary` check, or so)
       local vararg_args = inst.arg_ptrs[1] and (inst.arg_ptrs[#inst.arg_ptrs]--[[@as ILRegister]]).is_vararg
       local vararg_result = inst.result_regs[1] and inst.result_regs[#inst.result_regs].is_vararg
-      ---@diagnostic disable-next-line: undefined-field
-      local func_reg_index = inst.register_list_index -- FIXME: rely on register groups
-      local func_reg = ensure_is_exact_reg_for_get_pre(data, inst.func_reg.current_reg, func_reg_index)
       add_new_inst(data, inst.position, opcodes.call, {
-        a = func_reg_index,
+        a = inst.func_reg.current_reg.reg_index,
         b = vararg_args and 0 or (#inst.arg_ptrs + 1),
         c = vararg_result and 0 or (#inst.result_regs + 1),
       })
-      ensure_is_exact_reg_for_get_post(data, inst.position, inst.func_reg.current_reg, func_reg)
       return inst.prev
     end,
     ---@param inst ILRet
@@ -711,20 +600,18 @@ do
     end,
     ---@param inst ILClosure
     ["closure"] = function(data, inst)
-      local reg = ensure_is_top_reg_for_set_pre(data, inst.position, inst.result_reg.current_reg)
+      ensure_reg_is_at_top(data, inst.result_reg.current_reg)
       add_new_inst(data, inst.position, opcodes.closure, {
-        a = reg.reg_index,
+        a = inst.result_reg.current_reg.reg_index,
         bx = inst.func.closure_index,
       })
-      ensure_is_top_reg_for_set_post(data, inst.result_reg.current_reg, reg)
       return inst.prev
     end,
     ---@param inst ILVararg
     ["vararg"] = function(data, inst)
       local is_vararg = inst.result_regs[#inst.result_regs].is_vararg
       add_new_inst(data, inst.position, opcodes.vararg, {
-        ---@diagnostic disable-next-line: undefined-field
-        a = inst.register_list_index, -- FIXME: rely on register groups
+        a = inst.result_regs[1].current_reg.reg_index,
         b = is_vararg and 0 or (#inst.result_regs + 1),
       })
       return inst.prev
@@ -2381,8 +2268,7 @@ local function compile(func)
   il.determine_reg_usage(func)
   pre_compilation_process(data)
 
-  -- FIXME: uncomment once register indexes are implemented and are ready for compilation
-  -- generate(data)
+  generate(data)
 
   for i = data.compiled_registers_count + 1, #data.compiled_registers do
     data.compiled_registers[i] = nil
