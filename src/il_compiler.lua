@@ -574,8 +574,6 @@ do
     end,
     ---@param inst ILCall
     ["call"] = function(data, inst)
-      -- TODO: Optimize by forcing registers to be at the right index and removing the moves in the [...]
-      -- pre-process step (removing the `not reg.temporary` check, or so)
       local vararg_args = inst.arg_ptrs[1] and (inst.arg_ptrs[#inst.arg_ptrs]--[[@as ILRegister]]).is_vararg
       local vararg_result = inst.result_regs[1] and inst.result_regs[#inst.result_regs].is_vararg
       add_new_inst(data, inst.position, opcodes.call, {
