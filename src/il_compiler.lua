@@ -1317,7 +1317,7 @@ do
       -- count_in_input == 0
       local index_in_output = linq(output_group.regs):index_of(reg)
       local corresponding_reg_in_input = input_group.regs[index_in_output + offset]
-      return corresponding_reg_in_input.is_gap
+      return (corresponding_reg_in_input and corresponding_reg_in_input.is_gap)
         or (not corresponding_reg_in_input and not il.is_vararg_list(input_group.regs))
     end
 
