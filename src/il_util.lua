@@ -95,6 +95,7 @@ local function new_forloop_group(params)
   group.index_reg = assert_reg(params, "index_reg")
   group.limit_reg = assert_reg(params, "limit_reg")
   group.step_reg = assert_reg(params, "step_reg")
+  group.local_reg = assert_reg(params, "local_reg")
   group.loop_jump = assert_field(params, "loop_jump")
   return group
 end
