@@ -1055,7 +1055,6 @@ do
       replace_forprep_reg(func, inst_group, reg)
 
       if not is_original_call then return end -- do not recurse if we already came from a recursive call
-      if index_in_group ~= 1 then return end -- only the first register is shared between the 2 reg groups
       local opposite_reg_group = get_opposite_reg_group_for_inst_group(inst_group, reg_group)
       replace_reg_in_reg_group_recursive(func, opposite_reg_group, index_in_group, reg, false)
     end,
