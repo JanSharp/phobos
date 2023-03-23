@@ -1035,8 +1035,6 @@ do
     [4] = il.replace_forloop_local_reg,
   }
 
-  local replace_reg_in_reg_group_recursive
-
   ---@param inst_group ILInstructionGroup
   ---@param reg_group ILRegisterGroup
   ---@return ILRegisterGroup
@@ -1046,28 +1044,52 @@ do
       or inst_group.start.input_reg_group--[[@as ILRegisterGroup]]
   end
 
-  ---@type table<ILInstructionGroupType, fun(func: ILFunction, inst_group: ILInstructionGroup, reg_group: ILRegisterGroup, index_in_group: integer, reg: ILRegister, is_original_call: boolean)>
+  ---@param reg_group ILRegisterGroup
+  ---@param index_in_group integer
+  ---@param reg ILRegister
+  local function mark_reg_as_replaced(reg_group, index_in_group, reg)
+    -- if this function was called due to inst groups's reg groups being linked and using the same registers
+    -- (which means that if a register gets replaced in one group, it also has to be replaced in the other
+    -- one (the 2 groups in question are the input and output groups for inst groups))
+    -- then we have to remember that this was an "implied" replacement to then inform future processing
+    -- of this register group that a register was replaced so it can decide if it has to insert another
+    -- move instruction to or from this register.
+    -- this allows the input or output reg group for the inst group to be processed in any order, so long
+    -- as they are not processed multiple times, because this extra data stored here cannot be cleaned up
+    -- TODO: change this comment if the insert move logic can clean up all of the temp data
+    local old_reg = reg_group.regs[index_in_group]
+    reg_group.replaced_regs = reg_group.replaced_regs or {}
+    reg_group.replaced_regs_lut = reg_group.replaced_regs_lut or {}
+    if not reg_group.replaced_regs_lut[index_in_group] then
+      reg_group.replaced_regs[#reg_group.replaced_regs+1] = {
+        index = index_in_group,
+        old_reg = old_reg,
+      }
+      reg_group.replaced_regs_lut[index_in_group] = old_reg
+    end
+    reg_group.regs[index_in_group] = reg
+  end
+
+  ---@type table<ILInstructionGroupType, fun(func: ILFunction, inst_group: ILInstructionGroup, reg_group: ILRegisterGroup, index_in_group: integer, reg: ILRegister)>
   local replace_reg_in_reg_group_inst_group_lut = {
     ---@param inst_group ILForprepGroup
-    ["forprep"] = function(func, inst_group, reg_group, index_in_group, reg, is_original_call)
+    ["forprep"] = function(func, inst_group, reg_group, index_in_group, reg)
       -- both input and output have all 3 registers in the same location, so just do this regardless of that
       local replace_forprep_reg = replace_forprep_reg_lut[index_in_group]
       replace_forprep_reg(func, inst_group, reg)
 
-      if not is_original_call then return end -- do not recurse if we already came from a recursive call
       local opposite_reg_group = get_opposite_reg_group_for_inst_group(inst_group, reg_group)
-      replace_reg_in_reg_group_recursive(func, opposite_reg_group, index_in_group, reg, false)
+      mark_reg_as_replaced(opposite_reg_group, index_in_group, reg)
     end,
     ---@param inst_group ILForloopGroup
-    ["forloop"] = function(func, inst_group, reg_group, index_in_group, reg, is_original_call)
+    ["forloop"] = function(func, inst_group, reg_group, index_in_group, reg)
       -- both input and output have all 3 registers in the same location, so just do this regardless of that
       local replace_forloop_reg = replace_forloop_reg_lut[index_in_group]
       replace_forloop_reg(func, inst_group, reg)
 
-      if not is_original_call then return end -- do not recurse if we already came from a recursive call
       if index_in_group ~= 1 then return end -- only the first register is shared between the 2 reg groups
       local opposite_reg_group = get_opposite_reg_group_for_inst_group(inst_group, reg_group)
-      replace_reg_in_reg_group_recursive(func, opposite_reg_group, index_in_group, reg, false)
+      mark_reg_as_replaced(opposite_reg_group, index_in_group, reg)
     end,
   }
 
@@ -1075,48 +1097,18 @@ do
   ---@param reg_group ILRegisterGroup
   ---@param index_in_group integer
   ---@param reg ILRegister
-  ---@param is_original_call boolean
-  function replace_reg_in_reg_group_recursive(func, reg_group, index_in_group, reg, is_original_call)
+  local function replace_reg_in_reg_group(func, reg_group, index_in_group, reg)
     local inst = reg_group.inst
     if inst.inst_group then
       local group_type = inst.inst_group.group_type
       local replace_reg_in_reg_group_inst_group = replace_reg_in_reg_group_inst_group_lut[group_type]
-      replace_reg_in_reg_group_inst_group(func, inst.inst_group, reg_group, index_in_group, reg, is_original_call)
+      replace_reg_in_reg_group_inst_group(func, inst.inst_group, reg_group, index_in_group, reg)
     else
       local replace_reg_in_reg_group_inst = replace_reg_in_reg_group_inst_lut[inst.inst_type]
       replace_reg_in_reg_group_inst(func, inst, reg_group, index_in_group, reg)
     end
 
-    if not is_original_call then
-      -- if this function was called due to inst groups's reg groups being linked and using the same registers
-      -- (which means that if a register gets replaced in one group, it also has to be replaced in the other
-      -- one (the 2 groups in question are the input and output groups for inst groups))
-      -- then we have to remember that this was an "implied" replacement to then inform future processing
-      -- of this register group that a register was replaced so it can decide if it has to insert another
-      -- move instruction to or from this register.
-      -- this allows the input or output reg group for the inst group to be processed in any order, so long
-      -- as they are not processed multiple times, because this extra data stored here cannot be cleaned up
-      -- TODO: change this comment if the insert move logic can clean up all of the temp data
-      local old_reg = reg_group.regs[index_in_group]
-      reg_group.replaced_regs = reg_group.replaced_regs or {}
-      reg_group.replaced_regs_lut = reg_group.replaced_regs_lut or {}
-      if not reg_group.replaced_regs_lut[index_in_group] then
-        reg_group.replaced_regs[#reg_group.replaced_regs+1] = {
-          index = index_in_group,
-          old_reg = old_reg,
-        }
-        reg_group.replaced_regs_lut[index_in_group] = old_reg
-      end
-    end
     reg_group.regs[index_in_group] = reg
-  end
-
-  ---@param func ILFunction
-  ---@param reg_group ILRegisterGroup
-  ---@param index_in_group integer
-  ---@param reg ILRegister
-  local function replace_reg_in_reg_group(func, reg_group, index_in_group, reg)
-    replace_reg_in_reg_group_recursive(func, reg_group, index_in_group, reg, true)
   end
 
   ---@param data ILCompilerData
