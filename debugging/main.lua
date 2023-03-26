@@ -29,10 +29,11 @@ local total_lua_byte_count = 0
 local total_pho_byte_count = 0
 
 local instruction_line_format = util.parse_interpolated_string(
-  "-- {line:%3d} {column:%3d} {prefix}: {func_id:%3d}f  {pc:%4d}  {op_label}  {description:%-50s}  {args}"
+  "-- {line:%3d} {column:%3d} {prefix}: {func_id:%3d}f  {pc:%4d}  {op_label:%-8s}  {description:%-50s}  {args}"
 )
 local il_instruction_line_format = util.parse_interpolated_string(
-  "-- {line:%3d} {column:%3d} IL1: {func_id:%3d}f  {pc:%4d}  {index:%4d}  {group_label} {label}  {block_id}  {description}"
+  "-- {line:%3d} {column:%3d} IL1: {func_id:%3d}f  {pc:%4d}  {index:%4d}  \z
+    [ {group_label:%-8s} ] {label:%-8s}  {block_id}  {description}"
 )
 
 -- local ill = require("indexed_linked_list")

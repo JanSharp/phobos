@@ -552,13 +552,6 @@ local function disassemble(bytecode)
   return disassemble_func()
 end
 
-local max_opcode_name_length = 0
-for opcode_name in pairs(opcodes) do
-  if #opcode_name > max_opcode_name_length then
-    max_opcode_name_length = #opcode_name
-  end
-end
-
 ---@class DisassemblyInstructionData : Position
 ---@field line integer @ 0 for unknown (overridden to remove `nil`)
 ---@field column integer @ 0 for unknown (overridden to remove `nil`)
@@ -598,8 +591,6 @@ local function get_disassembly(func, func_description_callback, instruction_call
   local instructions = func.instructions
   local data = {}
   for i = 1, #instructions do
-    local label = instructions[i].op.label
-    local description = get_instruction_description(func, i, constant_labels, display_keys)
     local parts = {}
     for _, key in ipairs{"a", "b", "c", "ax", "bx", "sbx"} do
       if instructions[i].op.params[key] then
@@ -610,8 +601,8 @@ local function get_disassembly(func, func_description_callback, instruction_call
     data.line = instructions[i].line or 0
     data.column = instructions[i].column or 0
     data.pc = i
-    data.op_label = label..string.rep(" ", max_opcode_name_length - #label)
-    data.description = description
+    data.op_label = instructions[i].op.label
+    data.description = get_instruction_description(func, i, constant_labels, display_keys)
     data.args = args
     instruction_callback(data)
   end

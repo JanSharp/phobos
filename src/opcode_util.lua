@@ -1,4 +1,6 @@
 
+local util = require("util")
+
 local register = 1
 local constant = 2
 local register_or_constant = 3
@@ -90,6 +92,8 @@ local opcodes = {}
 local next_id = 0
 local opcodes_by_id = {}
 local function op(name, params, special)
+  util.debug_assert(#name <= 8, "Opcode names must (by internal convention) not be longer than 8 characters.")
+
   local reduce_if_not_zero = {}
   local conditional = {}
   local next_op = special and special.next
