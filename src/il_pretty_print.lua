@@ -166,6 +166,9 @@ return function(func, format_callback)
     local label, description = get_label(inst, context)
     data.pc = pc
     data.label = label..string.rep(" ", 8 - #label)
+    local group_label = inst.inst_group and inst.inst_group.group_type:upper() or "        "
+    data.group_label = "{ "..group_label..string.rep(" ", 8 - #group_label).." }"
+    data.index = inst.index
     data.description = description
     data.inst = inst
     local line = format_callback(data)

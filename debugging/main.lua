@@ -32,7 +32,7 @@ local instruction_line_format = util.parse_interpolated_string(
   "-- {line:%3d} {column:%3d} {prefix}: {func_id:%3d}f  {pc:%4d}  {op_label}  {description:%-50s}  {args}"
 )
 local il_instruction_line_format = util.parse_interpolated_string(
-  "-- {line:%3d} {column:%3d} IL1: {func_id:%3d}f  {pc:%4d}  {label}  {block_id}  {description}"
+  "-- {line:%3d} {column:%3d} IL1: {func_id:%3d}f  {pc:%4d}  {index:%4d}  {group_label} {label}  {block_id}  {description}"
 )
 
 -- local ill = require("indexed_linked_list")
