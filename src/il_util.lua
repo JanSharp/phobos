@@ -1904,6 +1904,11 @@ do
   ---@param inst ILInstruction
   function eval_start_stop_and_liveliness_for_regs_for_inst(func, inst)
     visit_regs_for_inst(func, inst, add_start_stop_and_liveliness_for_reg_for_inst)
+    if func.has_reg_liveliness and not inst.live_regs then
+      inst.live_regs = (inst.prev and util.shallow_copy(inst.prev.live_regs))
+        or (inst.next and util.shallow_copy(inst.next.live_regs))
+        or {}
+    end
   end
 end
 
