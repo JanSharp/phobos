@@ -642,6 +642,7 @@
 ---when not `nil` then there's at least 1 register group this register must not be moved into/has a fixed index
 ---@field index_in_linked_groups integer?
 ---@field predetermined_reg_index integer @ zero based
+---@field instantly_stop_again boolean? @ temporary flag for regs which start and stop at the same instruction
 
 ---@class ILVarargRegister : ILRegister
 ---@field name nil

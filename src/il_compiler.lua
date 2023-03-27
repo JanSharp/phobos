@@ -7,6 +7,7 @@ local ill = require("indexed_linked_list")
 local ll = require("linked_list")
 local il = require("il_util")
 local linq = require("linq")
+local il_blocks = require("il_blocks")
 
 local generate
 do
@@ -135,10 +136,20 @@ do
       local reg_count = #regs
       if reg_count == 0 then return end
       table.sort(regs, function(left, right)
-        return left.current_reg.reg_index > right.current_reg.reg_index
+        return left.predetermined_reg_index > right.predetermined_reg_index
       end)
       for i = reg_count, 1, -1 do
-        stop_reg(data, regs[i].current_reg)
+        if regs[i].current_reg then
+          stop_reg(data, regs[i].current_reg)
+        else
+          util.debug_assert(
+            il.get_inst_or_group(regs[i].start_at) == il.get_inst_or_group(regs[i].stop_at),
+            "Only in the case of registers which start and stop at the same instruction can current_reg \z
+              be nil when trying to stop them.\z
+            "
+          )
+          regs[i].instantly_stop_again = true
+        end
         regs[i] = nil
       end
     end
@@ -163,6 +174,9 @@ do
         reg.current_reg = create_compiled_reg(data, reg.predetermined_reg_index, reg.name)
         if reg.captured_as_upval and not reg_index_to_close_upvals_from then
           reg_index_to_close_upvals_from = reg.current_reg.reg_index
+        end
+        if reg.instantly_stop_again then
+          stop_reg(data, reg.current_reg)
         end
       end
       -- do this after all regs have been created - all regs are alive - for nice and clean debug symbols
@@ -2025,66 +2039,166 @@ do
       return reg_index
     end
 
-    local inst_to_insert_before = reg_group.is_input and reg_group.inst or reg_group.inst.next
+    local inst_or_group = il.get_inst_or_group(reg_group.inst)
+
+    local is_forprep_or_forloop_group_output = il.is_inst_group(inst_or_group)
+      and (inst_or_group.group_type == "forprep" or inst_or_group.group_type == "forloop")
+      and not reg_group.is_input
+
+    -- inserting at main means inserting moves right before/after the inst the reg group is at
+    local insert_at_main = not is_forprep_or_forloop_group_output
+
+    -- inserting at secondary means inserting moves at the jump target of the inst the reg group is at
+    -- therefore this only ever applies to output groups, if any.
+    -- If it were to apply to input groups, then the inst reg group is at would have to be the jump target of
+    -- other jumps, and since there aren't any Lua instructions that force me to do this, I can simply put the
+    -- label those jumps before instruction group, and it'll all "just work".
+    local insert_at_secondary = is_forprep_or_forloop_group_output
+
+    local main_inst_to_insert_before = reg_group.is_input and reg_group.inst or reg_group.inst.next
+
+    -- both nil when `insert_at_secondary` is `false`
+    local secondary_inst_to_insert_before ---@type ILInstruction
+    local jump_to_redirect ---@type ILJump|ILTest
+
+    ---@param jump ILJump|ILTest
+    local function set_jump_to_redirect(jump)
+      jump_to_redirect = jump
+      secondary_inst_to_insert_before = jump.label.next
+    end
+
+    if is_forprep_or_forloop_group_output then
+      set_jump_to_redirect((inst_or_group--[[@as ILForloopGroup]]).loop_jump)
+    end
+
+    local function check_redirect_secondary_jump()
+      if not insert_at_secondary or not jump_to_redirect.label.block.source_links[2] then return end
+
+      -- if there are other jumps jumping to this label then we must
+      local original_label = jump_to_redirect.label
+      local label = il.new_label{position = original_label.position}
+      il.insert_before_inst(data.func, original_label, label)
+      jump_to_redirect.label = label -- TODO: call il util function to update block links
+      set_jump_to_redirect(jump_to_redirect) -- set secondary_inst_to_insert_before
+
+      -- if label.prev and linq(label.block.source_links):any(function(link)
+      --   return link.source_block == label.prev.block
+      -- end) then
+      -- NOTE: duplication of block logic, may want to use the above logic instead, once possible
+      if label.prev and (label.prev.inst_type ~= "jump" and label.prev.inst_type ~= "ret") then
+        il.insert_before_inst(data.func, label, il.new_jump{
+          position = original_label.position,
+          label = original_label,
+        })
+      end
+    end
+
+    ---@param move ILMoveData
+    ---@return ILRegister
+    local function get_inserted_reg_in_group(move)
+      -- this register will replace the reg in the register group.
+      -- which means for input groups this is the target reg, for output groups this is the source reg
+      local reg_index_in_group = reg_group.is_input and move.to_index or move.from_index
+      -- plus 1 because we're converting zero based to one based
+      local index_in_group = 1 + reg_index_in_group
+        - (linked_groups.predetermined_base_index + reg_group.index_in_linked_groups)
+      local reg_in_group
+      if move.reg ~= reg_group.regs[index_in_group] then
+        -- the reg has already been replaced in the reg group
+        reg_in_group = reg_group.regs[index_in_group]
+      else
+        reg_in_group = il.new_reg()
+        reg_in_group.predetermined_reg_index = reg_index_in_group
+        replace_reg_in_reg_group(data.func, reg_group, index_in_group, reg_in_group)
+      end
+      return reg_in_group
+    end
 
     ---@param moves ILMoveData[]
     local function insert_non_circular_linked_moves(moves, start_index)
       for i = start_index or 1, #moves do
         local move = moves[i]
-        -- this register will replace the reg in the register group.
-        -- which means for input groups this is the target reg, for output groups this is the source reg
-        local inserted_reg = il.new_reg()
-        inserted_reg.predetermined_reg_index = reg_group.is_input and move.to_index or move.from_index
-        il.insert_before_inst(data.func, inst_to_insert_before, il.new_move{
-          position = reg_group.inst.position,
-          right_ptr = reg_group.is_input and move.reg or inserted_reg,
-          result_reg = reg_group.is_input and inserted_reg or move.reg,
-        })
-        -- plus 1 because we're converting zero based to one based
-        local index_in_group = inserted_reg.predetermined_reg_index
-          - (linked_groups.predetermined_base_index + reg_group.index_in_linked_groups) + 1
-        replace_reg_in_reg_group(data.func, reg_group, index_in_group, inserted_reg)
+        local inserted_reg_in_group = get_inserted_reg_in_group(move)
+
+        if insert_at_main then
+          il.insert_before_inst(data.func, main_inst_to_insert_before, il.new_move{
+            position = reg_group.inst.position,
+            right_ptr = reg_group.is_input and move.reg or inserted_reg_in_group,
+            result_reg = reg_group.is_input and inserted_reg_in_group or move.reg,
+          })
+        end
+        if insert_at_secondary then
+          local disconnected_inserted_reg = il.new_reg()
+          disconnected_inserted_reg.predetermined_reg_index = inserted_reg_in_group.predetermined_reg_index
+          il.insert_before_inst(data.func, secondary_inst_to_insert_before, il.new_move{
+            position = reg_group.inst.position,
+            right_ptr = reg_group.is_input and move.reg or disconnected_inserted_reg,
+            result_reg = reg_group.is_input and disconnected_inserted_reg or move.reg,
+          })
+        end
       end
     end
 
     ---@param moves ILMoveData[]
     local function insert_circular_linked_moves(moves)
       local first_move = moves[1]
-      -- this register will replace the reg in the register group.
-      -- which means for input groups this is the target reg, for output groups this is the source reg
-      local inserted_reg = il.new_reg()
-      inserted_reg.predetermined_reg_index = reg_group.is_input and first_move.to_index or first_move.from_index
+      local inserted_reg_in_group = get_inserted_reg_in_group(first_move)
 
-      local temp_reg = il.new_reg()
-      temp_reg.predetermined_reg_index = get_temp_reg_index_for_circular_moves()
-      il.insert_before_inst(data.func, inst_to_insert_before, il.new_move{
-        position = reg_group.inst.position,
-        right_ptr = reg_group.is_input and first_move.reg or inserted_reg,
-        result_reg = temp_reg,
-      })
+      local main_temp_reg
+      if insert_at_main then
+        main_temp_reg = il.new_reg()
+        main_temp_reg.predetermined_reg_index = get_temp_reg_index_for_circular_moves()
+        il.insert_before_inst(data.func, main_inst_to_insert_before, il.new_move{
+          position = reg_group.inst.position,
+          right_ptr = reg_group.is_input and first_move.reg or inserted_reg_in_group,
+          result_reg = main_temp_reg,
+        })
+      end
+
+      local secondary_temp_reg
+      local disconnected_inserted_reg
+      if insert_at_secondary then
+        disconnected_inserted_reg = il.new_reg()
+        disconnected_inserted_reg.predetermined_reg_index = inserted_reg_in_group.predetermined_reg_index
+        secondary_temp_reg = il.new_reg()
+        secondary_temp_reg.predetermined_reg_index = get_temp_reg_index_for_circular_moves()
+        il.insert_before_inst(data.func, secondary_inst_to_insert_before, il.new_move{
+          position = reg_group.inst.position,
+          right_ptr = reg_group.is_input and first_move.reg or disconnected_inserted_reg,
+          result_reg = secondary_temp_reg,
+        })
+      end
+
       insert_non_circular_linked_moves(moves, 2)
-      il.insert_before_inst(data.func, inst_to_insert_before, il.new_move{
-        position = reg_group.inst.position,
-        right_ptr = temp_reg,
-        result_reg = reg_group.is_input and inserted_reg or first_move.reg,
-      })
 
-      -- plus 1 because we're converting zero based to one based
-      local index_in_group = inserted_reg.predetermined_reg_index
-        - (linked_groups.predetermined_base_index + reg_group.index_in_linked_groups) + 1
-      replace_reg_in_reg_group(data.func, reg_group, index_in_group, inserted_reg)
+      if insert_at_main then
+        il.insert_before_inst(data.func, main_inst_to_insert_before, il.new_move{
+          position = reg_group.inst.position,
+          right_ptr = main_temp_reg,
+          result_reg = reg_group.is_input and inserted_reg_in_group or first_move.reg,
+        })
+      end
+
+      if insert_at_secondary then
+        il.insert_before_inst(data.func, secondary_inst_to_insert_before, il.new_move{
+          position = reg_group.inst.position,
+          right_ptr = secondary_temp_reg,
+          result_reg = reg_group.is_input and disconnected_inserted_reg or first_move.reg,
+        })
+      end
     end
 
     local non_circular_moves, circular_moves = get_linked_moves_required_for_group(linked_groups, reg_group)
-    for _, moves in ipairs(non_circular_moves) do
-      insert_non_circular_linked_moves(moves)
-    end
-    for _, moves in ipairs(circular_moves) do
-      insert_circular_linked_moves(moves)
-    end
+    if non_circular_moves[1] or circular_moves[1] then
+      check_redirect_secondary_jump()
 
-    -- TODO: handle reg groups where their instruction is a jump or test, as such the inserted move insts
-    -- must be in a different location (for jumps) or duplicated (for tests)
+      for _, moves in ipairs(non_circular_moves) do
+        insert_non_circular_linked_moves(moves)
+      end
+      for _, moves in ipairs(circular_moves) do
+        insert_circular_linked_moves(moves)
+      end
+    end
   end
 
   ---@param data ILCompilerData
@@ -2257,6 +2371,9 @@ local function compile(func)
   func.is_compiling = true
   make_bytecode_func(data)
   il.determine_reg_usage(func)
+  if not func.has_blocks then
+    il_blocks(func)
+  end
   pre_compilation_process(data)
 
   generate(data)
