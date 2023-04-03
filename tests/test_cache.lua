@@ -106,7 +106,7 @@ do
       profile = got_profile,
       file_list = got_file_list,
     }, "Unexpected success, expected warning with the pattern "..warning_pattern)
-    assert.errors(warning_pattern, function()
+    assert.errors_with_pattern(warning_pattern, function()
       error(err)
     end)
   end
@@ -244,7 +244,7 @@ do
 
   add_test("profile with inject_scripts with usage_count 0 (technically invalid)", function()
     add_inject_scripts(0)
-    assert.errors("Attempt to save cache with inject_scripts with usage_count == 0%.", save_cache)
+    assert.errors_with_pattern("Attempt to save cache with inject_scripts with usage_count == 0%..*", save_cache)
   end)
 
   add_test("compile file actions", function()
@@ -281,7 +281,7 @@ do
     file_list[#file_list+1] = {
       action = 255, -- any larger and we get an out of bounds error for uint8
     }
-    assert.errors("Invalid file action '255'%.", save_cache)
+    assert.errors("Invalid file action '255'.", save_cache)
   end)
 
   add_test("inject script filenames", function()

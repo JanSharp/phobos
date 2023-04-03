@@ -6,7 +6,7 @@ local vfs = require("lib.virtual_file_system")
 
 local function assert_entry_type_error(expected_type, got_type, path, got_func)
   assert.errors("Expected entry type '"..expected_type.."', got '"..got_type
-    .."' for entry '"..path.."'.", got_func, nil, true
+    .."' for entry '"..path.."'.", got_func
   )
 end
 
@@ -59,13 +59,13 @@ do
   end)
 
   add_test("non string path to set_cwd", function()
-    assert.errors("Expected string path, got 'nil'%.", function()
+    assert.errors("Expected string path, got 'nil'.", function()
       fs:set_cwd()
     end)
   end)
 
   add_test("invalid path attempting to .. out of root to set_cwd", function()
-    assert.errors("Trying to move up an entry.*", function()
+    assert.errors_with_pattern("Trying to move up an entry.*", function()
       fs:set_cwd("..")
     end)
   end)
@@ -79,7 +79,7 @@ do
     add_test(data.label, function()
       assert.errors("Invalid entry name 'foo"..data.symbol.."bar', contains '"..data.symbol.."'.", function()
         fs:set_cwd("foo"..data.symbol.."bar")
-      end, nil, true)
+      end)
     end)
   end
 
@@ -134,7 +134,7 @@ do
   end)
 
   add_test("attempt to add_file '/'", function()
-    assert.errors("Attempt to add/create root%.", function()
+    assert.errors("Attempt to add/create root.", function()
       fs:add_file("/")
     end)
   end)
@@ -193,7 +193,7 @@ do
   end)
 
   add_test("add_symlink with invalid old name", function()
-    assert.errors("Invalid entry name.*", function()
+    assert.errors_with_pattern("Invalid entry name.*", function()
       fs:add_symlink("?", "/foo")
     end)
   end)
@@ -217,7 +217,7 @@ do
 
   add_test("add_symlink to invalid location and try to use it (with get_entry_type)", function()
     fs:add_symlink("/foo", "/bar")
-    assert.errors("No such file or directory '/foo'%.", function()
+    assert.errors("No such file or directory '/foo'.", function()
       fs:get_entry_type("/bar")
     end)
   end)
@@ -252,7 +252,7 @@ do
 
   add_test("set_contents to invalid data", function()
     fs:add_file("/foo")
-    assert.errors("Expected string contents for a file, got 'nil'%.", function()
+    assert.errors("Expected string contents for a file, got 'nil'.", function()
       fs:set_contents("/foo", nil)
     end)
   end)
@@ -281,7 +281,7 @@ do
   add_test("remove non empty dir", function()
     fs:add_dir("/foo")
     fs:add_file("/foo/bar")
-    assert.errors("Attempt to remove non empty directory '/foo'%.", function()
+    assert.errors("Attempt to remove non empty directory '/foo'.", function()
       fs:remove("/foo")
     end)
   end)
@@ -358,7 +358,7 @@ do
   end)
 
   add_test("attempt to remove root", function()
-    assert.errors("Attempt to remove root%.", function()
+    assert.errors("Attempt to remove root.", function()
       fs:remove("/")
     end)
   end)
@@ -445,7 +445,7 @@ do
       fs:add_dir("/foo")
       local enumerator = fs:enumerate("/foo")
       assert.errors(
-        "Attempt to modify directory '/foo' while it is being enumerated by 1 enumerators%.",
+        "Attempt to modify directory '/foo' while it is being enumerated by 1 enumerators.",
         data.func
       )
       enumerator() -- since the dir should be empty, this should end iteration

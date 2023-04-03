@@ -47,7 +47,7 @@ end
 
 local function assert_is_alive_errors(list, node, msg)
   assert.errors(
-    "Attempt to check liveliness for a node in a linked list that does not track liveliness%.",
+    "Attempt to check liveliness for a node in a linked list that does not track liveliness.",
     function()
       ll.is_alive(list, node)
     end,
@@ -194,7 +194,7 @@ do
   add_test("is_alive errors with lists not tracking liveliness", function()
     local list = ll.new_list("foo", false)
     assert.errors(
-      "Attempt to check liveliness for a node in a linked list that does not track liveliness%.",
+      "Attempt to check liveliness for a node in a linked list that does not track liveliness.",
       function()
         ll.is_alive(list, {foo = 100})
       end
@@ -407,7 +407,7 @@ do
   add_double_test("insert_after where both the base node and the new node are the same errors", function()
     local node = {foo = 100}
     local list = make_expected_list{node}
-    assert.errors("Inserting a node after itself does not make sense%.", function()
+    assert.errors("Inserting a node after itself does not make sense.", function()
       ll.insert_after(list, node, node)
     end)
   end)
@@ -453,7 +453,7 @@ do
   add_double_test("insert_before where both the base node and the new node are the same errors", function()
     local node = {foo = 100}
     local list = make_expected_list{node}
-    assert.errors("Inserting a node before itself does not make sense%.", function()
+    assert.errors("Inserting a node before itself does not make sense.", function()
       ll.insert_before(list, node, node)
     end)
   end)

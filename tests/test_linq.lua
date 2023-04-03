@@ -1190,7 +1190,7 @@ do
 
   add_test("max with empty collection", function()
     local obj = linq{}
-    assert.errors("Attempt to evaluate max value on an empty collection%.", function()
+    assert.errors("Attempt to evaluate max value on an empty collection.", function()
       obj:max()
     end)
   end)
@@ -1216,7 +1216,7 @@ do
 
   add_test("max_by with empty collection", function()
     local obj = linq{}
-    assert.errors("Attempt to evaluate max value on an empty collection%.", function()
+    assert.errors("Attempt to evaluate max value on an empty collection.", function()
       obj:max_by(function(value) return value end)
     end)
   end)
@@ -1245,7 +1245,7 @@ do
 
   add_test("min with empty collection", function()
     local obj = linq{}
-    assert.errors("Attempt to evaluate min value on an empty collection%.", function()
+    assert.errors("Attempt to evaluate min value on an empty collection.", function()
       obj:min()
     end)
   end)
@@ -1271,7 +1271,7 @@ do
 
   add_test("min_by with empty collection", function()
     local obj = linq{}
-    assert.errors("Attempt to evaluate min value on an empty collection%.", function()
+    assert.errors("Attempt to evaluate min value on an empty collection.", function()
       obj:min_by(function(value) return value end)
     end)
   end)
@@ -1542,7 +1542,7 @@ do
       add_test("single with "..outer.label.." without condition with "..data.label, function()
         local obj = outer.make_obj(data.values)
         if data.error then
-          assert.errors(err_msg_prefix..data.error.."%.", function()
+          assert.errors(err_msg_prefix..data.error..".", function()
             obj:single()
           end)
         else
@@ -1565,7 +1565,7 @@ do
       local obj = linq(get_test_strings())
       if data.error then
         assert.errors(
-          "Expected a single value in the sequence to match the condition, got "..data.error.."%.",
+          "Expected a single value in the sequence to match the condition, got "..data.error..".",
           function()
             obj:single(data.condition)
           end
@@ -2102,7 +2102,7 @@ do
           end
         else
           assert.errors(
-            "Attempt to check liveliness for a node in a linked list that does not track liveliness%.",
+            "Attempt to check liveliness for a node in a linked list that does not track liveliness.",
             function()
               ll.is_alive(got_list, nodes[1])
             end

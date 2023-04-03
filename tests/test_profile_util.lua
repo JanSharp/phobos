@@ -393,7 +393,7 @@ do
     include_file("foo", {output_path = "foo".._lua.."x"})
     assert.errors("When including a single file for compilation the output file extension must be '"
       .._lua.."'. (output_path: 'foo".._lua.."x')",
-      run, nil, true
+      run
     )
   end)
 
@@ -403,26 +403,26 @@ do
     assert.errors("When including a single file for compilation the 'source_name' must not contain '?'. \z
       It must instead define the entire source_name - it is not a pattern. \z
       (source_path: '"..include_def.source_path.."', source_name: '"..include_def.source_name.."')",
-      run, nil, true
+      run
     )
   end)
 
   add_test("include path that does not exist", function()
     include_file("foo")
-    assert.errors("No such file or directory '"..normalize_path("src/foo".._pho), run)
+    assert.errors("No such file or directory '"..normalize_path("src/foo".._pho).."'.", run)
   end)
 
   do
     local function add_invalid_output_path_tests(label, include_func)
       add_test(label.." with absolute output_path", function()
         include_func("foo", {output_path = "/foo"})
-        assert.errors("'output_path' must be a relative path (output_path: '/foo').", run, nil, true)
+        assert.errors("'output_path' must be a relative path (output_path: '/foo').", run)
       end)
 
       add_test(label.." with output_path outside of output dir using '..'", function()
         include_func("foo", {output_path = ".././foo"})
         assert.errors("Attempt to output files outside of the output directory. \z
-          (output_path: '.././foo', normalized: '../foo').", run, nil, true
+          (output_path: '.././foo', normalized: '../foo').", run
         )
       end)
     end
@@ -705,14 +705,14 @@ do
     include_file("foo", {inject_scripts = {"scripts/inject".._pho}})
     assert.errors("AST inject scripts must return a function. \z
       (script file: "..normalize_path("scripts/inject".._pho)..")",
-      run, nil, true
+      run
     )
   end)
 
   add_test("inject script file that does not exist", function()
     create_source_file("foo")
     include_file("foo", {inject_scripts = {"scripts/inject".._pho}})
-    assert.errors("No such file or directory '"..normalize_path("scripts/inject".._pho).."'%.", run)
+    assert.errors("No such file or directory '"..normalize_path("scripts/inject".._pho).."'.", run)
   end)
 
   add_test("include_copy 1 file", function()
@@ -796,7 +796,7 @@ do
 
   add_test("include_copy path that does not exist", function()
     include_copy("docs/foo")
-    assert.errors("No such file or directory '"..normalize_path("docs/foo"), run)
+    assert.errors("No such file or directory '"..normalize_path("docs/foo").."'.", run)
   end)
 
   add_test("include_delete 1 file", function()

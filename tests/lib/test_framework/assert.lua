@@ -44,7 +44,7 @@ local function add_msg(err, msg)
 end
 
 ---@param value any
----@param msg string?
+---@param msg string? @ optional additional msg
 local function assert(value, msg)
   if not value then
     error(add_msg("assertion failed", msg))
@@ -54,7 +54,7 @@ end
 
 ---@param expected any
 ---@param got any
----@param msg string?
+---@param msg string? @ optional additional msg
 local function equals(expected, got, msg)
   -- also test for nan
   if got ~= expected and (got == got or expected == expected) then
@@ -64,7 +64,7 @@ end
 
 ---@param expected any
 ---@param got any
----@param msg string?
+---@param msg string? @ optional additional msg
 local function not_equals(expected, got, msg)
   -- also tests for nan
   if got == expected or (got ~= got and expected ~= expected) then
@@ -86,7 +86,7 @@ end
 
 ---@param expected any
 ---@param got any
----@param msg string?
+---@param msg string? @ optional additional msg
 ---@param options ContentsEqualsOptions?
 local function contents_equals(expected, got, msg, options)
   options = options or {}
@@ -181,26 +181,59 @@ local function contents_equals(expected, got, msg, options)
   end
 end
 
----@param expected_pattern string
+---@param err_msg_prefix string
 ---@param got_func function @ function that's expected to error
----@param msg string?
----@param plain boolean?
-local function errors(expected_pattern, got_func, msg, plain)
+---@param msg string? @ optional additional msg
+---@param is_msg_valid fun(got_msg: string?):boolean
+local function errors_internal(err_msg_prefix, got_func, msg, is_msg_valid)
   local stacktrace
   local success, err = xpcall(got_func, function(err)
     stacktrace = debug.traceback(nil, 2):gsub("\t", "  ")
     return err
   end)
   if success then
-    error(add_msg("expected error "..(plain and "" or "pattern ")..pretty_print(expected_pattern)
-      ..", got success", msg)
-    )
+    error(add_msg(err_msg_prefix..", got success", msg))
   end
-  if ((err == nil) and expected_pattern ~= nil) or not err:find(expected_pattern, 1, plain) then
-    error(add_msg("expected error "..(plain and "" or "pattern ")..pretty_print(expected_pattern)
-      ..", got error "..pretty_print(err).."\n"..stacktrace, msg)
-    )
+  if not is_msg_valid(err) then
+    error(add_msg(err_msg_prefix..", got error "..pretty_print(err).."\n"..stacktrace, msg))
   end
+end
+
+---@param expected_error_msg string? @
+---The error message must match this exact value... kind of.
+---If it's nil, it'll have to be nil too.
+---But when comparing messages, best it can do is do a plain find and ensure the message ends as expected.
+---It can't ensure it starts correctly because Lua includes the <source_name:line: > prefix in the message,
+---trying to generically remove that part is very painful, so this function doesn't do that.
+---@param got_func function @ function that's expected to error
+---@param msg string? @ optional additional msg
+local function errors(expected_error_msg, got_func, msg)
+  errors_internal(
+    "expected error "..pretty_print(expected_error_msg),
+    got_func,
+    msg,
+    function(got_msg)
+      if got_msg == nil then return expected_error_msg == nil end
+      if expected_error_msg == nil then return false end
+      local _, stop_index = got_msg:find(expected_error_msg, 1, true)
+      return stop_index == #got_msg
+    end
+  )
+end
+
+---@param expected_error_msg_pattern string @ the error message match this pattern
+---@param got_func function @ function that's expected to error
+---@param msg string? @ optional additional msg
+local function errors_with_pattern(expected_error_msg_pattern, got_func, msg)
+  if expected_error_msg_pattern == nil then
+    error("The expected pattern for 'assert.errors_with_pattern' must not be nil. Use 'assert.errors' instead.")
+  end
+  errors_internal(
+    "expected error matching the pattern "..pretty_print(expected_error_msg_pattern),
+    got_func,
+    msg,
+    function(got_msg) return got_msg ~= nil and got_msg:find(expected_error_msg_pattern)--[[@as boolean]] end
+  )
 end
 
 return setmetatable({
@@ -216,6 +249,7 @@ return setmetatable({
   do_not_compare_flag = deep_compare.do_not_compare_flag,
   custom_comparator = deep_compare.register_custom_comparator,
   errors = errors,
+  errors_with_pattern = errors_with_pattern,
 }, {
   __call = function(_, ...)
     return assert(...)
