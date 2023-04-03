@@ -2259,7 +2259,12 @@ end
 ---@param starting_value T? @ used if this is an iterator
 ---@return LinqObj|T[]
 local function linq(tab_or_iter, state, starting_value)
-  if type(tab_or_iter) == "table" then
+  local tab_or_iter_type = type(tab_or_iter)
+  if tab_or_iter_type == "table" then
+    ---@diagnostic disable-next-line: undefined-field
+    if tab_or_iter.__is_linq then
+      util.abort("Attempt to create linq object from another linq object. If this is intentional, use 'copy' instead.")
+    end
     local count = #tab_or_iter
     return setmetatable({
       __is_linq = true,
@@ -2267,6 +2272,9 @@ local function linq(tab_or_iter, state, starting_value)
       __count = count,
     }, linq_meta)
   else
+    if tab_or_iter_type ~= "function" then
+      util.abort("Expected table or function for 'tab_or_iter', got '"..tab_or_iter_type.."'.")
+    end
     local value = starting_value
     return setmetatable({
       __is_linq = true,
@@ -2274,7 +2282,7 @@ local function linq(tab_or_iter, state, starting_value)
         value = tab_or_iter(state, value)
         return value
       end,
-      -- __count = nil,
+      __count = nil,
     }, linq_meta)
   end
 end

@@ -135,6 +135,31 @@ do
     assert_iteration(obj, {3, 4, 5, false})
   end)
 
+  add_test("attempting to create linq object from another linq object errors", function()
+    local obj = linq{}
+    assert.errors(
+      "Attempt to create linq object from another linq object. If this is intentional, use 'copy' instead.",
+      function()
+        linq(obj)
+      end
+    )
+  end)
+
+  for _, data in ipairs{
+    {value = nil},
+    {value = 100},
+    {value = "foo"},
+    {value = false},
+    -- userdata and thread are untested, but if the rest works, those will be just fine too
+  }
+  do
+    add_test("attempting to create a linq object from a value with the type '"..type(data.value).."' errors", function()
+      assert.errors("Expected table or function for 'tab_or_iter', got '"..type(data.value).."'.", function()
+        linq(data.value)
+      end)
+    end)
+  end
+
   add_test("all with condition matching everything", function()
     local got = linq(get_test_strings()):all(function() return true end)
     assert.equals(true, got, "result of 'all'")
