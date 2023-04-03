@@ -2,6 +2,7 @@
 -- function names and behavior inspired by C# System.Linq
 
 local ll = require("linked_list")
+local util = require("util")
 
 ---@class LinqObj
 ---@field __is_linq true
@@ -1190,7 +1191,7 @@ end
 ---@return T
 function linq_meta_index:max(left_is_greater_func)
   local max = max_or_min(self, left_is_greater_func or function(left, right) return left > right end)
-  if max == nil then error("Attempt to evaluate max value on an empty collection.") end
+  if max == nil then util.abort("Attempt to evaluate max value on an empty collection.") end
   return max
 end
 
@@ -1204,7 +1205,7 @@ function linq_meta_index:max_by(selector, left_is_greater_func)
   local result = max_or_min_by(self, selector, left_is_greater_func or function(left, right)
     return left > right
   end)
-  if result == nil then error("Attempt to evaluate max value on an empty collection.") end
+  if result == nil then util.abort("Attempt to evaluate max value on an empty collection.") end
   return result
 end
 
@@ -1214,7 +1215,7 @@ end
 ---@return T
 function linq_meta_index:min(left_is_lesser_func)
   local min = max_or_min(self, left_is_lesser_func or function(left, right) return left < right end)
-  if min == nil then error("Attempt to evaluate min value on an empty collection.") end
+  if min == nil then util.abort("Attempt to evaluate min value on an empty collection.") end
   return min
 end
 
@@ -1228,7 +1229,7 @@ function linq_meta_index:min_by(selector, left_is_lesser_func)
   local result = max_or_min_by(self, selector, left_is_lesser_func or function(left, right)
     return left < right
   end)
-  if result == nil then error("Attempt to evaluate min value on an empty collection.") end
+  if result == nil then util.abort("Attempt to evaluate min value on an empty collection.") end
   return result
 end
 
@@ -1577,25 +1578,25 @@ function linq_meta_index:single(condition)
         if result == nil then
           result = value
         else
-          error("Expected a single value in the sequence to match the condition, got multiple.")
+          util.abort("Expected a single value in the sequence to match the condition, got multiple.")
         end
       end
     end
     if result == nil then
-      error("Expected a single value in the sequence to match the condition, got zero.")
+      util.abort("Expected a single value in the sequence to match the condition, got zero.")
     end
     return result
   end
 
   if self.__count and self.__count ~= 1 then
-    error("Expected a single value in the sequence, got "..self.__count..".")
+    util.abort("Expected a single value in the sequence, got "..self.__count..".")
   end
   local result = self.__iter()
   if not self.__count then
     if result == nil then
-      error("Expected a single value in the sequence, got zero.")
+      util.abort("Expected a single value in the sequence, got zero.")
     elseif self.__iter() ~= nil then
-      error("Expected a single value in the sequence, got multiple.")
+      util.abort("Expected a single value in the sequence, got multiple.")
     end
   end
   return result
@@ -2041,7 +2042,7 @@ local function then_by_internal(self, next_ordering_definition)
   -- replace the iterator for optimization reasons. However the check is better than nothing as it still has
   -- a good chance of catching mistakes during development.
   if not self.__ordering_definitions or self.__ordering_reference_iter ~= self.__iter then
-    error("'then_by' and 'then_descending_by' must only be used directly after any of the \z
+    util.abort("'then_by' and 'then_descending_by' must only be used directly after any of the \z
       'order' functions, or another 'then' function."
     )
   end
