@@ -118,6 +118,310 @@ do
     scope:add_test(name, func)
   end
 
+  -- IMPORTANT: for these validation tests, the helper functions for parameter validation directly wrap the ...
+  -- call to 'func' in an 'assert.errors' while the helper functions for sequence value or selector validation
+  -- pass an 'assert_errors' function to 'func' to reduce the chance of misleading failed test error messages
+
+  local function add_validation_test_internal(
+    error_msg_template,
+    linq_func_name,
+    value_name,
+    optional,
+    func,
+    use_number_instead_of_string
+  )
+    add_test(
+      linq_func_name.." given a "..(use_number_instead_of_string and "number" or "string")
+        .." as "..value_name.." errors",
+      function()
+        local value = use_number_instead_of_string and 132 or "hello world"
+        assert.errors(
+          util.format_interpolated(error_msg_template, {got = value}),
+          function() func(value) end
+        )
+      end
+    )
+
+    add_test(
+      linq_func_name.." given 'nil' as "..value_name
+        ..(optional and " succeeds because it's optional" or " errors"),
+      function()
+        if optional then
+          func(nil) -- should not error
+        else
+          assert.errors(
+            util.format_interpolated(error_msg_template, {got = "nil"}),
+            function() func(nil) end
+          )
+        end
+      end
+    )
+  end
+
+  local function add_function_validation_test(linq_func_name, func_name, optional, func)
+    add_validation_test_internal(
+      "Expected a function as the "..func_name..", got '{got}'.",
+      linq_func_name,
+      func_name,
+      optional,
+      func
+    )
+  end
+
+  local function add_condition_validation_test(linq_func_name, optional, func)
+    add_function_validation_test(linq_func_name, "condition", optional, func)
+  end
+
+  local function add_selector_validation_test(linq_func_name, optional, func)
+    add_function_validation_test(linq_func_name, "selector", optional, func)
+  end
+
+  local function add_action_validation_test(linq_func_name, optional, func)
+    add_function_validation_test(linq_func_name, "action", optional, func)
+  end
+
+  local function add_comparator_validation_test(linq_func_name, optional, func)
+    add_function_validation_test(linq_func_name, "comparator", optional, func)
+  end
+
+  local function add_collection_validation_test(linq_func_name, collection_name, optional, func)
+    add_validation_test_internal(
+      "Expected a linq object or array as the "..collection_name..", got '{got}'.",
+      linq_func_name,
+      collection_name,
+      optional,
+      func
+    )
+  end
+
+  local function add_value_validation_test_internal(linq_func_name, value_name, err_msg, func)
+    add_test(linq_func_name.." given a 'nil' as the "..value_name.." value errors", function()
+      assert.errors(err_msg, function() func(nil) end)
+    end)
+  end
+
+  local function add_search_value_validation_test(linq_func_name, func)
+    add_value_validation_test_internal(
+      linq_func_name,
+      "search",
+      "Searching for a 'nil' value in a sequence is disallowed. \z
+        A sequence cannot contain 'nil'.",
+      func
+    )
+  end
+
+  local function add_default_value_validation_test(linq_func_name, func)
+    add_value_validation_test_internal(
+      linq_func_name,
+      "default",
+      "The default value must not be 'nil'. \z
+        A sequence cannot contain 'nil'.",
+      func
+    )
+  end
+
+  local function add_insert_value_validation_test(linq_func_name, func)
+    add_value_validation_test_internal(
+      linq_func_name,
+      "insert",
+      "Inserting a 'nil' value into a sequence is disallowed. \z
+        A sequence cannot contain 'nil'.",
+      func
+    )
+  end
+
+  local function add_lut_validation_test(linq_func_name, func)
+    add_validation_test_internal(
+      "Expected a lookup table, got '{got}'.",
+      linq_func_name,
+      "lut",
+      false,
+      func
+    )
+  end
+
+  local function add_number_validation_test(linq_func_name, include_zero, param_name, func)
+    local error_msg_template = "Expected an integer greater than 0"..(include_zero and " or equal to" or "")
+      .." as the "..param_name..", got '{got}'."
+    add_validation_test_internal(
+      error_msg_template,
+      linq_func_name,
+      param_name,
+      false,
+      func
+    )
+
+    add_test(linq_func_name.." given a negative number as "..param_name.." errors", function()
+      assert.errors(
+        util.format_interpolated(error_msg_template, {got = -1}),
+        function() func(-1) end
+      )
+    end)
+
+    add_test(
+      linq_func_name.." given the number zero as "..param_name.." "
+        ..(include_zero and "succeeds" or "errors"),
+      function()
+        if include_zero then
+          func(0) -- should not error
+        else
+          assert.errors(
+            util.format_interpolated(error_msg_template, {got = 0}),
+            function() func(0) end
+          )
+        end
+      end
+    )
+  end
+
+  local function add_index_validation_test(linq_func_name, func, param_name)
+    add_number_validation_test(linq_func_name, false, param_name or "index", func)
+  end
+
+  local function add_size_validation_test(linq_func_name, func)
+    add_number_validation_test(linq_func_name, false, "size", func)
+  end
+
+  local function add_count_validation_test(linq_func_name, func)
+    add_number_validation_test(linq_func_name, true, "count", func)
+  end
+
+  local function add_name_validation_test(linq_func_name, optional, func)
+    add_validation_test_internal(
+      "Expected a string as the name, got '{got}'.",
+      linq_func_name,
+      "name",
+      optional,
+      func,
+      true
+    )
+  end
+
+  local function add_track_liveliness_validation_test(linq_func_name, optional, func)
+    add_validation_test_internal(
+      "Expected a boolean for track_liveliness, got '{got}'.",
+      linq_func_name,
+      "name",
+      optional,
+      func,
+      true
+    )
+  end
+
+  ---@param func fun(value: any, assert_errors: fun(erroring_func: fun()))
+  local function add_typed_sequence_value_validation_test(
+    linq_func_name,
+    label_infix,
+    post_selection,
+    expected_type,
+    invalid_value,
+    func
+  )
+    label_infix = label_infix and (" "..label_infix) or ""
+    local function add_test_for_value(value)
+      add_test(
+        linq_func_name.." containing '"..tostring(value).."' in the sequence"..label_infix.." errors",
+        function()
+          if post_selection then
+            func(value, function(erroring_func)
+              assert.errors(
+                "The selector for '"..linq_func_name.."' must return a "..expected_type.." \z
+                  for each value in the sequence, but for one it returned '"..tostring(value).."'.",
+                erroring_func
+              )
+            end)
+          else
+            func(value, function(erroring_func)
+              assert.errors(
+                "Every value in the sequence for '"..linq_func_name.."' \z
+                  must be a "..expected_type..", but one is '"..tostring(value).."'.",
+                erroring_func
+              )
+            end)
+          end
+        end
+      )
+    end
+    add_test_for_value(invalid_value)
+    if post_selection then
+      add_test_for_value(nil)
+    end
+  end
+
+  ---@param func fun(value: any, assert_errors: fun(erroring_func: fun()))
+  local function add_sequence_number_validation_test(linq_func_name, label_infix, post_selection, func)
+    add_typed_sequence_value_validation_test(
+      linq_func_name,
+      label_infix,
+      post_selection,
+      "number",
+      "hello world",
+      func
+    )
+  end
+
+  ---@param func fun(value: any, assert_errors: fun(erroring_func: fun()))
+  local function add_sequence_value_for_ordering_validation_test(
+    linq_func_name,
+    label_infix,
+    ordering_definition_index,
+    post_selection,
+    func
+  )
+    label_infix = label_infix and (" "..label_infix) or ""
+    local function add_test_for_value(value)
+      add_test(
+        linq_func_name.." containing '"..tostring(value).."' in the sequence"..label_infix.." errors",
+        function()
+          if post_selection then
+            func(value, function(erroring_func)
+              assert.errors(
+              "The selector for an order function must return a number or a string \z
+                for each value in the sequence, but for one it returned '"..tostring(value).."' \z
+                (ordering definition index: "..ordering_definition_index..").",
+              erroring_func
+            )
+            end)
+          else
+            func(value, function(erroring_func)
+              assert.errors(
+                "Every value in the sequence for an order function must be a number or a string, but one \z
+                  is '"..tostring(value).."' (ordering definition index: "..ordering_definition_index..").",
+                erroring_func
+              )
+            end)
+          end
+        end
+      )
+    end
+    add_test_for_value(true)
+    if post_selection then
+      add_test_for_value(nil)
+    end
+  end
+
+  ---@param func fun(assert_selector_errors: fun(erroring_func: fun()))
+  local function add_selected_value_validation_test(
+    linq_func_name,
+    label_infix,
+    selector_name,
+    func,
+    return_value_index
+  )
+    label_infix = label_infix and (" "..label_infix) or ""
+    selector_name = selector_name or "selector"
+    add_test(linq_func_name.." where the "..selector_name.." returns 'nil'"..label_infix.." errors", function()
+      func(function(erroring_func)
+        assert.errors(
+          "The "..selector_name.." for '"..linq_func_name.."' must not return nil "
+            ..(return_value_index and "as return value #"..return_value_index.." " or "")
+            .."for any value in the sequence, but for one it did return 'nil'.",
+          erroring_func
+        )
+      end)
+    end)
+  end
+
   add_test("creating a linq object from a table", function()
     local obj = linq(get_test_strings())
     assert_iteration(obj, get_test_strings())
@@ -135,6 +439,35 @@ do
     assert_iteration(obj, {3, 4, 5, false})
   end)
 
+  add_test("attempting to create linq object from another linq object errors", function()
+    local obj = linq{}
+    assert.errors(
+      "Attempt to create linq object from another linq object. If this is intentional, use 'copy' instead.",
+      function()
+        linq(obj)
+      end
+    )
+  end)
+
+  for _, data in ipairs{
+    {value = nil},
+    {value = 100},
+    {value = "foo"},
+    {value = false},
+    -- userdata and thread are untested, but if the rest works, those will be just fine too
+  }
+  do
+    add_test("attempting to create a linq object from a value with the type '"..type(data.value).."' errors", function()
+      assert.errors("Expected table or function for 'tab_or_iter', got '"..type(data.value).."'.", function()
+        linq(data.value)
+      end)
+    end)
+  end
+
+  add_condition_validation_test("all", false, function(condition)
+    linq{}:all(condition)
+  end)
+
   add_test("all with condition matching everything", function()
     local got = linq(get_test_strings()):all(function() return true end)
     assert.equals(true, got, "result of 'all'")
@@ -150,6 +483,10 @@ do
     assert_sequential_helper(obj, obj.all, function() return true end)
   end)
 
+  add_condition_validation_test("any", false, function(condition)
+    linq{}:all(condition)
+  end)
+
   add_test("any with condition matching nothing", function()
     local got = linq(get_test_strings()):any(function() return false end)
     assert.equals(false, got, "result of 'any'")
@@ -163,6 +500,10 @@ do
   add_test("any with condition using index arg", function()
     local obj = linq(get_test_strings())
     assert_sequential_helper(obj, obj.any, function() return false end)
+  end)
+
+  add_collection_validation_test("append", "collection", false, function(collection)
+    linq{}:append(collection)
   end)
 
   add_test("append an array, self has known __count", function()
@@ -211,6 +552,10 @@ do
     assert_iteration(obj, {"foo", "bar", false, "baz", "hello", "world"})
   end)
 
+  add_selector_validation_test("average", true, function(selector)
+    linq{}:average(selector)
+  end)
+
   add_test("average on object with known __count", function()
     local got = linq{1, 3, 5, 18, 32}:average()
     assert.equals((1 + 3 + 5 + 18 + 32) / 5, got, "result of 'average'")
@@ -233,6 +578,26 @@ do
   add_test("average using selector using index arg", function()
     local obj = linq(get_test_strings())
     assert_sequential_helper(obj, obj.average, function() return 1 end)
+  end)
+
+  add_sequence_number_validation_test("average", "using selector", true, function(selected_value, assert_errors)
+    local obj = linq{"foo"}
+    assert_errors(function()
+      obj:average(function() return selected_value end)
+    end)
+  end)
+
+  for _, outer in ipairs(known_or_unknown_count_dataset) do
+    add_sequence_number_validation_test("average", "with "..outer.label, false, function(value, assert_errors)
+      local obj = outer.make_obj{value}
+      assert_errors(function()
+        obj:average()
+      end)
+    end)
+  end
+
+  add_size_validation_test("chunk", function(size)
+    linq{}:chunk(size)
   end)
 
   for _, data in ipairs{
@@ -280,6 +645,10 @@ do
     assert_iteration(obj, {{"foo", "bar", false}, {"baz"}})
   end)
 
+  add_search_value_validation_test("contains", function(value)
+    linq{}:contains(value)
+  end)
+
   add_test("contains with a value that exists", function()
     local got = linq(get_test_strings()):contains("bar")
     assert.equals(true, got, "result of 'contains'")
@@ -318,6 +687,10 @@ do
     local obj = linq(get_test_strings())
     obj.__count = nil -- means unknown
     assert.equals(#get_test_strings(), obj:count(), "count")
+  end)
+
+  add_default_value_validation_test("default_if_empty", function(default)
+    linq{}:default_if_empty(default)
   end)
 
   add_test("default_if_empty leaves __count untouched when it is > 0", function()
@@ -366,6 +739,10 @@ do
     assert_iteration(obj, {"hi", "hello", "bye"})
   end)
 
+  add_selector_validation_test("distinct_by", false, function(selector)
+    linq{}:distinct_by(selector)
+  end)
+
   add_test("distinct_by", function()
     local obj = linq(get_test_strings())
       :distinct_by(function(value) return type(value) == "string" and value:sub(1, 2) or value end)
@@ -376,6 +753,13 @@ do
   add_test("distinct_by using index arg", function()
     local obj = linq(get_test_strings())
     assert_sequential_helper(obj, obj.distinct_by, function() return 1 end)
+  end)
+
+  add_selected_value_validation_test("distinct_by", nil, nil, function(assert_selector_errors)
+    local obj = linq{"foo"}:distinct_by(function() return nil end)
+    assert_selector_errors(function()
+      iterate(obj)
+    end)
   end)
 
   add_test("ensure_knows_count does nothing if __count is known", function()
@@ -398,6 +782,10 @@ do
     assert_iteration(obj, get_test_strings())
   end)
 
+  add_index_validation_test("element_at", function(index)
+    linq{}:element_at(index)
+  end)
+
   for _, outer in ipairs(known_or_unknown_count_dataset) do
     add_test("element_at with index past the sequence, self has "..outer.label, function()
       local got = outer.make_obj(get_test_strings()):element_at(5)
@@ -410,6 +798,10 @@ do
     end)
   end
 
+  add_index_validation_test("element_at_from_end", function(index)
+    linq{}:element_at_from_end(index)
+  end)
+
   for _, outer in ipairs(known_or_unknown_count_dataset) do
     add_test("element_at_from_end with index past the sequence, self has "..outer.label, function()
       local got = outer.make_obj(get_test_strings()):element_at_from_end(5)
@@ -421,6 +813,10 @@ do
       assert.equals("hello", got, "result of 'element_at_from_end'")
     end)
   end
+
+  add_collection_validation_test("except", "collection", false, function(collection)
+    linq{}:except(collection)
+  end)
 
   add_test("except makes __count unknown", function()
     local obj = linq{}:except{}
@@ -436,6 +832,14 @@ do
   add_test("except with a linq object to exclude", function()
     local obj = linq(get_test_strings()):except(linq{"foo", "baz"})
     assert_iteration(obj, {"bar", false})
+  end)
+
+  add_collection_validation_test("except_by", "collection", false, function(collection)
+    linq{}:except_by(collection, function(value) return value end)
+  end)
+
+  add_function_validation_test("except_by", "key selector", false, function(key_selector)
+    linq{}:except_by({}, key_selector)
   end)
 
   add_test("except_by makes __count unknown", function()
@@ -475,6 +879,17 @@ do
     iterate(obj)
   end)
 
+  add_selected_value_validation_test("except_by", nil, "key selector", function(assert_selector_errors)
+    local obj = linq{"foo"}:except_by({}, function() return nil end)
+    assert_selector_errors(function()
+      iterate(obj)
+    end)
+  end)
+
+  add_lut_validation_test("except_lut", function(lut)
+    linq{}:except_lut(lut)
+  end)
+
   add_test("except_lut is nearly identical to except", function()
     local got_lut = {bar = true, [false] = true}
     local expected_lut = util.shallow_copy(got_lut)
@@ -485,6 +900,14 @@ do
     )
   end)
 
+  add_lut_validation_test("except_lut_by", function(lut)
+    linq{}:except_lut_by(lut, function(value) return value end)
+  end)
+
+  add_function_validation_test("except_lut_by", "key selector", false, function(key_selector)
+    linq{}:except_lut_by({}, key_selector)
+  end)
+
   add_test("except_lut_by is nearly identical to except_by", function()
     local got_lut = {[5] = true}
     local expected_lut = util.shallow_copy(got_lut)
@@ -493,6 +916,17 @@ do
     assert.contents_equals(expected_lut, got_lut,
       "the lookup table passed to 'except_lut_by' must not be modified"
     )
+  end)
+
+  add_selected_value_validation_test("except_lut_by", nil, "key selector", function(assert_selector_errors)
+    local obj = linq{"foo"}:except_lut_by({}, function() return nil end)
+    assert_selector_errors(function()
+      iterate(obj)
+    end)
+  end)
+
+  add_condition_validation_test("first", true, function(condition)
+    linq{}:first(condition)
   end)
 
   add_test("first gets the first element", function()
@@ -524,12 +958,20 @@ do
     assert_sequential_helper(obj, obj.first, function() return false end)
   end)
 
+  add_action_validation_test("for_each", false, function(action)
+    linq{}:for_each(action)
+  end)
+
   add_test("for_each with an action using index arg", function()
     local values = get_test_strings()
     local obj = linq(values)
     assert_sequential_helper(obj, obj.for_each, function(value, i)
       assert.equals(values[i], value, "value #"..i)
     end)
+  end)
+
+  add_function_validation_test("group_by", "key selector", false, function(key_selector)
+    linq{}:group_by(key_selector)
   end)
 
   add_test("group_by creating 2 groups", function()
@@ -551,6 +993,21 @@ do
     local obj = linq(get_test_strings()):group_by(function() return "key" end)
     local got = obj.__count
     assert.equals(nil, got, "internal __count")
+  end)
+
+  add_selected_value_validation_test("group_by", nil, "key selector", function(assert_selector_errors)
+    local obj = linq{"foo"}:group_by(function() return nil end)
+    assert_selector_errors(function()
+      iterate(obj)
+    end)
+  end)
+
+  add_function_validation_test("group_by_select", "key selector", false, function(key_selector)
+    linq{}:group_by_select(key_selector, function(value) return value end)
+  end)
+
+  add_function_validation_test("group_by_select", "element selector", false, function(element_selector)
+    linq{}:group_by_select(function(value) return value end, element_selector)
   end)
 
   add_test("group_by_select creating 2 groups", function()
@@ -591,6 +1048,32 @@ do
     ;
     local got = obj.__count
     assert.equals(nil, got, "internal __count")
+  end)
+
+  add_selected_value_validation_test("group_by_select", nil, "key selector", function(assert_selector_errors)
+    local obj = linq{"foo"}:group_by_select(function() return nil end, function(value) return value end)
+    assert_selector_errors(function()
+      iterate(obj)
+    end)
+  end)
+
+  add_selected_value_validation_test("group_by_select", nil, "element selector", function(assert_selector_errors)
+    local obj = linq{"foo"}:group_by_select(function(value) return value end, function() return nil end)
+    assert_selector_errors(function()
+      iterate(obj)
+    end)
+  end)
+
+  add_collection_validation_test("group_join", "inner collection", false, function(inner_collection)
+    linq{}:group_join(inner_collection, function(value) return value end, function(value) return value end)
+  end)
+
+  add_function_validation_test("group_join", "outer key selector", false, function(outer_key_selector)
+    linq{}:group_join({}, outer_key_selector, function(value) return value end)
+  end)
+
+  add_function_validation_test("group_join", "inner key selector", false, function(inner_key_selector)
+    linq{}:group_join({}, function(value) return value end, inner_key_selector)
   end)
 
   add_test("group_join associates one inner (an array) to one outer", function()
@@ -719,6 +1202,33 @@ do
     iterate(obj)
   end)
 
+  add_selected_value_validation_test("group_join", nil, "outer key selector", function(assert_selector_errors)
+    local obj = linq{"foo"}:group_join({}, function() return nil end, function(value) return value end)
+    assert_selector_errors(function()
+      iterate(obj)
+    end)
+  end)
+
+  for _, inner in ipairs(array_or_obj_with_known_or_unknown_count_dataset) do
+    add_selected_value_validation_test(
+      "group_join",
+      "inner is "..inner.label,
+      "inner key selector",
+      function(assert_selector_errors)
+        local obj = linq{}
+          :group_join(inner.make_obj{"foo"}, function(value) return value end, function() return nil end)
+        ;
+        assert_selector_errors(function()
+          iterate(obj)
+        end)
+      end
+    )
+  end
+
+  add_search_value_validation_test("index_of", function(value)
+    linq{}:index_of(value)
+  end)
+
   add_test("index_of where the value exists in the sequence", function()
     local got = linq(get_test_strings()):index_of(false)
     assert.equals(3, got, "result of 'index_of'")
@@ -734,6 +1244,10 @@ do
     assert.equals(nil, got, "result of 'index_of'")
   end)
 
+  add_search_value_validation_test("index_of_last", function(value)
+    linq{}:index_of_last(value)
+  end)
+
   add_test("index_of_last where the value exists in the sequence", function()
     local got = linq(get_test_strings()):index_of_last(false)
     assert.equals(3, got, "result of 'index_of'")
@@ -747,6 +1261,14 @@ do
   add_test("index_of_last where the value does not exist in the sequence", function()
     local got = linq(get_test_strings()):index_of_last("hello")
     assert.equals(nil, got, "result of 'index_of'")
+  end)
+
+  add_index_validation_test("index", function(index)
+    linq{}:insert(index, "foo")
+  end)
+
+  add_insert_value_validation_test("index", function(value)
+    linq{}:insert(1, value)
   end)
 
   for _, outer in ipairs(known_or_unknown_count_dataset) do
@@ -766,6 +1288,14 @@ do
       end)
     end
   end
+
+  add_index_validation_test("insert_range", function(index)
+    linq{}:insert_range(index, {})
+  end)
+
+  add_collection_validation_test("insert_range", "collection", false, function(collection)
+    linq{}:insert_range(1, collection)
+  end)
 
   -- insert_range
   for _, outer in ipairs(known_or_unknown_count_dataset) do
@@ -817,6 +1347,14 @@ do
       end
     end
   end
+
+  add_collection_validation_test("intersect", "collection", false, function(collection)
+    linq{}:intersect(collection)
+  end)
+
+  add_lut_validation_test("intersect_lut", function(lut)
+    linq{}:intersect_lut(lut)
+  end)
 
   -- intersect
   for _, data in ipairs{
@@ -882,6 +1420,22 @@ do
     local obj = linq{}:intersect_lut{}
     local got = obj.__count
     assert.equals(nil, got, "internal __count")
+  end)
+
+  add_collection_validation_test("intersect_by", "key collection", false, function(key_collection)
+    linq{}:intersect_by(key_collection, function(value) return value end)
+  end)
+
+  add_function_validation_test("intersect_by", "key selector", false, function(key_selector)
+    linq{}:intersect_by({}, key_selector)
+  end)
+
+  add_lut_validation_test("intersect_lut_by", function(lut)
+    linq{}:intersect_lut_by(lut, function(value) return value end)
+  end)
+
+  add_function_validation_test("intersect_lut_by", "key selector", false, function(key_selector)
+    linq{}:intersect_lut_by({}, key_selector)
   end)
 
   -- intersect_by
@@ -960,6 +1514,13 @@ do
     ;
   end)
 
+  add_selected_value_validation_test("intersect_by", nil, "key selector", function(assert_selector_errors)
+    local obj = linq{"foo"}:intersect_by({}, function() return nil end)
+    assert_selector_errors(function()
+      iterate(obj)
+    end)
+  end)
+
   add_test("intersect_lut_by makes __count unknown", function()
     local obj = linq{}:intersect_lut_by({}, function(value) return value end)
     local got = obj.__count
@@ -970,6 +1531,26 @@ do
     local obj = linq{}
     local got_iter = obj:iterate()
     assert.equals(obj.__iter, got_iter, "iterator")
+  end)
+
+  add_collection_validation_test("join", "inner collection", false, function(inner_collection)
+    local function selector(value) return value end
+    linq{}:join(inner_collection, selector, selector, selector)
+  end)
+
+  add_function_validation_test("join", "outer key selector", false, function(outer_key_selector)
+    local function selector(value) return value end
+    linq{}:join({}, outer_key_selector, selector, selector)
+  end)
+
+  add_function_validation_test("join", "inner key selector", false, function(inner_key_selector)
+    local function selector(value) return value end
+    linq{}:join({}, selector, inner_key_selector, selector)
+  end)
+
+  add_function_validation_test("join", "result selector", false, function(result_selector)
+    local function selector(value) return value end
+    linq{}:join({}, selector, selector, result_selector)
   end)
 
   add_test("join makes __count unknown", function()
@@ -1100,6 +1681,52 @@ do
     iterate(obj)
   end)
 
+  add_selected_value_validation_test("join", nil, "outer key selector", function(assert_selector_errors)
+    local obj = linq{"foo"}
+      :join(
+        {"bar"},
+        function() return nil end,
+        function(value) return value end,
+        function(value) return value end
+      )
+    ;
+    assert_selector_errors(function()
+      iterate(obj)
+    end)
+  end)
+
+  add_selected_value_validation_test("join", nil, "inner key selector", function(assert_selector_errors)
+    local obj = linq{"foo"}
+      :join(
+        {"bar"},
+        function(value) return value end,
+        function() return (nil)--[[@as string]] end,
+        function(value) return value end
+      )
+    ;
+    assert_selector_errors(function()
+      iterate(obj)
+    end)
+  end)
+
+  add_selected_value_validation_test("join", nil, "result selector", function(assert_selector_errors)
+    local obj = linq{"bar"}
+      :join(
+        {"baz"},
+        function(value) return value:sub(1, 1) end,
+        function(value) return value:sub(1, 1) end,
+        function() return nil end
+      )
+    ;
+    assert_selector_errors(function()
+      iterate(obj)
+    end)
+  end)
+
+  add_index_validation_test("keep_at", function(index)
+    linq{}:keep_at(index)
+  end)
+
   for _, outer in ipairs(known_or_unknown_count_dataset) do
     for _, data in ipairs{
       {index = 1, expected_count = 1, expected_results = {"foo"}},
@@ -1119,6 +1746,14 @@ do
       end)
     end
   end
+
+  add_index_validation_test("keep_range", function(start_index)
+    linq{}:keep_range(start_index, 1)
+  end, "start index")
+
+  add_index_validation_test("keep_range", function(stop_index)
+    linq{}:keep_range(1, stop_index)
+  end, "stop index")
 
   for _, outer in ipairs(known_or_unknown_count_dataset) do
     for _, data in ipairs{
@@ -1143,6 +1778,10 @@ do
       end)
     end
   end
+
+  add_condition_validation_test("last", true, function(condition)
+    linq{}:last(condition)
+  end)
 
   add_test("last gets the last element", function()
     local got_value, got_index = linq(get_test_strings()):last()
@@ -1173,6 +1812,10 @@ do
     assert_sequential_helper(obj, obj.last, function() return false end, 4, -1)
   end)
 
+  add_comparator_validation_test("max", true, function(comparator)
+    linq{1}:max(comparator)
+  end)
+
   add_test("max with 3 values", function()
     local got = linq{2, 1, 3}:max()
     assert.equals(3, got, "result of 'max'")
@@ -1193,6 +1836,28 @@ do
     assert.errors("Attempt to evaluate max value on an empty collection.", function()
       obj:max()
     end)
+  end)
+
+  add_sequence_number_validation_test("max", "as the first value", false, function(value, assert_errors)
+    local obj = linq{value, 1}
+    assert_errors(function()
+      obj:max()
+    end)
+  end)
+
+  add_sequence_number_validation_test("max", "as the second value", false, function(value, assert_errors)
+    local obj = linq{1, value}
+    assert_errors(function()
+      obj:max()
+    end)
+  end)
+
+  add_selector_validation_test("max_by", false, function(selector)
+    linq{1}:max_by(selector)
+  end)
+
+  add_comparator_validation_test("max_by", true, function(comparator)
+    linq{1}:max_by(function(value) return value end, comparator)
   end)
 
   add_test("max_by with 4 values", function()
@@ -1228,6 +1893,24 @@ do
     end))
   end)
 
+  add_sequence_number_validation_test("max_by", "as the first value", true, function(value, assert_errors)
+    local obj = linq{1, 1}
+    assert_errors(function()
+      obj:max_by(function(_, i) if i == 1 then return value else return 1 end end)
+    end)
+  end)
+
+  add_sequence_number_validation_test("max_by", "as the second value", true, function(value, assert_errors)
+    local obj = linq{1, 1}
+    assert_errors(function()
+      obj:max_by(function(_, i) if i == 2 then return value else return 1 end end)
+    end)
+  end)
+
+  add_comparator_validation_test("min", true, function(comparator)
+    linq{1}:min(comparator)
+  end)
+
   add_test("min with 3 values", function()
     local got = linq{2, 1, 3}:min()
     assert.equals(1, got, "result of 'min'")
@@ -1248,6 +1931,28 @@ do
     assert.errors("Attempt to evaluate min value on an empty collection.", function()
       obj:min()
     end)
+  end)
+
+  add_sequence_number_validation_test("min", "as the first value", false, function(value, assert_errors)
+    local obj = linq{value, 1}
+    assert_errors(function()
+      obj:min()
+    end)
+  end)
+
+  add_sequence_number_validation_test("min", "as the second value", false, function(value, assert_errors)
+    local obj = linq{1, value}
+    assert_errors(function()
+      obj:min()
+    end)
+  end)
+
+  add_selector_validation_test("min_by", false, function(selector)
+    linq{1}:min_by(selector)
+  end)
+
+  add_comparator_validation_test("min_by", true, function(comparator)
+    linq{1}:min_by(function(value) return value end, comparator)
   end)
 
   add_test("min_by with 4 values", function()
@@ -1283,6 +1988,20 @@ do
     end))
   end)
 
+  add_sequence_number_validation_test("min_by", "as the first value", true, function(value, assert_errors)
+    local obj = linq{1, 1}
+    assert_errors(function()
+      obj:min_by(function(_, i) if i == 1 then return value else return 1 end end)
+    end)
+  end)
+
+  add_sequence_number_validation_test("min_by", "as the second value", true, function(value, assert_errors)
+    local obj = linq{1, 1}
+    assert_errors(function()
+      obj:min_by(function(_, i) if i == 2 then return value else return 1 end end)
+    end)
+  end)
+
   for _, outer in ipairs(known_or_unknown_count_dataset) do
     for _, data in ipairs{
       {label = "no values", values = {}, expected = {}},
@@ -1308,6 +2027,14 @@ do
       end)
     end
   end
+
+  add_selector_validation_test("order_by", false, function(selector)
+    linq{}:order_by(selector)
+  end)
+
+  add_selector_validation_test("order_descending_by", false, function(selector)
+    linq{}:order_descending_by(selector)
+  end)
 
   for _, outer in ipairs(known_or_unknown_count_dataset) do
     -- ordered starting at the second character instead of first
@@ -1338,6 +2065,10 @@ do
       end)
     end
   end
+
+  add_collection_validation_test("prepend", "collection", false, function(collection)
+    linq{}:prepend(collection)
+  end)
 
   add_test("prepend an array, self has known __count", function()
     local obj = linq(get_test_strings()):prepend{"hello", "world"}
@@ -1385,6 +2116,10 @@ do
     assert_iteration(obj, {"hello", "world", table.unpack(get_test_strings())})
   end)
 
+  add_index_validation_test("remove_at", function(index)
+    linq{}:remove_at(index)
+  end)
+
   for _, outer in ipairs(known_or_unknown_count_dataset) do
     for _, data in ipairs{
       {label = "first value", index = 1, expected_count = 3, expected_results = {"bar", false, "baz"}},
@@ -1403,6 +2138,14 @@ do
       end)
     end
   end
+
+  add_index_validation_test("remove_range", function(start_index)
+    linq{}:remove_range(start_index, 1)
+  end, "start index")
+
+  add_index_validation_test("remove_range", function(stop_index)
+    linq{}:remove_range(1, stop_index)
+  end, "stop index")
 
   for _, outer in ipairs(known_or_unknown_count_dataset) do
     for _, data in ipairs{
@@ -1439,6 +2182,10 @@ do
     assert_iteration(obj, {"baz", false, "bar", "foo"})
   end)
 
+  add_selector_validation_test("select", false, function(selector)
+    linq{}:select(selector)
+  end)
+
   add_test("select does not affect __count", function()
     local obj = linq(get_test_strings())
     local expected_count = obj.__count
@@ -1459,6 +2206,17 @@ do
       :select(function(_, i) return i end)
     ;
     assert_iteration(obj, {1, 2, 3, 4})
+  end)
+
+  add_selected_value_validation_test("select", nil, nil, function(assert_selector_errors)
+    local obj = linq{"foo"}:select(function() return nil end)
+    assert_selector_errors(function()
+      iterate(obj)
+    end)
+  end)
+
+  add_selector_validation_test("select_many", false, function(selector)
+    linq{}:select_many(selector)
   end)
 
   add_test("select_many makes __count unknown", function()
@@ -1513,6 +2271,26 @@ do
     assert_iteration(obj, {"foo", "foo", "bar", false, false, "baz"})
   end)
 
+  -- NOTE: these selected collection tests break the rule described in the IMPORTANT tag at the top
+  for _, data in ipairs{1, 2} do
+    add_collection_validation_test("select_many", "selected collection #"..data, false, function(collection)
+      local obj = linq{{"foo"}, {"bar"}}
+        :select_many(function(v, i)
+          if i == data then
+            return collection
+          else
+            return v
+          end
+        end)
+      ;
+      iterate(obj)
+    end)
+  end
+
+  add_collection_validation_test("sequence_equal", "collection", false, function(collection)
+    linq{}:sequence_equal(collection)
+  end)
+
   for _, outer in ipairs(known_or_unknown_count_dataset) do
     for _, inner in ipairs(array_or_obj_with_known_or_unknown_count_dataset) do
       for _, data in ipairs{
@@ -1529,6 +2307,10 @@ do
       end
     end
   end
+
+  add_condition_validation_test("single", true, function(condition)
+    linq{"foo"}:single(condition)
+  end)
 
   for _, outer in ipairs(known_or_unknown_count_dataset) do
     local err_msg_prefix = "Expected a single value in the sequence, got "
@@ -1582,6 +2364,10 @@ do
     assert_sequential_helper(obj, obj.single, function(value) return value == "baz" end)
   end)
 
+  add_count_validation_test("skip", function(count)
+    linq{}:skip(count)
+  end)
+
   for _, outer in ipairs(known_or_unknown_count_dataset) do
     for _, data in ipairs{
       {skip_count = 0, expected_count = 4, expected = get_test_strings()},
@@ -1600,6 +2386,10 @@ do
     end
   end
 
+  add_count_validation_test("skip_last", function(count)
+    linq{}:skip_last(count)
+  end)
+
   for _, outer in ipairs(known_or_unknown_count_dataset) do
     for _, data in ipairs{
       {skip_count = 0, expected_count = 4, expected = get_test_strings()},
@@ -1617,6 +2407,10 @@ do
       end)
     end
   end
+
+  add_condition_validation_test("skip_last_while", false, function(condition)
+    linq{}:skip_last_while(condition)
+  end)
 
   for _, data in ipairs{
     {skip_count = 0, expected = get_test_strings(), condition = function(value) return false end},
@@ -1640,6 +2434,10 @@ do
     local obj = linq(get_test_strings()):skip_last_while(function() return true end)
     local got = obj.__count
     assert.equals(nil, got, "internal __count")
+  end)
+
+  add_condition_validation_test("skip_while", false, function(condition)
+    linq{}:skip_while(condition)
   end)
 
   for _, data in ipairs{
@@ -1666,6 +2464,10 @@ do
     assert.equals(nil, got, "internal __count")
   end)
 
+  add_comparator_validation_test("sort", false, function(comparator)
+    linq{}:sort(comparator)
+  end)
+
   for _, outer in ipairs(known_or_unknown_count_dataset) do
     add_test("sort, self has "..outer.label, function()
       local obj = outer.make_obj(get_test_strings()):sort(function(left, right)
@@ -1680,6 +2482,10 @@ do
       assert_iteration(obj, {false, "bar", "baz", "foo"})
     end)
   end
+
+  add_selector_validation_test("sum", true, function(selector)
+    linq{}:sum(selector)
+  end)
 
   for _, outer in ipairs(known_or_unknown_count_dataset) do
     local function selector(value)
@@ -1707,6 +2513,34 @@ do
       assert_sequential_helper(obj, obj.sum, function(_, i) return i end)
     end)
   end
+
+  for _, outer in ipairs(known_or_unknown_count_dataset) do
+    add_sequence_number_validation_test("sum", "using selector and has "..outer.label, true, function(value, assert_errors)
+      local obj = outer.make_obj{"foo"}
+      assert_errors(function()
+        obj:sum(function() return value end)
+      end)
+    end)
+  end
+
+  add_sequence_number_validation_test("sum", nil, false, function(value, assert_errors)
+    local obj = linq{value}
+    assert_errors(function()
+      obj:sum()
+    end)
+  end)
+
+  add_collection_validation_test("symmetric_difference", "collection", false, function(collection)
+    linq{}:symmetric_difference(collection)
+  end)
+
+  add_collection_validation_test("symmetric_difference_by", "collection", false, function(collection)
+    linq{}:symmetric_difference_by(collection, function(value) return value end)
+  end)
+
+  add_function_validation_test("symmetric_difference_by", "key selector", false, function(key_selector)
+    linq{}:symmetric_difference_by({}, key_selector)
+  end)
 
   for _, data in ipairs{
     {
@@ -1787,6 +2621,36 @@ do
     assert.equals(nil, got, "internal __count")
   end)
 
+  add_selected_value_validation_test(
+    "symmetric_difference_by",
+    "in outer",
+    "key selector",
+    function(assert_selector_errors)
+      local obj = linq{"foo"}:symmetric_difference_by({}, function() return nil end)
+      assert_selector_errors(function()
+        iterate(obj)
+      end)
+    end
+  )
+
+  for _, inner in ipairs(array_or_obj_with_known_or_unknown_count_dataset) do
+    add_selected_value_validation_test(
+      "symmetric_difference_by",
+      "in inner, inner is "..inner.label,
+      "key selector",
+      function(assert_selector_errors)
+        local obj = linq{}:symmetric_difference_by(inner.make_obj{"foo"}, function() return nil end)
+        assert_selector_errors(function()
+          iterate(obj)
+        end)
+      end
+    )
+  end
+
+  add_count_validation_test("take", function(count)
+    linq{}:take(count)
+  end)
+
   add_test("take 0 values", function()
     local obj = linq(get_test_strings()):take(0)
     assert.equals(0, obj.__count, "internal __count after take")
@@ -1821,6 +2685,10 @@ do
     assert_iteration(obj, {"foo", "bar", false})
   end)
 
+  add_count_validation_test("take_last", function(count)
+    linq{}:take_last(count)
+  end)
+
   for _, outer in ipairs(known_or_unknown_count_dataset) do
     for _, data in ipairs{
       {take_count = 0, expected_count = 0, makes_count_known = true, expected = {}},
@@ -1839,6 +2707,10 @@ do
       end)
     end
   end
+
+  add_condition_validation_test("take_last_while", false, function(condition)
+    linq{}:take_last_while(condition)
+  end)
 
   for _, data in ipairs{
     {take_count = 0, expected = {}, condition = function(value) return false end},
@@ -1862,6 +2734,10 @@ do
   add_test("take_last_while with condition using index arg", function()
     local obj = linq(get_test_strings())
     assert_sequential_helper(obj, obj.take_last_while, function() return true end, 4, -1)
+  end)
+
+  add_condition_validation_test("take_while", false, function(condition)
+    linq{}:take_while(condition)
   end)
 
   add_test("take_while makes __count unknown", function()
@@ -1888,6 +2764,14 @@ do
   add_test("take_while with condition using index arg", function()
     local obj = linq(get_test_strings()):take_while(function(_, i) return i <= 3 end)
     assert_iteration(obj, {"foo", "bar", false})
+  end)
+
+  add_selector_validation_test("then_by", false, function(selector)
+    linq{}:order():then_by(selector)
+  end)
+
+  add_selector_validation_test("then_descending_by", false, function(selector)
+    linq{}:order():then_descending_by(selector)
   end)
 
   -- then_by and then_descending_by
@@ -2027,6 +2911,11 @@ do
     end
   end
 
+  add_test("order + then_by while it does not make sense, it works", function()
+    local obj = linq{"foo", "bar", "bar"}:order():then_by(function(value) return value end)
+    assert_iteration(obj, {"bar", "bar", "foo"})
+  end)
+
   add_test("order_by + then_by + then_descending_by", function()
     local obj = linq{
       "beg",
@@ -2054,12 +2943,99 @@ do
     })
   end)
 
+  add_test("then_by without previous order call errors", function()
+    local obj = linq{}
+    assert.errors(
+      "'then_by' and 'then_descending_by' must only be used directly after any of the \z
+        'order' functions, or another 'then' function.",
+      function()
+        obj:then_by(function(value) return value end)
+      end
+    )
+  end)
+
+  add_test("then_descending_by without previous order call errors", function()
+    local obj = linq{}
+    assert.errors(
+      "'then_by' and 'then_descending_by' must only be used directly after any of the \z
+        'order' functions, or another 'then' function.",
+      function()
+        obj:then_descending_by(function(value) return value end)
+      end
+    )
+  end)
+
+  add_sequence_value_for_ordering_validation_test(
+    "order",
+    "as the first value",
+    1,
+    false,
+    function(value, assert_errors)
+      local obj = linq{value, "foo"}:order()
+      assert_errors(function()
+        iterate(obj)
+      end)
+    end
+  )
+
+  add_sequence_value_for_ordering_validation_test(
+    "order",
+    "as the second value",
+    1,
+    false,
+    function(value, assert_errors)
+      local obj = linq{"foo", value}:order()
+      assert_errors(function()
+        iterate(obj)
+      end)
+    end
+  )
+
+  for _, data in ipairs{{label = "first", value = "foo"}, {label = "second", value = "bar"}} do
+    add_sequence_value_for_ordering_validation_test(
+      "order_by",
+      "as the "..data.value.." value",
+      1,
+      true,
+      function(value, assert_errors)
+        local obj =linq{"foo", "bar"}
+          :order_by(function(v) if v == data.value then return value else return v end end)
+        ;
+        assert_errors(function()
+          iterate(obj)
+        end)
+      end
+    )
+  end
+
+  for _, data in ipairs{{label = "first", value = "foo"}, {label = "second", value = "bar"}} do
+    add_sequence_value_for_ordering_validation_test(
+      "order_by + then_by",
+      "as the "..data.label.." value in then_by",
+      2,
+      true,
+      function(value, assert_errors)
+        local obj = linq{"foo", "bar"}
+          :order_by(function() return "hello world" end)
+          :then_by(function(v) if v == data.value then return value else return v end end)
+        ;
+        assert_errors(function()
+          iterate(obj)
+        end)
+      end
+    )
+  end
+
   for _, outer in ipairs(known_or_unknown_count_dataset) do
     add_test("to_array, self has "..outer.label, function()
       local got = outer.make_obj(get_test_strings()):to_array()
       assert.contents_equals(get_test_strings(), got, "result of 'to_array'")
     end)
   end
+
+  add_function_validation_test("to_dict", "key value pair selector", false, function(kvp_selector)
+    linq{}:to_dict(kvp_selector)
+  end)
 
   for _, outer in ipairs(known_or_unknown_count_dataset) do
     add_test("to_dict, self has "..outer.label, function()
@@ -2074,6 +3050,40 @@ do
       assert_sequential_helper(obj, obj.to_dict, function(value) return value, value end)
     end)
   end
+
+  for _, outer in ipairs(known_or_unknown_count_dataset) do
+    add_selected_value_validation_test(
+      "to_dict",
+      "as the first value, self has "..outer.label, "key value pair selector",
+      function(assert_selector_errors)
+        local obj = linq{"foo"}
+        assert_selector_errors(function()
+          obj:to_dict(function() return nil, "bar" end)
+        end)
+      end,
+      1
+    )
+
+    add_selected_value_validation_test(
+      "to_dict",
+      "as the second value, self has "..outer.label, "key value pair selector",
+      function(assert_selector_errors)
+        local obj = linq{"foo"}
+        assert_selector_errors(function()
+          obj:to_dict(function() return "bar", nil end)
+        end)
+      end,
+      2
+    )
+  end
+
+  add_name_validation_test("to_linked_list", true, function(name)
+    linq{}:to_linked_list(name)
+  end)
+
+  add_track_liveliness_validation_test("to_linked_list", true, function(track_liveliness)
+    linq{}:to_linked_list(nil, track_liveliness)
+  end)
 
   for _, outer in ipairs(known_or_unknown_count_dataset) do
     for _, data in ipairs{
@@ -2112,6 +3122,10 @@ do
     end
   end
 
+  add_function_validation_test("to_lookup", "key selector", true, function(key_selector)
+    linq{}:to_lookup(key_selector)
+  end)
+
   for _, outer in ipairs(known_or_unknown_count_dataset) do
     add_test("to_lookup, "..outer.label, function()
       local got = outer.make_obj(get_test_strings()):to_lookup()
@@ -2133,6 +3147,32 @@ do
       assert_sequential_helper(obj, obj.to_lookup, function(value) return value end)
     end)
   end
+
+  for _, outer in ipairs(known_or_unknown_count_dataset) do
+    add_selected_value_validation_test(
+      "to_lookup",
+      "self has "..outer.label,
+      "key selector",
+      function(assert_selector_errors)
+        local obj = linq{"foo"}
+        assert_selector_errors(function()
+          obj:to_lookup(function() return nil end)
+        end)
+      end
+    )
+  end
+
+  add_collection_validation_test("union", "collection", false, function(collection)
+    linq{}:union(collection)
+  end)
+
+  add_collection_validation_test("union_by", "collection", false, function(collection)
+    linq{}:union_by(collection, function(value) return value end)
+  end)
+
+  add_function_validation_test("union_by", "key selector", false, function(key_selector)
+    linq{}:union_by({}, key_selector)
+  end)
 
   -- union
   for _, data in ipairs{
@@ -2210,6 +3250,31 @@ do
     local obj = linq(get_test_strings()):union_by({"hello", "world"}, function(value) return value end)
     local got = obj.__count
     assert.equals(nil, got, "internal __count")
+  end)
+
+  add_selected_value_validation_test("union_by", "in outer", "key selector", function(assert_selector_errors)
+    local obj = linq{"foo"}:union_by({}, function() return nil end)
+    assert_selector_errors(function()
+      iterate(obj)
+    end)
+  end)
+
+  for _, inner in ipairs(array_or_obj_with_known_or_unknown_count_dataset) do
+    add_selected_value_validation_test(
+      "union_by",
+      "in inner, inner is "..inner.label,
+      "key selector",
+      function(assert_selector_errors)
+        local obj = linq{}:union_by(inner.make_obj{"foo"}, function() return nil end)
+        assert_selector_errors(function()
+          iterate(obj)
+        end)
+      end
+    )
+  end
+
+  add_condition_validation_test("where", false, function(condition)
+    linq{}:where(condition)
   end)
 
   add_test("where makes __count unknown", function()
