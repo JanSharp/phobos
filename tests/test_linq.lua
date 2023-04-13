@@ -2911,6 +2911,11 @@ do
     end
   end
 
+  add_test("order + then_by while it does not make sense, it works", function()
+    local obj = linq{"foo", "bar", "bar"}:order():then_by(function(value) return value end)
+    assert_iteration(obj, {"bar", "bar", "foo"})
+  end)
+
   add_test("order_by + then_by + then_descending_by", function()
     local obj = linq{
       "beg",
@@ -2936,6 +2941,28 @@ do
       "beh",
       "beg",
     })
+  end)
+
+  add_test("then_by without previous order call errors", function()
+    local obj = linq{}
+    assert.errors(
+      "'then_by' and 'then_descending_by' must only be used directly after any of the \z
+        'order' functions, or another 'then' function.",
+      function()
+        obj:then_by(function(value) return value end)
+      end
+    )
+  end)
+
+  add_test("then_descending_by without previous order call errors", function()
+    local obj = linq{}
+    assert.errors(
+      "'then_by' and 'then_descending_by' must only be used directly after any of the \z
+        'order' functions, or another 'then' function.",
+      function()
+        obj:then_descending_by(function(value) return value end)
+      end
+    )
   end)
 
   add_sequence_value_for_ordering_validation_test(
