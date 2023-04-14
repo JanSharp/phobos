@@ -65,7 +65,7 @@ local function serialize_table(value)
         break
       end
       local v_str = serialize_value(v)
-      array_values[i] = v_str
+      array_values[i] = v_str -- assigns the string, or false in case of a back reference. never nil
       if not v_str then
         back_ref_kvps_c=back_ref_kvps_c+1;back_ref_kvps[back_ref_kvps_c] = {
           t = value,

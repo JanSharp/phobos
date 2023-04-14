@@ -45,9 +45,7 @@ do
           ),
           function()
             func(binary.new_serializer())
-          end,
-          nil,
-          true -- plain
+          end
         )
       end)
     end
@@ -90,7 +88,7 @@ do
 
     serializer_scope:add_test("uint8 non integer", function()
       local serializer = binary.new_serializer()
-      assert.errors("Value must be an integer: '1.5%d*'%.", function()
+      assert.errors_with_pattern("Value must be an integer: '1.5%d*'%.", function()
         serializer:write_uint8(1.5)
       end)
     end)
@@ -307,7 +305,7 @@ do
 
     add_test("invalid constant", function(serializer)
       assert.errors(
-        "Invalid Lua constant node type 'constructor', expected.*",
+        "Invalid Lua constant node type 'constructor', expected 'nil', 'boolean', 'number' or 'string'.",
         function()
           serializer:write_lua_constant(nodes.new_constructor{})
         end
@@ -408,7 +406,7 @@ do
       assert.equals(false, deserializer:get_allow_reading_past_end(), "after setting to false")
       deserializer:set_allow_reading_past_end(true)
       assert.equals(true, deserializer:get_allow_reading_past_end(), "after setting to true")
-      assert.errors("Expected boolean for allow_reading_past_end, got.*", function()
+      assert.errors_with_pattern("Expected boolean for allow_reading_past_end, got.*", function()
         deserializer:set_allow_reading_past_end()
       end)
     end)
@@ -480,13 +478,13 @@ do
     end
 
     add_test("uint64 7th byte out of bounds", "\x00\x00\x00\x00\x00\x00\x20\x00", function(deserializer)
-      assert.errors("Unsupported.*uint64 %(actually uint53%).*2%s*^%s*53.", function()
+      assert.errors_with_pattern("Unsupported.*uint64 %(actually uint53%).*2%s*^%s*53.", function()
         deserializer:read_uint64()
       end)
     end)
 
     add_test("uint64 8th byte out of bounds", "\x00\x00\x00\x00\x00\x00\x00\x01", function(deserializer)
-      assert.errors("Unsupported.*uint64 %(actually uint53%).*2%s*^%s*53.", function()
+      assert.errors_with_pattern("Unsupported.*uint64 %(actually uint53%).*2%s*^%s*53.", function()
         deserializer:read_uint64()
       end)
     end)
@@ -558,13 +556,13 @@ do
     end)
 
     add_test("invalid nil string constant", "\4\0\0\0\0\0\0\0\0", function(deserializer)
-      assert.errors("Lua constant strings must not be 'nil'%.", function()
+      assert.errors("Lua constant strings must not be 'nil'.", function()
         deserializer:read_lua_constant()
       end)
     end)
 
     add_test("invalid constant type", "\5", function(deserializer)
-      assert.errors("Invalid Lua constant type '5', expected.*", function()
+      assert.errors_with_pattern("Invalid Lua constant type '5', expected.*", function()
         deserializer:read_lua_constant()
       end)
     end)

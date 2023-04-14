@@ -201,6 +201,16 @@ local function factorio_profile(params)
     output_path = ".",
   }
 
+  -- For the debugger to find source files. Not the most convenient solution, but it works.
+  if not params.publish then
+    profiles.include_copy{
+      profile = profile,
+      source_path = "src",
+      output_path = "src",
+      filename_pattern = "%.lua$",
+    }
+  end
+
   -- TODO: either change doc generation to not need the files in the output
   -- or remove docs from teh mod entirely
   copy_emmy_lua_docs(profile)

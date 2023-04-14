@@ -35,12 +35,14 @@ do
   end
 
   local get_path
+  local already_wrapped_in_assert_errors = false
   local function add_test(label, func)
     scope:add_test(label.." (string paths)", function()
       setup_new_fs()
       get_path = function(path)
         return path
       end
+      already_wrapped_in_assert_errors = false
       func()
     end)
     scope:add_test(label.." (Path paths)", function()
@@ -48,6 +50,7 @@ do
       get_path = function(path)
         return Path.new(path)
       end
+      already_wrapped_in_assert_errors = false
       func()
     end)
     scope:add_test(label.." (Missing paths)", function()
@@ -55,7 +58,11 @@ do
       get_path = function()
         return nil
       end
-      assert.errors("Missing path argument%.", func)
+      assert.errors("Missing path argument.", function()
+        already_wrapped_in_assert_errors = true
+        func()
+        -- can't set 'already_wrapped_in_assert_errors' to false here, because 'func' may (will/should) error
+      end)
     end)
   end
 
@@ -110,9 +117,15 @@ do
   end)
 
   add_test("attempt to rmdir_recursive non existent dir", function()
-    assert.errors("No such file or directory '/foo'%.", function()
+    local function func()
       io_util.rmdir_recursive(get_path("/foo"))
-    end)
+    end
+    if already_wrapped_in_assert_errors then
+      func() -- wrapping it in assert.errors twice makes some really unreadable error messages.
+      -- it doesn't work with assert.errors, only assert.errors_with_pattern, so we have to do it this way anyway.
+    else
+      assert.errors("No such file or directory '/foo'.", func)
+    end
   end)
 
   add_test("read_file", function()
