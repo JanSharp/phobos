@@ -56,7 +56,6 @@ local function new_factorio_profile(params)
     type = "factoriomod",
     request = "launch",
     preLaunchTask = "Build Factorio Mod Debug",
-    factorioPath = "${env:PHOBOS_FACTORIO_PATH}",
     modsPath = "${workspaceFolder}/out/debug_factorio",
     allowDisableBaseMod = true,
     adjustMods = {

@@ -32,7 +32,6 @@
         "--window-size",
         "1280x720",
       ],
-      "factorioPath": "${env:PHOBOS_FACTORIO_PATH}",
       "modsPath": "${workspaceFolder}/out/debug_factorio",
     },
     {
@@ -53,7 +52,6 @@
         "--window-size",
         "1280x720",
       ],
-      "factorioPath": "${env:PHOBOS_FACTORIO_PATH}",
       "modsPath": "${workspaceFolder}/out/debug_factorio",
     },
     {
