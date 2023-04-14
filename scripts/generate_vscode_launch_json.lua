@@ -67,25 +67,49 @@ local function new_factorio_profile(params)
       "--window-size", "1280x720",
     },
   }
+  if params.profile then
+    profile.hookMode = "profile"
+    profile.profileSlowStart = 0
+    profile.profileUpdateRate = 1
+    profile.profileFuncs = true
+    profile.profileLines = params.profile_lines or false
+  end
   for _, mod in ipairs(params.base_mods) do
     profile.adjustMods[mod] = true
   end
   return profile
 end
 
-add_profile(new_factorio_profile{
-  name = "Factorio Mod (base)",
-  base_mods = {"base"},
-  scenario = "base/freeplay",
-})
-add_profile(new_factorio_profile{
-  name = "Factorio Mod (minimal no base)",
-  base_mods = {
+local function add_base_and_no_base_factorio_profiles(params)
+  local name = params.name
+
+  params.name = name.." (base)"
+  params.base_mods = {"base"}
+  params.scenario = "base/freeplay"
+  add_profile(new_factorio_profile(params))
+
+  params.name = name.." (minimal no base)"
+  params.base_mods = {
     "minimal-no-base-mod",
     "JanSharpDevEnv",
-  },
-  scenario = "JanSharpDevEnv/NoBase",
-})
+  }
+  params.scenario = "JanSharpDevEnv/NoBase"
+  add_profile(new_factorio_profile(params))
+end
+
+add_base_and_no_base_factorio_profiles{
+  name = "Factorio Mod",
+}
+add_base_and_no_base_factorio_profiles{
+  name = "Factorio Mod (profile)",
+  profile = true,
+  profile_lines = true,
+}
+add_base_and_no_base_factorio_profiles{
+  name = "Factorio Mod (profile functions only)",
+  profile = true,
+  profile_lines = false,
+}
 
 local function add_phobos_profiles(params)
   for _, compiler in ipairs{"Lua", "Phobos"} do
