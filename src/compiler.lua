@@ -406,7 +406,7 @@ do
         generate_const_code_internal(expr, k, func, reg)
         return reg, false
       end
-      return bit32.bor(add_constant(expr,func),0x100), true
+      return bit32.bor(k, 0x100), true
     else
       return local_or_fetch(expr,func), false
     end
