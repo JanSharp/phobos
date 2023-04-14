@@ -1959,7 +1959,7 @@ do
         return linq(reg.reg_groups)
           :where(function(reg_group)
             -- only check groups which are actually apart of this these linked groups
-            -- and where the register doesn't require a move into the register list, so it is usd in place
+            -- and where the register doesn't require a move into the register list, so it is used in place
             return reg_group.linked_groups == linked_groups and linq(reg_group.regs):any(function(r, index)
               return r == reg and (reg_group.index_in_linked_groups + index - 1 == reg.index_in_linked_groups)
             end)
