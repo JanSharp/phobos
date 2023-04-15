@@ -57,9 +57,12 @@ do
   ---@field prev ILCompiledInstruction?
   ---@field next ILCompiledInstruction?
 
+  local live_regs = {} -- DEBUG: to know which regs are alive while an error occurs
+
   ---@param data ILCompilerData
+  ---@param il_reg ILRegister? @ -- DEBUG
   ---@return ILCompiledRegister
-  local function create_compiled_reg(data, reg_index, name)
+  local function create_compiled_reg(data, reg_index, name, il_reg)
     if reg_index >= data.result.max_stack_size then
       data.result.max_stack_size = reg_index + 1
     end
@@ -75,12 +78,15 @@ do
       end
       data.local_reg_count = reg_index + 1
     end
-    return {
+    local reg = {
       reg_index = reg_index,
       name = name,
       start_at = nil,
       stop_at = get_first_inst(data),
+      il_reg = il_reg, -- DEBUG
     }
+    live_regs[reg_index] = reg
+    return reg
   end
 
   ---@param data ILCompilerData
@@ -106,6 +112,7 @@ do
     reg.start_at = get_first_inst(data)
     data.compiled_registers_count = data.compiled_registers_count + 1
     data.compiled_registers[data.compiled_registers_count] = reg
+    live_regs[reg.reg_index] = nil
   end
 
   local generate_inst_lut
@@ -171,7 +178,7 @@ do
       for i = 1, reg_count do
         local reg = regs[i]
         regs[i] = nil
-        reg.current_reg = create_compiled_reg(data, reg.predetermined_reg_index, reg.name)
+        reg.current_reg = create_compiled_reg(data, reg.predetermined_reg_index, reg.name, reg)
         if reg.captured_as_upval and not reg_index_to_close_upvals_from then
           reg_index_to_close_upvals_from = reg.current_reg.reg_index
         end
