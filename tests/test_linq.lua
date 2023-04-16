@@ -484,7 +484,7 @@ do
   end)
 
   add_condition_validation_test("any", false, function(condition)
-    linq{}:all(condition)
+    linq{}:any(condition)
   end)
 
   add_test("any with condition matching nothing", function()
