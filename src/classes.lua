@@ -946,7 +946,7 @@
 ---@field has_blocks boolean @ `blocks` on ILFunction and `block` on ILInstruction
 ---@field has_start_stop_insts boolean @ `start_at` and `stop_at` on ILRegister
 ---@field has_reg_liveliness boolean @ `regs_(start|stop)_at_(list|lut)` and `live_regs` on ILInstruction
----@field blocks ILBLockList @ intrusive ILL
+---@field blocks ILBLockList @ intrusive linked list
 ---@field has_types boolean @ `(pre|post)_state` on ILInstruction
 ---@field has_reg_usage boolean @ `total_get/set_count` and `temporary` on ILRegister
 ---@field is_compiling boolean @ `closure_index` on ILFUnction and `captured_as_upval` and `current_reg` on ILRegister
@@ -955,19 +955,19 @@
 ---temp compilation data
 ---@field closure_index integer @ **zero based** needed for closure instructions to know the function index
 
----@class ILBlock : ILLNode<ILBlock>
----@field list ILBLockList @ (overridden) back reference
----@field prev ILBlock? @ (overridden) `nil` if this is the first node
----@field next ILBlock? @ (overridden) `nil` if this is the last node
+---@class ILBlock
+---@field prev ILBlock? @ `nil` if this is the first block
+---@field next ILBlock? @ `nil` if this is the last block
+---@field is_main_entry_block boolean?
 ---@field source_links ILBlockLink[] @ blocks flowing into this block
 ---@field start_inst ILInstruction @ the first instruction in this block
 ---@field stop_inst ILInstruction @ the last instruction in this block
----@field is_main_entry_block boolean
----@field target_links ILBlockLink[] @ blocks this block can flow to
+---@field straight_link ILBlockLink? @ used when this block flows directly into the next block
+---@field jump_link ILBlockLink? @ only used by "test" and "jump" instructions, linking to the label's block
 
----@class ILBLockList : IntrusiveIndexedLinkedList<ILBLock>
----@field first ILBlock? @ (overridden)
----@field last ILBlock? @ (overridden)
+---@class ILBLockList
+---@field first ILBlock @ empty instruction lists are malformed, therefore never nil
+---@field last ILBlock @ empty instruction lists are malformed, therefore never nil
 
 ---@class ILBlockLink
 ---@field source_block ILBlock @ the block flowing to `target_block`
@@ -976,6 +976,8 @@
 ---which are ultimately forming a loop.
 ---(currently all backwards jumps are marked as loop links)
 ---@field is_loop boolean
+---`true` when this is the `jump_link` of the source_block, otherwise it's the `straight_link`.
+---@field is_jump_link boolean?
 
 ---@class ILFunctionTemp
 ---@field local_reg_lut table<AstLocalDef, ILRegister>

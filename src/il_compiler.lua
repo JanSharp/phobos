@@ -2378,9 +2378,7 @@ local function compile(func)
   func.is_compiling = true
   make_bytecode_func(data)
   il.determine_reg_usage(func)
-  if not func.has_blocks then
-    il_blocks(func)
-  end
+  il_blocks.ensure_has_blocks(func)
   pre_compilation_process(data)
 
   generate(data)

@@ -189,7 +189,7 @@ local function compile(filename)
   if args.use_il then
     local il = il_generator(ast)
     if args.check_cyclomatic_complexity and cyclomatic_complexity_values then
-      il_blocks(il)
+      il_blocks.create_blocks_recursive(il)
       ---@param func ILFunction
       local function recurse(func)
         local index = #cyclomatic_complexity_values + 1

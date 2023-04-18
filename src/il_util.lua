@@ -4,6 +4,7 @@ local number_ranges = require("number_ranges")
 local error_code_util = require("error_code_util")
 local ill = require("indexed_linked_list")
 local linq = require("linq")
+local il_blocks = require("il_blocks")
 
 ----------------------------------------------------------------------------------------------------
 -- instructions
@@ -1545,112 +1546,6 @@ do
 end
 
 ----------------------------------------------------------------------------------------------------
--- il blocks
-----------------------------------------------------------------------------------------------------
-
--- TODO: either add a function or change normalize_blocks to handle changing the jump target of tests/jumps
--- (since that change the links between blocks)
--- TODO: add a function to handle removal of instructions, potentially merging or removing blocks
-
-local function new_block(start_inst, stop_inst)
-  return {
-    source_links = {},
-    start_inst = start_inst,
-    stop_inst = stop_inst,
-    target_links = {},
-  }
-end
-
-local function create_link(source_block, target_block)
-  local link = {
-    source_block = source_block,
-    target_block = target_block,
-    -- backwards jumps are 99% of the time a loop
-    -- I'm not sure how to detect if it is a loop otherwise, but since this is 99% of the time correct
-    -- it's good enough. Besides, a jump being marked as a loop even though it isn't doesn't cause harm
-    -- while a jump that is a loop not being marked as a loop does cause harm
-    is_loop = target_block.start_inst.index < source_block.start_inst.index,
-  }
-  source_block.target_links[#source_block.target_links+1] = link
-  target_block.source_links[#target_block.source_links+1] = link
-  return link
-end
-
-local function create_links_for_block(block)
-  local last_inst = block.stop_inst
-  local function assert_next()
-    util.debug_assert(last_inst.next, "The next instruction of the last instruction of a block \z
-      where the last instruction in the block is not a 'ret' or 'jump' instruction should be \z
-      impossible to be nil."
-    )
-  end
-  local inst_type = last_inst.inst_type
-  if inst_type == "jump" then
-    create_link(block, last_inst.label.block)
-  elseif inst_type == "test" then
-    assert_next()
-    create_link(block, last_inst.next.block)
-    create_link(block, last_inst.label.block)
-  elseif inst_type == "ret" then
-    -- doesn't link to anything
-  else -- anything else just continues to the next block
-    assert_next()
-    create_link(block, last_inst.next.block)
-  end
-end
-
-local block_ends = util.invert{"jump", "test", "ret"}
----@param func ILFunction
----@param inst ILInstruction
-local function normalize_blocks_for_inst(func, inst)
-  -- determine if we can connect with the block of the previous instruction
-  local can_use_prev_block = inst.prev and not block_ends[inst.prev.inst_type] and inst.inst_type ~= "label"
-  -- determine if we can connect with the block of the next instruction
-  local can_use_next_block = inst.next and not block_ends[inst.inst_type] and inst.next.inst_type ~= "label"
-  -- determine if we have to split a block due to this insertion
-  -- TODO: this doesn't actually split the blocks at all.
-  if can_use_prev_block then
-    inst.block = inst.prev.block
-    if inst.block.stop_inst == inst.prev then
-      inst.block.stop_inst = inst
-    end
-    return
-  end
-  if can_use_next_block then
-    inst.block = inst.next.block
-    inst.block.start_inst = inst
-    return
-  end
-  -- can't use either of them, create new block
-  local block = new_block(inst, inst)
-  inst.block = block
-  ill.insert_after(func.blocks, inst.prev and inst.prev.block, block)
-  -- deal with source_links
-  if inst.prev then
-    if inst.prev.inst_type ~= "jump" and inst.prev.inst_type ~= "ret" then
-      local prev_link_to_next = inst.prev.block.target_links[1]
-      prev_link_to_next.target_block = block
-      -- `next` is guaranteed to exist because `create_links_for_block`
-      -- asserts as much during the creation of blocks
-      local next_source_links = inst.next.block.source_links
-      for i = 1, #next_source_links do
-        if next_source_links[i] == prev_link_to_next then
-          next_source_links[i] = next_source_links[#next_source_links]
-          next_source_links[#next_source_links] = nil
-          break
-        end
-      end
-    end
-  else -- `not inst.prev`
-    block.is_main_entry_block = true
-    if inst.next then
-      inst.next.block.is_main_entry_block = nil
-    end
-  end
-  create_links_for_block(block)
-end
-
-----------------------------------------------------------------------------------------------------
 -- il registers
 ----------------------------------------------------------------------------------------------------
 
@@ -2212,7 +2107,7 @@ local function insert_after_inst(func, inst, inserted_inst)
   ill.insert_after(func.instructions, inst, inserted_inst)
   update_intermediate_data(func, inserted_inst)
   if func.has_blocks then
-    normalize_blocks_for_inst(func, inserted_inst)
+    il_blocks.update_blocks_for_new_inst(func, inserted_inst)
   end
   return inserted_inst
 end
@@ -2228,7 +2123,7 @@ local function insert_before_inst(func, inst, inserted_inst)
   ill.insert_before(func.instructions, inst, inserted_inst)
   update_intermediate_data(func, inserted_inst)
   if func.has_blocks then
-    normalize_blocks_for_inst(func, inserted_inst)
+    il_blocks.update_blocks_for_new_inst(func, inserted_inst)
   end
   return inserted_inst
 end
@@ -2240,7 +2135,7 @@ local function prepend_inst(func, inserted_inst)
   ill.prepend(func.instructions, inserted_inst)
   update_intermediate_data(func, inserted_inst)
   if func.has_blocks then
-    normalize_blocks_for_inst(func, inserted_inst)
+    il_blocks.update_blocks_for_new_inst(func, inserted_inst)
   end
   return inserted_inst
 end
@@ -2252,7 +2147,7 @@ local function append_inst(func, inserted_inst)
   ill.append(func.instructions, inserted_inst)
   update_intermediate_data(func, inserted_inst)
   if func.has_blocks then
-    normalize_blocks_for_inst(func, inserted_inst)
+    il_blocks.update_blocks_for_new_inst(func, inserted_inst)
   end
   return inserted_inst
 end
@@ -2572,12 +2467,6 @@ return {
   type_indexing = type_indexing,
   class_new_indexing = class_new_indexing,
   type_new_indexing = type_new_indexing,
-
-  -- il blocks
-
-  new_block = new_block,
-  create_links_for_block = create_links_for_block,
-  normalize_blocks_for_inst = normalize_blocks_for_inst,
 
   -- il registers
 

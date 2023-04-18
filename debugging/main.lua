@@ -216,7 +216,7 @@ local function compile(filename)
       success, il = pcall(require("il_generator"), main)
       if not success then print(il) goto finish end
 
-      success, err = pcall(require("il_blocks"), il)
+      success, err = pcall(require("il_blocks").create_blocks_recursive, il)
       if not success then print(err) goto finish end
 
       -- TODO: fix il_types for `local foo; foo = ...`
