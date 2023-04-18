@@ -808,6 +808,8 @@
 ---@field regs_stop_at_lut table<ILRegister, boolean>?
 ---All regs alive at this instruction, including ones starting or stopping at it. Has no guaranteed order.
 ---@field live_regs ILRegister[]
+---@field prev_border ILBorder @ the border between the prev instruction and this instruction
+---@field next_border ILBorder @ the border between this instruction and the next instruction
 ---@field pre_state ILState
 ---@field post_state ILState
 ---@field input_reg_group ILRegisterGroup?
@@ -816,6 +818,11 @@
 ---@class ILInstructionList : IntrusiveIndexedLinkedList<ILInstruction>
 ---@field first ILInstruction @ (overridden) empty instruction lists are malformed, therefore never `nil`
 ---@field last ILInstruction @ (overridden) empty instruction lists are malformed, therefore never `nil`
+
+---The border between 2 instructions.
+---@class ILBorder
+---@field prev_inst ILInstruction?
+---@field next_inst ILInstruction?
 
 ---@class ILState
 ---@field reg_types table<ILRegister, ILType>
@@ -944,6 +951,7 @@
 ---@field last_defined_position Position? @ usually the position of the `end_token`
 ---post IL generation data
 ---@field has_blocks boolean @ `blocks` on ILFunction and `block` on ILInstruction
+---@field has_borders boolean @ `prev_border` and `next_border` on ILInstruction
 ---@field has_start_stop_insts boolean @ `start_at` and `stop_at` on ILRegister
 ---@field has_reg_liveliness boolean @ `regs_(start|stop)_at_(list|lut)` and `live_regs` on ILInstruction
 ---@field blocks ILBLockList @ intrusive linked list
