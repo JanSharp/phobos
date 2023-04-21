@@ -1554,177 +1554,7 @@ local function is_vararg_list(regs)
   return regs[#regs].is_vararg
 end
 
-local visit_regs_for_inst
-local visit_all_regs
-local inst_uses_reg
-local get_flag = 1
-local set_flag = 2
-local get_and_set_flags = 3
-do
-  local get = get_flag
-  local set = set_flag
-  local get_and_set = get_and_set_flags
-
-  local visit_reg
-
-  local function visit_reg_list(data, inst, regs, get_set)
-    for _, reg in ipairs(regs) do
-      visit_reg(data, inst, reg, get_set)
-    end
-  end
-
-  local function visit_ptr(data, inst, ptr, get_set)
-    if ptr.ptr_type == "reg" then
-      visit_reg(data, inst, ptr, get_set)
-    end
-  end
-
-  local function visit_ptr_list(data, inst, ptrs, get_set)
-    for _, ptr in ipairs(ptrs) do
-      visit_ptr(data, inst, ptr, get_set)
-    end
-  end
-
-  local visitor_lut = {
-    ["move"] = function(data, inst)
-      visit_reg(data, inst, inst.result_reg, set)
-      visit_ptr(data, inst, inst.right_ptr, get)
-    end,
-    ["get_upval"] = function(data, inst)
-      visit_reg(data, inst, inst.result_reg, set)
-    end,
-    ["set_upval"] = function(data, inst)
-      visit_ptr(data, inst, inst.right_ptr, get)
-    end,
-    ["get_table"] = function(data, inst)
-      visit_reg(data, inst, inst.result_reg, set)
-      visit_reg(data, inst, inst.table_reg, get)
-      visit_ptr(data, inst, inst.key_ptr, get)
-    end,
-    ["set_table"] = function(data, inst)
-      visit_reg(data, inst, inst.table_reg, get)
-      visit_ptr(data, inst, inst.key_ptr, get)
-      visit_ptr(data, inst, inst.right_ptr, get)
-    end,
-    ["set_list"] = function(data, inst)
-      visit_reg(data, inst, inst.table_reg, get)
-      visit_ptr_list(data, inst, inst.right_ptrs, get) -- must be in order
-    end,
-    ["new_table"] = function(data, inst)
-      visit_reg(data, inst, inst.result_reg, set) -- has to be at the top of the stack
-    end,
-    ["concat"] = function(data, inst)
-      visit_reg(data, inst, inst.result_reg, set) -- has to be at the top of the stack
-      visit_ptr_list(data, inst, inst.right_ptrs, get) -- must be in order right above result_reg
-    end,
-    ["binop"] = function(data, inst)
-      visit_reg(data, inst, inst.result_reg, set)
-      visit_ptr(data, inst, inst.left_ptr, get)
-      visit_ptr(data, inst, inst.right_ptr, get)
-    end,
-    ["unop"] = function(data, inst)
-      visit_ptr(data, inst, inst.result_reg, set)
-      visit_ptr(data, inst, inst.right_ptr, get)
-    end,
-    ["label"] = function(data, inst)
-    end,
-    ["jump"] = function(data, inst)
-    end,
-    ["test"] = function(data, inst)
-      visit_ptr(data, inst, inst.condition_ptr, get)
-    end,
-    ["call"] = function(data, inst)
-      visit_reg(data, inst, inst.func_reg, get)
-      visit_ptr_list(data, inst, inst.arg_ptrs, get) -- must be in order right above func_reg
-      visit_reg_list(data, inst, inst.result_regs, set) -- must be in order right above func_reg
-    end,
-    ["ret"] = function(data, inst)
-      visit_ptr_list(data, inst, inst.ptrs, get) -- must be in order
-    end,
-    ---@param inst ILClosure
-    ["closure"] = function(data, inst)
-      visit_reg(data, inst, inst.result_reg, set) -- has to be at the top of the stack
-      for _, upval in ipairs(inst.func.upvals) do
-        if upval.parent_type == "local" then
-          visit_reg(data, inst, upval.reg_in_parent_func, get)
-        end
-      end
-    end,
-    ["vararg"] = function(data, inst)
-      visit_reg_list(data, inst, inst.result_regs, set) -- must be in order
-    end,
-    ["close_up"] = function(data, inst)
-      -- this neither gets or sets those registers, but I guess get is more accurate. Not sure to be honest
-      visit_reg_list(data, inst, inst.regs, get)
-    end,
-    ["scoping"] = function(data, inst)
-      visit_reg_list(data, inst, inst.regs, get_and_set)
-    end,
-    ["to_number"] = function(data, inst)
-      visit_reg(data, inst, inst.result_reg, set)
-      visit_reg(data, inst, inst.right_ptr, get)
-    end,
-  }
-
-  -- ---@param visit_ptr fun(data: T, inst: ILInstruction, ptr: ILPointer, get_set: 1|2|3)
-
-  ---@generic T
-  ---@param data T
-  ---@param inst ILInstruction
-  ---@param visit_reg_func fun(data: T, inst: ILInstruction, reg: ILRegister, get_set: 1|2|3)
-  function visit_regs_for_inst(data, inst, visit_reg_func)
-    visit_reg = visit_reg_func
-    visitor_lut[inst.inst_type](data, inst)
-  end
-
-  ---@generic T
-  ---@param data T
-  ---@param func ILFunction
-  ---@param visit_reg_func fun(data: T, inst: ILInstruction, reg: ILRegister, get_set: 1|2|3)
-  function visit_all_regs(data, func, visit_reg_func)
-    visit_reg = visit_reg_func
-    local inst = func.instructions.first
-    while inst do
-      visitor_lut[inst.inst_type](data, inst)
-      inst = inst.next
-    end
-  end
-
-  ---@param inst ILInstruction
-  ---@param reg ILRegister
-  function inst_uses_reg(inst, reg)
-    local result = false
-    visit_reg = function(_, _, current_reg, _)
-      if current_reg == reg then
-        result = true
-      end
-    end
-    visitor_lut[inst.inst_type](nil, inst)
-    return result
-  end
-end
-
-local eval_start_stop_for_all_regs
-do
-  local function visit_reg(data, inst, reg)
-    if not reg.start_at then
-      reg.start_at = inst
-      data.all_regs[#data.all_regs+1] = reg
-    end
-    reg.stop_at = inst
-  end
-
-  function eval_start_stop_for_all_regs(data)
-    if data.func.has_start_stop_insts then return end
-    data.all_regs = {}
-    local inst = data.func.instructions.first
-    while inst do
-      visit_regs_for_inst(data, inst, visit_reg)
-      inst = inst.next
-    end
-    data.func.has_start_stop_insts = true
-  end
-end
+--[=[
 
 local add_start_stop_and_liveliness_for_reg_for_inst
 local eval_start_stop_and_liveliness_for_regs_for_inst
@@ -1850,147 +1680,7 @@ do
   end
 end
 
-local eval_live_regs
-do
-  function eval_live_regs(data)
-    if data.func.has_reg_liveliness then return end
-
-    if not data.func.has_start_stop_insts then
-      eval_start_stop_for_all_regs(data)
-    end
-
-    -- data.all_regs is also populated by `eval_start_stop_for_all_regs`
-    if not data.all_regs then
-      data.all_regs = {}
-      ---@diagnostic disable-next-line: redefined-local
-      visit_all_regs(data, data.func, function(data, _, reg)
-        data.all_regs[#data.all_regs+1] = reg
-      end)
-    end
-
-    local start_at_list_lut = {}
-    local start_at_lut_lut = {}
-    local stop_at_list_lut = {}
-    local stop_at_lut_lut = {}
-    for _, reg in ipairs(data.all_regs) do
-      local list = start_at_list_lut[reg.start_at]
-      local lut
-      if not list then
-        list = {}
-        start_at_list_lut[reg.start_at] = list
-        lut = {}
-        start_at_lut_lut[reg.start_at] = lut
-      else
-        lut = start_at_lut_lut[reg.start_at]
-      end
-      list[#list+1] = reg
-      lut[reg] = true
-      -- copy paste
-      list = stop_at_list_lut[reg.stop_at]
-      if not list then
-        list = {}
-        stop_at_list_lut[reg.stop_at] = list
-        lut = {}
-        stop_at_lut_lut[reg.stop_at] = lut
-      else
-        lut = stop_at_lut_lut[reg.stop_at]
-      end
-      list[#list+1] = reg
-      lut[reg] = true
-    end
-
-    local live_regs = {}
-    local inst = data.func.instructions.first
-    while inst do
-      inst.live_regs = live_regs
-      -- starting at this instruction, add them to live_regs for this instruction
-      local list = start_at_list_lut[inst]
-      if list then
-        inst.regs_start_at_list = list
-        inst.regs_start_at_lut = start_at_lut_lut[inst]
-        for _, reg in ipairs(list) do
-          live_regs[#live_regs+1] = reg
-        end
-      end
-      live_regs = util.shallow_copy(live_regs)
-      -- stopping at this instruction, remove them from live_regs for the next instruction
-      local lut = stop_at_lut_lut[inst]
-      if lut then
-        inst.regs_stop_at_list = stop_at_list_lut[inst]
-        inst.regs_stop_at_lut = lut
-        local i = 1
-        local j = 1
-        local c = #live_regs
-        while i <= c do
-          local reg = live_regs[i]
-          live_regs[i] = nil
-          if not lut[reg] then -- if it's not stopping it's still alive
-            live_regs[j] = reg
-            j = j + 1
-          end
-          i = i + 1
-        end
-      end
-      inst = inst.next
-    end
-
-    data.func.has_reg_liveliness = true
-  end
-end
-
----@param reg ILRegister
-local function determine_temporary(reg)
-  reg.temporary = reg.total_get_count <= 1 and reg.total_set_count <= 1
-  if reg.is_vararg and not reg.temporary then
-    util.debug_abort("Malformed vararg register. Vararg registers must only be set once and used once.")
-  end
-end
-
-local add_reg_usage_for_reg_for_inst
-local determine_reg_usage_for_inst
-local determine_reg_usage
-do
-  ---@param reg ILRegister
-  function add_reg_usage_for_reg_for_inst(data, inst, reg, get_set)
-    reg.total_get_count = reg.total_get_count or 0
-    reg.total_set_count = reg.total_set_count or 0
-    if get_set ~= set_flag then
-      reg.total_get_count = reg.total_get_count + 1
-    end
-    if get_set ~= get_flag then
-      reg.total_set_count = reg.total_set_count + 1
-    end
-    determine_temporary(reg)
-  end
-
-  function determine_reg_usage_for_inst(inst)
-    visit_regs_for_inst(nil, inst, add_reg_usage_for_reg_for_inst)
-  end
-
-  ---@param func ILFunction
-  function determine_reg_usage(func)
-    local inst = func.instructions.first
-    while inst do
-      visit_regs_for_inst(nil, inst, add_reg_usage_for_reg_for_inst)
-      inst = inst.next
-    end
-    func.has_reg_usage = true
-  end
-end
-
-local remove_reg_usage_for_reg_for_inst
-do
-  ---@param reg ILRegister
-  function remove_reg_usage_for_reg_for_inst(data, inst, reg, get_set)
-    if get_set ~= set_flag then
-      reg.total_get_count = reg.total_get_count - 1
-    end
-    if get_set ~= get_flag then
-      reg.total_set_count = reg.total_set_count - 1
-    end
-    determine_temporary(reg)
-  end
-end
+]=]
 
 ----------------------------------------------------------------------------------------------------
 -- il modifications
@@ -2005,14 +1695,11 @@ end
 -- - [x] inst.regs_start_at_lut
 -- - [x] inst.regs_stop_at_list
 -- - [x] inst.regs_stop_at_lut
--- - [x] inst.live_regs
+-- - [x] border.live_regs
 -- - [ ] inst.pre_state
 -- - [ ] inst.post_state
 -- - [x] reg.start_at
 -- - [x] reg.stop_at
--- - [x] reg.total_get_count
--- - [x] reg.total_set_count
--- - [x] reg.temporary
 --
 -- - [ ] reg.captured_as_upval
 -- - [ ] reg.current_reg
@@ -2025,12 +1712,8 @@ local function add_reg_to_inst(func, inst, reg, get_set, allow_modifying_inst_gr
   if inst.inst_group and not allow_modifying_inst_group then
     util.debug_abort("Attempt to add a register to an inst in inst_group (which are immutable).")
   end
-  if func.has_start_stop_insts then
-    -- `func.has_reg_liveliness` is checked for in the following function
-    add_start_stop_and_liveliness_for_reg_for_inst(func, inst, reg)
-  end
-  if func.has_reg_usage then
-    add_reg_usage_for_reg_for_inst(nil, inst, reg, get_set)
+  if func.has_reg_liveliness then
+    -- add_start_stop_and_liveliness_for_reg_for_inst(func, inst, reg) -- FIXME
   end
 end
 
@@ -2059,12 +1742,8 @@ local function remove_reg_from_inst(func, inst, reg, get_set, allow_modifying_in
   if inst.inst_group and not allow_modifying_inst_group then
     util.debug_abort("Attempt to remove a register from an inst in inst_group (which are immutable).")
   end
-  if func.has_start_stop_insts then
-    -- `func.has_reg_liveliness` is checked for in the following function
-    remove_start_stop_and_liveliness_for_reg_for_inst(func, inst, reg)
-  end
-  if func.has_reg_usage then
-    remove_reg_usage_for_reg_for_inst(nil, inst, reg, get_set)
+  if func.has_reg_liveliness then
+    -- remove_start_stop_and_liveliness_for_reg_for_inst(func, inst, reg) -- FIXME
   end
 end
 
@@ -2087,12 +1766,8 @@ end
 ---@param func ILFunction
 ---@param inst ILInstruction
 local function update_intermediate_data(func, inst)
-  if func.has_start_stop_insts then
-    -- `func.has_reg_liveliness` is checked for in the following function
-    eval_start_stop_and_liveliness_for_regs_for_inst(func, inst)
-  end
-  if func.has_reg_usage then
-    determine_reg_usage_for_inst(inst)
+  if func.has_reg_liveliness then
+    -- eval_start_stop_and_liveliness_for_regs_for_inst(func, inst) -- FIXME
   end
 end
 
@@ -2471,16 +2146,6 @@ return {
   -- il registers
 
   is_vararg_list = is_vararg_list,
-  get_flag = get_flag,
-  set_flag = set_flag,
-  get_and_set_flags = get_and_set_flags,
-  visit_regs_for_inst = visit_regs_for_inst,
-  visit_all_regs = visit_all_regs,
-  eval_start_stop_for_all_regs = eval_start_stop_for_all_regs,
-  eval_start_stop_and_liveliness_for_regs_for_inst = eval_start_stop_and_liveliness_for_regs_for_inst,
-  eval_live_regs = eval_live_regs,
-  determine_reg_usage_for_inst = determine_reg_usage_for_inst,
-  determine_reg_usage = determine_reg_usage,
 
   -- il modifications
 

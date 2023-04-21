@@ -8,6 +8,9 @@ local ll = require("linked_list")
 local il = require("il_util")
 local linq = require("linq")
 local il_blocks = require("il_blocks")
+local il_registers = require("il_registers")
+
+-- FIXME: 'live_regs' have been moved from instructions to borders. This file is not updated.
 
 local generate
 do
@@ -718,13 +721,9 @@ do
   end
 end
 
----@param data ILCompilerData
-local function make_bytecode_func(data)
-  local func = data.func
-  if not func.has_reg_liveliness then
-    il.eval_live_regs{func = func}
-  end
-
+---@param func ILFunction
+---@return CompiledFunc
+local function make_bytecode_func(func)
   local result = {
     line_defined = func.defined_position and func.defined_position.line,
     column_defined = func.defined_position and func.defined_position.column,
@@ -740,7 +739,7 @@ local function make_bytecode_func(data)
     source = func.source,
     debug_registers = {},
   }
-  data.result = result
+
   for i, upval in ipairs(func.upvals) do
     upval.upval_index = i - 1 -- **zero based** temporary
     if upval.parent_type == "local" then
@@ -770,6 +769,8 @@ local function make_bytecode_func(data)
   for i, inner_func in ipairs(func.inner_functions) do
     inner_func.closure_index = i - 1 -- **zero based**
   end
+
+  return result
 end
 
 local pre_compilation_process
@@ -1265,38 +1266,6 @@ do
     else
       return left == right
     end
-  end
-
-  ---@param inst ILInstruction
-  ---@param reg ILRegister
-  local function get_get_set_flags_for_reg_for_inst_group(inst, reg)
-    local total_get_set = 0
-    local function callback(_, _, current_reg, get_set)
-      if current_reg == reg then
-        total_get_set = bit32.bor(total_get_set, get_set)
-      end
-    end
-    if inst.inst_group then
-      local current_inst = inst.inst_group.start
-      repeat
-        il.visit_regs_for_inst(nil, inst, callback)
-      until current_inst == inst.inst_group.stop
-    else
-      il.visit_regs_for_inst(nil, inst, callback)
-    end
-    return total_get_set
-  end
-
-  ---@param inst ILInstruction
-  ---@param reg ILRegister
-  local function inst_group_gets_reg(inst, reg)
-    return bit32.band(il.get_flag, get_get_set_flags_for_reg_for_inst_group(inst, reg)) ~= 0
-  end
-
-  ---@param inst ILInstruction
-  ---@param reg ILRegister
-  local function inst_group_sets_reg(inst, reg)
-    return bit32.band(il.set_flag, get_get_set_flags_for_reg_for_inst_group(inst, reg)) ~= 0
   end
 
   ---@param inst ILInstruction
@@ -2361,6 +2330,8 @@ end
 
 ---@param func ILFunction
 local function compile(func)
+  func.is_compiling = true
+
   ---@type ILCompilerData
   local data = {
     func = func,
@@ -2375,12 +2346,12 @@ local function compile(func)
     all_jumps_count = 0,
     all_linked_groups_lut = {},
   }
-  func.is_compiling = true
-  make_bytecode_func(data)
-  il.determine_reg_usage(func)
+
   il_blocks.ensure_has_blocks(func)
+  il_registers.ensure_has_reg_liveliness(func)
   pre_compilation_process(data)
 
+  data.result = make_bytecode_func(func)
   generate(data)
 
   for i = data.compiled_registers_count + 1, #data.compiled_registers do

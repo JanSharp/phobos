@@ -631,8 +631,8 @@
 ---post IL generation data
 ---@field start_at ILInstruction
 ---@field stop_at ILInstruction
----@field total_get_count integer
----@field total_set_count integer
+---@field prev_reg_in_func ILRegister?
+---@field next_reg_in_func ILRegister?
 ---@field temporary boolean?
 ---@field captured_as_upval boolean?
 ---@field current_reg ILCompiledRegister
@@ -802,12 +802,10 @@
 ---@field position ILPosition|nil
 ---post IL generation data
 ---@field block ILBlock
----@field regs_start_at_list ILRegister[]?
----@field regs_start_at_lut table<ILRegister, boolean>?
----@field regs_stop_at_list ILRegister[]?
----@field regs_stop_at_lut table<ILRegister, boolean>?
----All regs alive at this instruction, including ones starting or stopping at it. Has no guaranteed order.
----@field live_regs ILRegister[]
+---@field regs_start_at_list ILRegister[]
+---@field regs_start_at_lut table<ILRegister, boolean>
+---@field regs_stop_at_list ILRegister[]
+---@field regs_stop_at_lut table<ILRegister, boolean>
 ---@field prev_border ILBorder @ the border between the prev instruction and this instruction
 ---@field next_border ILBorder @ the border between this instruction and the next instruction
 ---@field pre_state ILState
@@ -823,6 +821,7 @@
 ---@class ILBorder
 ---@field prev_inst ILInstruction?
 ---@field next_inst ILInstruction?
+---@field live_regs ILRegister[]
 
 ---@class ILState
 ---@field reg_types table<ILRegister, ILType>
@@ -951,17 +950,24 @@
 ---@field last_defined_position Position? @ usually the position of the `end_token`
 ---post IL generation data
 ---@field has_blocks boolean @ `blocks` on ILFunction and `block` on ILInstruction
----@field has_borders boolean @ `prev_border` and `next_border` on ILInstruction
----@field has_start_stop_insts boolean @ `start_at` and `stop_at` on ILRegister
----@field has_reg_liveliness boolean @ `regs_(start|stop)_at_(list|lut)` and `live_regs` on ILInstruction
 ---@field blocks ILBLockList @ intrusive linked list
+---@field has_borders boolean @ `prev_border` and `next_border` on ILInstruction
+---Depends on `has_borders`\
+---`regs_(start|stop)_at_(list|lut)` on ILInstruction\
+---`live_regs` on ILBorder\
+---`all_regs` on ILFunction and with it `(prev|next)_reg_in_func` on ILRegister
+---@field has_reg_liveliness boolean
+---@field all_regs ILRegisterList
 ---@field has_types boolean @ `(pre|post)_state` on ILInstruction
----@field has_reg_usage boolean @ `total_get/set_count` and `temporary` on ILRegister
 ---@field is_compiling boolean @ `closure_index` on ILFUnction and `captured_as_upval` and `current_reg` on ILRegister
 ---
 ---@field temp ILFunctionTemp
 ---temp compilation data
 ---@field closure_index integer @ **zero based** needed for closure instructions to know the function index
+
+---@class ILRegisterList
+---@field first ILRegister?
+---@field last ILRegister?
 
 ---@class ILBlock
 ---@field prev ILBlock? @ `nil` if this is the first block

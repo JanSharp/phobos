@@ -1058,10 +1058,9 @@ function generate_il_func(functiondef, options, parent_func)
     last_defined_position = functiondef.end_token,
 
     has_blocks = false,
-    has_start_stop_insts = false,
+    has_borders = false,
     has_reg_liveliness = false,
     has_types = false,
-    has_reg_usage = false,
     is_compiling = false,
   }
 

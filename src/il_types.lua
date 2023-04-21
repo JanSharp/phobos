@@ -1,6 +1,7 @@
 
 local util = require("util")
 local il = require("il_util")
+local il_registers = require("il_registers")
 local number_ranges = require("number_ranges")
 local error_code_util = require("error_code_util")
 
@@ -201,9 +202,7 @@ end
 ---@param func ILFunction
 local function resolve_types(func)
   local data = {func = func}
-  if not func.has_start_stop_insts then
-    il.eval_live_regs(data)
-  end
+  il_registers.ensure_has_reg_liveliness(func)
   walk_block(data, func.blocks.first)
   func.has_types = true
 end
