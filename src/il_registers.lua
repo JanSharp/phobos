@@ -158,13 +158,15 @@ end
 
 -- creating
 
+---NOTE: If you're worried about parameter regs not getting handled in here, don't be! They are handled thanks
+-- to the entry scoping instruction and ending scoping instruction that are managed by other utility functions
+
 local eval_start_stop_for_all_regs
 do
   ---@param data {func: ILFunction, regs_lut: table<ILRegister, true>}
   ---@param inst ILInstruction
   ---@param reg ILRegister
   local function visit_reg(data, inst, reg)
-    if reg.is_parameter then return end -- TODO: remove with the addition of an entry instruction
     if not reg.start_at then
       reg.start_at = inst
       if not data.regs_lut[reg] then
@@ -179,11 +181,6 @@ do
   function eval_start_stop_for_all_regs(func)
     func.all_regs = ll.new_list("reg_in_func")
     local data = {func = func, regs_lut = {}}
-    for _, reg in ipairs(func.param_regs) do
-      data.regs_lut[reg] = true
-      ll.append(func.all_regs, reg)
-    end
-
     local inst = func.instructions.first
     while inst do
       visit_regs_for_inst(data, inst, visit_reg)
@@ -227,16 +224,14 @@ local function eval_start_stop_luts_and_lists(func)
   end
 
   for reg in ll.iterate(func.all_regs)--[[@as fun(): ILRegister?]] do
-    if reg.is_parameter then goto continue end
     add_to_list_and_lut(reg.start_at.regs_start_at_list, reg.start_at.regs_start_at_lut, reg)
     add_to_list_and_lut(reg.stop_at.regs_stop_at_list, reg.stop_at.regs_stop_at_lut, reg)
-    ::continue::
   end
 end
 
 ---@param func ILFunction
 local function eval_live_regs(func)
-  local live_regs = util.shallow_copy(func.param_regs) -- TODO: change with the addition of an entry instruction
+  local live_regs = {}
   for border in il_borders.iterate_borders(func) do
     -- stopping at prev_inst, remove them from live_regs for this border
     local lut = border.prev_inst and border.prev_inst.regs_stop_at_lut
