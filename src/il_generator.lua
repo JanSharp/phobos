@@ -1095,7 +1095,8 @@ function generate_il_func(functiondef, options, parent_func)
     end
   end
 
-  -- special handling for methods because self is not in the params list
+  -- Special handling for methods because self is not in the params list,
+  -- but in IL it is in `param_regs` because the concept of methods does not exist.
   if functiondef.is_method then
     local reg = il.new_reg("self")
     reg.is_parameter = true
@@ -1116,24 +1117,27 @@ function generate_il_func(functiondef, options, parent_func)
   if func.param_regs[1] then
     add_inst(func, il.new_scoping{
       position = not functiondef.is_main and functiondef.function_token or nil,
-      regs = func.param_regs, -- using a reference to the same table!
+      regs = func.param_regs, -- using a reference to the same table, as it must always match the ILFunction
+      is_entry = true,
     })
   end
 
   generate_scope(functiondef, func)
 
-  -- parameters also have to stay alive for the entire function in case they are captured a an upvalue
+  -- as per usual, an extra return for good measure
+  add_inst(func, il.new_ret{position = functiondef.end_token or get_last_used_position(func)})
+
+  -- scoping instruction comes last, however IL modifications are free to do with it as they please
+
+  -- parameters also have to stay alive for the entire function by default in case of loops or upvalues
   if func.param_regs[1] then
     add_inst(func, il.new_scoping{
       position = not functiondef.is_main and functiondef.function_token or nil,
-      regs = func.param_regs, -- using a reference to the same table!
+      regs = util.shallow_copy(func.param_regs), -- not using a reference here,
+      -- because while parameters normal lifetime is the entire function, optimizations don't have to follow
+      -- that rule outside of debug builds, so they may end up modifying this regs table
     })
   end
-
-  -- self does have a local so it gets included in the scope's SCOPING instruction
-
-  -- as per usual, an extra return for good measure
-  add_inst(func, il.new_ret{position = functiondef.end_token or get_last_used_position(func)})
 
   func.temp = nil
   return func

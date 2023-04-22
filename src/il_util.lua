@@ -368,12 +368,16 @@ end
 
 ---@class ILScopingParams : ILInstParamsBase
 ---@field regs ILRegister[]
+---When true this must be the very first instruction in the instruction list where `regs` is a reference to
+---`ILFunction.param_regs`.
+---@field is_entry boolean
 
 ---@param params ILScopingParams
 ---@return ILScoping
 local function new_scoping(params)
   local inst = new_inst(params, "scoping")
   inst.regs = params.regs or {}
+  inst.is_entry = params.is_entry or false
   return inst
 end
 

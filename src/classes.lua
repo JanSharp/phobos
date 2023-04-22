@@ -932,6 +932,9 @@
 ---@class ILScoping : ILInstruction
 ---@field inst_type "scoping"
 ---@field regs ILRegister[]
+---When true this must be the very first instruction in the instruction list where `regs` is a reference to
+---`ILFunction.param_regs`.
+---@field is_entry boolean
 
 ---@class ILToNumber : ILInstruction
 ---@field inst_type "to_number"
@@ -941,7 +944,15 @@
 ---@class ILFunction
 ---@field parent_func ILFunction|nil @ `nil` if main chunk
 ---@field inner_functions ILFunction[]
----@field instructions ILInstructionList @ intrusive ILL
+---Intrusive ILL\
+---Every path through the blocks must end with a return instruction, which means there is always at least 1.\
+---Functions with at least one parameter must have a scoping instruction as their first instruction where the
+---`regs` table of said instruction is a reference to this function's `param_regs`.\
+---(note that to ensure proper lifetime in relation to loops and upvalues there usually is
+---also a scoping instruction at the very end of the instruction list with all parameter registers,
+---however that one must not use a reference to the same table. It isn't guaranteed to contain all
+---param regs, and it could get moved or removed. There are no special rules for this instruction.)
+---@field instructions ILInstructionList
 ---@field upvals ILUpval[]
 ---@field param_regs ILRegister[]
 ---@field is_vararg boolean
