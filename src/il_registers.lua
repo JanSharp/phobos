@@ -1,9 +1,12 @@
 
 local util = require("util")
 local ll = require("linked_list")
+local ill = require("indexed_linked_list")
 local il_borders = require("il_borders")
 
+----====----====----====----====----====----====----====----====----====----====----====----====----
 -- utility
+----====----====----====----====----====----====----====----====----====----====----====----====----
 
 local visit_regs_for_inst
 local visit_all_regs
@@ -156,7 +159,36 @@ do
   end
 end
 
+---@param list ILRegister[]
+---@param lut table<ILRegister, boolean>
+---@param reg ILRegister
+local function add_to_list_and_lut(list, lut, reg)
+  if lut[reg] then return end
+  lut[reg] = true
+  list[#list+1] = reg
+end
+
+---@param list ILRegister[]
+---@param lut table<ILRegister, boolean>
+---@param reg ILRegister
+local function remove_from_list_and_lut(list, lut, reg)
+  util.debug_assert(lut[reg], "When removing from a list and lut the given register must be contained in them.")
+  lut[reg] = nil
+  util.remove_from_array_fast(list, reg)
+end
+
+---@param func ILFunction
+---@param func_name string
+local function assert_has_reg_liveliness(func, func_name)
+  util.debug_assert(
+    func.has_reg_liveliness,
+    "Attempt to use 'il_registers."..func_name.."' with a func without reg liveliness."
+  )
+end
+
+----====----====----====----====----====----====----====----====----====----====----====----====----
 -- creating
+----====----====----====----====----====----====----====----====----====----====----====----====----
 
 ---NOTE: If you're worried about parameter regs not getting handled in here, don't be! They are handled thanks
 -- to the entry scoping instruction and ending scoping instruction that are managed by other utility functions
@@ -215,12 +247,6 @@ local function eval_start_stop_luts_and_lists(func)
       inst.regs_stop_at_lut = {}
     end
     inst = inst.next
-  end
-
-  local function add_to_list_and_lut(list, lut, reg)
-    if lut[reg] then return end
-    lut[reg] = true
-    list[#list+1] = reg
   end
 
   for reg in ll.iterate(func.all_regs)--[[@as fun(): ILRegister?]] do
@@ -294,12 +320,528 @@ local function ensure_has_reg_liveliness_recursive(func)
   end
 end
 
+----====----====----====----====----====----====----====----====----====----====----====----====----
 -- modifying
+----====----====----====----====----====----====----====----====----====----====----====----====----
 
+---@param reg ILRegister
+---@param start_at ILInstruction
+local function add_start_at(reg, start_at)
+  reg.start_at = start_at
+  add_to_list_and_lut(start_at.regs_start_at_list, start_at.regs_start_at_lut, reg)
+end
+
+---@param reg ILRegister
+local function remove_start_at(reg)
+  remove_from_list_and_lut(reg.start_at.regs_start_at_list, reg.start_at.regs_start_at_lut, reg)
+  reg.start_at = nil
+end
+
+---@param reg ILRegister
+---@param stop_at ILInstruction
+local function add_stop_at(reg, stop_at)
+  reg.stop_at = stop_at
+  add_to_list_and_lut(stop_at.regs_start_at_list, stop_at.regs_start_at_lut, reg)
+end
+
+---@param reg ILRegister
+local function remove_stop_at(reg)
+  remove_from_list_and_lut(reg.stop_at.regs_stop_at_lut, reg.stop_at.regs_stop_at_lut, reg)
+  reg.stop_at = nil
+end
+
+---@param func ILFunction
+---@param from_inst ILInstruction
+---@param to_inst ILInstruction
+---@param reg ILRegister
+local function add_to_live_regs_between_insts(func, from_inst, to_inst, reg)
+  for border in il_borders.iterate_borders(func, from_inst.next_border, to_inst.prev_border) do
+    border.live_regs[#border.live_regs+1] = reg
+  end
+end
+
+---@param func ILFunction
+---@param from_inst ILInstruction
+---@param to_inst ILInstruction
+---@param reg ILRegister
+local function remove_from_live_regs_between_insts(func, from_inst, to_inst, reg)
+  for border in il_borders.iterate_borders(func, from_inst.next_border, to_inst.prev_border) do
+    util.remove_from_array_fast(border.live_regs, reg)
+  end
+end
+
+---@param func ILFunction
+---@param reg ILRegister
+---@param start_at ILInstruction
+local function set_reg_start_at(func, reg, start_at)
+  local old_start_at = reg.start_at
+  if old_start_at == start_at then return end
+
+  if not old_start_at then
+    add_start_at(reg, start_at)
+    return
+  end
+
+  remove_start_at(reg)
+  add_start_at(reg, start_at)
+  if old_start_at.index < start_at.index then
+    remove_from_live_regs_between_insts(func, old_start_at, start_at, reg)
+  else -- old is greater
+    add_to_live_regs_between_insts(func, start_at, old_start_at, reg)
+  end
+end
+
+---@param func ILFunction
+---@param reg ILRegister
+---@param stop_at ILInstruction
+local function set_reg_stop_at(func, reg, stop_at)
+  local old_stop_at = reg.stop_at
+  if old_stop_at == stop_at then return end
+
+  if not old_stop_at then
+    add_stop_at(reg, stop_at)
+    return
+  end
+
+  remove_stop_at(reg)
+  add_stop_at(reg, stop_at)
+  if old_stop_at.index < stop_at.index then
+    add_to_live_regs_between_insts(func, old_stop_at, stop_at, reg)
+  else -- old is greater
+    remove_from_live_regs_between_insts(func, stop_at, old_stop_at, reg)
+  end
+end
+
+---Can be called before the register has actually been added to the instruction.
+---@param func ILFunction
+---@param inst ILInstruction
+---@param reg ILRegister
+local function add_reg_to_inst(func, inst, reg)
+  if not func.has_reg_liveliness then return end
+
+  if not reg.start_at then
+    util.debug_assert(not reg.stop_at, "When a reg doesn't have start_at it must also not have stop_at. \z
+      Such registers are most of the time newly created registers."
+    )
+    add_start_at(reg, inst)
+    add_stop_at(reg, inst)
+    ll.append(func.all_regs, reg)
+    return
+  end
+
+  if inst.index < reg.start_at.index then
+    set_reg_start_at(func, reg, inst)
+  elseif reg.stop_at.index < inst.index then
+    set_reg_stop_at(func, reg, inst)
+  end
+end
+
+---@param func ILFunction
+---@param inst ILInstruction
+---@param ptr ILPointer
+local function add_ptr_to_inst(func, inst, ptr)
+  if ptr.ptr_type == "reg" then
+    ---@cast ptr ILRegister
+    add_reg_to_inst(func, inst, ptr)
+  end
+end
+
+---@param inst_iter fun(): ILInstruction?
+---@param reg ILRegister
+---@return ILInstruction
+local function find_inst_using_reg(inst_iter, reg)
+  for inst in inst_iter do
+    if inst_uses_reg(inst, reg) then
+      return inst
+    end
+  end
+  ---@diagnostic disable-next-line: missing-return
+  util.debug_abort("Unable to find instruction using register when there must be at least 1.")
+end
+
+---Can be called before the register has actually been removed from the instruction.
+---@param func ILFunction
+---@param inst ILInstruction
+---@param reg ILRegister
+local function remove_reg_from_inst(func, inst, reg)
+  if not func.has_reg_liveliness then return end
+
+  local removed_start = inst == reg.start_at and not inst_uses_reg(inst, reg)
+  local removed_stop = inst == reg.stop_at and not inst_uses_reg(inst, reg)
+
+  if removed_start and removed_stop then
+    remove_start_at(reg)
+    remove_stop_at(reg)
+    ll.remove(func.all_regs, reg)
+    return
+  end
+
+  if removed_start then
+    local new_start_at = find_inst_using_reg(ill.iterate(func.instructions, inst.next), reg)
+    set_reg_start_at(func, reg, new_start_at)
+    return
+  end
+
+  if removed_stop then
+    local new_stop_at = find_inst_using_reg(ill.iterate_reverse(func.instructions, inst.prev), reg)
+    set_reg_stop_at(func, reg, new_stop_at)
+    return
+  end
+end
+
+---@param func ILFunction
+---@param inst ILInstruction
+---@param ptr ILPointer
+local function remove_ptr_from_inst(func, inst, ptr)
+  if ptr.ptr_type == "reg" then
+    ---@cast ptr ILRegister
+    remove_reg_from_inst(func, inst, ptr)
+  end
+end
+
+----------------------------------------------------------------------------------------------------
+-- changing registers or pointers on instructions
+----------------------------------------------------------------------------------------------------
+
+---@param func ILFunction
+---@param inst ILMove|ILGetUpval|ILGetTable|ILNewTable|ILConcat|ILBinop|ILUnop|ILClosure|ILToNumber
+---@param reg ILRegister
+local function set_result_reg(func, inst, reg)
+  if reg == inst.result_reg then return end
+  remove_reg_from_inst(func, inst, inst.result_reg)
+  inst.result_reg = reg
+  add_reg_to_inst(func, inst, reg)
+end
+
+---@param func ILFunction
+---@param inst ILGetTable|ILSetTable|ILSetList
+---@param reg ILRegister
+local function set_table_reg(func, inst, reg)
+  if reg == inst.table_reg then return end
+  remove_reg_from_inst(func, inst, inst.table_reg)
+  inst.table_reg = reg
+  add_reg_to_inst(func, inst, reg)
+end
+
+---@param func ILFunction
+---@param inst ILCall
+---@param reg ILRegister
+local function set_func_reg(func, inst, reg)
+  if reg == inst.func_reg then return end
+  remove_reg_from_inst(func, inst, inst.func_reg)
+  inst.func_reg = reg
+  add_reg_to_inst(func, inst, reg)
+end
+
+---@param func ILFunction
+---@param inst ILBinop
+---@param ptr ILPointer
+local function set_left_ptr(func, inst, ptr)
+  if ptr == inst.left_ptr then return end
+  remove_ptr_from_inst(func, inst, inst.left_ptr)
+  inst.left_ptr = ptr
+  add_ptr_to_inst(func, inst, ptr)
+end
+
+---@param func ILFunction
+---@param inst ILMove|ILSetUpval|ILSetTable|ILBinop|ILUnop|ILToNumber
+---@param ptr ILPointer
+local function set_right_ptr(func, inst, ptr)
+  if ptr == inst.right_ptr then return end
+  remove_ptr_from_inst(func, inst, inst.right_ptr)
+  inst.right_ptr = ptr
+  add_ptr_to_inst(func, inst, ptr)
+end
+
+---@param func ILFunction
+---@param inst ILGetTable|ILSetTable
+---@param ptr ILPointer
+local function set_key_ptr(func, inst, ptr)
+  if ptr == inst.key_ptr then return end
+  remove_ptr_from_inst(func, inst, inst.key_ptr)
+  inst.key_ptr = ptr
+  add_ptr_to_inst(func, inst, ptr)
+end
+
+---@param func ILFunction
+---@param inst ILTest
+---@param ptr ILPointer
+local function set_condition_ptr(func, inst, ptr)
+  if ptr == inst.condition_ptr then return end
+  remove_ptr_from_inst(func, inst, inst.condition_ptr)
+  inst.condition_ptr = ptr
+  add_ptr_to_inst(func, inst, ptr)
+end
+
+----------------------------------------------------------------------------------------------------
+-- helper functions for arrays of registers or pointers
+----------------------------------------------------------------------------------------------------
+
+---@param func ILFunction
+---@param inst ILInstruction
+---@param reg ILRegister
+---@param array ILRegister[]
+---@param index integer? @ Default: `#array + 1`
+local function insert_reg_in_array(func, inst, reg, array, index)
+  if index then
+    table.insert(array, index, reg)
+  else
+    array[#array+1] = reg
+  end
+  add_reg_to_inst(func, inst, reg)
+end
+
+---@param func ILFunction
+---@param inst ILInstruction
+---@param ptr ILPointer
+---@param array ILPointer[]
+---@param index integer? @ Default: `#array + 1`
+local function insert_ptr_in_array(func, inst, ptr, array, index)
+  if index then
+    table.insert(array, index, ptr)
+  else
+    array[#array+1] = ptr
+  end
+  add_ptr_to_inst(func, inst, ptr)
+end
+
+---Removes the first instance of the given register.
+---@param func ILFunction
+---@param inst ILInstruction
+---@param reg ILRegister
+---@param array ILRegister[]
+local function remove_reg_from_array(func, inst, reg, array)
+  util.remove_from_array(array, reg)
+  remove_reg_from_inst(func, inst, reg)
+end
+
+---Removes the first instance of the given pointer.
+---@param func ILFunction
+---@param inst ILInstruction
+---@param ptr ILPointer
+---@param array ILPointer[]
+local function remove_ptr_from_array(func, inst, ptr, array)
+  util.remove_from_array(array, ptr)
+  remove_ptr_from_inst(func, inst, ptr)
+end
+
+---@param func ILFunction
+---@param inst ILInstruction
+---@param array ILRegister[]
+---@param index integer? @ Default: `#array`
+local function remove_reg_at(func, inst, array, index)
+  local reg_or_ptr = table.remove(array, index)
+  remove_reg_from_inst(func, inst, reg_or_ptr)
+end
+
+---@param func ILFunction
+---@param inst ILInstruction
+---@param array ILPointer[]
+---@param index integer? @ Default: `#array`
+local function remove_ptr_at(func, inst, array, index)
+  local reg_or_ptr = table.remove(array, index)
+  remove_ptr_from_inst(func, inst, reg_or_ptr)
+end
+
+---@param func ILFunction
+---@param inst ILInstruction
+---@param reg ILRegister
+---@param array ILRegister[]
+---@param index integer
+local function set_reg_at(func, inst, reg, array, index)
+  remove_reg_from_inst(func, inst, array[index])
+  array[index] = reg
+  add_reg_to_inst(func, inst, reg)
+end
+
+---@param func ILFunction
+---@param inst ILInstruction
+---@param ptr ILPointer
+---@param array ILPointer[]
+---@param index integer
+local function set_ptr_at(func, inst, ptr, array, index)
+  remove_ptr_from_inst(func, inst, array[index])
+  array[index] = ptr
+  add_ptr_to_inst(func, inst, ptr)
+end
+
+----------------------------------------------------------------------------------------------------
+-- wrapper functions for result_regs for ILCall|ILVararg
+----------------------------------------------------------------------------------------------------
+
+---@param func ILFunction
+---@param inst ILCall|ILVararg
+---@param reg ILRegister
+---@param index integer? @ Default: `#inst.result_regs + 1`
+local function insert_into_result_regs(func, inst, reg, index)
+  insert_reg_in_array(func, inst, reg, inst.result_regs, index)
+end
+
+---@param func ILFunction
+---@param inst ILCall|ILVararg
+---@param reg ILRegister
+local function remove_from_result_regs(func, inst, reg)
+  remove_reg_from_array(func, inst, reg, inst.result_regs)
+end
+
+---@param func ILFunction
+---@param inst ILCall|ILVararg
+---@param index integer? @ Default: `#inst.result_regs`
+local function remove_at_in_result_regs(func, inst, index)
+  remove_reg_at(func, inst, inst.result_regs, index)
+end
+
+---@param func ILFunction
+---@param inst ILCall|ILVararg
+---@param reg ILRegister
+---@param index integer
+local function set_at_in_result_regs(func, inst, reg, index)
+  set_reg_at(func, inst, reg, inst.result_regs, index)
+end
+
+----------------------------------------------------------------------------------------------------
+-- wrapper functions for regs for ILCloseUp|ILScoping
+----------------------------------------------------------------------------------------------------
+
+---@param func ILFunction
+---@param inst ILCloseUp|ILScoping
+---@param reg ILRegister
+---@param index integer? @ Default: `#inst.regs + 1`
+local function insert_into_regs(func, inst, reg, index)
+  insert_reg_in_array(func, inst, reg, inst.regs, index)
+end
+
+---@param func ILFunction
+---@param inst ILCloseUp|ILScoping
+---@param reg ILRegister
+local function remove_from_regs(func, inst, reg)
+  remove_reg_from_array(func, inst, reg, inst.regs)
+end
+
+---@param func ILFunction
+---@param inst ILCloseUp|ILScoping
+---@param index integer? @ Default: `#inst.regs`
+local function remove_at_in_regs(func, inst, index)
+  remove_reg_at(func, inst, inst.regs, index)
+end
+
+---@param func ILFunction
+---@param inst ILCloseUp|ILScoping
+---@param reg ILRegister
+---@param index integer
+local function set_at_in_regs(func, inst, reg, index)
+  set_reg_at(func, inst, reg, inst.regs, index)
+end
+
+----------------------------------------------------------------------------------------------------
+-- wrapper functions for right_ptrs for ILSetList|ILConcat
+----------------------------------------------------------------------------------------------------
+
+---@param func ILFunction
+---@param inst ILSetList|ILConcat
+---@param ptr ILPointer
+---@param index integer? @ Default: `#inst.right_ptrs + 1`
+local function insert_into_right_ptrs(func, inst, ptr, index)
+  insert_ptr_in_array(func, inst, ptr, inst.right_ptrs, index)
+end
+
+---@param func ILFunction
+---@param inst ILSetList|ILConcat
+---@param ptr ILPointer
+local function remove_from_right_ptrs(func, inst, ptr)
+  remove_ptr_from_array(func, inst, ptr, inst.right_ptrs)
+end
+
+---@param func ILFunction
+---@param inst ILSetList|ILConcat
+---@param index integer? @ Default: `#inst.right_ptrs`
+local function remove_at_in_right_ptrs(func, inst, index)
+  remove_ptr_at(func, inst, inst.right_ptrs, index)
+end
+
+---@param func ILFunction
+---@param inst ILSetList|ILConcat
+---@param ptr ILPointer
+---@param index integer
+local function set_at_in_right_ptrs(func, inst, ptr, index)
+  set_ptr_at(func, inst, ptr, inst.right_ptrs, index)
+end
+
+----------------------------------------------------------------------------------------------------
+-- wrapper functions for arg_ptrs for ILCall
+----------------------------------------------------------------------------------------------------
+
+---@param func ILFunction
+---@param inst ILCall
+---@param ptr ILPointer
+---@param index integer? @ Default: `#inst.arg_ptrs + 1`
+local function insert_into_arg_ptrs(func, inst, ptr, index)
+  insert_ptr_in_array(func, inst, ptr, inst.arg_ptrs, index)
+end
+
+---@param func ILFunction
+---@param inst ILCall
+---@param ptr ILPointer
+local function remove_from_arg_ptrs(func, inst, ptr)
+  remove_ptr_from_array(func, inst, ptr, inst.arg_ptrs)
+end
+
+---@param func ILFunction
+---@param inst ILCall
+---@param index integer? @ Default: `#inst.arg_ptrs`
+local function remove_at_in_arg_ptrs(func, inst, index)
+  remove_ptr_at(func, inst, inst.arg_ptrs, index)
+end
+
+---@param func ILFunction
+---@param inst ILCall
+---@param ptr ILPointer
+---@param index integer
+local function set_at_in_arg_ptrs(func, inst, ptr, index)
+  set_ptr_at(func, inst, ptr, inst.arg_ptrs, index)
+end
+
+----------------------------------------------------------------------------------------------------
+-- wrapper functions for ptrs for ILRet
+----------------------------------------------------------------------------------------------------
+
+---@param func ILFunction
+---@param inst ILRet
+---@param ptr ILPointer
+---@param index integer? @ Default: `#inst.ptrs + 1`
+local function insert_into_ptrs(func, inst, ptr, index)
+  insert_ptr_in_array(func, inst, ptr, inst.ptrs, index)
+end
+
+---@param func ILFunction
+---@param inst ILRet
+---@param ptr ILPointer
+local function remove_from_ptrs(func, inst, ptr)
+  remove_ptr_from_array(func, inst, ptr, inst.ptrs)
+end
+
+---@param func ILFunction
+---@param inst ILRet
+---@param index integer? @ Default: `#inst.ptrs`
+local function remove_at_in_ptrs(func, inst, index)
+  remove_ptr_at(func, inst, inst.ptrs, index)
+end
+
+---@param func ILFunction
+---@param inst ILRet
+---@param ptr ILPointer
+---@param index integer
+local function set_at_in_ptrs(func, inst, ptr, index)
+  set_ptr_at(func, inst, ptr, inst.ptrs, index)
+end
+
+----====----====----====----====----====----====----====----====----====----====----====----====----
 -- inserting
+----====----====----====----====----====----====----====----====----====----====----====----====----
 
+----====----====----====----====----====----====----====----====----====----====----====----====----
 -- removing
-
+----====----====----====----====----====----====----====----====----====----====----====----====----
 
 -- temp copy paste:
 --[=[
@@ -339,8 +881,41 @@ end
 ]=]
 
 return {
+  -- creating
+
   create_reg_liveliness = create_reg_liveliness,
   create_reg_liveliness_recursive = create_reg_liveliness_recursive,
   ensure_has_reg_liveliness = ensure_has_reg_liveliness,
   ensure_has_reg_liveliness_recursive = ensure_has_reg_liveliness_recursive,
+
+  -- modifying
+
+  set_result_reg = set_result_reg,
+  set_table_reg = set_table_reg,
+  set_func_reg = set_func_reg,
+  set_left_ptr = set_left_ptr,
+  set_right_ptr = set_right_ptr,
+  set_key_ptr = set_key_ptr,
+  set_condition_ptr = set_condition_ptr,
+
+  insert_into_result_regs = insert_into_result_regs,
+  remove_from_result_regs = remove_from_result_regs,
+  remove_at_in_result_regs = remove_at_in_result_regs,
+  set_at_in_result_regs = set_at_in_result_regs,
+  insert_into_regs = insert_into_regs,
+  remove_from_regs = remove_from_regs,
+  remove_at_in_regs = remove_at_in_regs,
+  set_at_in_regs = set_at_in_regs,
+  insert_into_right_ptrs = insert_into_right_ptrs,
+  remove_from_right_ptrs = remove_from_right_ptrs,
+  remove_at_in_right_ptrs = remove_at_in_right_ptrs,
+  set_at_in_right_ptrs = set_at_in_right_ptrs,
+  insert_into_arg_ptrs = insert_into_arg_ptrs,
+  remove_from_arg_ptrs = remove_from_arg_ptrs,
+  remove_at_in_arg_ptrs = remove_at_in_arg_ptrs,
+  set_at_in_arg_ptrs = set_at_in_arg_ptrs,
+  insert_into_ptrs = insert_into_ptrs,
+  remove_from_ptrs = remove_from_ptrs,
+  remove_at_in_ptrs = remove_at_in_ptrs,
+  set_at_in_ptrs = set_at_in_ptrs,
 }
