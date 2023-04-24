@@ -319,6 +319,21 @@ local function update_blocks_for_new_inst(func, inst)
   -- And done.
 end
 
+local allow_modifying_inst_groups = false
+
+---@param allow boolean
+local function set_allow_modifying_inst_groups(allow)
+  allow_modifying_inst_groups = allow
+end
+
+---@param inst ILInstruction
+local function assert_is_not_inst_group(inst)
+  if allow_modifying_inst_groups then return end
+  util.debug_assert(not inst.inst_group, "Attempt to modify registers or pointers of an instruction which \z
+    is part of an instruction group. Use the dedicated functions for modifying instruction groups instead."
+  )
+end
+
 ---@param func ILFunction
 ---@param inst ILJump|ILTest
 local function update_blocks_for_new_jump_target_internal(func, inst)
@@ -328,6 +343,7 @@ end
 ---@param func ILFunction
 ---@param inst ILJump|ILTest
 local function update_blocks_for_new_jump_target(func, inst)
+  assert_is_not_inst_group(inst)
   assert_has_blocks(func, "update_blocks_for_new_jump_target")
   update_blocks_for_new_jump_target_internal(func, inst)
 end
@@ -336,6 +352,7 @@ end
 ---@param inst ILJump|ILTest
 ---@param target_label ILLabel
 local function set_jump_target(func, inst, target_label)
+  assert_is_not_inst_group(inst)
   assert_has_blocks(func, "set_jump_target")
   inst.label = target_label
   update_blocks_for_new_jump_target_internal(func, inst)
@@ -491,6 +508,8 @@ return {
   update_blocks_for_new_inst = update_blocks_for_new_inst,
 
   -- modifying
+
+  set_allow_modifying_inst_groups = set_allow_modifying_inst_groups,
 
   update_blocks_for_new_jump_target = update_blocks_for_new_jump_target,
   set_jump_target = set_jump_target,

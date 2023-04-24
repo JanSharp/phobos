@@ -499,6 +499,21 @@ local function remove_ptr_from_inst(func, inst, ptr)
   end
 end
 
+local allow_modifying_inst_groups = false
+
+---@param allow boolean
+local function set_allow_modifying_inst_groups(allow)
+  allow_modifying_inst_groups = allow
+end
+
+---@param inst ILInstruction
+local function assert_is_not_inst_group(inst)
+  if allow_modifying_inst_groups then return end
+  util.debug_assert(not inst.inst_group, "Attempt to modify registers or pointers of an instruction which \z
+    is part of an instruction group. Use the dedicated functions for modifying instruction groups instead."
+  )
+end
+
 ----------------------------------------------------------------------------------------------------
 -- changing registers or pointers on instructions
 ----------------------------------------------------------------------------------------------------
@@ -507,6 +522,7 @@ end
 ---@param inst ILMove|ILGetUpval|ILGetTable|ILNewTable|ILConcat|ILBinop|ILUnop|ILClosure|ILToNumber
 ---@param reg ILRegister
 local function set_result_reg(func, inst, reg)
+  assert_is_not_inst_group(inst)
   if reg == inst.result_reg then return end
   remove_reg_from_inst(func, inst, inst.result_reg)
   inst.result_reg = reg
@@ -517,6 +533,7 @@ end
 ---@param inst ILGetTable|ILSetTable|ILSetList
 ---@param reg ILRegister
 local function set_table_reg(func, inst, reg)
+  assert_is_not_inst_group(inst)
   if reg == inst.table_reg then return end
   remove_reg_from_inst(func, inst, inst.table_reg)
   inst.table_reg = reg
@@ -527,6 +544,7 @@ end
 ---@param inst ILCall
 ---@param reg ILRegister
 local function set_func_reg(func, inst, reg)
+  assert_is_not_inst_group(inst)
   if reg == inst.func_reg then return end
   remove_reg_from_inst(func, inst, inst.func_reg)
   inst.func_reg = reg
@@ -537,6 +555,7 @@ end
 ---@param inst ILBinop
 ---@param ptr ILPointer
 local function set_left_ptr(func, inst, ptr)
+  assert_is_not_inst_group(inst)
   if ptr == inst.left_ptr then return end
   remove_ptr_from_inst(func, inst, inst.left_ptr)
   inst.left_ptr = ptr
@@ -547,6 +566,7 @@ end
 ---@param inst ILMove|ILSetUpval|ILSetTable|ILBinop|ILUnop|ILToNumber
 ---@param ptr ILPointer
 local function set_right_ptr(func, inst, ptr)
+  assert_is_not_inst_group(inst)
   if ptr == inst.right_ptr then return end
   remove_ptr_from_inst(func, inst, inst.right_ptr)
   inst.right_ptr = ptr
@@ -557,6 +577,7 @@ end
 ---@param inst ILGetTable|ILSetTable
 ---@param ptr ILPointer
 local function set_key_ptr(func, inst, ptr)
+  assert_is_not_inst_group(inst)
   if ptr == inst.key_ptr then return end
   remove_ptr_from_inst(func, inst, inst.key_ptr)
   inst.key_ptr = ptr
@@ -567,6 +588,7 @@ end
 ---@param inst ILTest
 ---@param ptr ILPointer
 local function set_condition_ptr(func, inst, ptr)
+  assert_is_not_inst_group(inst)
   if ptr == inst.condition_ptr then return end
   remove_ptr_from_inst(func, inst, inst.condition_ptr)
   inst.condition_ptr = ptr
@@ -583,6 +605,7 @@ end
 ---@param array ILRegister[]
 ---@param index integer? @ Default: `#array + 1`
 local function insert_reg_in_array(func, inst, reg, array, index)
+  assert_is_not_inst_group(inst)
   if index then
     table.insert(array, index, reg)
   else
@@ -597,6 +620,7 @@ end
 ---@param array ILPointer[]
 ---@param index integer? @ Default: `#array + 1`
 local function insert_ptr_in_array(func, inst, ptr, array, index)
+  assert_is_not_inst_group(inst)
   if index then
     table.insert(array, index, ptr)
   else
@@ -611,6 +635,7 @@ end
 ---@param reg ILRegister
 ---@param array ILRegister[]
 local function remove_reg_from_array(func, inst, reg, array)
+  assert_is_not_inst_group(inst)
   util.remove_from_array(array, reg)
   remove_reg_from_inst(func, inst, reg)
 end
@@ -621,6 +646,7 @@ end
 ---@param ptr ILPointer
 ---@param array ILPointer[]
 local function remove_ptr_from_array(func, inst, ptr, array)
+  assert_is_not_inst_group(inst)
   util.remove_from_array(array, ptr)
   remove_ptr_from_inst(func, inst, ptr)
 end
@@ -630,6 +656,7 @@ end
 ---@param array ILRegister[]
 ---@param index integer? @ Default: `#array`
 local function remove_reg_at(func, inst, array, index)
+  assert_is_not_inst_group(inst)
   local reg_or_ptr = table.remove(array, index)
   remove_reg_from_inst(func, inst, reg_or_ptr)
 end
@@ -639,6 +666,7 @@ end
 ---@param array ILPointer[]
 ---@param index integer? @ Default: `#array`
 local function remove_ptr_at(func, inst, array, index)
+  assert_is_not_inst_group(inst)
   local reg_or_ptr = table.remove(array, index)
   remove_ptr_from_inst(func, inst, reg_or_ptr)
 end
@@ -649,6 +677,7 @@ end
 ---@param array ILRegister[]
 ---@param index integer
 local function set_reg_at(func, inst, reg, array, index)
+  assert_is_not_inst_group(inst)
   remove_reg_from_inst(func, inst, array[index])
   array[index] = reg
   add_reg_to_inst(func, inst, reg)
@@ -660,6 +689,7 @@ end
 ---@param array ILPointer[]
 ---@param index integer
 local function set_ptr_at(func, inst, ptr, array, index)
+  assert_is_not_inst_group(inst)
   remove_ptr_from_inst(func, inst, array[index])
   array[index] = ptr
   add_ptr_to_inst(func, inst, ptr)
@@ -846,6 +876,9 @@ local function update_reg_liveliness_for_new_inst(func, inst)
   util.debug_assert(inst.prev_border or inst.next_border, "Cannot update reg liveliness for new instruction \z
     if its borders have not been updated yet. It is not the job of il_registers to update borders."
   )
+  util.debug_assert(not inst.inst_group, "A newly inserted instruction must not be apart of an \z
+    instruction group already. Insert all instructions first then group them together."
+  )
   -- The borders update already initializes `live_regs` either as an empty array if the instruction was
   -- prepended or appended, or as a copy of the existing `live_regs` of the border where the instruction was
   -- inserted. That leaves this function with just adding the registers used by this instruction.
@@ -906,6 +939,8 @@ return {
   ensure_has_reg_liveliness_recursive = ensure_has_reg_liveliness_recursive,
 
   -- modifying
+
+  set_allow_modifying_inst_groups = set_allow_modifying_inst_groups,
 
   set_result_reg = set_result_reg,
   set_table_reg = set_table_reg,
