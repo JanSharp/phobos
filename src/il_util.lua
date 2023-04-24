@@ -1578,9 +1578,7 @@ end
 -- - [ ] inst.post_state
 -- - [x] reg.start_at
 -- - [x] reg.stop_at
---
 -- - [ ] reg.captured_as_upval
--- - [ ] reg.current_reg
 
 ---@param func ILFunction
 ---@param inst ILInstruction
@@ -1601,6 +1599,7 @@ end
 ---@param inserted_inst ILInstruction
 ---@return ILInstruction
 local function insert_after_inst(func, inst, inserted_inst)
+  util.debug_assert(not func.is_compiling, "Cannot modify IL mid compilation, not all temp data would get updated.")
   if inst and inst.inst_group and inst ~= inst.inst_group.stop then
     util.debug_abort("Attempt to insert an instruction inside of an inst_group (which are immutable).")
   end
@@ -1621,6 +1620,7 @@ end
 ---@param inserted_inst ILInstruction
 ---@return ILInstruction
 local function insert_before_inst(func, inst, inserted_inst)
+  util.debug_assert(not func.is_compiling, "Cannot modify IL mid compilation, not all temp data would get updated.")
   if inst and inst.inst_group and inst ~= inst.inst_group.start then
     util.debug_abort("Attempt to insert an instruction inside of an inst_group (which are immutable).")
   end

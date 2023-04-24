@@ -970,7 +970,9 @@
 ---@field has_reg_liveliness boolean
 ---@field all_regs ILRegisterList
 ---@field has_types boolean @ `(pre|post)_state` on ILInstruction
----@field is_compiling boolean @ `closure_index` on ILFUnction and `captured_as_upval` and `current_reg` on ILRegister
+---Search for "temp compilation data" in classes.lua for all the data related to this step.\
+---During compilation modification of IL is prohibited. The above data would not get updated.
+---@field is_compiling boolean
 ---
 ---@field temp ILFunctionTemp
 ---temp compilation data
