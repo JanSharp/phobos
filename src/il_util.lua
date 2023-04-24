@@ -1953,9 +1953,24 @@ return {
   class_new_indexing = class_new_indexing,
   type_new_indexing = type_new_indexing,
 
+  -- il blocks
+
+  create_blocks = il_blocks.create_blocks,
+  create_blocks_recursive = il_blocks.create_blocks_recursive,
+  ensure_has_blocks = il_blocks.ensure_has_blocks,
+  ensure_has_blocks_recursive = il_blocks.ensure_has_blocks_recursive,
+
+  update_blocks_for_new_jump_target = il_blocks.update_blocks_for_new_jump_target,
+  set_jump_target = il_blocks.set_jump_target,
+
   -- il registers
 
   is_vararg_list = is_vararg_list,
+
+  create_reg_liveliness = il_registers.create_reg_liveliness,
+  create_reg_liveliness_recursive = il_registers.create_reg_liveliness_recursive,
+  ensure_has_reg_liveliness = il_registers.ensure_has_reg_liveliness,
+  ensure_has_reg_liveliness_recursive = il_registers.ensure_has_reg_liveliness_recursive,
 
   set_result_reg = il_registers.set_result_reg,
   set_table_reg = il_registers.set_table_reg,

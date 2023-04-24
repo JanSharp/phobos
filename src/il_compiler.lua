@@ -7,8 +7,6 @@ local ill = require("indexed_linked_list")
 local ll = require("linked_list")
 local il = require("il_util")
 local linq = require("linq")
-local il_blocks = require("il_blocks")
-local il_registers = require("il_registers")
 
 -- FIXME: 'live_regs' have been moved from instructions to borders. This file is not updated.
 
@@ -2325,8 +2323,8 @@ local function compile(func)
     all_linked_groups_lut = {},
   }
 
-  il_blocks.ensure_has_blocks(func)
-  il_registers.ensure_has_reg_liveliness(func)
+  il.ensure_has_blocks(func)
+  il.ensure_has_reg_liveliness(func)
   pre_compilation_process(data)
 
   data.result = make_bytecode_func(func)
