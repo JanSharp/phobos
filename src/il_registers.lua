@@ -224,28 +224,33 @@ end
 ---IMPORTANT: Keep the list of IL instructions without any registers up to date
 local insts_without_regs_lut = util.invert{"jump", "label"}
 
+local shared_empty = setmetatable({}, {
+  __newindex = function(_, k)
+    util.debug_abort("Attempt to write to a start/stop list/lut for an instruction that has no registers. \z
+      (Key: '"..tostring(k).."')"
+    )
+  end,
+})
+
+local function initialize_lists_and_luts(inst)
+  if insts_without_regs_lut[inst.inst_type] then
+    inst.regs_start_at_list = shared_empty
+    inst.regs_start_at_lut = shared_empty
+    inst.regs_stop_at_list = shared_empty
+    inst.regs_stop_at_lut = shared_empty
+  else
+    inst.regs_start_at_list = {}
+    inst.regs_start_at_lut = {}
+    inst.regs_stop_at_list = {}
+    inst.regs_stop_at_lut = {}
+  end
+end
+
 ---@param func ILFunction
 local function eval_start_stop_luts_and_lists(func)
-  local shared_empty = setmetatable({}, {
-    __newindex = function(_, k)
-      util.debug_abort("Attempt to write to a start/stop list/lut for an instruction that has no registers. \z
-        (Key: '"..tostring(k).."')"
-      )
-    end,
-  })
   local inst = func.instructions.first
   while inst do
-    if insts_without_regs_lut[inst.inst_type] then
-      inst.regs_start_at_list = shared_empty
-      inst.regs_start_at_lut = shared_empty
-      inst.regs_stop_at_list = shared_empty
-      inst.regs_stop_at_lut = shared_empty
-    else
-      inst.regs_start_at_list = {}
-      inst.regs_start_at_lut = {}
-      inst.regs_stop_at_list = {}
-      inst.regs_stop_at_lut = {}
-    end
+    initialize_lists_and_luts(inst)
     inst = inst.next
   end
 
@@ -897,6 +902,9 @@ local function update_reg_liveliness_for_new_inst(func, inst)
   util.debug_assert(not inst.inst_group, "A newly inserted instruction must not be apart of an \z
     instruction group already. Insert all instructions first then group them together."
   )
+
+  initialize_lists_and_luts(inst)
+
   -- The borders update already initializes `live_regs` either as an empty array if the instruction was
   -- prepended or appended, or as a copy of the existing `live_regs` of the border where the instruction was
   -- inserted. That leaves this function with just adding the registers used by this instruction.
@@ -921,6 +929,7 @@ local function update_reg_liveliness_for_removed_inst(func, inst)
       It has to pretend the 2 separate borders still exist to remove the registers from the instruction.\z
     "
   )
+
   -- Since we are telling the `remove_reg_from_inst` function not to check if the register is still used
   -- (because we're not actually removing them from the instruction) we must remove each register only once.
   local visited_lut = {}
