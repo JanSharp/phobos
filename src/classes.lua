@@ -628,12 +628,12 @@
 ---@field is_vararg boolean
 ---@field is_gap boolean? @ indicates a gap in register lists
 ---@field is_internal boolean? @ registers purely internal inside of instruction groups
+---@field captured_as_upval boolean?
 ---post IL generation data
 ---@field start_at ILInstruction
 ---@field stop_at ILInstruction
 ---@field prev_reg_in_func ILRegister?
 ---@field next_reg_in_func ILRegister?
----@field captured_as_upval boolean?
 ---@field current_reg ILCompiledRegister
 ---temp compilation data
 ---@field reg_groups ILRegisterGroup[]?
