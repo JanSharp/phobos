@@ -283,17 +283,20 @@ end
 
 ---@class ILJumpParams : ILInstParamsBase
 ---@field label ILLabel
+---@field allow_setting_label_while_in_inst_group boolean|nil
 
 ---@param params ILJumpParams
 ---@return ILJump
 local function new_jump(params)
   local inst = new_inst(params, "jump")
   inst.label = assert_field(params, "label")
+  inst.allow_setting_label_while_in_inst_group = params.allow_setting_label_while_in_inst_group or false
   return inst
 end
 
 ---@class ILTestParams : ILInstParamsBase
 ---@field label ILLabel
+---@field allow_setting_label_while_in_inst_group boolean|nil
 ---@field condition_ptr ILPointer
 ---@field jump_if_true boolean|nil
 
@@ -302,6 +305,7 @@ end
 local function new_test(params)
   local inst = new_inst(params, "test")
   inst.label = assert_field(params, "label")
+  inst.allow_setting_label_while_in_inst_group = params.allow_setting_label_while_in_inst_group or false
   inst.condition_ptr = assert_ptr(params, "condition_ptr")
   inst.jump_if_true = params.jump_if_true or false
   return inst

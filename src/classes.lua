@@ -892,6 +892,7 @@
 ---@class ILJump : ILInstruction
 ---@field inst_type "jump"
 ---@field label ILLabel
+---@field allow_setting_label_while_in_inst_group boolean
 ---temp compilation data\
 ---the jmp instruction that needs its `sbx` set after `inst_index`es have been evaluated
 ---@field jump_inst ILCompiledInstruction
@@ -899,6 +900,7 @@
 ---@class ILTest : ILInstruction
 ---@field inst_type "test"
 ---@field label ILLabel
+---@field allow_setting_label_while_in_inst_group boolean
 ---@field condition_ptr ILPointer
 ---@field jump_if_true boolean
 ---temp compilation data\

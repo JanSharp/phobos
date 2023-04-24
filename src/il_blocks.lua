@@ -326,9 +326,9 @@ local function set_allow_modifying_inst_groups(allow)
   allow_modifying_inst_groups = allow
 end
 
----@param inst ILInstruction
+---@param inst ILJump|ILTest
 local function assert_is_not_inst_group(inst)
-  if allow_modifying_inst_groups then return end
+  if allow_modifying_inst_groups or inst.allow_setting_label_while_in_inst_group then return end
   util.debug_assert(not inst.inst_group, "Attempt to modify registers or pointers of an instruction which \z
     is part of an instruction group. Use the dedicated functions for modifying instruction groups instead."
   )

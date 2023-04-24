@@ -572,6 +572,7 @@ do
       local prep_jump_forward = add_inst(func, il.new_jump{
         position = stat.for_token,
         label = prevent_assert,
+        allow_setting_label_while_in_inst_group = true,
       })
 
       -- stop of forprep group
@@ -708,6 +709,7 @@ do
       local forloop_group_loop_jump = add_inst(func, il.new_jump{
         position = stat.do_token,
         label = start_label,
+        allow_setting_label_while_in_inst_group = true,
       })
 
       -- set jump target for leave and break jumps
