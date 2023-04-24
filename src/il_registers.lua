@@ -839,6 +839,23 @@ end
 -- inserting
 ----====----====----====----====----====----====----====----====----====----====----====----====----
 
+---@param func ILFunction
+---@param inst ILInstruction
+local function update_reg_liveliness_for_new_inst(func, inst)
+  assert_has_reg_liveliness(func, "update_reg_liveliness_for_new_inst")
+  util.debug_assert(inst.prev_border or inst.next_border, "Cannot update reg liveliness for new instruction \z
+    if its borders have not been updated yet. It is not the job of il_registers to update borders."
+  )
+  -- The borders update already initializes `live_regs` either as an empty array if the instruction was
+  -- prepended or appended, or as a copy of the existing `live_regs` of the border where the instruction was
+  -- inserted. That leaves this function with just adding the registers used by this instruction.
+  ---@diagnostic disable-next-line: redefined-local
+  visit_regs_for_inst(func, inst, function(func, inst, reg)
+    -- Could directly pass the function to `visit_regs_for_inst` but that's more likely to break with changes.
+    add_reg_to_inst(func, inst, reg)
+  end)
+end
+
 ----====----====----====----====----====----====----====----====----====----====----====----====----
 -- removing
 ----====----====----====----====----====----====----====----====----====----====----====----====----
@@ -918,4 +935,8 @@ return {
   remove_from_ptrs = remove_from_ptrs,
   remove_at_in_ptrs = remove_at_in_ptrs,
   set_at_in_ptrs = set_at_in_ptrs,
+
+  -- inserting
+
+  update_reg_liveliness_for_new_inst = update_reg_liveliness_for_new_inst,
 }

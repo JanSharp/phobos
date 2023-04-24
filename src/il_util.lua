@@ -5,6 +5,8 @@ local error_code_util = require("error_code_util")
 local ill = require("indexed_linked_list")
 local linq = require("linq")
 local il_blocks = require("il_blocks")
+local il_borders = require("il_borders")
+local il_registers = require("il_registers")
 
 ----------------------------------------------------------------------------------------------------
 -- instructions
@@ -1769,9 +1771,15 @@ end
 
 ---@param func ILFunction
 ---@param inst ILInstruction
-local function update_intermediate_data(func, inst)
+local function update_intermediate_data_for_new_inst(func, inst)
+  if func.has_blocks then
+    il_blocks.update_blocks_for_new_inst(func, inst)
+  end
+  if func.has_borders then
+    il_borders.update_borders_for_new_inst(func, inst)
+  end
   if func.has_reg_liveliness then
-    -- eval_start_stop_and_liveliness_for_regs_for_inst(func, inst) -- FIXME
+    il_registers.update_reg_liveliness_for_new_inst(func, inst)
   end
 end
 
@@ -1784,10 +1792,7 @@ local function insert_after_inst(func, inst, inserted_inst)
     util.debug_abort("Attempt to insert an instruction inside of an inst_group (which are immutable).")
   end
   ill.insert_after(func.instructions, inst, inserted_inst)
-  update_intermediate_data(func, inserted_inst)
-  if func.has_blocks then
-    il_blocks.update_blocks_for_new_inst(func, inserted_inst)
-  end
+  update_intermediate_data_for_new_inst(func, inserted_inst)
   return inserted_inst
 end
 
@@ -1800,10 +1805,7 @@ local function insert_before_inst(func, inst, inserted_inst)
     util.debug_abort("Attempt to insert an instruction inside of an inst_group (which are immutable).")
   end
   ill.insert_before(func.instructions, inst, inserted_inst)
-  update_intermediate_data(func, inserted_inst)
-  if func.has_blocks then
-    il_blocks.update_blocks_for_new_inst(func, inserted_inst)
-  end
+  update_intermediate_data_for_new_inst(func, inserted_inst)
   return inserted_inst
 end
 
@@ -1812,10 +1814,7 @@ end
 ---@return ILInstruction
 local function prepend_inst(func, inserted_inst)
   ill.prepend(func.instructions, inserted_inst)
-  update_intermediate_data(func, inserted_inst)
-  if func.has_blocks then
-    il_blocks.update_blocks_for_new_inst(func, inserted_inst)
-  end
+  update_intermediate_data_for_new_inst(func, inserted_inst)
   return inserted_inst
 end
 
@@ -1824,10 +1823,7 @@ end
 ---@return ILInstruction
 local function append_inst(func, inserted_inst)
   ill.append(func.instructions, inserted_inst)
-  update_intermediate_data(func, inserted_inst)
-  if func.has_blocks then
-    il_blocks.update_blocks_for_new_inst(func, inserted_inst)
-  end
+  update_intermediate_data_for_new_inst(func, inserted_inst)
   return inserted_inst
 end
 
@@ -2157,7 +2153,6 @@ return {
   add_reg_to_inst_set = add_reg_to_inst_set,
   remove_reg_from_inst_get = remove_reg_from_inst_get,
   remove_reg_from_inst_set = remove_reg_from_inst_set,
-  update_intermediate_data = update_intermediate_data,
   insert_after_inst = insert_after_inst,
   insert_before_inst = insert_before_inst,
   prepend_inst = prepend_inst,

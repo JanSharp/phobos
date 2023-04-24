@@ -479,12 +479,23 @@ local function update_blocks_for_removed_inst(func, inst)
 end
 
 return {
+  -- creating
+
   create_blocks = create_blocks,
   create_blocks_recursive = create_blocks_recursive,
   ensure_has_blocks = ensure_has_blocks,
   ensure_has_blocks_recursive = ensure_has_blocks_recursive,
+
+  -- inserting
+
   update_blocks_for_new_inst = update_blocks_for_new_inst,
+
+  -- modifying
+
   update_blocks_for_new_jump_target = update_blocks_for_new_jump_target,
   set_jump_target = set_jump_target,
+
+  -- removing
+
   update_blocks_for_removed_inst = update_blocks_for_removed_inst,
 }
