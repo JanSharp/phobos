@@ -465,11 +465,16 @@ end
 ---@param func ILFunction
 ---@param inst ILInstruction
 ---@param reg ILRegister
-local function remove_reg_from_inst(func, inst, reg)
+---@param do_not_check_if_it_is_still_used boolean?
+local function remove_reg_from_inst(func, inst, reg, do_not_check_if_it_is_still_used)
   if not func.has_reg_liveliness then return end
 
-  local removed_start = inst == reg.start_at and not inst_uses_reg(inst, reg)
-  local removed_stop = inst == reg.stop_at and not inst_uses_reg(inst, reg)
+  local function got_removed_from_inst(check_inst)
+    return inst == check_inst and (do_not_check_if_it_is_still_used or not inst_uses_reg(inst, reg))
+  end
+
+  local removed_start = got_removed_from_inst(reg.start_at)
+  local removed_stop = got_removed_from_inst(reg.stop_at)
 
   if removed_start and removed_stop then
     remove_start_at(reg)
@@ -906,6 +911,27 @@ end
 -- removing
 ----====----====----====----====----====----====----====----====----====----====----====----====----
 
+---@param func ILFunction
+---@param inst ILInstruction
+local function update_reg_liveliness_for_removed_inst(func, inst)
+  assert_has_reg_liveliness(func, "update_reg_liveliness_for_new_inst")
+  util.debug_assert(
+    not inst.prev or not inst.next or inst.prev.next_border ~= inst.next.prev_border,
+    "Cannot update reg liveliness for a removed instruction if its borders have already been updated. \z
+      It has to pretend the 2 separate borders still exist to remove the registers from the instruction.\z
+    "
+  )
+  -- Since we are telling the `remove_reg_from_inst` function not to check if the register is still used
+  -- (because we're not actually removing them from the instruction) we must remove each register only once.
+  local visited_lut = {}
+  ---@diagnostic disable-next-line: redefined-local
+  visit_regs_for_inst(func, inst, function(func, inst, reg)
+    if visited_lut[reg] then return end
+    visited_lut[reg] = true
+    remove_reg_from_inst(func, inst, reg, true)
+  end)
+end
+
 -- temp copy paste:
 --[=[
 
@@ -988,4 +1014,8 @@ return {
   -- inserting
 
   update_reg_liveliness_for_new_inst = update_reg_liveliness_for_new_inst,
+
+  -- removing
+
+  update_reg_liveliness_for_removed_inst = update_reg_liveliness_for_removed_inst,
 }

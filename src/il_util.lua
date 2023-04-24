@@ -1649,6 +1649,24 @@ local function append_inst(func, inserted_inst)
 end
 
 ---@param func ILFunction
+---@param inst ILInstruction
+local function remove_inst(func, inst)
+  if inst.inst_group then
+    util.debug_abort("Attempt to remove an instruction which is apart of an inst_group (which are immutable).")
+  end
+  ill.remove(func.instructions, inst)
+  if func.has_blocks then
+    il_blocks.update_blocks_for_removed_inst(func, inst)
+  end
+  if func.has_borders then
+    il_borders.update_borders_for_removed_inst(func, inst)
+  end
+  if func.has_reg_liveliness then
+    il_registers.update_reg_liveliness_for_removed_inst(func, inst)
+  end
+end
+
+---@param func ILFunction
 ---@param forprep_group ILForprepGroup
 ---@param new_index_reg ILRegister
 local function replace_forprep_index_reg(func, forprep_group, new_index_reg)
@@ -2007,6 +2025,7 @@ return {
   insert_before_inst = insert_before_inst,
   prepend_inst = prepend_inst,
   append_inst = append_inst,
+  remove_inst = remove_inst,
 
   replace_forprep_index_reg = replace_forprep_index_reg,
   replace_forprep_limit_reg = replace_forprep_limit_reg,

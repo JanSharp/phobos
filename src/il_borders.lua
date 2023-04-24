@@ -133,7 +133,32 @@ local function update_borders_for_new_inst(func, inst)
   inst.next.prev_border = right_border
 end
 
+----====----====----====----====----====----====----====----====----====----====----====----====----
+-- removing
+----====----====----====----====----====----====----====----====----====----====----====----====----
+
+---@param func ILFunction
+---@param inst ILInstruction
+local function update_borders_for_removed_inst(func, inst)
+  assert_has_borders(func, "update_borders_for_removed_inst")
+
+  if not inst.prev then
+    inst.next.prev_border = nil
+    return
+  end
+
+  if not inst.next then
+    inst.prev.next_border = nil
+    return
+  end
+
+  -- keep the prev_border, discard of the next_border
+  inst.next.prev_border = inst.prev_border
+  inst.prev_border.next_inst = inst.next
+end
+
 return {
+
   -- utility
 
   iterate_borders = iterate_borders,
@@ -148,4 +173,8 @@ return {
   -- inserting
 
   update_borders_for_new_inst = update_borders_for_new_inst,
+
+  -- removing
+
+  update_borders_for_removed_inst = update_borders_for_removed_inst,
 }
