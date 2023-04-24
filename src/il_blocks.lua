@@ -496,6 +496,7 @@ local function update_blocks_for_removed_inst(func, inst)
 end
 
 return {
+
   -- creating
 
   create_blocks = create_blocks,
