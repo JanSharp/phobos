@@ -2304,8 +2304,6 @@ end
 
 ---@param func ILFunction
 local function compile(func)
-  func.is_compiling = true
-
   ---@type ILCompilerData
   local data = {
     func = func,
@@ -2324,6 +2322,9 @@ local function compile(func)
   il.ensure_has_blocks(func)
   il.ensure_has_reg_liveliness(func)
   pre_compilation_process(data)
+
+  -- must happen after pre_process, because the pre_process modifies IL, which is prohibited mid compilation
+  func.is_compiling = true
 
   data.result = make_bytecode_func(func)
   generate(data)
