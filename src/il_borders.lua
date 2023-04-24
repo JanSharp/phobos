@@ -12,8 +12,8 @@ local function assert_has_borders(func, func_name)
 end
 
 ---@param func ILFunction
----@param start_border ILBorder? @ Inclusive. Default: `prev_border` of the first instruction.
----@param stop_border ILBorder? @ Inclusive. Default: `next_border` of the last instruction.
+---@param start_border ILBorder? @ Inclusive. Default: `next_border` of the first instruction.
+---@param stop_border ILBorder? @ Inclusive. Default: `prev_border` of the last instruction.
 ---@return fun(): ILBorder?
 local function iterate_borders(func, start_border, stop_border)
   assert_has_borders(func, "iterate_borders")
@@ -24,7 +24,7 @@ local function iterate_borders(func, start_border, stop_border)
     -- Could also simply return an iterator that always returns 'nil'.
   end
   ---@type ILBorder?
-  local next_border = start_border or func.instructions.first.prev_border
+  local next_border = start_border or func.instructions.first.next_border
   return function()
     local result = next_border
     next_border = next_border ~= stop_border and next_border and next_border.next_inst.next_border or nil
@@ -72,13 +72,13 @@ local function create_borders(func)
   )
   func.has_borders = true
 
-  local prev_border = {prev_inst = nil}
-  local inst = func.instructions.first
+  local border = {prev_inst = func.instructions.first}
+  local inst = func.instructions.first.next
   while inst do
-    prev_border.next_inst = inst
-    inst.prev_border = prev_border
-    prev_border = {prev_inst = inst}
-    inst.next_border = prev_border
+    border.next_inst = inst
+    inst.prev_border = border
+    border.prev_inst.next_border = border
+    border = {prev_inst = inst}
     inst = inst.next
   end
 end

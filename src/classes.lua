@@ -805,8 +805,8 @@
 ---@field regs_start_at_lut table<ILRegister, boolean>
 ---@field regs_stop_at_list ILRegister[]
 ---@field regs_stop_at_lut table<ILRegister, boolean>
----@field prev_border ILBorder @ the border between the prev instruction and this instruction
----@field next_border ILBorder @ the border between this instruction and the next instruction
+---@field prev_border ILBorder? @ the border between the prev inst and this inst. `nil` for first inst
+---@field next_border ILBorder? @ the border between this inst and the next inst. `nil` for last inst
 ---@field pre_state ILState
 ---@field post_state ILState
 ---@field input_reg_group ILRegisterGroup?
@@ -818,8 +818,8 @@
 
 ---The border between 2 instructions.
 ---@class ILBorder
----@field prev_inst ILInstruction?
----@field next_inst ILInstruction?
+---@field prev_inst ILInstruction
+---@field next_inst ILInstruction
 ---@field live_regs ILRegister[]
 
 ---@class ILState
