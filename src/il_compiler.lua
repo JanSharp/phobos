@@ -2034,7 +2034,7 @@ do
       local original_label = jump_to_redirect.label
       local label = il.new_label{position = original_label.position}
       il.insert_before_inst(data.func, original_label, label)
-      jump_to_redirect.label = label -- TODO: call il util function to update block links
+      il.set_jump_target(data.func, jump_to_redirect, label)
       set_jump_to_redirect(jump_to_redirect) -- set secondary_inst_to_insert_before
 
       -- if label.prev and linq(label.block.source_links):any(function(link)
