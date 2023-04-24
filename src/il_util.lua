@@ -525,19 +525,23 @@ end
 ---@param inst_or_group ILInstruction|ILInstructionGroup
 ---@return ILRegister[]
 local function get_live_regs(inst_or_group)
+  -- FIXME: I just converted this from the old live_regs to the new ones while (hopefully) preserving the
+  -- same functionality. But I don't like it
   if is_inst_group(inst_or_group) then
     ---@cast inst_or_group ILInstructionGroup
     if inst_or_group.start == inst_or_group.stop then
       util.debug_abort("Hold up, why is there an instruction _group_ with only _one_ instruction?!")
-      return inst_or_group.start.live_regs
+      -- return inst_or_group.start.live_regs
     end
-    return linq(inst_or_group.start.live_regs)
-      :union(inst_or_group.stop.live_regs)
+    return linq(inst_or_group.start.next_border.live_regs)
+      :union(inst_or_group.stop.prev_border.live_regs)
       :where(function(reg) return not reg.is_internal end)
       :to_array()
     ;
   else
-    return inst_or_group.live_regs
+    return linq(inst_or_group.prev_border and inst_or_group.prev_border.live_regs or {})
+      :union(inst_or_group.next_border and inst_or_group.next_border.live_regs or {})
+      :to_array()
   end
 end
 
