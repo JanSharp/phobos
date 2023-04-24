@@ -633,7 +633,6 @@
 ---@field stop_at ILInstruction
 ---@field prev_reg_in_func ILRegister?
 ---@field next_reg_in_func ILRegister?
----@field temporary boolean?
 ---@field captured_as_upval boolean?
 ---@field current_reg ILCompiledRegister
 ---temp compilation data
