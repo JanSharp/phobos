@@ -341,12 +341,12 @@ end
 ---@param stop_at ILInstruction
 local function add_stop_at(reg, stop_at)
   reg.stop_at = stop_at
-  add_to_list_and_lut(stop_at.regs_start_at_list, stop_at.regs_start_at_lut, reg)
+  add_to_list_and_lut(stop_at.regs_stop_at_list, stop_at.regs_stop_at_lut, reg)
 end
 
 ---@param reg ILRegister
 local function remove_stop_at(reg)
-  remove_from_list_and_lut(reg.stop_at.regs_stop_at_lut, reg.stop_at.regs_stop_at_lut, reg)
+  remove_from_list_and_lut(reg.stop_at.regs_stop_at_list, reg.stop_at.regs_stop_at_lut, reg)
   reg.stop_at = nil
 end
 
