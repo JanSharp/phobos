@@ -883,7 +883,8 @@ do
   ---@param data ILCompilerData
   ---@param inst ILInstruction
   ---@param ptrs ILPointer[]
-  local function expand_ptr_list(data, inst, ptrs)
+  ---@param set_at_in_ptrs_func fun(func: ILFunction, inst: ILInstruction, ptr: ILPointer, index: integer?)
+  local function expand_ptr_list(data, inst, ptrs, set_at_in_ptrs_func)
     for i, ptr in ipairs(ptrs) do
       if ptr.ptr_type ~= "reg" then
         local temp_reg = il.new_reg()
@@ -892,8 +893,7 @@ do
           right_ptr = ptr,
           result_reg = temp_reg,
         })
-        ptrs[i] = temp_reg
-        il.add_reg_to_inst_get(data.func, inst, temp_reg)
+        set_at_in_ptrs_func(data.func, inst, temp_reg, i)
       end
     end
   end
@@ -903,7 +903,7 @@ do
     ---@param data ILCompilerData
     ---@param inst ILSetList
     ["set_list"] = function(data, inst)
-      expand_ptr_list(data, inst, inst.right_ptrs)
+      expand_ptr_list(data, inst, inst.right_ptrs, il.set_at_in_right_ptrs)
       inst.right_ptrs[0] = inst.table_reg
       group_registers(data, inst, true, inst.right_ptrs, 0)
       inst.right_ptrs[0] = nil
@@ -911,7 +911,7 @@ do
     ---@param data ILCompilerData
     ---@param inst ILConcat
     ["concat"] = function(data, inst)
-      expand_ptr_list(data, inst, inst.right_ptrs)
+      expand_ptr_list(data, inst, inst.right_ptrs, il.set_at_in_right_ptrs)
       set_forced_offset_for_groups(
         data,
         group_registers(data, inst, true, inst.right_ptrs, 1),
@@ -922,7 +922,7 @@ do
     ---@param data ILCompilerData
     ---@param inst ILCall
     ["call"] = function(data, inst)
-      expand_ptr_list(data, inst, inst.arg_ptrs)
+      expand_ptr_list(data, inst, inst.arg_ptrs, il.set_at_in_arg_ptrs)
       inst.arg_ptrs[0] = inst.func_reg
       local input_group = group_registers(data, inst, true, inst.arg_ptrs, 0)
       inst.arg_ptrs[0] = nil
@@ -933,7 +933,7 @@ do
     ---@param inst ILRet
     ["ret"] = function(data, inst)
       if inst.ptrs[1] then
-        expand_ptr_list(data, inst, inst.ptrs)
+        expand_ptr_list(data, inst, inst.ptrs, il.set_at_in_ptrs)
         group_registers(data, inst, true, inst.ptrs, 1)
       end
     end,
@@ -988,59 +988,41 @@ do
     ---@param inst ILSetList
     ["set_list"] = function(func, inst, reg_group, index_in_group, reg)
       if index_in_group == 1 then -- the first one in the group must always be the table reg
-        il.remove_reg_from_inst_get(func, inst, inst.table_reg)
-        inst.table_reg = reg
-        il.add_reg_to_inst_get(func, inst, reg)
+        il.set_table_reg(func, inst, reg)
       else
         local index_in_right_ptrs = index_in_group - 1
-        il.remove_reg_from_inst_get(func, inst, inst.right_ptrs[index_in_right_ptrs]--[[@as ILRegister]])
-        inst.right_ptrs[index_in_right_ptrs] = reg
-        il.add_reg_to_inst_get(func, inst, reg)
+        il.set_at_in_right_ptrs(func, inst, reg, index_in_right_ptrs)
       end
     end,
     ---@param inst ILConcat
     ["concat"] = function(func, inst, reg_group, index_in_group, reg)
       if reg_group.is_input then
-        il.remove_reg_from_inst_get(func, inst, inst.right_ptrs[index_in_group]--[[@as ILRegister]])
-        inst.right_ptrs[index_in_group] = reg
-        il.add_reg_to_inst_get(func, inst, reg)
+        il.set_at_in_right_ptrs(func, inst, reg, index_in_group)
       else -- output reg group
         util.debug_assert(index_in_group == 1, "The output reg group of concat insts should only ever contain 1 reg.")
-        il.remove_reg_from_inst_set(func, inst, inst.result_reg)
-        inst.result_reg = reg
-        il.add_reg_to_inst_set(func, inst, reg)
+        il.set_result_reg(func, inst, reg)
       end
     end,
     ---@param inst ILCall
     ["call"] = function(func, inst, reg_group, index_in_group, reg)
       if reg_group.is_input then
         if index_in_group == 1 then -- the first one in the group must always be the func reg
-          il.remove_reg_from_inst_get(func, inst, inst.func_reg)
-          inst.func_reg = reg
-          il.add_reg_to_inst_get(func, inst, reg)
+          il.set_func_reg(func, inst, reg)
         else
           local index_in_arg_ptrs = index_in_group - 1
-          il.remove_reg_from_inst_get(func, inst, inst.arg_ptrs[index_in_arg_ptrs]--[[@as ILRegister]])
-          inst.arg_ptrs[index_in_arg_ptrs] = reg
-          il.add_reg_to_inst_get(func, inst, reg)
+          il.set_at_in_arg_ptrs(func, inst, reg, index_in_arg_ptrs)
         end
       else -- output reg group
-        il.remove_reg_from_inst_get(func, inst, inst.result_regs[index_in_group])
-        inst.result_regs[index_in_group] = reg
-        il.add_reg_to_inst_get(func, inst, reg)
+        il.set_at_in_result_regs(func, inst, reg, index_in_group)
       end
     end,
     ---@param inst ILRet
     ["ret"] = function(func, inst, reg_group, index_in_group, reg)
-      il.remove_reg_from_inst_get(func, inst, inst.ptrs[index_in_group]--[[@as ILRegister]])
-      inst.ptrs[index_in_group] = reg
-      il.add_reg_to_inst_get(func, inst, reg)
+      il.set_at_in_ptrs(func, inst, reg, index_in_group)
     end,
     ---@param inst ILVararg
     ["vararg"] = function(func, inst, reg_group, index_in_group, reg)
-      il.remove_reg_from_inst_get(func, inst, inst.result_regs[index_in_group])
-      inst.result_regs[index_in_group] = reg
-      il.add_reg_to_inst_get(func, inst, reg)
+      il.set_at_in_result_regs(func, inst, reg, index_in_group)
     end,
   }
 
@@ -2210,9 +2192,7 @@ do
       right_ptr = temp_reg,
       result_reg = inst.result_reg,
     })
-    il.remove_reg_from_inst_set(data.func, inst, inst.result_reg)
-    inst.result_reg = temp_reg
-    il.add_reg_to_inst_set(data.func, inst, temp_reg)
+    il.set_result_reg(data.func, inst, temp_reg)
   end
 
   ---@type table<ILInstructionType, fun(data: ILCompilerData, inst: ILInstruction)?>
@@ -2243,9 +2223,7 @@ do
           right_ptr = old_reg,
           result_reg = temp_reg,
         })
-        il.remove_reg_from_inst_get(data.func, inst, old_reg)
-        inst.right_ptrs[i] = temp_reg
-        il.add_reg_to_inst_set(data.func, inst, temp_reg)
+        il.set_at_in_right_ptrs(data.func, inst, temp_reg, i)
       end
 
       change_result_reg_to_be_at_top(data, inst, top_index)

@@ -1560,134 +1560,6 @@ local function is_vararg_list(regs)
   return regs[#regs].is_vararg
 end
 
---[=[
-
-local add_start_stop_and_liveliness_for_reg_for_inst
-local eval_start_stop_and_liveliness_for_regs_for_inst
-do
-  ---@param func ILFunction
-  ---@param inst ILInstruction
-  ---@param reg ILRegister
-  function add_start_stop_and_liveliness_for_reg_for_inst(func, inst, reg)
-    if func.has_reg_liveliness then
-      -- initialize `live_regs` if they are nil. updating others is handled afterwards
-      if not inst.live_regs then
-        local prev_inst = inst.prev
-        if prev_inst then
-          local live_regs = util.shallow_copy(prev_inst.live_regs)
-          for i = #live_regs, 1, -1 do
-            if prev_inst.regs_stop_at_lut and prev_inst.regs_stop_at_lut[live_regs[i]] then
-              table.remove(live_regs, i)
-            end
-          end
-          live_regs[#live_regs+1] = reg
-          inst.live_regs = live_regs
-        else
-          inst.live_regs = {reg}
-        end
-      end
-    end
-
-    ---@param start_inst ILInstruction @ inclusive
-    ---@param stop_inst ILInstruction @ exclusive
-    local function add_to_live_regs(start_inst, stop_inst)
-      while start_inst ~= stop_inst do
-        start_inst.live_regs[#start_inst.live_regs+1] = reg
-        start_inst = start_inst.next
-      end
-    end
-
-    if not reg.start_at or inst.index < reg.start_at.index then
-      if func.has_reg_liveliness then
-        if reg.start_at then
-          util.remove_from_array(reg.start_at.regs_start_at_list, reg)
-          reg.start_at.regs_start_at_lut[reg] = nil
-          add_to_live_regs(inst.next, reg.start_at)
-        end
-        inst.regs_start_at_list = inst.regs_start_at_list or {}
-        inst.regs_start_at_list[#inst.regs_start_at_list+1] = reg
-        inst.regs_start_at_lut = inst.regs_start_at_lut or {}
-        inst.regs_start_at_lut[reg] = true
-      end
-      reg.start_at = inst
-    end
-
-    if not reg.stop_at or inst.index > reg.stop_at.index then
-      if func.has_reg_liveliness then
-        if reg.stop_at then
-          util.remove_from_array(reg.stop_at.regs_stop_at_list, reg)
-          reg.stop_at.regs_stop_at_lut[reg] = nil
-          add_to_live_regs(reg.stop_at.next, inst)
-        end
-        inst.regs_stop_at_list = inst.regs_stop_at_list or {}
-        inst.regs_stop_at_list[#inst.regs_stop_at_list+1] = reg
-        inst.regs_stop_at_lut = inst.regs_stop_at_lut or {}
-        inst.regs_stop_at_lut[reg] = true
-      end
-      reg.stop_at = inst
-    end
-
-    -- TODO: pre_state
-    -- TODO: post_state
-  end
-
-  ---@param func ILFunction
-  ---@param inst ILInstruction
-  function eval_start_stop_and_liveliness_for_regs_for_inst(func, inst)
-    visit_regs_for_inst(func, inst, add_start_stop_and_liveliness_for_reg_for_inst)
-    if func.has_reg_liveliness and not inst.live_regs then
-      inst.live_regs = (inst.prev and util.shallow_copy(inst.prev.live_regs))
-        or (inst.next and util.shallow_copy(inst.next.live_regs))
-        or {}
-    end
-  end
-end
-
-local remove_start_stop_and_liveliness_for_reg_for_inst
-do
-  ---@param func ILFunction
-  ---@param inst ILInstruction
-  ---@param reg ILRegister
-  function remove_start_stop_and_liveliness_for_reg_for_inst(func, inst, reg)
-    local function do_stuff(iteration_key, start_stop_at_key, list_key, lut_key, end_iteration_inst)
-      if inst ~= reg[start_stop_at_key] then return end
-      if func.has_reg_liveliness then
-        inst[lut_key][reg] = nil
-        util.remove_from_array(inst[list_key], reg)
-      end
-      local current_inst = inst
-      while not inst_uses_reg(current_inst, reg) do
-        if func.has_reg_liveliness then
-          util.remove_from_array(current_inst.live_regs, reg)
-        end
-        current_inst = current_inst[iteration_key]
-        if current_inst == end_iteration_inst then -- only used in the first call to this function
-          util.debug_assert(end_iteration_inst, "Impossible because there must be an instruction using this register.")
-          if func.has_reg_liveliness then
-            reg.stop_at.regs_stop_at_lut[reg] = nil
-            util.remove_from_array(reg.stop_at.regs_stop_at_list, reg)
-          end
-          -- the register is no longer used at all, we are done
-          return true
-        end
-      end
-      ---@cast current_inst -nil
-      if func.has_reg_liveliness then
-        current_inst[lut_key] = current_inst[lut_key] or {}
-        current_inst[lut_key][reg] = true
-        current_inst[list_key] = current_inst[list_key] or {}
-        current_inst[list_key][#current_inst[list_key]+1] = reg
-      end
-      reg[start_stop_at_key] = current_inst
-    end
-
-    if do_stuff("next", "start_at", "regs_start_at_list", "regs_start_at_lut", reg.stop_at) then return end
-    do_stuff("prev", "stop_at", "regs_stop_at_list", "regs_stop_at_lut", nil)
-  end
-end
-
-]=]
-
 ----------------------------------------------------------------------------------------------------
 -- il modifications
 ----------------------------------------------------------------------------------------------------
@@ -1709,65 +1581,6 @@ end
 --
 -- - [ ] reg.captured_as_upval
 -- - [ ] reg.current_reg
-
----@param func ILFunction
----@param inst ILInstruction
----@param reg ILRegister
----@param get_set 1|2|3
-local function add_reg_to_inst(func, inst, reg, get_set, allow_modifying_inst_group)
-  if inst.inst_group and not allow_modifying_inst_group then
-    util.debug_abort("Attempt to add a register to an inst in inst_group (which are immutable).")
-  end
-  if func.has_reg_liveliness then
-    -- add_start_stop_and_liveliness_for_reg_for_inst(func, inst, reg) -- FIXME
-  end
-end
-
----@param func ILFunction
----@param inst ILInstruction
----@param reg ILRegister
----@param allow_modifying_inst_group boolean? @ only ever set this to true if you're certain it's correct
-local function add_reg_to_inst_get(func, inst, reg, allow_modifying_inst_group)
-  add_reg_to_inst(func, inst, reg, 1, allow_modifying_inst_group)
-end
-
----@param func ILFunction
----@param inst ILInstruction
----@param reg ILRegister
----@param allow_modifying_inst_group boolean? @ only ever set this to true if you're certain it's correct
-local function add_reg_to_inst_set(func, inst, reg, allow_modifying_inst_group)
-  add_reg_to_inst(func, inst, reg, 2, allow_modifying_inst_group)
-end
-
----@param func ILFunction
----@param inst ILInstruction
----@param reg ILRegister
----@param get_set 1|2|3
----@param allow_modifying_inst_group boolean?
-local function remove_reg_from_inst(func, inst, reg, get_set, allow_modifying_inst_group)
-  if inst.inst_group and not allow_modifying_inst_group then
-    util.debug_abort("Attempt to remove a register from an inst in inst_group (which are immutable).")
-  end
-  if func.has_reg_liveliness then
-    -- remove_start_stop_and_liveliness_for_reg_for_inst(func, inst, reg) -- FIXME
-  end
-end
-
----@param func ILFunction
----@param inst ILInstruction
----@param reg ILRegister
----@param allow_modifying_inst_group boolean? @ only ever set this to true if you're certain it's correct
-local function remove_reg_from_inst_get(func, inst, reg, allow_modifying_inst_group)
-  remove_reg_from_inst(func, inst, reg, 1, allow_modifying_inst_group)
-end
-
----@param func ILFunction
----@param inst ILInstruction
----@param reg ILRegister
----@param allow_modifying_inst_group boolean? @ only ever set this to true if you're certain it's correct
-local function remove_reg_from_inst_set(func, inst, reg, allow_modifying_inst_group)
-  remove_reg_from_inst(func, inst, reg, 2, allow_modifying_inst_group)
-end
 
 ---@param func ILFunction
 ---@param inst ILInstruction
@@ -1839,92 +1652,82 @@ end
 ---@param forprep_group ILForprepGroup
 ---@param new_index_reg ILRegister
 local function replace_forprep_index_reg(func, forprep_group, new_index_reg)
-  local old_reg = forprep_group.index_reg
   forprep_group.index_reg = new_index_reg
+
+  il_registers.set_allow_modifying_inst_groups(true)
 
   local iter = ill.iterate(func.instructions, forprep_group.start)
   do -- to_number for index_reg
     local inst = iter()--[[@as ILToNumber]]
-    remove_reg_from_inst_get(func, inst, old_reg, true)
-    inst.right_ptr = new_index_reg
-    add_reg_to_inst_get(func, inst, new_index_reg, true)
-    remove_reg_from_inst_set(func, inst, old_reg, true)
-    inst.result_reg = new_index_reg
-    add_reg_to_inst_set(func, inst, new_index_reg, true)
+    il_registers.set_right_ptr(func, inst, new_index_reg)
+    il_registers.set_result_reg(func, inst, new_index_reg)
   end
   iter() -- skip to_number for limit_reg
   iter() -- skip to_number for step_reg
   do -- binop to subtract step from index
     local inst = iter()--[[@as ILBinop]]
-    remove_reg_from_inst_get(func, inst, old_reg, true)
-    inst.left_ptr = new_index_reg
-    add_reg_to_inst_get(func, inst, new_index_reg, true)
-    remove_reg_from_inst_set(func, inst, old_reg, true)
-    inst.result_reg = new_index_reg
-    add_reg_to_inst_set(func, inst, new_index_reg, true)
+    il_registers.set_left_ptr(func, inst, new_index_reg)
+    il_registers.set_result_reg(func, inst, new_index_reg)
   end
+
+  il_registers.set_allow_modifying_inst_groups(false)
 end
 
 ---@param func ILFunction
 ---@param forprep_group ILForprepGroup
 ---@param new_limit_reg ILRegister
 local function replace_forprep_limit_reg(func, forprep_group, new_limit_reg)
-  local old_reg = forprep_group.limit_reg
   forprep_group.limit_reg = new_limit_reg
+
+  il_registers.set_allow_modifying_inst_groups(true)
 
   local iter = ill.iterate(func.instructions, forprep_group.start)
   iter() -- skip to_number for index_reg
   do -- to_number for limit_reg
     local inst = iter()--[[@as ILToNumber]]
-    remove_reg_from_inst_get(func, inst, old_reg, true)
-    inst.right_ptr = new_limit_reg
-    add_reg_to_inst_get(func, inst, new_limit_reg, true)
-    remove_reg_from_inst_set(func, inst, old_reg, true)
-    inst.result_reg = new_limit_reg
-    add_reg_to_inst_set(func, inst, new_limit_reg, true)
+    il_registers.set_right_ptr(func, inst, new_limit_reg)
+    il_registers.set_result_reg(func, inst, new_limit_reg)
   end
+
+  il_registers.set_allow_modifying_inst_groups(false)
 end
 
 ---@param func ILFunction
 ---@param forprep_group ILForprepGroup
 ---@param new_step_reg ILRegister
 local function replace_forprep_step_reg(func, forprep_group, new_step_reg)
-  local old_reg = forprep_group.step_reg
   forprep_group.step_reg = new_step_reg
+
+  il_registers.set_allow_modifying_inst_groups(true)
 
   local iter = ill.iterate(func.instructions, forprep_group.start)
   iter() -- skip to_number for index_reg
   iter() -- skip to_number for limit_reg
   do -- to_number for step_reg
     local inst = iter()--[[@as ILToNumber]]
-    remove_reg_from_inst_get(func, inst, old_reg, true)
-    inst.right_ptr = new_step_reg
-    add_reg_to_inst_get(func, inst, new_step_reg, true)
-    remove_reg_from_inst_set(func, inst, old_reg, true)
-    inst.result_reg = new_step_reg
-    add_reg_to_inst_set(func, inst, new_step_reg, true)
+    il_registers.set_right_ptr(func, inst, new_step_reg)
+    il_registers.set_result_reg(func, inst, new_step_reg)
   end
   do -- binop to subtract step from index
     local inst = iter()--[[@as ILBinop]]
-    remove_reg_from_inst_get(func, inst, old_reg, true)
-    inst.right_ptr = new_step_reg
-    add_reg_to_inst_get(func, inst, new_step_reg, true)
+    il_registers.set_right_ptr(func, inst, new_step_reg)
   end
+
+  il_registers.set_allow_modifying_inst_groups(false)
 end
 
 ---@param func ILFunction
 ---@param forloop_group ILForloopGroup
 ---@param new_index_reg ILRegister
 local function replace_forloop_index_reg(func, forloop_group, new_index_reg)
-  local old_reg = forloop_group.index_reg
   forloop_group.index_reg = new_index_reg
+
+  il_registers.set_allow_modifying_inst_groups(true)
 
   local iter = ill.iterate(func.instructions, forloop_group.start)
   do -- binop incrementing index_reg (saved to temp reg)
     local inst = iter()--[[@as ILBinop]]
-    remove_reg_from_inst_get(func, inst, old_reg, true)
-    inst.left_ptr = new_index_reg
-    add_reg_to_inst_get(func, inst, new_index_reg, true)
+    il_registers.set_left_ptr(func, inst, new_index_reg)
   end
   iter() -- skip binop for test `step > 0`
   iter() -- skip test for test `step > 0`
@@ -1941,23 +1744,24 @@ local function replace_forloop_index_reg(func, forloop_group, new_index_reg)
   iter() -- skip label - jump target for first branch (on success)
   do -- move `index = incremented_index`
     local inst = iter()--[[@as ILMove]]
-    remove_reg_from_inst_set(func, inst, old_reg, true)
-    inst.result_reg = new_index_reg
-    add_reg_to_inst_set(func, inst, new_index_reg, true)
+    il_registers.set_result_reg(func, inst, new_index_reg)
   end
   -- commented out because they're not needed, but kept for the comments
   -- iter() -- skip move `local_var = incremented_index`
   -- iter() -- skip jump back up, next loop iteration (the target label isn't apart of the group)
 
   -- iter() -- skip label - jump target for leave and break jumps
+
+  il_registers.set_allow_modifying_inst_groups(false)
 end
 
 ---@param func ILFunction
 ---@param forloop_group ILForloopGroup
 ---@param new_limit_reg ILRegister
 local function replace_forloop_limit_reg(func, forloop_group, new_limit_reg)
-  local old_reg = forloop_group.limit_reg
   forloop_group.limit_reg = new_limit_reg
+
+  il_registers.set_allow_modifying_inst_groups(true)
 
   local iter = ill.iterate(func.instructions, forloop_group.start)
   iter() -- skip binop incrementing index_reg (saved to temp reg)
@@ -1966,9 +1770,7 @@ local function replace_forloop_limit_reg(func, forloop_group, new_limit_reg)
   -- in the branch: `if step <= 0 then`
   do -- binop for `if index < limit then break end`
     local inst = iter()--[[@as ILBinop]]
-    remove_reg_from_inst_get(func, inst, old_reg, true)
-    inst.left_ptr = new_limit_reg
-    add_reg_to_inst_get(func, inst, new_limit_reg, true)
+    il_registers.set_left_ptr(func, inst, new_limit_reg)
   end
   iter() -- skip test for `if index < limit then break end`
   iter() -- skip jump for `if index < limit then break end`
@@ -1977,9 +1779,7 @@ local function replace_forloop_limit_reg(func, forloop_group, new_limit_reg)
   -- in the branch: `if step > 0 then`
   do -- binop for `if index > limit then break end`
     local inst = iter()--[[@as ILBinop]]
-    remove_reg_from_inst_get(func, inst, old_reg, true)
-    inst.left_ptr = new_limit_reg
-    add_reg_to_inst_get(func, inst, new_limit_reg, true)
+    il_registers.set_left_ptr(func, inst, new_limit_reg)
   end
   -- commented out because they're not needed, but kept for the comments
   -- iter() -- skip test for `if index > limit then break end`
@@ -1990,27 +1790,26 @@ local function replace_forloop_limit_reg(func, forloop_group, new_limit_reg)
   -- iter() -- skip jump back up, next loop iteration (the target label isn't apart of the group)
 
   -- iter() -- skip label - jump target for leave and break jumps
+
+  il_registers.set_allow_modifying_inst_groups(false)
 end
 
 ---@param func ILFunction
 ---@param forloop_group ILForloopGroup
 ---@param new_step_reg ILRegister
 local function replace_forloop_step_reg(func, forloop_group, new_step_reg)
-  local old_reg = forloop_group.step_reg
   forloop_group.step_reg = new_step_reg
+
+  il_registers.set_allow_modifying_inst_groups(true)
 
   local iter = ill.iterate(func.instructions, forloop_group.start)
   do -- incrementing index_reg (saved to temp reg)
     local inst = iter()--[[@as ILBinop]]
-    remove_reg_from_inst_get(func, inst, old_reg, true)
-    inst.left_ptr = new_step_reg
-    add_reg_to_inst_get(func, inst, new_step_reg, true)
+    il_registers.set_left_ptr(func, inst, new_step_reg)
   end
   do -- binop for test `step > 0`
     local inst = iter()--[[@as ILBinop]]
-    remove_reg_from_inst_get(func, inst, old_reg, true)
-    inst.left_ptr = new_step_reg
-    add_reg_to_inst_get(func, inst, new_step_reg, true)
+    il_registers.set_left_ptr(func, inst, new_step_reg)
   end
   -- commented out because they're not needed, but kept for the comments
   -- iter() -- skip test for test `step > 0`
@@ -2030,14 +1829,17 @@ local function replace_forloop_step_reg(func, forloop_group, new_step_reg)
   -- iter() -- skip jump back up, next loop iteration (the target label isn't apart of the group)
 
   -- iter() -- skip label - jump target for leave and break jumps
+
+  il_registers.set_allow_modifying_inst_groups(false)
 end
 
 ---@param func ILFunction
 ---@param forloop_group ILForloopGroup
 ---@param new_local_reg ILRegister
 local function replace_forloop_local_reg(func, forloop_group, new_local_reg)
-  local old_reg = forloop_group.local_reg
   forloop_group.local_reg = new_local_reg
+
+  il_registers.set_allow_modifying_inst_groups(true)
 
   local iter = ill.iterate(func.instructions, forloop_group.start)
   iter() -- skip incrementing index_reg (saved to temp reg)
@@ -2057,14 +1859,14 @@ local function replace_forloop_local_reg(func, forloop_group, new_local_reg)
   iter() -- skip move `index = incremented_index`
   do -- move `local_var = incremented_index`
     local inst = iter()--[[@as ILMove]]
-    remove_reg_from_inst_set(func, inst, old_reg, true)
-    inst.result_reg = new_local_reg
-    add_reg_to_inst_set(func, inst, new_local_reg, true)
+    il_registers.set_result_reg(func, inst, new_local_reg)
   end
   -- commented out because they're not needed, but kept for the comments
   -- iter() -- skip jump back up, next loop iteration (the target label isn't apart of the group)
 
   -- iter() -- skip label - jump target for leave and break jumps
+
+  il_registers.set_allow_modifying_inst_groups(false)
 end
 
 return {
@@ -2155,12 +1957,37 @@ return {
 
   is_vararg_list = is_vararg_list,
 
+  set_result_reg = il_registers.set_result_reg,
+  set_table_reg = il_registers.set_table_reg,
+  set_func_reg = il_registers.set_func_reg,
+  set_left_ptr = il_registers.set_left_ptr,
+  set_right_ptr = il_registers.set_right_ptr,
+  set_key_ptr = il_registers.set_key_ptr,
+  set_condition_ptr = il_registers.set_condition_ptr,
+
+  insert_into_result_regs = il_registers.insert_into_result_regs,
+  remove_from_result_regs = il_registers.remove_from_result_regs,
+  remove_at_in_result_regs = il_registers.remove_at_in_result_regs,
+  set_at_in_result_regs = il_registers.set_at_in_result_regs,
+  insert_into_regs = il_registers.insert_into_regs,
+  remove_from_regs = il_registers.remove_from_regs,
+  remove_at_in_regs = il_registers.remove_at_in_regs,
+  set_at_in_regs = il_registers.set_at_in_regs,
+  insert_into_right_ptrs = il_registers.insert_into_right_ptrs,
+  remove_from_right_ptrs = il_registers.remove_from_right_ptrs,
+  remove_at_in_right_ptrs = il_registers.remove_at_in_right_ptrs,
+  set_at_in_right_ptrs = il_registers.set_at_in_right_ptrs,
+  insert_into_arg_ptrs = il_registers.insert_into_arg_ptrs,
+  remove_from_arg_ptrs = il_registers.remove_from_arg_ptrs,
+  remove_at_in_arg_ptrs = il_registers.remove_at_in_arg_ptrs,
+  set_at_in_arg_ptrs = il_registers.set_at_in_arg_ptrs,
+  insert_into_ptrs = il_registers.insert_into_ptrs,
+  remove_from_ptrs = il_registers.remove_from_ptrs,
+  remove_at_in_ptrs = il_registers.remove_at_in_ptrs,
+  set_at_in_ptrs = il_registers.set_at_in_ptrs,
+
   -- il modifications
 
-  add_reg_to_inst_get = add_reg_to_inst_get,
-  add_reg_to_inst_set = add_reg_to_inst_set,
-  remove_reg_from_inst_get = remove_reg_from_inst_get,
-  remove_reg_from_inst_set = remove_reg_from_inst_set,
   insert_after_inst = insert_after_inst,
   insert_before_inst = insert_before_inst,
   prepend_inst = prepend_inst,
