@@ -1791,6 +1791,13 @@ local function insert_after_inst(func, inst, inserted_inst)
   if inst and inst.inst_group and inst ~= inst.inst_group.stop then
     util.debug_abort("Attempt to insert an instruction inside of an inst_group (which are immutable).")
   end
+  if not inst
+    and func.instructions.first.inst_type == "scoping"
+    and (func.instructions.first--[[@as ILScoping]]).is_entry
+  then
+    -- don't put it before the entry scoping inst, put it after it
+    inst = func.instructions.first
+  end
   ill.insert_after(func.instructions, inst, inserted_inst)
   update_intermediate_data_for_new_inst(func, inserted_inst)
   return inserted_inst
@@ -1804,6 +1811,11 @@ local function insert_before_inst(func, inst, inserted_inst)
   if inst and inst.inst_group and inst ~= inst.inst_group.start then
     util.debug_abort("Attempt to insert an instruction inside of an inst_group (which are immutable).")
   end
+  if inst and inst.inst_type == "scoping" and (inst--[[@as ILScoping]]).is_entry then
+    util.debug_abort("Cannot insert before the entry scoping instruction. \z
+      It must come first as it is marking all parameters as alive."
+    )
+  end
   ill.insert_before(func.instructions, inst, inserted_inst)
   update_intermediate_data_for_new_inst(func, inserted_inst)
   return inserted_inst
@@ -1813,18 +1825,14 @@ end
 ---@param inserted_inst ILInstruction
 ---@return ILInstruction
 local function prepend_inst(func, inserted_inst)
-  ill.prepend(func.instructions, inserted_inst)
-  update_intermediate_data_for_new_inst(func, inserted_inst)
-  return inserted_inst
+  return insert_after_inst(func, nil, inserted_inst)
 end
 
 ---@param func ILFunction
 ---@param inserted_inst ILInstruction
 ---@return ILInstruction
 local function append_inst(func, inserted_inst)
-  ill.append(func.instructions, inserted_inst)
-  update_intermediate_data_for_new_inst(func, inserted_inst)
-  return inserted_inst
+  return insert_before_inst(func, nil, inserted_inst)
 end
 
 ---@param func ILFunction
