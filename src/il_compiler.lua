@@ -8,8 +8,6 @@ local ll = require("linked_list")
 local il = require("il_util")
 local linq = require("linq")
 
--- FIXME: 'live_regs' have been moved from instructions to borders. This file is not updated.
-
 local generate
 do
   ---@param data ILCompilerData
@@ -399,13 +397,14 @@ do
 
   ---@param inst ILJump|ILTest
   local function get_a_for_jump(inst)
+    if not inst.prev_border then return 0 end
     local regs_still_alive_lut = {}
-    for _, reg in ipairs(inst.label.live_regs) do
+    for _, reg in ipairs(inst.label.next_border.live_regs) do
       regs_still_alive_lut[reg] = true
     end
     -- live_regs are not guaranteed to be in any order, so loop through all of them
     local result
-    for _, reg in ipairs(inst.live_regs) do
+    for _, reg in ipairs(inst.prev_border.live_regs) do
       if reg.captured_as_upval and not regs_still_alive_lut[reg]
         and (not result or reg.current_reg.reg_index < result)
       then
@@ -2169,10 +2168,9 @@ do
   ---instruction. If there are none, returns `-1`.
   ---@param inst ILInstruction
   local function get_highest_reg_index_at_inst(inst)
-    local empty = {}
-    return linq(inst.live_regs)
-      :except_lut(inst.regs_start_at_lut or empty)
-      :except_lut(inst.regs_stop_at_lut or empty)
+    if not inst.prev_border then return -1 end
+    return linq(inst.prev_border.live_regs)
+      :except_lut(inst.regs_stop_at_lut)
       :select(function(reg) return reg.predetermined_reg_index end)
       :default_if_empty(-1)
       :max()
