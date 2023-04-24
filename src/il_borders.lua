@@ -27,7 +27,15 @@ local function iterate_borders(func, start_border, stop_border)
   local next_border = start_border or func.instructions.first.next_border
   return function()
     local result = next_border
-    next_border = next_border ~= stop_border and next_border and next_border.next_inst.next_border or nil
+    if next_border == stop_border then
+      next_border = nil
+      stop_border = nil
+    else
+      -- If next_border is impossible to be nil because it would have entered the above if block already.
+      -- This is ensured by the initial debug assert that the stop border comes after the start border.
+      ---@cast next_border -nil
+      next_border = next_border.next_inst.next_border
+    end
     return result
   end
 end
