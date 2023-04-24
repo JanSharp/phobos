@@ -459,7 +459,9 @@ local function find_inst_using_reg(inst_iter, reg)
   util.debug_abort("Unable to find instruction using register when there must be at least 1.")
 end
 
----Can be called before the register has actually been removed from the instruction.
+---Must be called _after_ the register has actually been removed from the instruction.\
+---(Because it checks if the register is still used by the instruction in case the register was previously
+---used multiple times by the same instruction, therefore it is still used after 1 removal.)
 ---@param func ILFunction
 ---@param inst ILInstruction
 ---@param reg ILRegister
@@ -524,8 +526,9 @@ end
 local function set_result_reg(func, inst, reg)
   assert_is_not_inst_group(inst)
   if reg == inst.result_reg then return end
-  remove_reg_from_inst(func, inst, inst.result_reg)
+  local old_reg = inst.result_reg
   inst.result_reg = reg
+  remove_reg_from_inst(func, inst, old_reg)
   add_reg_to_inst(func, inst, reg)
 end
 
@@ -535,8 +538,9 @@ end
 local function set_table_reg(func, inst, reg)
   assert_is_not_inst_group(inst)
   if reg == inst.table_reg then return end
-  remove_reg_from_inst(func, inst, inst.table_reg)
+  local old_reg = inst.table_reg
   inst.table_reg = reg
+  remove_reg_from_inst(func, inst, old_reg)
   add_reg_to_inst(func, inst, reg)
 end
 
@@ -546,8 +550,9 @@ end
 local function set_func_reg(func, inst, reg)
   assert_is_not_inst_group(inst)
   if reg == inst.func_reg then return end
-  remove_reg_from_inst(func, inst, inst.func_reg)
+  local old_reg = inst.func_reg
   inst.func_reg = reg
+  remove_reg_from_inst(func, inst, old_reg)
   add_reg_to_inst(func, inst, reg)
 end
 
@@ -557,8 +562,9 @@ end
 local function set_left_ptr(func, inst, ptr)
   assert_is_not_inst_group(inst)
   if ptr == inst.left_ptr then return end
-  remove_ptr_from_inst(func, inst, inst.left_ptr)
+  local old_ptr = inst.left_ptr
   inst.left_ptr = ptr
+  remove_ptr_from_inst(func, inst, old_ptr)
   add_ptr_to_inst(func, inst, ptr)
 end
 
@@ -568,8 +574,9 @@ end
 local function set_right_ptr(func, inst, ptr)
   assert_is_not_inst_group(inst)
   if ptr == inst.right_ptr then return end
-  remove_ptr_from_inst(func, inst, inst.right_ptr)
+  local old_ptr = inst.right_ptr
   inst.right_ptr = ptr
+  remove_ptr_from_inst(func, inst, old_ptr)
   add_ptr_to_inst(func, inst, ptr)
 end
 
@@ -579,8 +586,9 @@ end
 local function set_key_ptr(func, inst, ptr)
   assert_is_not_inst_group(inst)
   if ptr == inst.key_ptr then return end
-  remove_ptr_from_inst(func, inst, inst.key_ptr)
+  local old_ptr = inst.key_ptr
   inst.key_ptr = ptr
+  remove_ptr_from_inst(func, inst, old_ptr)
   add_ptr_to_inst(func, inst, ptr)
 end
 
@@ -590,8 +598,9 @@ end
 local function set_condition_ptr(func, inst, ptr)
   assert_is_not_inst_group(inst)
   if ptr == inst.condition_ptr then return end
-  remove_ptr_from_inst(func, inst, inst.condition_ptr)
+  local old_ptr = inst.condition_ptr
   inst.condition_ptr = ptr
+  remove_ptr_from_inst(func, inst, old_ptr)
   add_ptr_to_inst(func, inst, ptr)
 end
 
@@ -678,8 +687,10 @@ end
 ---@param index integer
 local function set_reg_at(func, inst, reg, array, index)
   assert_is_not_inst_group(inst)
-  remove_reg_from_inst(func, inst, array[index])
+  local old_reg = array[index]
+  if reg == old_reg then return end
   array[index] = reg
+  remove_reg_from_inst(func, inst, old_reg)
   add_reg_to_inst(func, inst, reg)
 end
 
@@ -690,8 +701,10 @@ end
 ---@param index integer
 local function set_ptr_at(func, inst, ptr, array, index)
   assert_is_not_inst_group(inst)
-  remove_ptr_from_inst(func, inst, array[index])
+  local old_ptr = array[index]
+  if ptr == old_ptr then return end
   array[index] = ptr
+  remove_ptr_from_inst(func, inst, old_ptr)
   add_ptr_to_inst(func, inst, ptr)
 end
 
