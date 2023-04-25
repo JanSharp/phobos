@@ -1270,7 +1270,7 @@ do
         local index_in_input = linq(input_group.regs):index_of(reg)
         local corresponding_reg_in_output = output_group.regs[index_in_input - offset]
         return corresponding_reg_in_output == reg
-          or corresponding_reg_in_output.is_gap
+          or (corresponding_reg_in_output and corresponding_reg_in_output.is_gap)
           or (not corresponding_reg_in_output and not il.is_vararg_list(output_group.regs))
       end
 
