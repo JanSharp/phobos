@@ -950,7 +950,7 @@
 ---Functions with at least one parameter must have a scoping instruction as their first instruction where the
 ---`regs` table of said instruction is a reference to this function's `param_regs`.\
 ---(note that to ensure proper lifetime in relation to loops and upvalues there usually is
----also a scoping instruction at the very end of the instruction list with all parameter registers,
+---also a scoping instruction with all parameter registers before the last instruction,
 ---however that one must not use a reference to the same table. It isn't guaranteed to contain all
 ---param regs, and it could get moved or removed. There are no special rules for this instruction.)
 ---@field instructions ILInstructionList

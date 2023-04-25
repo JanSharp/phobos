@@ -1127,19 +1127,13 @@ function generate_il_func(functiondef, options, parent_func)
   generate_scope(functiondef, func)
 
   -- as per usual, an extra return for good measure
+  -- though actually it is required because the generate_scope function may end with a scoping instruction
+  -- for the parameters which would be after the return statement even when the ast had one, and the only
+  -- valid last instructions are a return or a (naturally backwards) jump.
   add_inst(func, il.new_ret{position = functiondef.end_token or get_last_used_position(func)})
 
-  -- scoping instruction comes last, however IL modifications are free to do with it as they please
-
-  -- parameters also have to stay alive for the entire function by default in case of loops or upvalues
-  if func.param_regs[1] then
-    add_inst(func, il.new_scoping{
-      position = not functiondef.is_main and functiondef.function_token or nil,
-      regs = util.shallow_copy(func.param_regs), -- not using a reference here,
-      -- because while parameters normal lifetime is the entire function, optimizations don't have to follow
-      -- that rule outside of debug builds, so they may end up modifying this regs table
-    })
-  end
+  -- as mentioned in the comment above, parameters already get their second scoping instruction
+  -- by generate_scope (and this - past the return - wouldn't be a valid location for a scoping inst anyway).
 
   func.temp = nil
   return func
