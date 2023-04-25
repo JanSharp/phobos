@@ -1657,6 +1657,16 @@ do
     end
   end
 
+  ---@param reg ILRegister
+  ---@param index integer
+  local function set_predetermined_reg_index(reg, index)
+    util.debug_assert(
+      index >= 0,
+      "Attempt to set a register's 'predetermined_reg_index' to "..index..", but it must be >= 0."
+    )
+    reg.predetermined_reg_index = index
+  end
+
   ---@param data ILCompilerData
   local function evaluate_indexes_for_regs_outside_of_groups(data)
     local empty = {}
@@ -1696,7 +1706,7 @@ do
     end
 
     for _, reg in ipairs(data.func.param_regs) do
-      reg.predetermined_reg_index = use_reg()
+      set_predetermined_reg_index(reg, use_reg())
     end
 
     for regs_for_inst in linq(ill.iterate_reverse(data.func.instructions)--[[@as fun(): ILInstruction?]])
@@ -1744,7 +1754,7 @@ do
         end
       end
       for reg in regs_for_inst.stopping_regs_iter do
-        reg.predetermined_reg_index = reg.captured_as_upval and use_reg_for_upval() or use_reg()
+        set_predetermined_reg_index(reg, reg.captured_as_upval and use_reg_for_upval() or use_reg())
         if regs_to_instantly_free_again and regs_to_instantly_free_again[reg] then
           free_reg(reg.predetermined_reg_index)
         end
@@ -1943,7 +1953,7 @@ do
     local function apply_base_index()
       linked_groups.predetermined_base_index = base_index
       for _, reg in ipairs(relevant_regs) do
-        reg.predetermined_reg_index = base_index + reg.index_in_linked_groups
+        set_predetermined_reg_index(reg, base_index + reg.index_in_linked_groups)
       end
     end
     apply_base_index()
@@ -2064,7 +2074,7 @@ do
         reg_in_group = reg_group.regs[index_in_group]
       else
         reg_in_group = il.new_reg()
-        reg_in_group.predetermined_reg_index = reg_index_in_group
+        set_predetermined_reg_index(reg_in_group, reg_index_in_group)
         replace_reg_in_reg_group(data.func, reg_group, index_in_group, reg_in_group)
       end
       return reg_in_group
@@ -2085,7 +2095,7 @@ do
         end
         if insert_at_secondary then
           local disconnected_inserted_reg = il.new_reg()
-          disconnected_inserted_reg.predetermined_reg_index = inserted_reg_in_group.predetermined_reg_index
+          set_predetermined_reg_index(disconnected_inserted_reg, inserted_reg_in_group.predetermined_reg_index)
           il.insert_before_inst(data.func, secondary_inst_to_insert_before, il.new_move{
             position = reg_group.inst.position,
             right_ptr = reg_group.is_input and move.reg or disconnected_inserted_reg,
@@ -2103,7 +2113,7 @@ do
       local main_temp_reg
       if insert_at_main then
         main_temp_reg = il.new_reg()
-        main_temp_reg.predetermined_reg_index = get_temp_reg_index_for_circular_moves()
+        set_predetermined_reg_index(main_temp_reg, get_temp_reg_index_for_circular_moves())
         il.insert_before_inst(data.func, main_inst_to_insert_before, il.new_move{
           position = reg_group.inst.position,
           right_ptr = reg_group.is_input and first_move.reg or inserted_reg_in_group,
@@ -2115,9 +2125,9 @@ do
       local disconnected_inserted_reg
       if insert_at_secondary then
         disconnected_inserted_reg = il.new_reg()
-        disconnected_inserted_reg.predetermined_reg_index = inserted_reg_in_group.predetermined_reg_index
+        set_predetermined_reg_index(disconnected_inserted_reg, inserted_reg_in_group.predetermined_reg_index)
         secondary_temp_reg = il.new_reg()
-        secondary_temp_reg.predetermined_reg_index = get_temp_reg_index_for_circular_moves()
+        set_predetermined_reg_index(secondary_temp_reg, get_temp_reg_index_for_circular_moves())
         il.insert_before_inst(data.func, secondary_inst_to_insert_before, il.new_move{
           position = reg_group.inst.position,
           right_ptr = reg_group.is_input and first_move.reg or disconnected_inserted_reg,
@@ -2183,7 +2193,7 @@ do
   ---give this the result of `get_highest_reg_index_at_inst` before any changes were made to inst
   local function change_result_reg_to_be_at_top(data, inst, current_top_index)
     local temp_reg = il.new_reg()
-    temp_reg.predetermined_reg_index = current_top_index + 1
+    set_predetermined_reg_index(temp_reg, current_top_index + 1)
     il.insert_after_inst(data.func, inst, il.new_move{
       position = inst.position,
       right_ptr = temp_reg,
@@ -2214,7 +2224,7 @@ do
       for i = #inst.right_ptrs, 1, -1 do
         local old_reg = inst.right_ptrs[i]--[[@as ILRegister]]
         local temp_reg = il.new_reg()
-        temp_reg.predetermined_reg_index = top_index + i
+        set_predetermined_reg_index(temp_reg, top_index + i)
         il.insert_before_inst(data.func, inst, il.new_move{
           position = inst.position,
           right_ptr = old_reg,
