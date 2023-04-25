@@ -265,7 +265,7 @@ local function eval_live_regs(func)
   local live_regs = {}
   for border in il_borders.iterate_borders(func) do
     -- stopping at prev_inst, remove them from live_regs for this border
-    local lut = border.prev_inst and border.prev_inst.regs_stop_at_lut
+    local lut = border.prev_inst.regs_stop_at_lut
     if lut then
       local j = 1
       for i = 1, #live_regs do
@@ -281,7 +281,7 @@ local function eval_live_regs(func)
     border.live_regs = util.shallow_copy(live_regs)
 
     -- starting at next_inst, add them to live_regs for the next border
-    local list = border.next_inst and border.next_inst.regs_start_at_lut
+    local list = border.next_inst.regs_start_at_list
     if list then
       for _, reg in ipairs(list) do
         live_regs[#live_regs+1] = reg
