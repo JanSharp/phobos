@@ -1677,7 +1677,7 @@ do
 
     ---get lowest index above all currently alive regs for upvals
     local function use_reg_for_upval()
-      local index = top
+      local index = math.max(0, top) -- -1 is an invalid start index
       while not used_reg_indexes_for_upvals[index] and index > 0 do -- this loop counts down to 0
         index = index - 1
       end
