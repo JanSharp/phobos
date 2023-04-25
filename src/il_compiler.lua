@@ -1596,7 +1596,7 @@ do
       local groups_count = #linked_groups.groups
       local function eval_score()
         attempt_count = attempt_count + 1
-        print(attempt_count..": "..group_indexes_count.."/"..groups_count.." "
+        util.debug_print(attempt_count..": "..group_indexes_count.."/"..groups_count.." "
           ..(winning_score or "?").." vs "..(total_moves_count * move_score_weight)
         )
         if group_indexes_count ~= groups_count then return end
@@ -1622,6 +1622,7 @@ do
         use_move(unknown, i)
       end
 
+      util.debug_print("----------------")
       set_group_index(linked_groups.groups[1], 0, {})
       walk(1)
 
