@@ -1150,6 +1150,78 @@ do
     ;
   end
 
+  ---@type fun(data: ILCompilerData, linked_groups: ILLinkedRegisterGroupsGroup): AllUnknownsForLinkedGroups
+  local get_all_unknowns_for_linked_groups
+
+  ---TODO: once the determination of indexes within linked groups is updated/changed, note here that this
+  ---is actually just an optimization to preemptively split groups instead of having it make pointless
+  ---attempts at finding a solution where all of them are linked based on registers being used in place.
+  ---@param data ILCompilerData
+  ---@param linked_groups ILLinkedRegisterGroupsGroup
+  local function split_groups_based_on_unknowns(data, linked_groups)
+    local all_unknowns = get_all_unknowns_for_linked_groups(data, linked_groups)
+    -- local unknowns = all_unknowns.unknowns
+    -- local can_only_move = all_unknowns.can_only_move
+    local unknowns_by_reg = all_unknowns.unknowns_by_reg
+    -- local unknowns_by_group = all_unknowns.unknowns_by_group
+
+    ---@type table<ILRegisterGroup, true>
+    local visited_groups_lut = {}
+    ---@type table<ILRegisterGroup, true>[]
+    local resulting_groups_luts = {}
+
+    ---@param group ILRegisterGroup|{i: integer}
+    ---@param groups_lut table<ILRegisterGroup, true>
+    local function set_linked_groups(group, groups_lut)
+      if visited_groups_lut[group] then return end
+      visited_groups_lut[group] = true
+      groups_lut[group] = true
+      if group.offset_to_prev_group then
+        set_linked_groups(group.prev_group, groups_lut)
+      end
+      if group.offset_to_next_group then
+        set_linked_groups(group.next_group, groups_lut)
+      end
+      for _, reg in ipairs(group.regs) do
+        local unknowns = unknowns_by_reg[reg]
+        if unknowns then
+          for _, unknown in ipairs(unknowns) do
+            set_linked_groups(unknown.group, groups_lut)
+          end
+        end
+      end
+    end
+
+    for _, group in ipairs(linked_groups.groups) do
+      if not visited_groups_lut[group] then -- `set_linked_groups` also checks this, but it's duplicated ...
+        local groups_lut = {} -- ... in order not to create a new empty table ...
+        resulting_groups_luts[#resulting_groups_luts+1] = groups_lut -- ... and not to add it to the list here
+        set_linked_groups(group, groups_lut)
+      end
+    end
+
+    -- Only one resulting group, so nothing to split.
+    if not resulting_groups_luts[2] then return end
+
+    -- actually split the groups
+
+    data.all_linked_groups_lut[linked_groups] = nil
+
+    for _, groups_lut in ipairs(resulting_groups_luts) do
+      ---@type ILLinkedRegisterGroupsGroup
+      local linked = {
+        groups_lut = groups_lut,
+        groups = (nil)--[=[@as ILRegisterGroup[]]=], -- populated after all splitting is done
+      }
+      for group in pairs(groups_lut) do
+        group.linked_groups = linked
+        group.prev_group = nil
+        group.next_group = nil
+      end
+      data.all_linked_groups_lut[linked] = true
+    end
+  end
+
   ---@param data ILCompilerData
   ---@param linked_groups ILLinkedRegisterGroupsGroup
   local function split_linked_groups_recursive(data, linked_groups)
@@ -1185,7 +1257,9 @@ do
     end
 
     if not did_mark_a_new_register_to_require_move_into_register_group then
-      -- no registers that could cause the linked groups to split, just return
+      -- no registers that always require a move,
+      -- split based on registers that require a move into some groups within the linked groups
+      split_groups_based_on_unknowns(data, linked_groups)
       return
     end
 
@@ -1234,6 +1308,10 @@ do
           split_linked_groups_recursive(data, group.linked_groups)
         end
       end
+    end
+
+    if new_groups_count == 1 then
+      split_groups_based_on_unknowns(data, next(new_groups_lut))
     end
   end
 
@@ -1354,9 +1432,11 @@ do
       )
     end
 
+    ---Also sets `offset_to_prev_group` on groups, when applicable (so based on `offset_to_next_group`)
     ---@param data ILCompilerData
     ---@param linked_groups ILLinkedRegisterGroupsGroup
-    function determine_best_offsets(data, linked_groups)
+    ---@return AllUnknownsForLinkedGroups
+    function get_all_unknowns_for_linked_groups(data, linked_groups)
       ---@type DetermineBestOffsetsUnknownData[]
       local unknowns = {}
       ---@type DetermineBestOffsetsUnknownData[]
@@ -1396,6 +1476,24 @@ do
           ::continue::
         end
       end
+
+      ---@class AllUnknownsForLinkedGroups
+      return {
+        unknowns = unknowns,
+        can_only_move = can_only_move,
+        unknowns_by_reg = unknowns_by_reg,
+        unknowns_by_group = unknowns_by_group,
+      }
+    end
+
+    ---@param data ILCompilerData
+    ---@param linked_groups ILLinkedRegisterGroupsGroup
+    function determine_best_offsets(data, linked_groups)
+      local all_unknown_data = get_all_unknowns_for_linked_groups(data, linked_groups)
+
+      local unknowns = all_unknown_data.unknowns
+      local unknowns_by_reg = all_unknown_data.unknowns_by_reg
+      local unknowns_by_group = all_unknown_data.unknowns_by_group
 
       ---@type table<ILRegister, integer>
       local reg_indexes = {}
