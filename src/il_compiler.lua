@@ -1561,26 +1561,28 @@ do
         if reg.requires_move_into_register_group then
           util.debug_abort("Attempt to set index for a register that requires a move into register group.")
         end
-        reg_indexes[reg] = reg_index
         local regs_at_index = regs_at_index_lut[reg_index]
-        if not regs_at_index then
+        if regs_at_index then
+          for _, other_reg in ipairs(regs_at_index) do
+            if other_reg == reg then
+              util.debug_abort("Calling set_reg_index for a register which already has a fixed index is not allowed.")
+            end
+            if register_lifetime_overlaps(reg, other_reg) then
+              return false -- if they overlap, we can't use the same index
+            end
+          end
+        else
           regs_at_index = {}
           regs_at_index_lut[reg_index] = regs_at_index
         end
-        regs_at_index[#regs_at_index+1] = reg
-        for other_reg in linq(regs_at_index):skip_last(1):iterate() do
-          if other_reg == reg then
-            util.debug_abort("Calling set_reg_index for a register which already has a fixed index is not allowed.")
-          end
-          if register_lifetime_overlaps(reg, other_reg) then
-            return false -- if they overlap, we can't use the same index
-          end
-        end
 
+        reg_indexes[reg] = reg_index
+        regs_at_index[#regs_at_index+1] = reg
         to_revert[#to_revert+1] = {
           type = "set_reg_index",
           reg = reg,
         }
+
         local unknowns_for_reg = unknowns_by_reg[reg]
         for _, unknown in ipairs(unknowns_for_reg) do
           local group_index = group_indexes[unknown.group]
