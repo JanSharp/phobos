@@ -1516,7 +1516,10 @@ do
       ---@param to_revert table @ state to pass to `revert_changes`
       ---@return boolean success
       local function set_group_index(group, group_index, to_revert)
-        util.debug_assert(not group_indexes[group])
+        util.debug_assert(
+          not group_indexes[group],
+          "Calling set_group_index for a register group which already has a fixed index is not allowed."
+        )
         group_indexes[group] = group_index
         group_indexes_count = group_indexes_count + 1
         to_revert[#to_revert+1] = {
@@ -1559,16 +1562,16 @@ do
       ---@param to_revert table @ state to pass to `revert_changes`
       ---@return boolean success
       function set_reg_index(reg, reg_index, to_revert)
-        util.debug_assert(not reg_indexes[reg])
+        util.debug_assert(
+          not reg_indexes[reg],
+          "Calling set_reg_index for a register which already has a fixed index is not allowed."
+        )
         if reg.requires_move_into_register_group then
           util.debug_abort("Attempt to set index for a register that requires a move into register group.")
         end
         local regs_at_index = regs_at_index_lut[reg_index]
         if regs_at_index then
           for _, other_reg in ipairs(regs_at_index) do
-            if other_reg == reg then
-              util.debug_abort("Calling set_reg_index for a register which already has a fixed index is not allowed.")
-            end
             if register_lifetime_overlaps(reg, other_reg) then
               return false -- if they overlap, we can't use the same index
             end
