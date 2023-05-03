@@ -1516,6 +1516,7 @@ do
       ---@param to_revert table @ state to pass to `revert_changes`
       ---@return boolean success
       local function set_group_index(group, group_index, to_revert)
+        util.debug_assert(not group_indexes[group])
         group_indexes[group] = group_index
         group_indexes_count = group_indexes_count + 1
         to_revert[#to_revert+1] = {
@@ -1558,6 +1559,7 @@ do
       ---@param to_revert table @ state to pass to `revert_changes`
       ---@return boolean success
       function set_reg_index(reg, reg_index, to_revert)
+        util.debug_assert(not reg_indexes[reg])
         if reg.requires_move_into_register_group then
           util.debug_abort("Attempt to set index for a register that requires a move into register group.")
         end
