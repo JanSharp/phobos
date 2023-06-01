@@ -491,9 +491,9 @@ local function distinct_internal(self, selector)
         local value = inner_iter()
         if value == nil then return end
         i = i + 1
-        value = validate_selected_value(selector(value, i), "distinct_by")
-        if not visited_lut[value] then
-          visited_lut[value] = true
+        local key = validate_selected_value(selector(value, i), "distinct_by")
+        if not visited_lut[key] then
+          visited_lut[key] = true
           return value
         end
       end
