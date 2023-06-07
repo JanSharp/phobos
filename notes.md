@@ -119,6 +119,12 @@ when encountering a `(`:
 
 Add a definition statements for globals, like `define global foo` and only then a standalone `foo` expression is a valid index into _ENV. Explicit indexing into _ENV would still be allowed regardless of what globals are defined.
 
+## return and break expressions
+
+```lua
+local entity = event.entity or return
+```
+
 ## And More (not implemented)
 
 There are lots of ideas for language extensions which are not listed here in the readme yet.
