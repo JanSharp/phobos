@@ -1,6 +1,12 @@
 
+local util = require("util")
+
 local function new_stack()
   return {size = 0}
+end
+
+local function clear_stack(stack)
+  util.clear_array(stack)
 end
 
 ---@generic T
@@ -37,6 +43,7 @@ end
 
 return {
   new_stack = new_stack,
+  clear_stack = clear_stack,
   push = push,
   pop = pop,
   get_top = get_top,

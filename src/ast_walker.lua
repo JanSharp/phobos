@@ -1,5 +1,6 @@
 
 local ill = require("indexed_linked_list")
+local util = require("util")
 local stack = require("stack")
 
 local function dispatch(listeners, node, context, is_statement)
@@ -25,6 +26,16 @@ local function new_context(on_open, on_close)
     stat_stack = stack.new_stack(),
     scope_stack = stack.new_stack(),
   }
+end
+
+---@param context AstWalkerContext
+local function clean_context(context)
+  util.debug_assert(stack.is_empty(context.node_stack), "Stacks must be empty when cleaning ast walker context.")
+  util.debug_assert(stack.is_empty(context.stat_stack), "Stacks must be empty when cleaning ast walker context.")
+  util.debug_assert(stack.is_empty(context.scope_stack), "Stacks must be empty when cleaning ast walker context.")
+  stack.clear_stack(context.node_stack)
+  stack.clear_stack(context.stat_stack)
+  stack.clear_stack(context.scope_stack)
 end
 
 local walk_stat
@@ -292,6 +303,7 @@ end
 
 return {
   new_context = new_context,
+  clean_context = clean_context,
   walk_scope = walk_scope,
   walk_testblock = walk_testblock,
   walk_elseblock = walk_elseblock,
