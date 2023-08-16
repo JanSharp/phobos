@@ -48,7 +48,7 @@ end
 -- and probably should
 -- but for now it's a nice validation that all the node_types are correct
 -- ... unit tests where are you?!
----@type table<AstExpression, fun(node: AstExpression, context: AstWalkerContext)>
+---@type table<AstNodeType, fun(node: AstExpression, context: AstWalkerContext)>
 local exprs = {
   ---@param node AstLocalReference
   local_ref = function(node, context)
@@ -134,12 +134,17 @@ function walk_exp_list(list, context)
   end
 end
 
+-- NOTE: testblock and elseblock are both nodes. They're not statements nor expressions, but the ast walker is
+-- walking nodes, so they should also be in the node_stack and dispatch the on_open and on_close events.
+
 ---@param testblock AstTestBlock
 ---@param context AstWalkerContext
 local function walk_testblock(testblock, context)
   stack.push(context.node_stack, testblock)
+  dispatch(context.on_open, testblock, context)
   walk_exp(testblock.condition, context)
   walk_scope_internal(testblock, context)
+  dispatch(context.on_close, testblock, context)
   stack.pop(context.node_stack)
 end
 
@@ -147,12 +152,14 @@ end
 ---@param context AstWalkerContext
 local function walk_elseblock(elseblock, context)
   stack.push(context.node_stack, elseblock)
+  dispatch(context.on_open, elseblock, context)
   walk_scope_internal(elseblock, context)
+  dispatch(context.on_close, elseblock, context)
   stack.pop(context.node_stack)
 end
 
 -- same here, empty functions could and should be removed
----@type table<AstStatement, fun(node: AstStatement, context: AstWalkerContext)>
+---@type table<AstNodeType, fun(node: AstStatement, context: AstWalkerContext)>
 local stats = {
   ---@param node AstEmpty
   empty = function(node, context)
