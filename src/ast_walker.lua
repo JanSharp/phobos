@@ -283,12 +283,18 @@ function walk_stat(stat, context)
   -- This is ensured if the removal was the last operation on the statement list.
 end
 
-function walk_scope_internal(node, context)
+function walk_scope_internal(node, context, do_dispatch)
   stack.push(context.scope_stack, node)
+  if do_dispatch then
+    dispatch(context.on_open, node, context)
+  end
   local stat = node.body.first
   while stat do
     walk_stat(stat, context)
     stat = stat.next
+  end
+  if do_dispatch then
+    dispatch(context.on_close, node, context)
   end
   stack.pop(context.scope_stack)
 end
@@ -297,7 +303,7 @@ end
 ---@param context AstWalkerContext
 local function walk_scope(node, context)
   stack.push(context.node_stack, node)
-  walk_scope_internal(node, context)
+  walk_scope_internal(node, context, true)
   stack.pop(context.node_stack)
 end
 
