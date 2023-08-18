@@ -5,16 +5,33 @@ local Path = require("lib.path")
 local shell_util = require("shell_util")
 local util = require("util")
 
+local ignore_failure_in_mkdir_recursive = false
+
+---mkdir recursive can fail when multiple processes (or threads, if a Lua threads C library is used) try to
+---create parts of the same directory path at the same time, because of race conditions. It might think a
+---given part of the directory path does not exist yet at twice at the same time, enter if block and try to
+---create the directory. The first one will succeed, the second one will fail.\
+---If this kind of race condition is expected, errors from `lfs.mkdir` can optionally be ignored.
+---@param do_ignore boolean
+local function set_ignore_failure_in_mkdir_recursive(do_ignore)
+  ignore_failure_in_mkdir_recursive = do_ignore
+end
+
 local function mkdir_recursive(path)
   path = Path.new(path)
 
   -- i thought for sure you could just mkdir multiple dir levels at once... but i guess not?
   for i = 1, #path do
-    if not path:sub(1, i):exists() then
+    local current = path:sub(1, i)
+    if not current:exists() then
       -- this might fail, for example for drive letters,
       -- but that doesn't matter, as long as the output file
       -- can get created (=> asserted)
-      util.debug_assert(lfs.mkdir(path:sub(1, i):str()))
+      if ignore_failure_in_mkdir_recursive then
+        lfs.mkdir(current:str())
+      else
+        util.debug_assert(lfs.mkdir(current:str()))
+      end
     end
   end
 end
@@ -231,6 +248,7 @@ local function get_modification(path)
 end
 
 return {
+  set_ignore_failure_in_mkdir_recursive = set_ignore_failure_in_mkdir_recursive,
   mkdir_recursive = mkdir_recursive,
   rmdir_recursive = rmdir_recursive,
   read_file = read_file,

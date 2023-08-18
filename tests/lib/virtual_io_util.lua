@@ -23,6 +23,13 @@ local function ensure_is_path(path)
   return Path.new(path)
 end
 
+function fake_io_util.set_ignore_failure_in_mkdir_recursive(do_ignore)
+  util.debug_abort("set_ignore_failure_in_mkdir_recursive currently cannot be used in tests because there \z
+    is no clear good place to store the flag that gets set. Once this is required in some test, it should \z
+    be more obvious how it should work and can be implemented then."
+  )
+end
+
 function fake_io_util.mkdir_recursive(path)
   path = ensure_is_path(path)
   for i = 1, #path do
