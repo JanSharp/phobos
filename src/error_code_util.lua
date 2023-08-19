@@ -231,7 +231,7 @@ add_error_code(
 add_error_code(
   types.emmy_lua_linker,
   "el_builtin_base_class",
-  "Base class %s for the class --TODO%%s is a builtin class which is not allowed"
+  "Base class %s for the class -- TODO: %%s is a builtin class which is not allowed"
 )
 
 add_error_code(

@@ -66,6 +66,12 @@ do
     end)
   end
 
+  scope:add_test("set_ignore_failure_in_mkdir_recursive cannot be used in tests", function()
+    assert.errors_with_pattern("currently cannot be used in tests", function()
+      io_util.set_ignore_failure_in_mkdir_recursive(true)
+    end)
+  end)
+
   add_test("mkdir_recursive 2 dirs", function()
     io_util.mkdir_recursive(get_path("/foo/bar"))
     local got_first = fs:exists("/foo")

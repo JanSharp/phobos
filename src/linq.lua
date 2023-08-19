@@ -275,10 +275,17 @@ end
 
 ---@generic T
 ---@param self LinqObj|T[]
----@param condition fun(value: T, index: integer?):boolean
+---@param condition (fun(value: T, index: integer?):boolean)?
 ---@return boolean
 function linq_meta_index:any(condition)
-  validate_condition(condition)
+  validate_condition(condition, true)
+  if not condition then
+    if self.__count and self.__count > 0 then
+      return true
+    end
+    return self.__iter() ~= nil
+  end
+
   local i = 1
   for value in self.__iter do
     if condition(value, i) then
@@ -484,9 +491,9 @@ local function distinct_internal(self, selector)
         local value = inner_iter()
         if value == nil then return end
         i = i + 1
-        value = validate_selected_value(selector(value, i), "distinct_by")
-        if not visited_lut[value] then
-          visited_lut[value] = true
+        local key = validate_selected_value(selector(value, i), "distinct_by")
+        if not visited_lut[key] then
+          visited_lut[key] = true
           return value
         end
       end

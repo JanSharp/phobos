@@ -50,6 +50,22 @@ Phobos syntax is based on Lua 5.2. By default Phobos will always be able to comp
 
 Phobos is planned to be type aware. The idea is that it can figure out the majority of types on it's own, but there will most likely be ways for you to explicitly tell Phobos what type something should have.
 
+
+no parenthesis for types, as they would get parsed as function calls
+
+defining a type using the `define type` context aware keywords (in a statement context in Lua, 2 consecutive identifiers are invalid, opening this syntax up for custom interpretation without breaking any existing (functional) Lua code).
+
+`local foo = bar` means "define local foo and infer type"
+`string foo = bar` means "define local foo with type string"
+`dict<string, number> foo = bar` also works
+
+`local function foo(foo, bar) end` means "define parameters foo and bar with unknown type"
+`local function foo(string foo, number bar) end` means "define parameter foo with type string and bar with type number"
+
+`local function foo() end` means "define function with unknown return values"
+`local function foo(): nothing do end` means "define function with no return values (technically with 1 return value, but it's type is nothing)"
+`local function foo(): string, number do end` means "define function with 2 return values, first is a string, second is a number"
+
 ## Safe Chaining Operators (not implemented)
 
 The operators `?.`, `?:`, `?[]` and `?()` to replace the common Lua idiom `foo and foo.bar`. These allow more efficient re-use of intermediate results in deeply nested optional objects. `?.`, `?:` and `?[]` protect an indexing operation, while `?()` protects a function call, calling the function only if it exists (is not `nil` or `false`).
@@ -87,10 +103,31 @@ Lua's existing function syntax is already fairly compact, but for the specific c
 (foo,bar) => foo?[bar]
 ```
 
+in exp context
+`() => 0`
+`(foo) => foo.bar` (infers type of `foo` falling back to unknown)
+`(string foo) => #foo`
+return types always inferred
+
+when encountering a `(`:
+- test next `)`, it's a lambda, so assert next `=>`
+- otherwise try parsing as a (typed) name list
+- if successful, test next `)` and test next `=>`, if not, reset back to `(` and parse as exp
+- if not name list, reset back to `(` and parse as exp
+
 ## Global Definitions
 
 Add a definition statements for globals, like `define global foo` and only then a standalone `foo` expression is a valid index into _ENV. Explicit indexing into _ENV would still be allowed regardless of what globals are defined.
 
+## return and break expressions
+
+```lua
+local entity = event.entity or return
+```
+
 ## And More (not implemented)
 
 There are lots of ideas for language extensions which are not listed here in the readme yet.
+
+tuples...
+no idea yet. can't use any of the `({[<>]})` so yea, kind of screwed

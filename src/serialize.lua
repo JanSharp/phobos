@@ -1,9 +1,12 @@
 
+local util = require("util")
+
 ---cSpell:ignore kvps
 
 local type = type
 local format = string.format
 
+local is_compact
 local out
 local c
 local next_id
@@ -25,7 +28,7 @@ local cache = {
 local serialize_value
 
 local function serialize_string(value)
-  local result = format("%q", value)
+  local result = is_compact and util.to_binary_string(value) or format("%q", value)
   cache[value] = result
   return result
 end
@@ -161,7 +164,16 @@ local function resolve_back_references()
   end
 end
 
-local function serialize(value)
+---Can handle very large and back reference heavy nested tables. The limit to nesting is the serialization
+---process running out of Lua stack, as it is recursive. Deserialization is impossible to run out of stack.
+---@param value any
+---@param compact boolean? @
+---Should it be serialized in a more compact form? If strings in the given data contain binary data, the
+---output will also contain binary data, including literal zeros (`\0`). It is still valid Lua code however.
+---Additionally, when `compact` is `true`, the result will contain zero `\r` and `\n` characters.
+---@return string @ The `value` serialized into Lua code, which when loaded and run recreates said `value`.
+local function serialize(value, compact)
+  is_compact = compact or false
   out = {}
   c = 0
   next_id = 1

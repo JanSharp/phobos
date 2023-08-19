@@ -483,9 +483,26 @@ do
     assert_sequential_helper(obj, obj.all, function() return true end)
   end)
 
-  add_condition_validation_test("any", false, function(condition)
-    linq{}:all(condition)
+  add_condition_validation_test("any", true, function(condition)
+    linq{}:any(condition)
   end)
+
+  for _, outer in ipairs(known_or_unknown_count_dataset) do
+    add_test("any with 0 values, self has "..outer.label, function()
+      local got = outer.make_obj{}:any()
+      assert.equals(false, got, "result of 'any'")
+    end)
+
+    add_test("any with 4 values, self has "..outer.label, function()
+      local got = outer.make_obj(get_test_strings()):any()
+      assert.equals(true, got, "result of 'any'")
+    end)
+
+    add_test("any with 'false' as the first value values, self has "..outer.label, function()
+      local got = outer.make_obj{false}:any()
+      assert.equals(true, got, "result of 'any'")
+    end)
+  end
 
   add_test("any with condition matching nothing", function()
     local got = linq(get_test_strings()):any(function() return false end)
@@ -747,7 +764,7 @@ do
     local obj = linq(get_test_strings())
       :distinct_by(function(value) return type(value) == "string" and value:sub(1, 2) or value end)
     ;
-    assert_iteration(obj, {"fo", "ba", false})
+    assert_iteration(obj, {"foo", "bar", false})
   end)
 
   add_test("distinct_by using index arg", function()
