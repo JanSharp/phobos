@@ -3050,6 +3050,15 @@ do
     end)
   end
 
+  for _, outer in ipairs(known_or_unknown_count_dataset) do
+    add_test("to_stack, self has "..outer.label, function()
+      local got = outer.make_obj(get_test_strings()):to_stack()
+      local expected = get_test_strings()
+      expected.size = #expected
+      assert.contents_equals(expected, got, "result of 'to_stack'")
+    end)
+  end
+
   add_function_validation_test("to_dict", "key value pair selector", false, function(kvp_selector)
     linq{}:to_dict(kvp_selector)
   end)
