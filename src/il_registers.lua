@@ -941,43 +941,6 @@ local function update_reg_liveliness_for_removed_inst(func, inst)
   end)
 end
 
--- temp copy paste:
---[=[
-
----@param inst ILInstruction
----@param reg ILRegister
-local function get_get_set_flags_for_reg_for_inst_group(inst, reg)
-  local total_get_set = 0
-  local function callback(_, _, current_reg, get_set)
-    if current_reg == reg then
-      total_get_set = bit32.bor(total_get_set, get_set)
-    end
-  end
-  if inst.inst_group then
-    local current_inst = inst.inst_group.start
-    repeat
-      il.visit_regs_for_inst(nil, inst, callback)
-    until current_inst == inst.inst_group.stop
-  else
-    il.visit_regs_for_inst(nil, inst, callback)
-  end
-  return total_get_set
-end
-
----@param inst ILInstruction
----@param reg ILRegister
-local function inst_group_gets_reg(inst, reg)
-  return bit32.band(il.get_flag, get_get_set_flags_for_reg_for_inst_group(inst, reg)) ~= 0
-end
-
----@param inst ILInstruction
----@param reg ILRegister
-local function inst_group_sets_reg(inst, reg)
-  return bit32.band(il.set_flag, get_get_set_flags_for_reg_for_inst_group(inst, reg)) ~= 0
-end
-
-]=]
-
 return {
 
   -- creating
