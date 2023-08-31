@@ -3,6 +3,7 @@
 
 local ll = require("linked_list")
 local util = require("util")
+local stack = require("stack")
 
 ---@class LinqObj
 ---@field __is_linq true
@@ -246,6 +247,7 @@ end
 -- [x] then_by
 -- [x] then_descending_by
 -- [x] to_array
+-- [x] to_stack
 -- [x] to_dict
 -- [x] to_linked_list
 -- [x] to_lookup
@@ -2349,6 +2351,13 @@ function linq_meta_index:to_array()
     end
   end
   return array
+end
+
+---@generic T
+---@param self LinqObj|T[]
+---@return T[]
+function linq_meta_index:to_stack()
+  return stack.from_iterator(self.__iter)
 end
 
 ---@generic T
