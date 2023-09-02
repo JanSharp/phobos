@@ -229,6 +229,9 @@ local function compile(filename)
       success, err = pcall(require("il_real_liveliness").create_real_reg_liveliness_recursive, il)
       if not success then print(err) goto finish end
 
+      success, err = pcall(require("il_register_coloring").color_live_regs_recursive, il)
+      if not success then print(err) goto finish end
+
       -- local compiled
       -- success, compiled = pcall(require("il_compiler"), il)
       -- local compilation_succeeded = success

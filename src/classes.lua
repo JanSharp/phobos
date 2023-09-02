@@ -825,6 +825,9 @@
 
 ---@class ILLiveRegisterRange
 ---@field reg ILRegister
+---@field color integer
+---@field adjacent_regs ILLiveRegisterRange[] @ Temp data for color eval.
+---@field adjacent_regs_lut table<ILLiveRegisterRange, true> @ Temp data for color eval.
 
 ---@class ILState
 ---@field reg_types table<ILRegister, ILType>

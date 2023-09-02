@@ -151,7 +151,8 @@ local function get_label(instruction, context)
     real_live_regs = "["
       ..table.concat(
         linq(instruction.next_border.real_live_regs)
-          :select(function(reg_range) return get_reg(reg_range.reg, context) end)
+          :select(function(reg_range) return get_reg(reg_range.reg, context)
+            ..(reg_range.color and ("c"..reg_range.color) or "") end)
           :to_array(),
         ", "
       )
