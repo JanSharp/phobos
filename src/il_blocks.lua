@@ -1,6 +1,7 @@
 
 local util = require("util")
 local ll = require("linked_list")
+local ill = require("indexed_linked_list")
 local linq = require("linq")
 
 -- NOTE: definition of blocks:
@@ -17,6 +18,22 @@ local linq = require("linq")
 --
 -- Links are considered to be loop links if the target_block comes before the source_block
 -- this is not 100% accurate but it is close enough.
+
+---Iterates the instructions of this block from `start_inst` to `stop_inst`, both including.
+---@param func ILFunction
+---@param block ILBlock
+---@return fun(): ILInstruction
+local function iterate(func, block)
+  return ill.iterate(func.instructions, block.start_inst, block.stop_inst)
+end
+
+---Iterates the instructions of this block from `stop_inst` to `start_inst`, both including.
+---@param func ILFunction
+---@param block ILBlock
+---@return fun(): ILInstruction
+local function iterate_reverse(func, block)
+  return ill.iterate_reverse(func.instructions, block.stop_inst, block.start_inst)
+end
 
 ---@param start_inst ILInstruction
 ---@param stop_inst ILInstruction
@@ -496,6 +513,10 @@ local function update_blocks_for_removed_inst(func, inst)
 end
 
 return {
+  -- utility
+
+  iterate = iterate,
+  iterate_reverse = iterate_reverse,
 
   -- creating
 

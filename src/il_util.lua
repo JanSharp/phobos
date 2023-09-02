@@ -2,6 +2,7 @@
 local util = require("util")
 local number_ranges = require("number_ranges")
 local error_code_util = require("error_code_util")
+local ll = require("linked_list")
 local ill = require("indexed_linked_list")
 local linq = require("linq")
 local il_blocks = require("il_blocks")
@@ -1675,6 +1676,26 @@ local function remove_inst(func, inst)
 end
 
 ---@param func ILFunction
+local function remove_unreachable_blocks(func)
+  il_blocks.ensure_has_blocks(func)
+
+  for block in ll.iterate(func.blocks)--[[@as fun(): ILBlock]] do
+    if block.is_main_entry_block or block.source_links[1] then goto continue end
+    for inst in il_blocks.iterate(func, block) do
+      remove_inst(func, inst)
+    end
+    ::continue::
+  end
+end
+
+local function remove_unreachable_blocks_recursive(func)
+  remove_unreachable_blocks(func)
+  for _, inner_func in ipairs(func.inner_functions) do
+    remove_unreachable_blocks_recursive(inner_func)
+  end
+end
+
+---@param func ILFunction
 ---@param forprep_group ILForprepGroup
 ---@param new_index_reg ILRegister
 local function replace_forprep_index_reg(func, forprep_group, new_index_reg)
@@ -1988,6 +2009,9 @@ return {
 
   update_blocks_for_new_jump_target = il_blocks.update_blocks_for_new_jump_target,
   set_jump_target = il_blocks.set_jump_target,
+
+  remove_unreachable_blocks = remove_unreachable_blocks,
+  remove_unreachable_blocks_recursive = remove_unreachable_blocks_recursive,
 
   -- il registers
 
