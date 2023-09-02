@@ -33,7 +33,7 @@ local instruction_line_format = util.parse_interpolated_string(
 )
 local il_instruction_line_format = util.parse_interpolated_string(
   "-- {line:%3d} {column:%3d} IL1: {func_id:%3d}f  {pc:%4d}  {index:%4d}  \z
-    [ {group_label:%-8s} ] {label:%-8s}  {block_id}  {description}"
+    [ {group_label:%-8s} ] {label:%-8s}  {block_id}  {description:%-26s}  {real_live_regs}"
 )
 
 -- local ill = require("indexed_linked_list")
@@ -223,14 +223,20 @@ local function compile(filename)
       -- success, err = pcall(require("il_types"), il)
       -- if not success then print(err) goto finish end
 
-      local compiled
-      success, compiled = pcall(require("il_compiler"), il)
-      local compilation_succeeded = success
-      if success then
-        add_func_to_lines("ILR", compiled)
-      else
-        print(compiled)
-      end
+      success, err = pcall(require("il_util").remove_unreachable_blocks_recursive, il)
+      if not success then print(err) goto finish end
+
+      success, err = pcall(require("il_real_liveliness").create_real_reg_liveliness_recursive, il)
+      if not success then print(err) goto finish end
+
+      -- local compiled
+      -- success, compiled = pcall(require("il_compiler"), il)
+      -- local compilation_succeeded = success
+      -- if success then
+      --   add_func_to_lines("ILR", compiled)
+      -- else
+      --   print(compiled)
+      -- end
 
       success, err = pcall(function()
         local il_func_id = 0
@@ -257,6 +263,9 @@ local function compile(filename)
               block_ids[data.inst.block] = block_id
             end
             data.block_id = block_id
+            if data.real_live_regs ~= "" then
+              data.real_live_regs = "live: "..data.real_live_regs
+            end
             local line = get_line(data.inst.position and data.inst.position.line)
             line[#line+1] = util.format_interpolated(il_instruction_line_format, data)
           end)

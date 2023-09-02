@@ -821,6 +821,10 @@
 ---@field prev_inst ILInstruction
 ---@field next_inst ILInstruction
 ---@field live_regs ILRegister[]
+---@field real_live_regs ILLiveRegisterRange[]
+
+---@class ILLiveRegisterRange
+---@field reg ILRegister
 
 ---@class ILState
 ---@field reg_types table<ILRegister, ILType>
@@ -970,6 +974,9 @@
 ---`all_regs` on ILFunction and with it `(prev|next)_reg_in_func` on ILRegister
 ---@field has_reg_liveliness boolean
 ---@field all_regs ILRegisterList
+---Depends on `has_blocks` and `has_borders`\
+---`real_live_regs` on ILBorder
+---@field has_real_reg_liveliness boolean
 ---@field has_types boolean @ `(pre|post)_state` on ILInstruction
 ---Search for "temp compilation data" in classes.lua for all the data related to this step.\
 ---During compilation modification of IL is prohibited. The above data would not get updated.

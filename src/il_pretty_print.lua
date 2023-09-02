@@ -1,4 +1,6 @@
 
+local linq = require("linq")
+
 ---@param reg ILRegister
 local function get_reg(reg, context)
   if context.reg_label_lut[reg] then
@@ -136,13 +138,26 @@ local instruction_label_getter_lut = {
   end,
 }
 
+---@param instruction ILInstruction
 local function get_label(instruction, context)
-  return (
+  local main_label, description = (
     instruction_label_getter_lut[instruction.inst_type]
     or function(_, _)
       return "UNKNOWN"
     end--[[@as fun(inst, context):string]]
   )(instruction, context)
+  local real_live_regs = ""
+  if instruction.next_border and instruction.next_border.real_live_regs then
+    real_live_regs = "["
+      ..table.concat(
+        linq(instruction.next_border.real_live_regs)
+          :select(function(reg_range) return get_reg(reg_range.reg, context) end)
+          :to_array(),
+        ", "
+      )
+      .."]"
+  end
+  return main_label, description, real_live_regs
 end
 
 local function new_context()
@@ -163,12 +178,13 @@ return function(func, format_callback)
   local inst = func.instructions.first
   local pc = 1
   while inst do
-    local label, description = get_label(inst, context)
+    local label, description, real_live_regs = get_label(inst, context)
     data.pc = pc
     data.label = label
     data.group_label = inst.inst_group and inst.inst_group.group_type:upper() or ""
     data.index = inst.index
     data.description = description
+    data.real_live_regs = real_live_regs
     data.inst = inst
     local line = format_callback(data)
     if line then
