@@ -244,6 +244,8 @@ local function mark_as_finished(data, open_block)
   end
 
   for _, link in ipairs(open_block.block.source_links) do
+    link.real_live_regs = util.shallow_copy(open_block.regs_waiting_for_set)
+
     local source_block = link.source_block
     if data.finished_blocks[source_block] then
       local previously_open_block = data.previously_open_blocks[source_block]
@@ -300,7 +302,7 @@ local function eval_live_regs_in_block(data, open_block)
       end)
     end
 
-    if inst.prev_border then
+    if inst ~= open_block.block.start_inst then
       inst.prev_border.real_live_regs = util.shallow_copy(regs_waiting_for_set)
     end
   end
@@ -310,7 +312,7 @@ end
 ---@param func ILFunction
 ---@return ILRealLivelinessOpenBlock[]
 local function get_initial_open_blocks(func)
-  return linq(ll.iterate(func.blocks)--[[@as fun():ILBlock]])
+  return linq(ll.iterate(func.blocks)--[[@as fun(): ILBlock]])
     :where(function(block) return not block.straight_link and not block.jump_link end)
     :select(function(block)
       ---@type ILRealLivelinessOpenBlock
@@ -370,6 +372,8 @@ local function eval_real_reg_liveliness(func)
       break
     end
   end
+  -- TODO: ensure the live regs before the main entry block are just he ones for parameters, anything else [...]
+  -- indicates that there are regs used before they are written to, which is invalid.
 end
 
 ---@param func ILFunction

@@ -146,18 +146,29 @@ local function get_label(instruction, context)
       return "UNKNOWN"
     end--[[@as fun(inst, context):string]]
   )(instruction, context)
-  local real_live_regs = ""
-  if instruction.next_border and instruction.next_border.real_live_regs then
-    real_live_regs = "["
-      ..table.concat(
-        linq(instruction.next_border.real_live_regs)
-          :select(function(reg_range) return get_reg(reg_range.reg, context)
-            ..(reg_range.color and ("c"..reg_range.color) or "") end)
-          :to_array(),
-        ", "
-      )
-      .."]"
+
+  ---@param regs ILLiveRegisterRange[]
+  local function format_real_live_regs(regs)
+    return "["..table.concat(
+      linq(regs):select(function(reg_range)
+        return get_reg(reg_range.reg, context)..(reg_range.color and ("c"..reg_range.color) or "")
+      end):to_array(), ", ").."]"
   end
+
+  local real_live_regs = ""
+  local block = instruction.block
+  if block and instruction == block.stop_inst and (block.straight_link or block.jump_link) then
+    if block.straight_link and block.straight_link.real_live_regs then
+      real_live_regs = "str-"..format_real_live_regs(block.straight_link.real_live_regs)
+    end
+    if block.jump_link and block.jump_link.real_live_regs then
+      real_live_regs = (real_live_regs == "" and "" or (real_live_regs.." "))
+        .."jmp-"..format_real_live_regs(block.jump_link.real_live_regs)
+    end
+  elseif instruction.next_border and instruction.next_border.real_live_regs then
+    real_live_regs = format_real_live_regs(instruction.next_border.real_live_regs)
+  end
+
   return main_label, description, real_live_regs
 end
 

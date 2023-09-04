@@ -821,13 +821,13 @@
 ---@field prev_inst ILInstruction
 ---@field next_inst ILInstruction
 ---@field live_regs ILRegister[]
----@field real_live_regs ILLiveRegisterRange[]
+---@field real_live_regs ILLiveRegisterRange[]? @ `nil` for borders between blocks. Links have the list instead.
 
 ---@class ILLiveRegisterRange
 ---@field reg ILRegister
----@field color integer
----@field adjacent_regs ILLiveRegisterRange[] @ Temp data for color eval.
----@field adjacent_regs_lut table<ILLiveRegisterRange, true> @ Temp data for color eval.
+---@field color integer @ 1 based.
+---@field adjacent_regs ILLiveRegisterRange[] @ Temp data for interference graph for color eval.
+---@field adjacent_regs_lut table<ILLiveRegisterRange, true> @ Temp data for interference graph for color eval.
 
 ---@class ILState
 ---@field reg_types table<ILRegister, ILType>
@@ -978,7 +978,7 @@
 ---@field has_reg_liveliness boolean
 ---@field all_regs ILRegisterList
 ---Depends on `has_blocks` and `has_borders`\
----`real_live_regs` on ILBorder
+---`real_live_regs` on ILBorder and ILBlockLink
 ---@field has_real_reg_liveliness boolean
 ---@field has_types boolean @ `(pre|post)_state` on ILInstruction
 ---Search for "temp compilation data" in classes.lua for all the data related to this step.\
@@ -1016,6 +1016,7 @@
 ---@field is_loop boolean
 ---`true` when this is the `jump_link` of the source_block, otherwise it's the `straight_link`.
 ---@field is_jump_link boolean?
+---@field real_live_regs ILLiveRegisterRange[]
 
 ---@class ILFunctionTemp
 ---@field local_reg_lut table<AstLocalDef, ILRegister>

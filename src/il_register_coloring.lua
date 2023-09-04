@@ -1,4 +1,5 @@
 
+local ll = require("linked_list")
 local il_borders = require("il_borders")
 local il_real_liveliness = require("il_real_liveliness")
 
@@ -7,16 +8,16 @@ local il_real_liveliness = require("il_real_liveliness")
 local function build_graph(func)
   local all_live_regs = {} ---@type ILLiveRegisterRange[]
   local all_live_regs_lut = {} ---@type table<ILLiveRegisterRange, true>
-  local insts = func.instructions
-  for border in il_borders.iterate_borders(func, insts.first.next_border, insts.last.prev_border)--[[@as fun(): ILBorder]] do
-    for _, live_reg in ipairs(border.real_live_regs) do
+  ---@param regs ILLiveRegisterRange[]
+  local function add_real_live_regs(regs)
+    for _, live_reg in ipairs(regs) do
       if not all_live_regs_lut[live_reg] then
         all_live_regs_lut[live_reg] = true
         all_live_regs[#all_live_regs+1] = live_reg
       end
       live_reg.adjacent_regs = live_reg.adjacent_regs or {}
       live_reg.adjacent_regs_lut = live_reg.adjacent_regs_lut or {}
-      for _, other_live_reg in ipairs(border.real_live_regs) do
+      for _, other_live_reg in ipairs(regs) do
         if other_live_reg ~= live_reg and not live_reg.adjacent_regs_lut[other_live_reg] then
           live_reg.adjacent_regs_lut[other_live_reg] = true
           live_reg.adjacent_regs[#live_reg.adjacent_regs+1] = other_live_reg
@@ -24,6 +25,24 @@ local function build_graph(func)
       end
     end
   end
+
+  local insts = func.instructions
+  for border in il_borders.iterate_borders(func, insts.first.next_border, insts.last.prev_border)--[[@as fun(): ILBorder]] do
+    -- Ignore borders between blocks, because those don't have live regs, the links between blocks do instead.
+    if border.prev_inst ~= border.prev_inst.block.stop_inst then
+      add_real_live_regs(border.real_live_regs)
+    end
+  end
+
+  for block in ll.iterate(func.blocks) do
+    if block.straight_link then
+      add_real_live_regs(block.straight_link.real_live_regs)
+    end
+    if block.jump_link then
+      add_real_live_regs(block.jump_link.real_live_regs)
+    end
+  end
+
   return all_live_regs
 end
 
@@ -79,7 +98,7 @@ end
   plus a bunch of live reg ranges which are actually apart of the register lists associated with an index
   offset from the group base index
   and a list of instructions associated with an index offset from the group base index
-- [ ] live regs must exist for block links
+- [x] live regs must exist for block links
   - [ ] live regs for borders which are actually never visited are nil.
 - [ ] list of live reg ranches which are alive from the beginning of the function, which must also match the
   list of parameters
