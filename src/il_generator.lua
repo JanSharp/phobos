@@ -70,6 +70,9 @@ end
 ---@param inst T
 ---@return T
 local function add_inst(func, inst)
+  -- HACK: Disabled scoping nodes to reduce noise while working on real reg liveliness and register coloring
+  ---@cast inst ILInstruction
+  if inst.inst_type == "scoping" then return inst end
   ill.append(func.instructions, inst)
   return inst
 end
