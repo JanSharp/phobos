@@ -360,17 +360,34 @@ local function eval_real_reg_liveliness(func)
     finished_blocks = {},
   }
   complain_about_unreachable_blocks(data)
+
   while true do
     while stack.get_top(data.open_blocks) do
       eval_live_regs_in_block(data, stack.pop(data.open_blocks))
     end
+
     if next(data.partially_open_blocks) then -- There is still at least 1 loop block.
       -- Only blocks with 2 target links can ultimately run this logic, so only test blocks
       local _, partially_open_block = next(data.partially_open_blocks)
       eval_live_regs_in_block(data, partially_open_block)
-    else
-      break
+      goto continue
     end
+
+    -- Check if there's still some blocks that are unfinished. This only happens if there is either no
+    -- return block at all or there is unreachable blocks (or unreachable block loops).
+    for block in ll.iterate_reverse(func.blocks) do
+      if not data.finished_blocks[block] then
+        data.partially_open_blocks[block] = {
+          block = block,
+          regs_lut = {},
+          regs_waiting_for_set = {},
+        }
+        goto continue
+      end
+    end
+
+    break
+    ::continue::
   end
   -- TODO: ensure the live regs before the main entry block are just he ones for parameters, anything else [...]
   -- indicates that there are regs used before they are written to, which is invalid.
