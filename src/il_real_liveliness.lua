@@ -326,17 +326,6 @@ local function get_initial_open_blocks(func)
     :to_stack()
 end
 
----@param data ILRealLivelinessData
-local function complain_about_unreachable_blocks(data)
-  local count = linq(ll.iterate(data.func.blocks)--[[@as fun(): ILBlock]])
-    :where(function(block) return not (block.is_main_entry_block or block.source_links[1]) end)
-    :count()
-  ;
-  util.debug_assert(count == 0, "There are "..count.." unreachable blocks. They have no source nor \z
-    straight/jump links. These generally should not exist, or get removed in a previous compilation step."
-  )
-end
-
 ---@class ILRealLivelinessOpenBlock
 ---@field block ILBlock
 ---@field regs_waiting_for_set ILLiveRegisterRange[]
@@ -359,7 +348,6 @@ local function eval_real_reg_liveliness(func)
     open_blocks = get_initial_open_blocks(func),
     finished_blocks = {},
   }
-  complain_about_unreachable_blocks(data)
 
   while true do
     while stack.get_top(data.open_blocks) do
