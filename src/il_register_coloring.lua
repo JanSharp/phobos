@@ -58,6 +58,34 @@ local function color_live_regs_recursive(func)
   end
 end
 
+--[[
+
+- [ ] lut from ILRegister to live range on each border
+- [ ] "must be at top" constraint on live reg ranges, implemented as a list of regs that must have a color
+  before this live range gets a color, which then must all be lower than the color for this live reg range
+- [ ] initial color feature, where a live range has a different color when it becomes alive, then the rest
+  has their actual color. When compiling, a move will be inserted right after the initial set
+- [ ] index for register groups, when compiling if a live range does not have a matching index, a move is
+  inserted before the register list consuming instruction
+- [ ] somehow force the color of parameter registers
+- [ ] remember the instruction which set a live reg range
+- [ ] maybe remember all instructions which get a live reg range
+- [ ] evaluate all live reg ranges which are not at top and not apart of register lists first
+- [ ] ignore internal regs
+- [ ] live reg ranges which outlive a register group in both directions must be below the register list
+  - [ ] unless it can be in the middle of the group without getting overwritten
+- [ ] a register group is defined as a list of live reg ranges which must be below the list
+  and an index which is the base index of the register group
+  plus a bunch of live reg ranges which are actually apart of the register lists associated with an index
+  offset from the group base index
+  and a list of instructions associated with an index offset from the group base index
+- [ ] live regs must exist for block links
+  - [ ] live regs for borders which are actually never visited are nil.
+- [ ] list of live reg ranches which are alive from the beginning of the function, which must also match the
+  list of parameters
+
+]]
+
 return {
   color_live_regs = color_live_regs,
   color_live_regs_recursive = color_live_regs_recursive,
