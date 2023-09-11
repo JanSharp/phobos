@@ -86,8 +86,8 @@ local function fold_exp(parent_exp,node_type,position,value)
   clear_exp_fields(parent_exp)
   parent_exp.node_type = node_type
   parent_exp.value = value
-  parent_exp.line = position.line
-  parent_exp.column = position.column
+  parent_exp.line = position and position.line
+  parent_exp.column = position and position.column
   parent_exp.folded = true
 end
 
