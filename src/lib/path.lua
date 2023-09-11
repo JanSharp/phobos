@@ -5,6 +5,7 @@ local Path = require("lib.LuaPath.path")
 
 -- overwrite enumerate to not return `"."` and `".."` entries
 
+---@diagnostic disable-next-line: duplicate-set-field
 function Path:enumerate()
   local iter, start_state, start_index = lfs.dir(self:str())
   return function(state, index)

@@ -2,10 +2,24 @@
 local assert = require("assert")
 local io_util = require("io_util")
 
+---@class TestTest
+---@field is_test true
+---@field name string
+---@field func fun()
+
+---@class TestScope
+---@field is_scope true
+---@field parent_scope TestScope?
+---@field child_scopes TestScope[]
+---@field name string
+---@field tests (TestTest|TestScope)[]
+---@field before_all fun()?
+---@field after_all fun()?
 local Scope = {}
 Scope.__index = Scope
 
 function Scope:new_scope(name)
+  ---@type TestScope
   local scope = setmetatable({
     is_scope = true,
     parent_scope = self,

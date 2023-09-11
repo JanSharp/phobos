@@ -18,10 +18,11 @@ do
   ---@param args InstructionArguments
   ---@return ILCompiledInstruction
   local function new_inst(data, position, op, args)
+    ---@cast args ILCompiledInstruction
     args.line = position and position.line
     args.column = position and position.column
     args.op = op
-    return args--[[@as ILCompiledInstruction]]
+    return args
   end
 
   ---@param data ILCompilerData
@@ -122,8 +123,10 @@ do
   ---@field start_at ILCompiledInstruction @ inclusive
   ---@field stop_at ILCompiledInstruction? @ exclusive. When `nil` stops at the very end
 
-  ---@class ILCompiledInstruction : ILLNode, Instruction
+  ---@class ILCompiledInstruction : Instruction
   ---@field inst_index integer
+  ---@field next ILCompiledInstruction?
+  ---@field prev ILCompiledInstruction?
 
   ---@param data ILCompilerData
   ---@return ILCompiledRegister
@@ -829,6 +832,7 @@ do
     return result or 0
   end
 
+  ---@type table<ILInstructionType, fun(data: ILCompilerData, inst: ILInstruction): (ILInstruction?)>
   generate_inst_lut = {
     ---@param inst ILMove
     ["move"] = function(data, inst)
@@ -1091,6 +1095,7 @@ do
     end,
   }
 
+  ---@type table<ILInstructionGroupType, fun(data: ILCompilerData, inst_group: ILInstructionGroup): (ILInstruction?)>
   generate_inst_group_lut = {
     ---@param data ILCompilerData
     ---@param inst_group ILForprepGroup
@@ -1375,13 +1380,17 @@ end
 ---@field max_stack_size integer
 ---@field current_inst ILInstruction
 
+---@class ILCompiledInstructionList
+---@field first ILCompiledInstruction?
+---@field last ILCompiledInstruction?
+
 ---@class ILCompilerData
 ---@field func ILFunction
 ---@field result CompiledFunc
 -- ---@field stack table
 ---@field local_reg_count integer
 ---@field local_reg_gaps table<integer, true>
----@field compiled_instructions IntrusiveIndexedLinkedList
+---@field compiled_instructions ILCompiledInstructionList @ intrusive indexed linked list
 ---@field compiled_registers ILCompiledRegister[]
 ---@field compiled_registers_count integer
 ---@field constant_lut table<number|string|boolean, integer>
@@ -1436,8 +1445,7 @@ local function compile(func)
     end
   end
 
-  for _, reg in ipairs(data.compiled_registers) do
-    ---@cast reg ILCompiledRegister|CompiledRegister
+  for _, reg in ipairs(data.compiled_registers--[=[@as (ILCompiledRegister|CompiledRegister)[]]=]) do
     reg.index = reg.reg_index
     reg.reg_index = nil
     reg.start_at = reg.start_at.inst_index

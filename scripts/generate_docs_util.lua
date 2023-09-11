@@ -160,6 +160,7 @@ end
 
 local function field_or_param_or_return_row(name, type, optional, description, css_class)
   local left = {name and (css_class and span_elem(css_class, name) or name)}
+  ---@diagnostic disable-next-line: assign-type-mismatch
   left[#left+1] = name and " :: " or ":: "
   left[#left+1] = format_type(type, optional)
   local right = {}

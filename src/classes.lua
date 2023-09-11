@@ -771,6 +771,7 @@
 ---@field live_regs ILRegister[]
 ---@field pre_state ILState
 ---@field post_state ILState
+---@field forced_list_index integer?
 
 ---@class ILInstructionList : IntrusiveIndexedLinkedList<ILInstruction>
 ---@field first ILInstruction? @ (overridden)

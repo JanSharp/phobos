@@ -3053,7 +3053,7 @@ do
   for _, outer in ipairs(known_or_unknown_count_dataset) do
     add_test("to_stack, self has "..outer.label, function()
       local got = outer.make_obj(get_test_strings()):to_stack()
-      local expected = get_test_strings()
+      local expected = get_test_strings()--[[@as string[]|{size: integer}]]
       expected.size = #expected
       assert.contents_equals(expected, got, "result of 'to_stack'")
     end)

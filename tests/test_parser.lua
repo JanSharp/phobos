@@ -123,9 +123,11 @@ local function test_stat(str, options)
 end
 
 do
+  ---@type TestScope[]|{size: integer}
   local scope_stack = stack.new_stack()
   local current_scope = framework.scope:new_scope("parser")
   stack.push(scope_stack, current_scope)
+  ---@type TestScope[]|{size: integer}
   local formatter_scope_stack = stack.new_stack()
   local current_formatter_scope = framework.scope:new_scope("formatter (generated from parser tests)")
   stack.push(formatter_scope_stack, current_formatter_scope)
@@ -1713,6 +1715,7 @@ do
             }} -- consuming 'foo.'
           )
           -- add this invalid node to the invalid nodes array after the unexpected_expression
+          ---@diagnostic disable-next-line: inject-field
           stat.consumed_nodes[1].suffix = new_invalid(
             error_code_util.codes.expected_ident,
             peek_next_token() -- at 'true'

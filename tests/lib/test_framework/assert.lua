@@ -246,7 +246,7 @@ return setmetatable({
   equals = equals,
   not_equals = not_equals,
   contents_equals = contents_equals,
-  do_not_compare_flag = deep_compare.do_not_compare_flag,
+  do_not_compare_flag = deep_compare.do_not_compare_flag--[[@as any]],
   custom_comparator = deep_compare.register_custom_comparator,
   errors = errors,
   errors_with_pattern = errors_with_pattern,

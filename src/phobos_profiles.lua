@@ -24,6 +24,8 @@ local phobos_profiles = {
 local all_profiles = phobos_profiles.internal.all_profiles
 local profiles_by_name = phobos_profiles.internal.profiles_by_name
 
+---@diagnostic disable: duplicate-set-field
+
 function phobos_profiles.add_profile(params)
   local profile = api_util.api_call(function()
     local root_dir = params.root_dir

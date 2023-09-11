@@ -140,6 +140,8 @@ do
   if not double_start then
     util.debug_abort("Unable to set up double to bytes conversion.")
   end
+  ---@cast double_start -nil
+  ---@cast double_end -nil
   local double_cache = {
     -- these two don't print %a correctly, so preload the cache with them
     -- **little endian** reminder
