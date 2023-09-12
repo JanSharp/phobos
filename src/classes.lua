@@ -823,6 +823,7 @@
 ---Therefore the fields in this data structure are `nil` for all borders between two ILBlocks.
 ---@class ILExecutionCheckpoint
 ---@field real_live_regs ILLiveRegisterRange[]
+---@field live_range_by_reg table<ILRegister, ILLiveRegisterRange>
 
 ---The border between 2 instructions.
 ---@class ILBorder : ILExecutionCheckpoint

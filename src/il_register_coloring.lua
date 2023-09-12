@@ -79,7 +79,7 @@ end
 
 --[[
 
-- [ ] lut from ILRegister to live range on each ILExecutionCheckpoint
+- [x] lut from ILRegister to live range on each ILExecutionCheckpoint
 - [ ] "must be at top" constraint on live reg ranges, implemented as a list of regs that must have a color
   before this live range gets a color, which then must all be lower than the color for this live reg range
 - [ ] initial color feature, where a live range has a different color when it becomes alive, then the rest

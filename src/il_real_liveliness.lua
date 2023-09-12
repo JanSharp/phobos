@@ -232,6 +232,15 @@ local function merge_partially_open_blocks(partially_open_block, regs_to_add)
   return anything_actually_changed
 end
 
+---@param execution_checkpoint ILExecutionCheckpoint
+---@param real_live_regs ILLiveRegisterRange[]
+local function set_real_live_regs(execution_checkpoint, real_live_regs)
+  execution_checkpoint.real_live_regs = util.shallow_copy(real_live_regs)
+  execution_checkpoint.live_range_by_reg = linq(real_live_regs):to_dict(function(live_reg_range)
+    return live_reg_range.reg, live_reg_range
+  end)
+end
+
 ---@param data ILRealLivelinessData
 ---@param open_block ILRealLivelinessOpenBlock
 local function mark_as_finished(data, open_block)
@@ -244,7 +253,7 @@ local function mark_as_finished(data, open_block)
   end
 
   for _, link in ipairs(open_block.block.source_links) do
-    link.real_live_regs = util.shallow_copy(open_block.regs_waiting_for_set)
+    set_real_live_regs(link, open_block.regs_waiting_for_set)
 
     local source_block = link.source_block
     if data.finished_blocks[source_block] then
@@ -303,7 +312,7 @@ local function eval_live_regs_in_block(data, open_block)
     end
 
     if inst ~= open_block.block.start_inst then
-      inst.prev_border.real_live_regs = util.shallow_copy(regs_waiting_for_set)
+      set_real_live_regs(inst.prev_border, regs_waiting_for_set)
     end
   end
   mark_as_finished(data, open_block)
