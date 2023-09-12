@@ -817,12 +817,18 @@
 ---@field first ILInstruction @ (overridden) empty instruction lists are malformed, therefore never `nil`
 ---@field last ILInstruction @ (overridden) empty instruction lists are malformed, therefore never `nil`
 
+---A point in time during the execution of a function where the program's execution flow is passing by.\
+---Nothing is happening at this point, unlike instructions which perform some action.\
+---These points in time are all ILBorders within an ILBlock, and all ILBlockLinks.\
+---Therefore the fields in this data structure are `nil` for all borders between two ILBlocks.
+---@class ILExecutionCheckpoint
+---@field real_live_regs ILLiveRegisterRange[]
+
 ---The border between 2 instructions.
----@class ILBorder
+---@class ILBorder : ILExecutionCheckpoint
 ---@field prev_inst ILInstruction
 ---@field next_inst ILInstruction
 ---@field live_regs ILRegister[]
----@field real_live_regs ILLiveRegisterRange[]? @ `nil` for borders between blocks. Links have the list instead.
 
 ---@class ILLiveRegisterRange
 ---@field reg ILRegister
@@ -979,7 +985,7 @@
 ---@field has_reg_liveliness boolean
 ---@field all_regs ILRegisterList
 ---Depends on `has_blocks` and `has_borders`\
----`real_live_regs` on ILBorder and ILBlockLink
+---`real_live_regs` on ILExecutionCheckpoint
 ---@field has_real_reg_liveliness boolean
 ---@field has_types boolean @ `(pre|post)_state` on ILInstruction
 ---Search for "temp compilation data" in classes.lua for all the data related to this step.\
@@ -1008,7 +1014,7 @@
 ---@field first ILBlock @ empty instruction lists are malformed, therefore never nil
 ---@field last ILBlock @ empty instruction lists are malformed, therefore never nil
 
----@class ILBlockLink
+---@class ILBlockLink : ILExecutionCheckpoint
 ---@field source_block ILBlock @ the block flowing to `target_block`
 ---@field target_block ILBlock @ the block `source_block` is flowing to
 ---a loop link is the link determined to be the one closing the loop of a collection of blocks
@@ -1017,7 +1023,6 @@
 ---@field is_loop boolean
 ---`true` when this is the `jump_link` of the source_block, otherwise it's the `straight_link`.
 ---@field is_jump_link boolean?
----@field real_live_regs ILLiveRegisterRange[]
 
 ---@class ILFunctionTemp
 ---@field local_reg_lut table<AstLocalDef, ILRegister>
