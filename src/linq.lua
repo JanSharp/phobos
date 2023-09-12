@@ -636,7 +636,7 @@ end
 ---@param key_selector fun(value: T, index: integer): TKey
 ---@param lut (table<T, true>)?
 ---@param collection (LinqObj|TKey[])?
----@param function_name string? @ the linq function name
+---@param function_name string @ the linq function name
 ---@return LinqObj|T[]
 local function except_by_internal(self, key_selector, lut, collection, function_name)
   self.__count = nil
@@ -2355,7 +2355,7 @@ end
 
 ---@generic T
 ---@param self LinqObj|T[]
----@return T[]
+---@return T[]|{size: integer}
 function linq_meta_index:to_stack()
   return stack.from_iterator(self.__iter)
 end

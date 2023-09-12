@@ -410,10 +410,10 @@ do
       main.locals[1] = one_def
       main.locals[2] = two_def
       local localstat = append_stat(main, nodes.new_localstat{lhs = {one_ref, two_ref}})
-      one_ref.start_at = localstat
-      one_ref.start_offset = 1
-      two_ref.start_at = localstat
-      two_ref.start_offset = 1
+      one_def.start_at = localstat
+      one_def.start_offset = 1
+      two_def.start_at = localstat
+      two_def.start_offset = 1
       append_stat(main, new_label("foo"))
       append_stat(main, nodes.new_dostat{parent_scope = main})
     end, function()
@@ -429,8 +429,8 @@ do
       local bar_def, bar_ref = ast.create_local({value = "bar"}, main)
       main.locals[1] = bar_def
       local localstat = append_stat(main, nodes.new_localstat{lhs = {bar_ref}})
-      bar_ref.start_at = localstat
-      bar_ref.start_offset = 1
+      bar_def.start_at = localstat
+      bar_def.start_offset = 1
       append_stat(main, new_label("foo"))
       append_stat(main, nodes.new_dostat{parent_scope = main})
     end, function()
@@ -449,8 +449,8 @@ do
       local bar_def, bar_ref = ast.create_local({value = "bar"}, repeatstat)
       repeatstat.locals[1] = bar_def
       local localstat = append_stat(repeatstat, nodes.new_localstat{lhs = {bar_ref}})
-      bar_ref.start_at = localstat
-      bar_ref.start_offset = 1
+      bar_def.start_at = localstat
+      bar_def.start_offset = 1
       append_stat(repeatstat, new_label("foo"))
     end, function()
       return {
@@ -469,8 +469,8 @@ do
       local bar_def, bar_ref = ast.create_local({value = "bar"}, repeatstat)
       repeatstat.locals[1] = bar_def
       local localstat = append_stat(repeatstat, nodes.new_localstat{lhs = {bar_ref}})
-      bar_ref.start_at = localstat
-      bar_ref.start_offset = 1
+      bar_def.start_at = localstat
+      bar_def.start_offset = 1
       append_stat(repeatstat, new_label("foo"))
     end, function()
       return {

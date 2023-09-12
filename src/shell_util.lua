@@ -21,7 +21,7 @@ local function escape_arg(arg)
       https://stackoverflow.com/questions/4094699/how-does-the-windows-command-interpreter-cmd-exe-parse-scripts/4095133#4095133\n\z
       \n\z
       And for completeness, here's how to do it in Unix shell:\n\z
-      https://pubs.opengroup.org/onlinepubs/9699919799/"
+      https://pubs.opengroup.org/onlinepubs/9699919799/utilities/V3_chap02.html#tag_18_02_03"
     )
   elseif annoying == "\n" then
     util.abort("Cannot escape argument '"..arg.."', because it contains a \\n (newline), and \z
@@ -30,7 +30,7 @@ local function escape_arg(arg)
       is an actual newline character) might work, but I don't know. "..cross_platform_explanation.."\n\z
       \n\z
       And for completeness, here's how to do it in Unix shell:\n\z
-      https://pubs.opengroup.org/onlinepubs/9699919799/"
+      https://pubs.opengroup.org/onlinepubs/9699919799/utilities/V3_chap02.html#tag_18_02_03"
     )
   end
   return Path.is_windows()

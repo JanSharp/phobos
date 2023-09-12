@@ -19,6 +19,11 @@
     "debugging/minimal-no-base-mod",
     "debugging/JanSharpDevEnv",
   ],
+  "Lua.diagnostics.disable": [
+    "lowercase-global",
+    "missing-fields",
+  ],
+  "Lua.workspace.checkThirdParty": false,
   "cSpell.flagWords": [
     "colum",
   ],

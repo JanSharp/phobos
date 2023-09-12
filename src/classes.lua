@@ -811,6 +811,7 @@
 ---@field post_state ILState
 ---@field input_reg_group ILRegisterGroup?
 ---@field output_reg_group ILRegisterGroup?
+---@field forced_list_index integer?
 
 ---@class ILInstructionList : IntrusiveIndexedLinkedList<ILInstruction>
 ---@field first ILInstruction @ (overridden) empty instruction lists are malformed, therefore never `nil`

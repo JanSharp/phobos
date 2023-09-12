@@ -141,6 +141,7 @@ local function compile(filename)
             local line = get_line(func.line_defined)
             line[#line+1] = "-- "..prefix..": "..(description:gsub("\n", "\n-- "..prefix..": "))
           end,
+          ---@param data DisassemblyInstructionData|{prefix: string, func_id: integer}
           function(data)
             data.prefix = prefix
             data.func_id = func_id

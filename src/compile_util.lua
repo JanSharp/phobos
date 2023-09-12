@@ -28,7 +28,7 @@ local function new_context()
   }
 end
 
----@class CompileUtilOptions
+---@class CompileUtilOptions : Options
 ---@field filename string
 ---@field filename_for_source string
 ---@field text string
@@ -43,7 +43,6 @@ end
 ---Extra description to add when `use_load == true`.\
 ---Does _not_ have a `{filename}` placeholder at the moment, unlike `>= 0.1.4`.
 ---@field custom_header string?
----@field optimizations Optimizations
 
 ---@class CompileUtilContext
 ---@field syntax_error_count integer

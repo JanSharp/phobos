@@ -7,7 +7,7 @@ end
 
 ---@generic T
 ---@param iter fun(): (T?)
----@return T[]
+---@return T[]|{size: integer}
 local function from_iterator(iter)
   local size = 0
   local stack = {size = 0} -- To make sure the table has an entry in the hash part allocated...
@@ -24,7 +24,7 @@ local function clear_stack(stack)
 end
 
 ---@generic T
----@param stack T[]
+---@param stack T[]|{size: integer}
 ---@param value T
 local function push(stack, value)
   local size = stack.size + 1
@@ -33,7 +33,7 @@ local function push(stack, value)
 end
 
 ---@generic T
----@param stack T[]
+---@param stack T[]|{size: integer}
 ---@return T
 local function pop(stack)
   local size = stack.size
@@ -44,7 +44,7 @@ local function pop(stack)
 end
 
 ---@generic T
----@param stack T[]
+---@param stack T[]|{size: integer}
 ---@return T
 local function get_top(stack)
   ---@diagnostic disable-next-line: undefined-field

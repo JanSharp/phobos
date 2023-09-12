@@ -44,6 +44,7 @@ local function disassemble_file(filename, output_postfix)
         local line = get_line(func.line_defined)
         line[#line+1] = "-- "..(description:gsub("\n", "\n-- "))
       end,
+      ---@param data DisassemblyInstructionData|{func_id: integer}
       function(data)
         data.func_id = func_id
         local line = get_line(data.line)

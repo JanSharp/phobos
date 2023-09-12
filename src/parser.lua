@@ -763,7 +763,7 @@ local function sub_expr(limit, scope)
     local prio = unop_prio[token.token_type]
     if prio then
       node = nodes.new_unop{
-        op = token.token_type,
+        op = token.token_type--[[@as AstUnOpOp]],
         op_token = new_token_node(),
         ex = prevent_assert,
       }
@@ -773,7 +773,7 @@ local function sub_expr(limit, scope)
       node = simple_exp(scope)
     end
   end
-  local binop = token.token_type
+  local binop = token.token_type--[[@as AstBinOpOp|".."]]
   local prio = binop_prio[binop]
   while prio and prio.left > limit do
     local op_token = new_token_node()
@@ -803,6 +803,7 @@ local function sub_expr(limit, scope)
         }
       end
     else
+      ---@cast binop AstBinOpOp
       local left_node = node
       node = nodes.new_binop{
         left = left_node,

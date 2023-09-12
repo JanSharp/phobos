@@ -16,10 +16,11 @@ do
   ---@param args InstructionArguments
   ---@return ILCompiledInstruction
   local function new_inst(data, position, op, args)
+    ---@cast args ILCompiledInstruction
     args.line = position and position.line
     args.column = position and position.column
     args.op = op
-    return args--[[@as ILCompiledInstruction]]
+    return args
   end
 
   ---@param data ILCompilerData
@@ -414,7 +415,7 @@ do
     return result or 0
   end
 
-  ---@type table<ILInstructionType, fun(data: ILCompilerData, inst: ILInstruction): ILInstruction>
+  ---@type table<ILInstructionType, fun(data: ILCompilerData, inst: ILInstruction): (ILInstruction?)>
   generate_inst_lut = {
     ---@param inst ILMove
     ["move"] = function(data, inst)
@@ -669,7 +670,7 @@ do
     end,
   }
 
-  ---@type table<ILInstructionGroupType, fun(data: ILCompilerData, inst_group: ILInstructionGroup): ILInstruction>
+  ---@type table<ILInstructionGroupType, fun(data: ILCompilerData, inst_group: ILInstructionGroup): (ILInstruction?)>
   generate_inst_group_lut = {
     ---@param inst_group ILForprepGroup
     ["forprep"] = function(data, inst_group)
@@ -2399,15 +2400,20 @@ do
   end
 end
 
+---@class ILCompiledInstructionList
+---@field first ILCompiledInstruction?
+---@field last ILCompiledInstruction?
+
 ---@class ILCompilerData
 ---@field func ILFunction
 ---@field result CompiledFunc
 -- ---@field stack table
 ---@field local_reg_count integer
 ---@field local_reg_gaps table<integer, true>
----While it starts off with both being nil, every function has at least 1 instruction,
----so `first` and `last` will be non nil real early and stay that way.
----@field compiled_instructions {first: ILCompiledInstruction, last: ILCompiledInstruction}
+---Intrusive indexed linked list\
+---While it starts off with `first` and `last` being `nil`, every function has at least 1 instruction,
+---so `first` and `last` will be non `nil` real early and stay that way.
+---@field compiled_instructions ILCompiledInstructionList
 ---@field compiled_registers ILCompiledRegister[]
 ---@field compiled_registers_count integer
 ---@field constant_lut table<number|string|boolean, integer>
