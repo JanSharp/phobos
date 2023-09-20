@@ -36,8 +36,10 @@ end
 ---@field break_on_read fun(key: any)|{any: true}|(any[])|nil
 ---@field break_on_write fun(key: any, old: any, new: any)|{any: true}|(any[])|nil
 
----@param tab any
+---@generic T
+---@param tab T
 ---@param break_definition DataBreakpointBreakDefinition
+---@return T
 local function data_breakpoint(tab, break_definition)
   assert(getmetatable(tab) == nil, "Data breakpoints on tables with metatables is not supported.")
 
@@ -54,7 +56,7 @@ local function data_breakpoint(tab, break_definition)
   local break_on_write_lut, break_on_write_callback = convert_to_lut_or_callback(break_definition.break_on_write)
 
   -- set metatable
-  setmetatable(tab, {
+  return setmetatable(tab, {
     __index = function(_, key)
       if break_on_read_lut and break_on_read_lut[key]
         or break_on_read_callback and break_on_read_callback(key)
