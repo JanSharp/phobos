@@ -11,6 +11,7 @@ local function invert(tab)
   return inverted
 end
 
+---@return table<any, true>?, function?
 local function convert_to_lut_or_callback(array_or_func)
   local t = type(array_or_func)
   if t == "table" then
@@ -24,11 +25,19 @@ local function convert_to_lut_or_callback(array_or_func)
     return nil, array_or_func
   end
   if t ~= "nil" then
-    error("Expected a table (array of keys) or a function as a break on condition.")
+    error("Expected a table (array of keys, or with the field 'any' set to true) \z
+      or a function as a break on condition."
+    )
   end
   return nil, nil
 end
 
+---@class DataBreakpointBreakDefinition
+---@field break_on_read fun(key: any)|{any: true}|(any[])|nil
+---@field break_on_write fun(key: any, old: any, new: any)|{any: true}|(any[])|nil
+
+---@param tab any
+---@param break_definition DataBreakpointBreakDefinition
 local function data_breakpoint(tab, break_definition)
   assert(getmetatable(tab) == nil, "Data breakpoints on tables with metatables is not supported.")
 
@@ -59,6 +68,7 @@ local function data_breakpoint(tab, break_definition)
       if break_on_write_lut and break_on_write_lut[key]
         or break_on_write_callback and break_on_write_callback(key, values[key], new_value)
       then
+        ---cSpell:ignore currentline
         local old_value = values[key]
         local info = debug.getinfo(2, "Sl")
         print("Written to '"..tostring(key).."' ('"..tostring(old_value).."' => '"..tostring(new_value).."') \z
@@ -69,9 +79,11 @@ local function data_breakpoint(tab, break_definition)
       values[key] = new_value
     end,
     __pairs = function()
+      ---@diagnostic disable-next-line: redundant-return-value
       return pairs(values)
     end,
     __ipairs = function()
+      ---@diagnostic disable-next-line: redundant-return-value
       return ipairs(values)
     end,
     __len = function()
