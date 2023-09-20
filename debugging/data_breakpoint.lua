@@ -74,6 +74,9 @@ local function data_breakpoint(tab, break_definition)
     __ipairs = function()
       return ipairs(values)
     end,
+    __len = function()
+      return #values
+    end,
   })
 end
 
