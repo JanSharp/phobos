@@ -125,7 +125,7 @@ do
   end
 end
 
--- run all tests (currently testing is very crude, so just `tests/compile_test.lua`)
+-- run all tests
 if not args.skip_tests then
   print("Running tests")
   local success, err = pcall(util.assert(loadfile("tests/main.lua")), table.unpack{
