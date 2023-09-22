@@ -29,8 +29,6 @@ local function test(str, expected_tokens, options)
   return state
 end
 
----cSpell:ignore inext
-
 local function new_token(token_type, index, line, column, value)
   return {
     token_type = token_type,
@@ -446,7 +444,7 @@ do
         end
       end
       if errors[1] then
-        error(#errors.." invalid escape sequence bytes threw and error: "
+        error(#errors.." invalid escape sequence bytes threw an error: "
           ..table.concat(broken_bytes, ", ")
           .."\n"..table.concat(errors, "\n")
         )
