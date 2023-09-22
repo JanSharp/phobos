@@ -129,8 +129,8 @@ end
 if not args.skip_tests then
   print("Running tests")
   local success, err = pcall(util.assert(loadfile("tests/main.lua")), table.unpack{
-    "--print-failed",
-    "--print-stacktrace",
+    "--failed",
+    "--stacktrace",
   })
   if not success then
     util.abort("Tests failed")
