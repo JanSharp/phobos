@@ -28,7 +28,7 @@ local function floating_byte_to_number(x)
   return bit32.lshift(bit32.band(x, 7--[[0b0111]]) + 8--[[0b1000]], e - 1)
 end
 
----currently unused
+---@param t table
 local function clear_table(t)
   local keys = {}
   for k in pairs(t) do
@@ -39,6 +39,7 @@ local function clear_table(t)
   end
 end
 
+---@param t any[]
 local function clear_array(t)
   for i = #t, 1, -1 do
     t[i] = nil
@@ -57,6 +58,9 @@ local function remove_from_array(array, element)
   end
 end
 
+---@generic T
+---@param target T
+---@param new_data T
 local function replace_table(target, new_data)
   clear_table(target)
   for k, v in pairs(new_data) do
@@ -64,6 +68,9 @@ local function replace_table(target, new_data)
   end
 end
 
+---@generic T
+---@param t T
+---@return T
 local function shallow_copy(t)
   local result = {}
   for k, v in pairs(t) do
@@ -76,11 +83,18 @@ local function shallow_copy(t)
   return result
 end
 
+---@generic T
+---@param t T?
+---@return T?
 local function optional_shallow_copy(t)
   if not t then return nil end
   return shallow_copy(t)
 end
 
+---@generic T
+---@param t T
+---@param copy_metatables boolean?
+---@return T
 local function copy(t, copy_metatables)
   local visited = {}
   local function copy_recursive(value)
@@ -104,9 +118,10 @@ local function copy(t, copy_metatables)
   return copy_recursive(t)
 end
 
---- Invert an array of keys to be a set of key=true
----@param t table<number,any>
----@return table<any,boolean>
+---Invert an array of keys to be a set of key=true
+---@generic T
+---@param t table<number, T>
+---@return table<T, boolean>
 local function invert(t)
   local tt = {}
   for _,s in pairs(t) do
@@ -115,6 +130,12 @@ local function invert(t)
   return tt
 end
 
+---@generic T
+---@param target T[]
+---@param range T[]
+---@param target_index integer
+---@param range_start_index integer
+---@param range_stop_index integer
 local function insert_range(target, range, target_index, range_start_index, range_stop_index)
   range_start_index = range_start_index or 1
   range_stop_index = range_stop_index or #range
@@ -132,6 +153,10 @@ local function insert_range(target, range, target_index, range_start_index, rang
   end
 end
 
+---@generic T
+---@param target T[]
+---@param start_index integer
+---@param stop_index integer
 local function remove_range(target, start_index, stop_index)
   local target_len = #target
   local range_len = stop_index - start_index + 1
@@ -141,6 +166,13 @@ local function remove_range(target, start_index, stop_index)
   end
 end
 
+---@generic T
+---@param target T[]
+---@param range T[]
+---@param start_index integer
+---@param stop_index integer
+---@param range_start_index integer
+---@param range_stop_index integer
 local function replace_range(target, range, start_index, stop_index, range_start_index, range_stop_index)
   range_start_index = range_start_index or 1
   range_stop_index = range_stop_index or #range
@@ -156,12 +188,12 @@ local function replace_range(target, range, start_index, stop_index, range_start
   end
 end
 
----must use the letter K for the generic type parameter, otherwise it won't infer the type of the key (in 3.6.13)
+---Must use the letter K for the generic type parameter, otherwise it won't infer the type of the key (in 3.6.13).
 ---@generic K
 ---@param tab table<K, any>
 ---@param prev_key? K @ this key will not be iterated, it will start at the next one.
 ---@return fun(_: any? ,_: K?):(K?) iterator @
----NOTE: doesn't actually take any parameters, just works around an issue with type inference (in 3.6.13)
+---NOTE: Doesn't actually take any parameters, just works around an issue with type inference (in 3.6.13).
 local function iterate_keys(tab, prev_key)
   local key = prev_key
   return function()
@@ -170,12 +202,12 @@ local function iterate_keys(tab, prev_key)
   end
 end
 
----must use the letter K for the generic type parameter, otherwise it won't infer the type of the key (in 3.6.13)
+---Must use the letter K for the generic type parameter, otherwise it won't infer the type of the key (in 3.6.13).
 ---@generic K
 ---@param tab table<K, any>
 ---@param prev_key? K @ this key will not be iterated, it will start at the next one.
 ---@return fun(_: any? ,_: K?):(K?) iterator @
----NOTE: doesn't actually take any parameters, just works around an issue with type inference (in 3.6.13)
+---NOTE: Doesn't actually take any parameters, just works around an issue with type inference (in 3.6.13).
 local function iterate_values(tab, prev_key)
   local key = prev_key
   return function()
@@ -189,6 +221,7 @@ local function debug_abort(message)
   return error(message)
 end
 
+---@param message string?
 local function abort(message)
   if os then -- factorio doesn't have `os`
     if message then
@@ -202,7 +235,10 @@ local function abort(message)
   end
 end
 
----`message` defaults to `"Assertion failed!"`
+---@generic T
+---@param value T?
+---@param message string? @ `message` defaults to `"Assertion failed!"`.
+---@return T
 local function debug_assert(value, message)
   if not value then
     debug_abort(message or "Assertion failed!")
@@ -210,7 +246,10 @@ local function debug_assert(value, message)
   return value
 end
 
----`message` does not default to `"Assertion failed!"`, it remains `nil` if it's `nil`
+---@generic T
+---@param value T?
+---@param message string? @ Does **not** default to `"Assertion failed!"`, it simply prints nothing.
+---@return T
 local function assert(value, message)
   if not value then
     abort(message)
@@ -220,16 +259,18 @@ end
 
 local reset = "\x1b[0m"
 local magenta = "\x1b[35m"
+---Prints a magenta message.
+---@param msg string
 local function debug_print(msg)
   print(msg and (magenta..msg..reset))
 end
 
 ---@param text string
----@param i integer?
----@return table?
----@return integer?
-local function parse_version(text, i)
-  local major_str, minor_str, patch_str, end_pos = text:match("^(%d+)%.(%d+)%.(%d+)()", i)
+---@param start_pos integer? @ Including.
+---@return Version? version @ `nil` if it could not parse a version.
+---@return integer? end_pos @ Including. `nil` if it could not parse a version.
+local function parse_version(text, start_pos)
+  local major_str, minor_str, patch_str, end_pos = text:match("^(%d+)%.(%d+)%.(%d+)()", start_pos)
   if not major_str then
     return nil, nil
   end
@@ -246,10 +287,15 @@ local function parse_version(text, i)
   }, end_pos
 end
 
+---@param version Version
+---@return string
 local function format_version(version)
   return string.format("%d.%d.%d", version.major, version.minor, version.patch)
 end
 
+---@param params table
+---@param field_name string
+---@return any value
 local function assert_params_field(params, field_name)
   local value = params[field_name]
   if value == nil then
@@ -258,6 +304,7 @@ local function assert_params_field(params, field_name)
   return value
 end
 
+---@return Position
 local function new_pos(line, column)
   return {
     line = line,
@@ -265,6 +312,8 @@ local function new_pos(line, column)
   }
 end
 
+---@param position Position
+---@return string
 local function pos_str(position)
   return (position and position.line or 0)..":"..(position and position.column or 0)
 end
