@@ -44,6 +44,15 @@ local function convert_to_lut_or_callback(array_or_func)
   return nil, nil
 end
 
+---@param print_stacktrace boolean?
+---@param msg string
+local function wrapped_print(print_stacktrace, msg)
+  ---cSpell:ignore currentline
+  local info = debug_getinfo(3, "Sl")
+  msg = msg.." at "..info.short_src..":"..(info.currentline or 0)
+  print(print_stacktrace and debug_traceback(msg, 3) or msg)
+end
+
 ---@class DataBreakpointBreakDefinition
 ---@field print_stacktrace boolean?
 ---@field break_on_read fun(key: any)|{any: true}|(any[])|nil
@@ -76,10 +85,9 @@ local function data_breakpoint(tab, break_definition)
         or break_on_read_callback and break_on_read_callback(key)
       then
         local current_value = values[key]
-        local info = debug_getinfo(2, "Sl")
-        local msg = "Reading from '"..tostring(key).."' ('"..tostring(current_value)
-          .."') at "..info.short_src..":"..(info.currentline or 0)
-        print(print_stacktrace and debug_traceback(msg, 2) or msg)
+        wrapped_print(print_stacktrace, "Reading from '"..tostring(key)
+          .."' ('"..tostring(current_value).."')"
+        )
         hit_break_point()
       end
       return values[key]
@@ -88,12 +96,10 @@ local function data_breakpoint(tab, break_definition)
       if break_on_write_lut and break_on_write_lut[key]
         or break_on_write_callback and break_on_write_callback(key, values[key], new_value)
       then
-        ---cSpell:ignore currentline
         local old_value = values[key]
-        local info = debug_getinfo(2, "Sl")
-        local msg = "Written to '"..tostring(key).."' ('"..tostring(old_value).."' => '"..tostring(new_value)
-          .."') at "..info.short_src..":"..(info.currentline or 0)
-        print(print_stacktrace and debug_traceback(msg, 2) or msg)
+        wrapped_print(print_stacktrace, "Writing to '"..tostring(key)
+          .."' ('"..tostring(old_value).."' => '"..tostring(new_value).."')"
+        )
         hit_break_point()
       end
       values[key] = new_value
