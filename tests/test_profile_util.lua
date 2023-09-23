@@ -186,6 +186,13 @@ do
     end)
   end
 
+  function scope.after_each()
+    -- Potentially clean up after failed tests.
+    if sandbox_util.is_hooked() then
+      sandbox_util.unhook()
+    end
+  end
+
   local function run()
     profile_util.run_profile(profile, function(msg)
       printed_messages[#printed_messages+1] = msg
@@ -709,6 +716,13 @@ do
       (script file: "..normalize_path("scripts/inject".._pho)..")",
       run
     )
+  end)
+
+  add_test("inject script file that errors during initial execution", function()
+    create_source_file("foo")
+    create_inject_script_file("inject", nil, "error('hello world')")
+    include_file("foo", {inject_scripts = {"scripts/inject".._pho}})
+    assert.errors_with_pattern("hello world", run)
   end)
 
   add_test("inject script file that does not exist", function()

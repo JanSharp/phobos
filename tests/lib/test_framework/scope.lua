@@ -6,6 +6,8 @@ local io_util = require("io_util")
 ---@field is_test true
 ---@field name string
 ---@field func fun()
+---@field passed boolean? @ Set when running tests.
+---@field error_message string? @ Set when running tests, specifically when `passed` is `false`.
 
 ---@class TestScope
 ---@field is_scope true
@@ -15,6 +17,9 @@ local io_util = require("io_util")
 ---@field tests (TestTest|TestScope)[]
 ---@field before_all fun()?
 ---@field after_all fun()?
+---A callback after each test, even for failing tests. Do not assert nor print anything here. It is called
+---after everything for a test is done, which includes printing to standard out.
+---@field after_each fun()?
 local Scope = {}
 Scope.__index = Scope
 
@@ -126,6 +131,12 @@ local function write_diff_files()
   io_util.write_file("temp/diff/got.txt", table.concat(diff_state.got, "\n"))
 end
 
+---@param scope TestScope
+---@param options any
+---@param print_parent_scope_header any
+---@param state any
+---@param full_scope_name any
+---@param is_root any
 local function run_tests(scope, options, print_parent_scope_header, state, full_scope_name, is_root)
   -- header
   local start_time = os and os.clock()
@@ -145,10 +156,12 @@ local function run_tests(scope, options, print_parent_scope_header, state, full_
   local failed_count = 0
   for _, test in ipairs(scope.tests) do
     if test.is_scope then
+      ---@cast test TestScope
       local result = run_tests(test, options, print_scope_header, state, full_scope_name.."/"..test.name)
       count = count + result.count
       failed_count = failed_count + result.failed_count
     elseif test.is_test and should_run_test(full_scope_name, test.name, options.filters) then
+      ---@cast test TestTest
       local id = state.next_id
       state.next_id = state.next_id + 1
       if not options.test_ids_to_run or options.test_ids_to_run[id] then
@@ -173,6 +186,9 @@ local function run_tests(scope, options, print_parent_scope_header, state, full_
             ))
           )
           print_latest_diff_msgs()
+        end
+        if scope.after_each then
+          scope.after_each()
         end
       end
     end
