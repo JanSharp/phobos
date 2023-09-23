@@ -10,6 +10,7 @@ local profile_util = require("profile_util")
 local Path = require("lib.path")
 local constants = require("constants")
 local util = require("util")
+local sandbox_util = require("sandbox_util")
 
 local compile_util = require("compile_util")
 
@@ -181,6 +182,7 @@ do
     scope:add_test(label, function()
       before_each()
       func()
+      assert(not sandbox_util.is_hooked(), "The sandbox util must be unhooked by the end.")
     end)
   end
 

@@ -315,10 +315,10 @@ local function get_inject_script_file_specific_data(filename, script_cache)
   }, script_cache.inject_script_context)), nil, "b"))
   sandbox_util.hook()
   local func = main_chunk()
+  local required_files = sandbox_util.unhook()
   util.assert(type(func) == "function",
     "AST inject scripts must return a function. (script file: "..filename..")"
   )
-  local required_files = sandbox_util.unhook()
   for i = #required_files, 1, -1 do
     local file = required_files[i]
     file = Path.new(file):to_fully_qualified():normalize():str()
