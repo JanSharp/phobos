@@ -44,13 +44,16 @@ local function convert_to_lut_or_callback(array_or_func)
   return nil, nil
 end
 
+local is_printing = false
 ---@param print_stacktrace boolean?
 ---@param msg string
 local function wrapped_print(print_stacktrace, msg)
   ---cSpell:ignore currentline
+  is_printing = true
   local info = debug_getinfo(3, "Sl")
   msg = msg.." at "..info.short_src..":"..(info.currentline or 0)
   print(print_stacktrace and debug_traceback(msg, 3) or msg)
+  is_printing = false
 end
 
 ---@class DataBreakpointBreakDefinition
@@ -81,8 +84,9 @@ local function data_breakpoint(tab, break_definition)
   -- set metatable
   return setmetatable(tab, {
     __index = function(_, key)
-      if break_on_read_lut and break_on_read_lut[key]
-        or break_on_read_callback and break_on_read_callback(key)
+      if not is_printing and (
+        break_on_read_lut and break_on_read_lut[key]
+        or break_on_read_callback and break_on_read_callback(key))
       then
         local current_value = values[key]
         wrapped_print(print_stacktrace, "Reading from '"..tostring(key)
