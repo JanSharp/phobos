@@ -76,6 +76,10 @@ local function data_breakpoint(tab, break_definition)
         or break_on_read_callback and break_on_read_callback(key)
       then
         local current_value = values[key]
+        local info = debug_getinfo(2, "Sl")
+        local msg = "Reading from '"..tostring(key).."' ('"..tostring(current_value)
+          .."') at "..info.short_src..":"..(info.currentline or 0)
+        print(print_stacktrace and debug_traceback(msg, 2) or msg)
         hit_break_point()
       end
       return values[key]
@@ -87,8 +91,8 @@ local function data_breakpoint(tab, break_definition)
         ---cSpell:ignore currentline
         local old_value = values[key]
         local info = debug_getinfo(2, "Sl")
-        local msg = "Written to '"..tostring(key).."' ('"..tostring(old_value).."' => '"
-          ..tostring(new_value).."') at "..info.short_src..":"..(info.currentline or 0)
+        local msg = "Written to '"..tostring(key).."' ('"..tostring(old_value).."' => '"..tostring(new_value)
+          .."') at "..info.short_src..":"..(info.currentline or 0)
         print(print_stacktrace and debug_traceback(msg, 2) or msg)
         hit_break_point()
       end
