@@ -1,4 +1,15 @@
 
+local pairs = pairs
+local type = type
+local error = error
+local assert = assert
+local getmetatable = getmetatable
+local setmetatable = setmetatable
+local print = print
+local tostring = tostring
+local ipairs = ipairs
+local debug_getinfo = debug.getinfo
+
 local function hit_break_point()
   local b -- put a breakpoint here (or call a break function if the debugger has one)
 end
@@ -72,7 +83,7 @@ local function data_breakpoint(tab, break_definition)
       then
         ---cSpell:ignore currentline
         local old_value = values[key]
-        local info = debug.getinfo(2, "Sl")
+        local info = debug_getinfo(2, "Sl")
         print("Written to '"..tostring(key).."' ('"..tostring(old_value).."' => '"..tostring(new_value).."') \z
           at "..info.short_src..":"..(info.currentline or 0)
         )
