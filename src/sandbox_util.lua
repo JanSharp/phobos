@@ -114,9 +114,9 @@ local function unhook_require()
 end
 
 local raw_loadfile = loadfile
-local function custom_loadfile(filename, mode, env)
+local function custom_loadfile(filename, ...)
   files[#files+1] = filename
-  return raw_loadfile(filename, mode, env)
+  return raw_loadfile(filename, ...)
 end
 
 local function hook_loadfile()
