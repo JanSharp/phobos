@@ -1,5 +1,4 @@
 
-local hooks = {}
 local hook_data_lut = {}
 
 local function hook(table, field, on_call)
@@ -7,10 +6,8 @@ local function hook(table, field, on_call)
   local hook_data = {
     table = table,
     field = field,
-    index = #hooks + 1,
     original_func = func,
   }
-  hooks[hook_data.index] = hook_data
   table[field] = function(...)
     on_call(...)
     return func(...)
@@ -32,8 +29,10 @@ local function unhook(table, field)
 end
 
 local function unhook_all()
-  for _, hook_data in ipairs(hooks) do
-    unhook_internal(hook_data)
+  for _, hook_data_for_table in pairs(hook_data_lut) do
+    for _, hook_data in pairs(hook_data_for_table) do
+      unhook_internal(hook_data)
+    end
   end
   hook_data_lut = {}
 end
