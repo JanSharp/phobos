@@ -4,7 +4,7 @@ local type = type
 local error = error
 local assert = assert
 local getmetatable = getmetatable
-local setmetatable = setmetatable
+local raw_setmetatable = setmetatable
 local print = print
 local tostring = tostring
 local ipairs = ipairs
@@ -63,26 +63,20 @@ end
 
 ---@generic T
 ---@param tab T
+---@param values T
 ---@param break_definition DataBreakpointBreakDefinition
 ---@return T
-local function data_breakpoint(tab, break_definition)
-  assert(getmetatable(tab) == nil, "Data breakpoints on tables with metatables is not supported.")
-
-  -- move values from tab to a new table
-  local values = {}
-  for k, v in pairs(tab) do
-    values[k] = v
-  end
-  for k in pairs(values) do
-    tab[k] = nil
-  end
-
+local function data_breakpoint_internal(tab, values, break_definition)
   local print_stacktrace = break_definition.print_stacktrace
   local break_on_read_lut, break_on_read_callback = convert_to_lut_or_callback(break_definition.break_on_read)
   local break_on_write_lut, break_on_write_callback = convert_to_lut_or_callback(break_definition.break_on_write)
 
   -- set metatable
-  return setmetatable(tab, {
+  return raw_setmetatable(tab, {
+    is_data_breakpoint = true,
+    values = values,
+    break_definition = break_definition,
+
     __index = function(_, key)
       if not is_printing and (
         break_on_read_lut and break_on_read_lut[key]
@@ -120,6 +114,43 @@ local function data_breakpoint(tab, break_definition)
       return #values
     end,
   })
+end
+
+---@generic T
+---@param tab T
+---@param break_definition DataBreakpointBreakDefinition
+---@return T
+local function data_breakpoint(tab, break_definition)
+  assert(getmetatable(tab) == nil, "Data breakpoints on tables with metatables is not supported.")
+
+  -- move values from tab to a new table
+  local values = {}
+  for k, v in pairs(tab) do
+    values[k] = v
+  end
+  for k in pairs(values) do
+    tab[k] = nil
+  end
+
+  return data_breakpoint_internal(tab, values, break_definition)
+end
+
+---@generic T
+---@param t T
+---@return T
+local function shallow_copy(t)
+  local result = {}
+  for k, v in pairs(t) do
+    result[k] = v
+  end
+  return result
+end
+
+function setmetatable(table, metatable)
+  if not metatable or not metatable.is_data_breakpoint then
+    return raw_setmetatable(table, metatable)
+  end
+  return data_breakpoint_internal(table, shallow_copy(metatable.values), metatable.break_definition)
 end
 
 return data_breakpoint
