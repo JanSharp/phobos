@@ -58,8 +58,8 @@ end
 
 ---@class DataBreakpointBreakDefinition
 ---@field print_stacktrace boolean?
----@field break_on_read fun(key: any)|{any: true}|(any[])|nil
----@field break_on_write fun(key: any, old: any, new: any)|{any: true}|(any[])|nil
+---@field break_on_read (fun(key: any): boolean?)|{any: true}|(any[])|nil
+---@field break_on_write (fun(key: any, old: any, new: any): boolean?)|{any: true}|(any[])|nil
 
 ---@generic T
 ---@param tab T
