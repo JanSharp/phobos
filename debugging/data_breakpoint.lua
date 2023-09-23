@@ -9,6 +9,7 @@ local print = print
 local tostring = tostring
 local ipairs = ipairs
 local debug_getinfo = debug.getinfo
+local debug_traceback = debug.traceback
 
 local function hit_break_point()
   local b -- put a breakpoint here (or call a break function if the debugger has one)
@@ -44,6 +45,7 @@ local function convert_to_lut_or_callback(array_or_func)
 end
 
 ---@class DataBreakpointBreakDefinition
+---@field print_stacktrace boolean?
 ---@field break_on_read fun(key: any)|{any: true}|(any[])|nil
 ---@field break_on_write fun(key: any, old: any, new: any)|{any: true}|(any[])|nil
 
@@ -63,6 +65,7 @@ local function data_breakpoint(tab, break_definition)
     tab[k] = nil
   end
 
+  local print_stacktrace = break_definition.print_stacktrace
   local break_on_read_lut, break_on_read_callback = convert_to_lut_or_callback(break_definition.break_on_read)
   local break_on_write_lut, break_on_write_callback = convert_to_lut_or_callback(break_definition.break_on_write)
 
@@ -84,9 +87,9 @@ local function data_breakpoint(tab, break_definition)
         ---cSpell:ignore currentline
         local old_value = values[key]
         local info = debug_getinfo(2, "Sl")
-        print("Written to '"..tostring(key).."' ('"..tostring(old_value).."' => '"..tostring(new_value).."') \z
-          at "..info.short_src..":"..(info.currentline or 0)
-        )
+        local msg = "Written to '"..tostring(key).."' ('"..tostring(old_value).."' => '"
+          ..tostring(new_value).."') at "..info.short_src..":"..(info.currentline or 0)
+        print(print_stacktrace and debug_traceback(msg, 2) or msg)
         hit_break_point()
       end
       values[key] = new_value
