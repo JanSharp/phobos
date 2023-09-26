@@ -6,6 +6,7 @@ local Path = require("lib.path")
 Path.set_main_separator("/")
 local error_code_util = require("error_code_util")
 local util = require("util")
+db = require("debugging.data_breakpoint")
 
 local unsafe = true
 local print_progress = true

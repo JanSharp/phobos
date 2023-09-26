@@ -10,6 +10,7 @@ local profile_util = require("profile_util")
 local Path = require("lib.path")
 local constants = require("constants")
 local util = require("util")
+local sandbox_util = require("sandbox_util")
 
 local compile_util = require("compile_util")
 
@@ -181,7 +182,15 @@ do
     scope:add_test(label, function()
       before_each()
       func()
+      assert(not sandbox_util.is_hooked(), "The sandbox util must be unhooked by the end.")
     end)
+  end
+
+  function scope.after_each()
+    -- Potentially clean up after failed tests.
+    if sandbox_util.is_hooked() then
+      sandbox_util.unhook()
+    end
   end
 
   local function run()
@@ -707,6 +716,13 @@ do
       (script file: "..normalize_path("scripts/inject".._pho)..")",
       run
     )
+  end)
+
+  add_test("inject script file that errors during initial execution", function()
+    create_source_file("foo")
+    create_inject_script_file("inject", nil, "error('hello world')")
+    include_file("foo", {inject_scripts = {"scripts/inject".._pho}})
+    assert.errors_with_pattern("hello world", run)
   end)
 
   add_test("inject script file that does not exist", function()

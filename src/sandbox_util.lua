@@ -114,9 +114,9 @@ local function unhook_require()
 end
 
 local raw_loadfile = loadfile
-local function custom_loadfile(filename, mode, env)
+local function custom_loadfile(filename, ...)
   files[#files+1] = filename
-  return raw_loadfile(filename, mode, env)
+  return raw_loadfile(filename, ...)
 end
 
 local function hook_loadfile()
@@ -127,18 +127,26 @@ local function unhook_loadfile()
   loadfile = raw_loadfile
 end
 
+local is_currently_hooked = false
+
 local function hook(do_not_reset_required_files)
   if not do_not_reset_required_files then
     reset_required_filenames()
   end
   hook_require()
   hook_loadfile()
+  is_currently_hooked = true
 end
 
 local function unhook()
   unhook_require()
   unhook_loadfile()
+  is_currently_hooked = false
   return get_required_filenames()
+end
+
+local function is_hooked()
+  return is_currently_hooked
 end
 
 -- local function save_loaded_state()
@@ -167,4 +175,5 @@ return {
   get_required_filenames = get_required_filenames,
   hook = hook,
   unhook = unhook,
+  is_hooked = is_hooked,
 }

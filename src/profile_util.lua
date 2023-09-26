@@ -314,11 +314,16 @@ local function get_inject_script_file_specific_data(filename, script_cache)
     accept_bytecode = true,
   }, script_cache.inject_script_context)), nil, "b"))
   sandbox_util.hook()
-  local func = main_chunk()
+  local success, func = xpcall(main_chunk, function(msg)
+    return debug.traceback(msg, 2)
+  end)
+  local required_files = sandbox_util.unhook()
+  if not success then
+    util.abort(func)
+  end
   util.assert(type(func) == "function",
     "AST inject scripts must return a function. (script file: "..filename..")"
   )
-  local required_files = sandbox_util.unhook()
   for i = #required_files, 1, -1 do
     local file = required_files[i]
     file = Path.new(file):to_fully_qualified():normalize():str()
