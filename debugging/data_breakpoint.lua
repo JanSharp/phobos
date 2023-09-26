@@ -8,8 +8,12 @@ local raw_setmetatable = setmetatable
 local print = print
 local tostring = tostring
 local ipairs = ipairs
+local next = next
 local debug_getinfo = debug.getinfo
 local debug_traceback = debug.traceback
+
+---@type table<table, true>
+local all_hooked_tables = setmetatable({}, {__mode = "k"})
 
 local function hit_break_point()
   local b -- put a breakpoint here (or call a break function if the debugger has one)
@@ -66,10 +70,12 @@ end
 ---@param values T
 ---@param break_definition DataBreakpointBreakDefinition
 ---@return T
-local function data_breakpoint_internal(tab, values, break_definition)
+local function hook_internal(tab, values, break_definition)
   local print_stacktrace = break_definition.print_stacktrace
   local break_on_read_lut, break_on_read_callback = convert_to_lut_or_callback(break_definition.break_on_read)
   local break_on_write_lut, break_on_write_callback = convert_to_lut_or_callback(break_definition.break_on_write)
+
+  all_hooked_tables[tab] = true
 
   -- set metatable
   return raw_setmetatable(tab, {
@@ -120,7 +126,7 @@ end
 ---@param tab T
 ---@param break_definition DataBreakpointBreakDefinition
 ---@return T
-local function data_breakpoint(tab, break_definition)
+local function hook(tab, break_definition)
   assert(getmetatable(tab) == nil, "Data breakpoints on tables with metatables is not supported.")
 
   -- move values from tab to a new table
@@ -132,7 +138,36 @@ local function data_breakpoint(tab, break_definition)
     tab[k] = nil
   end
 
-  return data_breakpoint_internal(tab, values, break_definition)
+  return hook_internal(tab, values, break_definition)
+end
+
+---@generic T
+---@param tab T
+---@param silent boolean? @ Suppress the "can only unhook hooked tables" warning?
+---@return T
+local function unhook(tab, silent)
+  local meta = getmetatable(tab)
+  if not (meta and meta.is_data_breakpoint) then
+    if not silent then
+      print("Can only unhook tables that are currently hooked as a data breakpoint. Ignoring.")
+    end
+    return tab
+  end
+  raw_setmetatable(tab, nil)
+  for k, v in pairs(meta.values) do
+    tab[k] = v
+  end
+  all_hooked_tables[tab] = nil
+  return tab
+end
+
+local function unhook_all()
+  local tab = next(all_hooked_tables)
+  while tab do
+    local next_tab = next(all_hooked_tables, tab)
+    unhook(tab)
+    tab = next_tab
+  end
 end
 
 ---@generic T
@@ -150,7 +185,11 @@ function setmetatable(table, metatable)
   if not metatable or not metatable.is_data_breakpoint then
     return raw_setmetatable(table, metatable)
   end
-  return data_breakpoint_internal(table, shallow_copy(metatable.values), metatable.break_definition)
+  return hook_internal(table, shallow_copy(metatable.values), metatable.break_definition)
 end
 
-return data_breakpoint
+return {
+  hook = hook,
+  unhook = unhook,
+  unhook_all = unhook_all,
+}
