@@ -2537,7 +2537,8 @@ end
 
 ---@generic T
 ---@generic TState
----@param tab_or_iter T[]|fun(state: TState, key: T?):(T?) @ an array or an iterator returning a single value
+---@param tab_or_iter (T[]|{size?: integer})|fun(state: TState, key: T?):(T?) @
+---an array, a stack or an iterator returning a single value
 ---@param state TState? @ used if this is an iterator
 ---@param starting_value T? @ used if this is an iterator
 ---@return LinqObj|T[]
@@ -2548,7 +2549,7 @@ local function linq(tab_or_iter, state, starting_value)
     if tab_or_iter.__is_linq then
       util.abort("Attempt to create linq object from another linq object. If this is intentional, use 'copy' instead.")
     end
-    local count = #tab_or_iter
+    local count = tab_or_iter.size or #tab_or_iter
     return setmetatable({
       __is_linq = true,
       __iter = make_array_iter(tab_or_iter, count),

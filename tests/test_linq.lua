@@ -6,6 +6,7 @@ local linq = require("linq")
 
 local util = require("util")
 local ll = require("linked_list")
+local stack = require("stack")
 
 local function reverse_array(array)
   local result = {}
@@ -424,6 +425,26 @@ do
 
   add_test("creating a linq object from a table", function()
     local obj = linq(get_test_strings())
+    assert_iteration(obj, get_test_strings())
+  end)
+
+  add_test("creating a linq object from a stack", function()
+    local value_stack = stack.new_stack()
+    for _, value in ipairs(get_test_strings()) do
+      stack.push(value_stack, value)
+    end
+    local obj = linq(value_stack)
+    assert_iteration(obj, get_test_strings())
+  end)
+
+  add_test("creating a linq object from a stack which had some values popped", function()
+    local value_stack = stack.new_stack()
+    for _, value in ipairs(get_test_strings()) do
+      stack.push(value_stack, value)
+    end
+    stack.push(value_stack, "I should not be here")
+    stack.pop(value_stack)
+    local obj = linq(value_stack)
     assert_iteration(obj, get_test_strings())
   end)
 
