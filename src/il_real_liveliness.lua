@@ -318,20 +318,24 @@ local function eval_live_regs_in_block(data, open_block)
   mark_as_finished(data, open_block)
 end
 
+---@param block ILBlock
+---@return ILRealLivelinessOpenBlock
+local function new_open_block(block)
+  ---@type ILRealLivelinessOpenBlock
+  local open_block = {
+    block = block,
+    regs_waiting_for_set = {},
+    regs_lut = {},
+  }
+  return open_block
+end
+
 ---@param func ILFunction
 ---@return ILRealLivelinessOpenBlock[]
 local function get_initial_open_blocks(func)
   return linq(ll.iterate(func.blocks)--[[@as fun(): ILBlock]])
     :where(function(block) return not block.straight_link and not block.jump_link end)
-    :select(function(block)
-      ---@type ILRealLivelinessOpenBlock
-      local open_block = {
-        block = block,
-        regs_waiting_for_set = {},
-        regs_lut = {},
-      }
-      return open_block
-    end)
+    :select(function(block) return new_open_block(block) end)
     :to_stack()
 end
 
@@ -364,7 +368,7 @@ local function eval_real_reg_liveliness(func)
     end
 
     if next(data.partially_open_blocks) then -- There is still at least 1 loop block.
-      -- Only blocks with 2 target links can ultimately run this logic, so only test blocks
+      -- Only blocks with 2 target links can ultimately run this logic, so only test blocks.
       local _, partially_open_block = next(data.partially_open_blocks)
       eval_live_regs_in_block(data, partially_open_block)
       goto continue
@@ -374,12 +378,10 @@ local function eval_real_reg_liveliness(func)
     -- return block at all or there is unreachable blocks (or unreachable block loops).
     for block in ll.iterate_reverse(func.blocks) do
       if not data.finished_blocks[block] then
-        data.partially_open_blocks[block] = {
-          block = block,
-          regs_lut = {},
-          regs_waiting_for_set = {},
-        }
-        goto continue
+        local partially_open_block = new_open_block(block)
+        data.partially_open_blocks[block] = partially_open_block
+        eval_live_regs_in_block(data, partially_open_block)
+        goto continue -- Go back to processing open blocks and new partially open blocks.
       end
     end
 
