@@ -256,10 +256,15 @@ local function mark_as_finished(data, open_block)
     set_real_live_regs(link, open_block.regs_waiting_for_set)
 
     local source_block = link.source_block
+
     if data.finished_blocks[source_block] then
       local previously_open_block = data.previously_open_blocks[source_block]
       if merge_partially_open_blocks(previously_open_block, open_block.regs_waiting_for_set) then
         stack.push(data.open_blocks, previously_open_block)
+        data.open_blocks_lut[source_block] = true
+        -- Theoretically these 2 lines are optional, I think, but this should be cleaner.
+        data.finished_blocks[source_block] = nil
+        data.previously_open_blocks[source_block] = nil
       end
       goto continue
     end
@@ -276,8 +281,12 @@ local function mark_as_finished(data, open_block)
       merge_partially_open_blocks(partially_open_block, open_block.regs_waiting_for_set)
     end
 
-    if is_link_finished(source_block.straight_link) and is_link_finished(source_block.jump_link) then
+    if not data.open_blocks_lut[source_block]
+      and is_link_finished(source_block.straight_link)
+      and is_link_finished(source_block.jump_link)
+    then
       stack.push(data.open_blocks, partially_open_block)
+      data.open_blocks_lut[source_block] = true
     end
     ::continue::
   end
@@ -287,6 +296,8 @@ end
 ---@param open_block ILRealLivelinessOpenBlock
 local function eval_live_regs_in_block(data, open_block)
   data.partially_open_blocks[open_block.block] = nil
+  -- previously_open_blocks is separate from finished_blocks because it must capture the state
+  -- before actually processing the block, while marking as finished happens after.
   data.previously_open_blocks[open_block.block] = {
     block = open_block.block,
     regs_waiting_for_set = util.shallow_copy(open_block.regs_waiting_for_set),
@@ -342,29 +353,34 @@ end
 ---@class ILRealLivelinessOpenBlock
 ---@field block ILBlock
 ---@field regs_waiting_for_set ILLiveRegisterRange[]
----@field regs_lut table<ILRegister, ILLiveRegisterRange>
+---@field regs_lut table<ILRegister, ILLiveRegisterRange> @ Lookup table for regs_waiting_for_set.
 
 ---@class ILRealLivelinessData
 ---@field func ILFunction
 ---@field partially_open_blocks table<ILBlock, ILRealLivelinessOpenBlock>
 ---@field previously_open_blocks table<ILBlock, ILRealLivelinessOpenBlock>
 ---@field open_blocks ILRealLivelinessOpenBlock[] @ This is a stack.
+---@field open_blocks_lut table<ILBlock, true> @ Lookup table for blocks in open_blocks.
 ---@field finished_blocks table<ILBlock, true>
 
 ---@param func ILFunction
 local function eval_real_reg_liveliness(func)
+  local open_blocks = get_initial_open_blocks(func)
   ---@type ILRealLivelinessData
   local data = {
     func = func,
     partially_open_blocks = {},
     previously_open_blocks = {},
-    open_blocks = get_initial_open_blocks(func),
+    open_blocks = open_blocks,
+    open_blocks_lut = linq(open_blocks):to_lookup(function(open_block) return open_block.block end),
     finished_blocks = {},
   }
 
   while true do
     while stack.get_top(data.open_blocks) do
-      eval_live_regs_in_block(data, stack.pop(data.open_blocks))
+      local open_block = stack.pop(data.open_blocks)
+      eval_live_regs_in_block(data, open_block)
+      data.open_blocks_lut[open_block.block] = true
     end
 
     if next(data.partially_open_blocks) then -- There is still at least 1 loop block.
