@@ -61,6 +61,7 @@ local function wrapped_print(print_stacktrace, msg)
 end
 
 ---@class DataBreakpointBreakDefinition
+---@field name string?
 ---@field print_stacktrace boolean?
 ---@field break_on_read (fun(key: any): boolean?)|{any: true}|(any[])|nil
 ---@field break_on_write (fun(key: any, old: any, new: any): boolean?)|{any: true}|(any[])|nil
@@ -89,8 +90,9 @@ local function hook_internal(tab, values, break_definition)
         or break_on_read_callback and break_on_read_callback(key))
       then
         local current_value = values[key]
-        wrapped_print(print_stacktrace, "Reading from '"..tostring(key)
-          .."' ('"..tostring(current_value).."')"
+        wrapped_print(print_stacktrace, "Reading from "
+          ..(break_definition.name and (break_definition.name.." ") or "")
+          .."'"..tostring(key).."' ('"..tostring(current_value).."')"
         )
         hit_break_point()
       end
@@ -101,8 +103,9 @@ local function hook_internal(tab, values, break_definition)
         or break_on_write_callback and break_on_write_callback(key, values[key], new_value)
       then
         local old_value = values[key]
-        wrapped_print(print_stacktrace, "Writing to '"..tostring(key)
-          .."' ('"..tostring(old_value).."' => '"..tostring(new_value).."')"
+        wrapped_print(print_stacktrace, "Writing to "
+          ..(break_definition.name and (break_definition.name.." ") or "")
+          .."'"..tostring(key).."' ('"..tostring(old_value).."' => '"..tostring(new_value).."')"
         )
         hit_break_point()
       end
@@ -161,11 +164,14 @@ local function unhook(tab, silent)
   return tab
 end
 
-local function unhook_all()
+---@param name string?
+local function unhook_all(name)
   local tab = next(all_hooked_tables)
   while tab do
     local next_tab = next(all_hooked_tables, tab)
-    unhook(tab)
+    if not name or getmetatable(tab).break_definition.name == name then
+      unhook(tab)
+    end
     tab = next_tab
   end
 end
