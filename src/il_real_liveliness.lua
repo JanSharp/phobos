@@ -5,6 +5,7 @@ local linq = require("linq")
 local stack = require("stack")
 local il_blocks = require("il_blocks")
 local il_borders = require("il_borders")
+local phobos_consts = require("constants")
 
 ----====----====----====----====----====----====----====----====----====----====----====----====----
 -- utility
@@ -326,6 +327,24 @@ local function eval_live_regs_in_block(data, open_block)
       set_real_live_regs(inst.prev_border, regs_waiting_for_set)
     end
   end
+
+  -- Ensure the live regs before the main entry block are just the ones for parameters, anything else
+  -- indicates that there are regs used before they are written to, which is invalid.
+  if open_block.block.is_main_entry_block then
+    local invalid_regs = linq(regs_waiting_for_set)
+      :select(function(reg_range) return reg_range.reg end)
+      :except(data.func.param_regs)
+      :select(function(reg) return reg.name or phobos_consts.unnamed_register_name end)
+      :to_array()
+    if invalid_regs[1] then
+      util.debug_abort(#invalid_regs.." registers are read from before they are written to: "
+        ..table.concat(invalid_regs, ", ").."."
+      )
+    end
+    data.func.param_live_reg_range_lut = linq(regs_waiting_for_set)
+      :to_dict(function(reg_range) return reg_range.reg, reg_range end)
+  end
+
   mark_as_finished(data, open_block)
 end
 
@@ -404,8 +423,6 @@ local function eval_real_reg_liveliness(func)
     break
     ::continue::
   end
-  -- TODO: ensure the live regs before the main entry block are just he ones for parameters, anything else [...]
-  -- indicates that there are regs used before they are written to, which is invalid.
 end
 
 ---@param func ILFunction
