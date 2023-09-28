@@ -9,6 +9,7 @@ local il_borders = require("il_borders")
 ----====----====----====----====----====----====----====----====----====----====----====----====----
 
 local visit_regs_for_inst
+local visit_regs_for_inst_deduplicated
 local visit_all_regs
 local inst_uses_reg
 local get_flag = 1
@@ -129,6 +130,30 @@ do
   function visit_regs_for_inst(data, inst, visit_reg_func)
     visit_reg = visit_reg_func
     visitor_lut[inst.inst_type](data, inst)
+  end
+
+  do
+    local reg_flags_lut = {}
+    local regs = {}
+    local function callback(_, _, reg, get_set)
+      if not reg_flags_lut[reg] then
+        regs[#regs+1] = reg
+      end
+      reg_flags_lut[reg] = bit32.bor(reg_flags_lut[reg] or 0, get_set)
+    end
+
+    ---@generic T
+    ---@param data T @ A state object passed as is to the visit callback. Can be `nil`.
+    ---@param inst ILInstruction
+    ---@param visit_reg_func fun(data: T, inst: ILInstruction, reg: ILRegister, get_set: 1|2|3)
+    function visit_regs_for_inst_deduplicated(data, inst, visit_reg_func)
+      visit_regs_for_inst(nil, inst, callback)
+      for _, reg in ipairs(regs) do
+        visit_reg_func(data, inst, reg, reg_flags_lut[reg])
+      end
+      util.clear_array(regs)
+      util.clear_table(reg_flags_lut)
+    end
   end
 
   ---@generic T
@@ -942,6 +967,16 @@ local function update_reg_liveliness_for_removed_inst(func, inst)
 end
 
 return {
+
+  -- utility
+
+  visit_regs_for_inst = visit_regs_for_inst,
+  visit_regs_for_inst_deduplicated = visit_regs_for_inst_deduplicated,
+  visit_all_regs = visit_all_regs,
+  inst_uses_reg = inst_uses_reg,
+  get_flag = get_flag,
+  set_flag = set_flag,
+  get_and_set_flags = get_and_set_flags,
 
   -- creating
 
