@@ -100,7 +100,7 @@ end
   and a list of instructions associated with an index offset from the group base index
 - [x] live regs must exist for block links
   - [x] live regs for borders which are actually never visited are nil.
-- [ ] list of live reg ranches which are alive from the beginning of the function, which must also match the
+- [x] list of live reg ranges which are alive from the beginning of the function, which must also match the
   list of parameters
 
 ]]
