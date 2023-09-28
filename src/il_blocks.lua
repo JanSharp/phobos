@@ -392,6 +392,9 @@ local function merge_blocks(func, left_block, right_block)
     inst = inst.next
   end
 
+  -- Extend the left_block to the stop_inst of the right_block.
+  left_block.stop_inst = right_block.stop_inst
+
   ll.remove(func.blocks, right_block)
 end
 
