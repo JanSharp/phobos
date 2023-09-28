@@ -1679,12 +1679,45 @@ end
 local function remove_unreachable_blocks(func)
   il_blocks.ensure_has_blocks(func)
 
-  for block in ll.iterate(func.blocks)--[[@as fun(): ILBlock]] do
-    if block.is_main_entry_block or block.source_links[1] then goto continue end
-    for inst in il_blocks.iterate(func, block) do
-      remove_inst(func, inst)
+  ---@type table<ILBlock, true>
+  local reachable = {}
+  local has_return = false
+
+  ---@param block ILBlock
+  local function walk_block(block)
+    if reachable[block] then return end
+    reachable[block] = true
+    if block.stop_inst.inst_type == "ret" then
+      has_return = true
     end
-    ::continue::
+    if block.straight_link then
+      walk_block(block.straight_link.target_block)
+    end
+    if block.jump_link then
+      walk_block(block.jump_link.target_block)
+    end
+  end
+  walk_block(func.blocks.first)
+
+  local insts_to_remove = linq(ll.iterate(func.blocks)--[[@as fun(): ILBlock]])
+    :where(function(block) return not reachable[block] end)
+    :select_many(function(block) return linq(il_blocks.iterate(func, block)--[[@as fun(): ILInstruction]]) end)
+    :order_by(function(inst) return inst.inst_type == "label" and 1 or 0 end) -- Remove labels after jumps.
+    :then_by(function(inst) return inst.index end) -- For a deterministic and faster removal order.
+    :to_array() -- Can't remove as we iterate because that can merge blocks and might break iteration.
+
+  for _, inst in ipairs(insts_to_remove) do
+    remove_inst(func, inst)
+  end
+
+  -- NOTE: At the moment every function has at least 1 return instruction. The above logic could break this
+  -- assumption because a function could end in an infinite loop. However for now I'd like to keep this
+  -- assumption alive because I have no reason to break it.
+  -- The downside here is that this newly added return instruction at the end here is actually unreachable,
+  -- which goes against what "remove_unreachable_blocks" is supposed to do, so depending on what behavior is
+  -- required in the future, this may end up getting removed.
+  if not has_return then
+    append_inst(func, new_ret{position = func.instructions.last.position})
   end
 end
 
