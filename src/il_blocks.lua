@@ -414,6 +414,13 @@ local function try_merge_blocks(func, left_block, right_block)
   end
 end
 
+---@param inst ILInstruction
+local function assert_has_next(inst)
+  util.debug_assert(inst.next, "Removing the last instruction where the second last instruction requires a \z
+    straight_link resulted in malformed IL."
+  )
+end
+
 ---Expects the given block's source_links to already be removed, except optionally one which is the previous
 ---block flowing into this block with a straight_link.\
 ---Excepts the jump_link of this block to already be removed, if it had one.\
@@ -429,9 +436,7 @@ local function remove_block(func, block)
 
   ll.remove(func.blocks, block)
   if inst.prev and inst.prev.block.straight_link then
-    util.debug_assert(inst.next, "Removing the last instruction where the second last instruction has a \z
-      straight_link flowing into its block resulted in malformed IL."
-    )
+    assert_has_next(inst)
     set_link_target_block(inst.prev.block.straight_link, inst.next.block)
 
     try_merge_blocks(func, inst.prev.block, inst.next.block)
@@ -479,6 +484,12 @@ local function update_blocks_for_removed_inst(func, inst)
   -- remove jump link if this is a jump or test instruction
   if removed_stop and block.jump_link then
     remove_link(block.jump_link)
+  end
+
+  -- create straight link if this is a jump or ret instruction
+  if not block.straight_link then
+    assert_has_next(inst)
+    create_link(block, inst.next.block, false)
   end
 
   if removed_start and removed_stop then
