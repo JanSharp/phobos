@@ -1706,18 +1706,20 @@ local function remove_unreachable_blocks(func)
     :then_by(function(inst) return inst.index end) -- For a deterministic and faster removal order.
     :to_array() -- Can't remove as we iterate because that can merge blocks and might break iteration.
 
+  -- Append a return at the end in order to make it possible to remove the following set of instructions:
+  -- A jump instruction as the last instruction, and a label as the second last instruction that the jump is
+  -- jumping to. Neither of these can be removed individually, unless they aren't at the end of the
+  -- instruction list. So with this return here, removing the jump is possible, which then enables removing
+  -- the label as well.
+  append_inst(func, new_ret{position = func.instructions.last.position})
   for _, inst in ipairs(insts_to_remove) do
     remove_inst(func, inst)
   end
 
-  -- NOTE: At the moment every function has at least 1 return instruction. The above logic could break this
-  -- assumption because a function could end in an infinite loop. However for now I'd like to keep this
-  -- assumption alive because I have no reason to break it.
-  -- The downside here is that this newly added return instruction at the end here is actually unreachable,
-  -- which goes against what "remove_unreachable_blocks" is supposed to do, so depending on what behavior is
-  -- required in the future, this may end up getting removed.
-  if not has_return then
-    append_inst(func, new_ret{position = func.instructions.last.position})
+  -- NOTE: This is the only place in the code base at the moment which can cause a function to not have any
+  -- ret instructions. To my knowledge nothing relies on there being one at the moment either.
+  if has_return then
+    remove_inst(func, func.instructions.last)
   end
 end
 
