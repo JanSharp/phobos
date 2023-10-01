@@ -87,7 +87,7 @@ end
 - [ ] index for register groups, when compiling if a live range does not have a matching index, a move is
   inserted before the register list consuming instruction
 - [ ] somehow force the color of parameter registers
-- [ ] remember the instruction which set a live reg range
+- [x] remember the instruction which set a live reg range
 - [ ] maybe remember all instructions which get a live reg range
 - [ ] evaluate all live reg ranges which are not at top and not apart of register lists first
 - [ ] ignore internal regs

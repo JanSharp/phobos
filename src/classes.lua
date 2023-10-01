@@ -836,6 +836,12 @@
 ---@field color integer @ 1 based.
 ---@field adjacent_regs ILLiveRegisterRange[] @ Temp data for interference graph for color eval.
 ---@field adjacent_regs_lut table<ILLiveRegisterRange, true> @ Temp data for interference graph for color eval.
+---Parameter live register ranges do not have an instruction which sets them initially.
+---Keep in mind that a register can have multiple live ranges, but only one of them will have this flag set.
+---@field is_param boolean?
+---The instruction setting/writing to this live reg range, the beginning of its lifetime.\
+---`nil` when `is_param` is `true`.
+---@field set_inst ILInstruction
 
 ---@class ILState
 ---@field reg_types table<ILRegister, ILType>

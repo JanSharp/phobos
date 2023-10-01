@@ -116,6 +116,7 @@ local function eval_live_regs_in_block(data, open_block)
       visit_regs_for_inst_deduplicated(data, inst, function(_, _, reg, get_set)
         local live_reg_range = regs_lut[reg]
         if bit32.band(get_set, set_flag) ~= 0 and regs_lut[reg] then
+          live_reg_range.set_inst = inst
           regs_lut[reg] = nil
           util.remove_from_array_fast(regs_waiting_for_set, live_reg_range)
         end
@@ -226,6 +227,13 @@ local function eval_real_reg_liveliness(func)
 
     break
     ::continue::
+  end
+
+  for _, live_reg_range in pairs(func.param_live_reg_range_lut) do
+    util.debug_assert(not live_reg_range.set_inst, "A live register range for a parameter should be \z
+      impossible to have an instruction that supposedly sets the live register range."
+    )
+    live_reg_range.is_param = true
   end
 end
 
