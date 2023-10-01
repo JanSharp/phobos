@@ -26,8 +26,7 @@ local function build_graph(func)
     end
   end
 
-  local insts = func.instructions
-  for border in il_borders.iterate_borders(func, insts.first.next_border, insts.last.prev_border)--[[@as fun(): ILBorder]] do
+  for border in il_borders.iterate_borders(func)--[[@as fun(): ILBorder]] do
     -- Ignore borders between blocks, because those don't have live regs, the links between blocks do instead.
     if border.prev_inst ~= border.prev_inst.block.stop_inst then
       add_real_live_regs(border.real_live_regs)
