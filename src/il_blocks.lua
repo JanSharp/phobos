@@ -486,15 +486,15 @@ local function update_blocks_for_removed_inst(func, inst)
     remove_link(block.jump_link)
   end
 
+  if removed_start and removed_stop then
+    remove_block(func, block) -- remove the block for this instruction entirely
+    return
+  end
+
   -- create straight link if this is a jump or ret instruction
   if not block.straight_link then
     assert_has_next(inst)
     create_link(block, inst.next.block, false)
-  end
-
-  if removed_start and removed_stop then
-    remove_block(func, block) -- remove the block for this instruction entirely
-    return
   end
 
   if removed_start then -- only removed start
