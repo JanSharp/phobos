@@ -12,6 +12,8 @@ local linq = require("linq")
 -- "ret" - 0 target links
 -- "jump" - 1 target links
 -- "test" - 2 target links
+-- "forprep_inst" - 2 target links
+-- "forloop_inst" - 2 target links
 -- any other instruction - 1 target links
 --
 -- Labels are only valid as the very first instruction of a block.
@@ -93,11 +95,11 @@ local function create_target_links_for_block(block)
     )
   end
   local inst_type = last_inst.inst_type
-  if inst_type == "jump" then
-    ---@cast last_inst ILJump
+  if inst_type == "jump" or inst_type == "forprep_inst" then
+    ---@cast last_inst ILJump|ILForprepInst
     create_link(block, last_inst.label.block, true)
-  elseif inst_type == "test" then
-    ---@cast last_inst ILTest
+  elseif inst_type == "test" or inst_type == "forloop_inst" then
+    ---@cast last_inst ILTest|ILForloopInst
     assert_next()
     create_link(block, last_inst.next.block)
     create_link(block, last_inst.label.block, true)
@@ -112,7 +114,15 @@ end
 ---label isn't in this list because labels can be the start of a block
 ---but if a label is not the first instruction in a block then it does still end the block
 ---so it's handled in the loop down below
-local block_ends_lut = util.invert{"jump", "test", "ret"}
+local block_ends_lut = util.invert{
+  "jump",
+  "test",
+  "ret",
+  "forprep_inst",
+  "forloop_inst",
+  "tforcall_inst", -- TODO: impl tforcall_inst
+  "tforloop_inst", -- TODO: impl tforloop_inst
+}
 
 ---@param left_inst ILInstruction
 ---@param right_inst ILInstruction
@@ -302,10 +312,10 @@ local function update_blocks_for_new_inst(func, inst)
     inst.block = inst.prev.block
     if not can_use_next_block then
       -- with `can_use_next_block` being false, this is true: `inst.block.stop_inst == inst.prev`.
-      inst.block.stop_inst = inst
       if inst.next and inst.next.block == inst.block then
         left_block, right_block = split_block(func, inst.block, inst, inst.next)
       end
+      inst.block.stop_inst = inst
     end
   else -- `can_use_next_block` is guaranteed to be true.
     inst.block = inst.next.block

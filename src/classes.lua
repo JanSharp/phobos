@@ -758,6 +758,11 @@
 ---| "close_up"
 ---| "scoping"
 ---| "to_number"
+---
+---| "forprep_inst"
+---| "forloop_inst"
+---| "tforcall_inst"
+---| "tforloop_inst"
 
 ---@alias ILInstructionGroupType
 ---| "forprep"
@@ -962,6 +967,27 @@
 ---@field inst_type "to_number"
 ---@field result_reg ILRegister
 ---@field right_ptr ILPointer
+
+---@class ILForprepInst : ILInstruction
+---@field inst_type "forprep_inst"
+---@field index_reg ILRegister
+---@field limit_reg ILRegister
+---@field step_reg ILRegister
+---@field label ILLabel
+
+---@class ILForloopInst : ILInstruction
+---@field inst_type "forloop_inst"
+---@field index_reg ILRegister
+---@field limit_reg ILRegister
+---@field step_reg ILRegister
+---@field local_reg ILRegister
+---@field label ILLabel
+
+---@class ILTforcallInst : ILInstruction
+---@field inst_type "tforcall_inst"
+
+---@class ILTforloopInst : ILInstruction
+---@field inst_type "tforloop_inst"
 
 ---@class ILFunction
 ---@field parent_func ILFunction|nil @ `nil` if main chunk

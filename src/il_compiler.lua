@@ -668,6 +668,26 @@ do
         forprep opcode."
       ) ---@diagnostic disable-line: missing-return
     end,
+    ---@param inst ILForprepInst
+    ["forprep_inst"] = function(data, inst)
+      util.debug_abort("-- TODO: implement forprep_inst")
+      return inst.prev
+    end,
+    ---@param inst ILForloopInst
+    ["forloop_inst"] = function(data, inst)
+      util.debug_abort("-- TODO: implement forloop_inst")
+      return inst.prev
+    end,
+    ---@param inst ILTforcallInst
+    ["tforcall_inst"] = function(data, inst)
+      util.debug_abort("-- TODO: implement tforcall_inst")
+      return inst.prev
+    end,
+    ---@param inst ILTforloopInst
+    ["tforloop_inst"] = function(data, inst)
+      util.debug_abort("-- TODO: implement tforloop_inst")
+      return inst.prev
+    end,
   }
 
   ---@type table<ILInstructionGroupType, fun(data: ILCompilerData, inst_group: ILInstructionGroup): (ILInstruction?)>

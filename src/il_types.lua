@@ -152,6 +152,22 @@ local modify_post_state_func_lut = {
     -- TODO: check if it is actually convert-able to a number and set the correct number range
     set_type(inst.post_state, inst.result_reg, il.new_type{type_flags = il.number_flag})
   end,
+  ---@param inst ILForprepInst
+  ["forprep_inst"] = function(data, inst)
+    util.debug_abort("-- TODO: implement forprep_inst")
+  end,
+  ---@param inst ILForloopInst
+  ["forloop_inst"] = function(data, inst)
+    util.debug_abort("-- TODO: implement forloop_inst")
+  end,
+  ---@param inst ILTforcallInst
+  ["tforcall_inst"] = function(data, inst)
+    util.debug_abort("-- TODO: implement tforcall_inst")
+  end,
+  ---@param inst ILTforloopInst
+  ["tforloop_inst"] = function(data, inst)
+    util.debug_abort("-- TODO: implement tforloop_inst")
+  end,
 }
 
 local function new_state()

@@ -34,8 +34,8 @@ local instruction_line_format = util.parse_interpolated_string(
 )
 local il_instruction_line_format = util.parse_interpolated_string(
   "-- {line:%3d} {column:%3d} IL1: {func_id:%3d}f  {pc:%4d}  {index:%4d}  \z
-    [ {group_label:%-8s} ] {label:%-8s}  {block_id}  {description:%-26s}  {real_live_regs}"
-)
+    {label:%-8s}  {block_id}  {description:%-26s}  {real_live_regs}"
+) -- Add "[ {group_label:%-8s} ] " before "{label:%-8s}" if seeing instruction groups is desired.
 
 -- local ill = require("indexed_linked_list")
 
@@ -226,6 +226,9 @@ local function compile(filename)
       -- if not success then print(err) goto finish end
 
       success, err = pcall(require("il_util").remove_unreachable_blocks_recursive, il)
+      if not success then print(err) goto finish end
+
+      success, err = pcall(require("il_util").collapse_inst_groups_recursive, il)
       if not success then print(err) goto finish end
 
       success, err = pcall(require("il_real_liveliness").create_real_reg_liveliness_recursive, il)

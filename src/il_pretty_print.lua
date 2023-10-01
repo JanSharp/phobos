@@ -136,6 +136,28 @@ local instruction_label_getter_lut = {
   ["to_number"] = function(inst, context)
     return "TONUMBER", get_reg(inst.result_reg, context).." := tonumber("..get_ptr(inst.right_ptr, context)..")"
   end,
+  ---@param inst ILForprepInst
+  ["forprep_inst"] = function(inst, context)
+    return "FORPREP", get_reg(inst.index_reg, context).." -= "..get_reg(inst.step_reg, context).."; "
+      .."-> "..get_label_label(inst.label, context)
+  end,
+  ---@param inst ILForloopInst
+  ["forloop_inst"] = function(inst, context)
+    return "FORLOOP", get_reg(inst.index_reg, context).." += "..get_reg(inst.step_reg, context).."; "
+      .."if "..get_reg(inst.step_reg, context).." (step < 0 ? >= : <=) "
+      ..get_reg(inst.limit_reg, context).." then { "
+      .."-> "..get_label_label(inst.label, context).."; "
+      ..get_reg(inst.local_reg, context).." := "..get_reg(inst.index_reg, context)
+      .." }"
+  end,
+  ---@param inst ILTforcallInst
+  ["tforcall_inst"] = function(inst, context)
+    return "TFORCALL", error("-- TODO: implement tforcall_inst")
+  end,
+  ---@param inst ILTforloopInst
+  ["tforloop_inst"] = function(inst, context)
+    return "TFORLOOP", error("-- TODO: implement tforloop_inst")
+  end,
 }
 
 ---@param instruction ILInstruction

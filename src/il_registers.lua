@@ -119,6 +119,23 @@ do
       visit_reg(data, inst, inst.result_reg, set)
       visit_reg(data, inst, inst.right_ptr, get)
     end,
+    ["forprep_inst"] = function(data, inst)
+      visit_reg(data, inst, inst.index_reg, get_and_set)
+      visit_reg(data, inst, inst.limit_reg, get_and_set)
+      visit_reg(data, inst, inst.step_reg, get_and_set)
+    end,
+    ["forloop_inst"] = function(data, inst)
+      visit_reg(data, inst, inst.index_reg, get_and_set)
+      visit_reg(data, inst, inst.limit_reg, get)
+      visit_reg(data, inst, inst.step_reg, get)
+      visit_reg(data, inst, inst.local_reg, set)
+    end,
+    ["tforcall_inst"] = function(data, inst)
+      -- TODO: impl tforcall_inst
+    end,
+    ["tforloop_inst"] = function(data, inst)
+      -- TODO: impl tforloop_inst
+    end,
   }
 
   -- ---@param visit_ptr fun(data: T, inst: ILInstruction, ptr: ILPointer, get_set: 1|2|3)

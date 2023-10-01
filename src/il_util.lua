@@ -52,9 +52,9 @@ end
 ---@field start ILInstruction
 ---@field stop ILInstruction
 
----@param group_type ILInstructionGroupType
 ---@param params ILInstGroupParamsBase
-local function new_instruction_group(group_type, params)
+---@param group_type ILInstructionGroupType
+local function new_instruction_group(params, group_type)
   local group = {
     group_type = group_type,
     position = params.position,
@@ -78,7 +78,7 @@ end
 ---@param params ILForprepGroupParams
 ---@return ILForprepGroup
 local function new_forprep_group(params)
-  local group = new_instruction_group("forprep", params)
+  local group = new_instruction_group(params, "forprep")
   group.index_reg = assert_reg(params, "index_reg")
   group.limit_reg = assert_reg(params, "limit_reg")
   group.step_reg = assert_reg(params, "step_reg")
@@ -95,7 +95,7 @@ end
 ---@param params ILForloopGroupParams
 ---@return ILForloopGroup
 local function new_forloop_group(params)
-  local group = new_instruction_group("forloop", params)
+  local group = new_instruction_group(params, "forloop")
   group.index_reg = assert_reg(params, "index_reg")
   group.limit_reg = assert_reg(params, "limit_reg")
   group.step_reg = assert_reg(params, "step_reg")
@@ -109,7 +109,7 @@ end
 ---@param params ILTforcallGroupParams
 ---@return ILTforcallGroup
 local function new_tforcall_group(params)
-  local group = new_instruction_group("tforcall", params)
+  local group = new_instruction_group(params, "tforcall")
   return group
 end
 
@@ -118,7 +118,7 @@ end
 ---@param params ILTforloopGroupParams
 ---@return ILTforloopGroup
 local function new_tforloop_group(params)
-  local group = new_instruction_group("tforloop", params)
+  local group = new_instruction_group(params, "tforloop")
   return group
 end
 
@@ -398,6 +398,60 @@ local function new_to_number(params)
   local inst = new_inst(params, "to_number")
   inst.result_reg = assert_reg(params, "result_reg")
   inst.right_ptr = assert_ptr(params, "right_ptr")
+  return inst
+end
+
+---@class ILForprepInstParams : ILInstParamsBase
+---@field index_reg ILRegister
+---@field limit_reg ILRegister
+---@field step_reg ILRegister
+---@field label ILLabel
+
+---@param params ILForprepInstParams
+---@return ILForprepInst
+local function new_forprep_inst(params)
+  local inst = new_inst(params, "forprep_inst")
+  inst.index_reg = assert_reg(params, "index_reg")
+  inst.limit_reg = assert_reg(params, "limit_reg")
+  inst.step_reg = assert_reg(params, "step_reg")
+  inst.label = assert_field(params, "label")
+  return inst
+end
+
+---@class ILForloopInstParams : ILInstParamsBase
+---@field index_reg ILRegister
+---@field limit_reg ILRegister
+---@field step_reg ILRegister
+---@field local_reg ILRegister
+---@field label ILLabel
+
+---@param params ILForloopInstParams
+---@return ILForloopInst
+local function new_forloop_inst(params)
+  local inst = new_inst(params ,"forloop_inst")
+  inst.index_reg = assert_reg(params, "index_reg")
+  inst.limit_reg = assert_reg(params, "limit_reg")
+  inst.step_reg = assert_reg(params, "step_reg")
+  inst.local_reg = assert_reg(params, "local_reg")
+  inst.label = assert_field(params, "label")
+  return inst
+end
+
+---@class ILTforcallInstParams : ILInstParamsBase
+
+---@param params ILTforcallInstParams
+---@return ILTforcallInst
+local function new_tforcall_inst(params)
+  local inst = new_inst(params, "tforcall_inst")
+  return inst
+end
+
+---@class ILTforloopInstParams : ILInstParamsBase
+
+---@param params ILTforloopInstParams
+---@return ILTforloopInst
+local function new_tforloop_inst(params)
+  local inst = new_inst(params, "tforloop_inst")
   return inst
 end
 
@@ -1676,6 +1730,19 @@ local function remove_inst(func, inst)
 end
 
 ---@param func ILFunction
+---@param inst_group ILInstructionGroup
+local function remove_inst_group(func, inst_group)
+  for inst in linq(iterate_insts_in_group(inst_group))
+    :order_by(function(inst) return inst.inst_type == "label" and 1 or 0 end) -- Remove labels after jumps.
+    :then_by(function(inst) return inst.index end) -- For a deterministic and faster removal order.
+    :iterate()
+  do
+    inst.inst_group = nil
+    remove_inst(func, inst)
+  end
+end
+
+---@param func ILFunction
 local function remove_unreachable_blocks(func)
   il_blocks.ensure_has_blocks(func)
 
@@ -1723,10 +1790,77 @@ local function remove_unreachable_blocks(func)
   end
 end
 
+---@param func ILFunction
 local function remove_unreachable_blocks_recursive(func)
   remove_unreachable_blocks(func)
   for _, inner_func in ipairs(func.inner_functions) do
     remove_unreachable_blocks_recursive(inner_func)
+  end
+end
+
+---@type table<ILInstructionGroupType, fun(inst_group: ILInstructionGroup): ILInstruction>
+local group_to_inst_lut = {
+  ---@param inst_group ILForprepGroup
+  ["forprep"] = function(inst_group)
+    return new_forprep_inst{
+      index_reg = inst_group.index_reg,
+      limit_reg = inst_group.limit_reg,
+      step_reg = inst_group.step_reg,
+      label = inst_group.loop_jump.label,
+      result_reg = "hi",
+      position = inst_group.start.position,
+    }
+  end,
+  ---@param inst_group ILForloopGroup
+  ["forloop"] = function(inst_group)
+    return new_forloop_inst{
+      index_reg = inst_group.index_reg,
+      limit_reg = inst_group.limit_reg,
+      step_reg = inst_group.step_reg,
+      local_reg = inst_group.local_reg,
+      label = inst_group.loop_jump.label,
+      position = inst_group.start.position,
+    }
+  end,
+  ---@param inst_group ILTforcallGroup
+  ["tforcall"] = function(inst_group)
+    return new_tforcall_inst{
+      position = inst_group.start.position,
+    }
+  end,
+  ---@param inst_group ILTforloopGroup
+  ["tforloop"] = function(inst_group)
+    return new_tforcall_inst{
+      position = inst_group.start.position,
+    }
+  end,
+}
+
+---@param func ILFunction
+---@param inst_group ILInstructionGroup
+---@return ILInstruction @ The single that has replaced the instruction group.
+local function collapse_inst_group(func, inst_group)
+  local inst = insert_after_inst(func, inst_group.stop, group_to_inst_lut[inst_group.group_type](inst_group))
+  remove_inst_group(func, inst_group)
+  return inst
+end
+
+---@param func ILFunction
+local function collapse_inst_groups(func)
+  local inst = func.instructions.first
+  while inst do
+    if inst.inst_group then
+      inst = collapse_inst_group(func, inst.inst_group)
+    end
+    inst = inst.next
+  end
+end
+
+---@param func ILFunction
+local function collapse_inst_groups_recursive(func)
+  collapse_inst_groups(func)
+  for _, inner_func in ipairs(func.inner_functions) do
+    collapse_inst_groups_recursive(inner_func)
   end
 end
 
@@ -1980,6 +2114,10 @@ return {
   new_close_up = new_close_up,
   new_scoping = new_scoping,
   new_to_number = new_to_number,
+  new_forprep_inst = new_forprep_inst,
+  new_forloop_inst = new_forloop_inst,
+  new_tforcall_inst = new_tforcall_inst,
+  new_tforloop_inst = new_tforloop_inst,
 
   -- pointers
 
@@ -2093,6 +2231,9 @@ return {
   prepend_inst = prepend_inst,
   append_inst = append_inst,
   remove_inst = remove_inst,
+  remove_inst_group = remove_inst_group,
+  collapse_inst_groups = collapse_inst_groups,
+  collapse_inst_groups_recursive = collapse_inst_groups_recursive,
 
   replace_forprep_index_reg = replace_forprep_index_reg,
   replace_forprep_limit_reg = replace_forprep_limit_reg,
