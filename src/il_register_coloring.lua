@@ -89,7 +89,7 @@ end
 - [x] remember the instruction which set a live reg range
 - [ ] maybe remember all instructions which get a live reg range
 - [ ] evaluate all live reg ranges which are not at top and not apart of register lists first
-- [ ] ignore internal regs
+- [x] ignore internal regs
 - [ ] live reg ranges which outlive a register group in both directions must be below the register list
   - [ ] unless it can be in the middle of the group without getting overwritten
 - [ ] a register group is defined as a list of live reg ranges which must be below the list

@@ -114,6 +114,7 @@ local function eval_live_regs_in_block(data, open_block)
   for inst in il_blocks.iterate_reverse(data.func, open_block.block) do
     if inst.inst_type ~= "scoping" then
       visit_regs_for_inst_deduplicated(data, inst, function(_, _, reg, get_set)
+        if reg.is_internal then return end
         local live_reg_range = regs_lut[reg]
         if bit32.band(get_set, set_flag) ~= 0 and regs_lut[reg] then
           live_reg_range.set_inst = inst
