@@ -267,8 +267,10 @@ if output_dir ~= source_dir then
   ignore_path_lut[output_dir:str()] = true
 end
 
-for _, ignore_path in ipairs(args.ignore_paths) do
-  ignore_path_lut[ignore_path:to_fully_qualified(source_dir):normalize():str()] = true
+if args.ignore_paths then
+  for _, ignore_path in ipairs(args.ignore_paths) do
+    ignore_path_lut[ignore_path:to_fully_qualified(source_dir):normalize():str()] = true
+  end
 end
 
 local function warn_for_unhandled_entry(mode, entry_path)
