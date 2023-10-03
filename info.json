@@ -4,7 +4,7 @@
   "factorio_version": "1.1",
   "version": "0.2.0",
   "author": "JanSharp",
-  "description": "Phobos is planned to be an optimizing bytecode compiler for Lua with some language extensions and a type system. See readme for what is implemented and what is planned.\n\nFor more info see the readme (on the homepage or in the mod files), especially the section about the 'Factorio Mod'. (In short: The mod is 99% a library)",
+  "description": "Phobos's goal is to be an optimizing bytecode compiler for Lua with some language extensions and a type system.\n\nFor more info see the readme (on the homepage or in the mod files), especially 'Factorio Support -> Factorio Mod'. (In short: This mod is 99% a library.)",
   "homepage": "https://github.com/JanSharp/phobos",
   "dependencies": []
 }
