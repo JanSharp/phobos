@@ -11,8 +11,8 @@ db = require("debugging.data_breakpoint")
 local unsafe = true
 local print_progress = true
 local use_regular_lua_compiler = true
-local use_phobos_compiler = true
-local use_il = true
+local use_phobos_compiler = false -- NOTE: Setting this to false currently merely disables the printed output.
+local use_il = false
 local do_create_inline_iife = false
 local do_fold_const = false
 local do_fold_control_statements = false
@@ -304,7 +304,7 @@ local function compile(filename)
     success, compiled = pcall(require("compiler"), main)
     if not success then print(compiled) goto finish end
     -- print(serpent.dump(main,{indent = '  ', sparse = true, sortkeys = false, comment=true}))
-    if eval_byte_count or create_disassembly then
+    if use_phobos_compiler and (eval_byte_count or create_disassembly) then
       add_func_to_lines("pho", compiled)
     end
 
