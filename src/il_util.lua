@@ -1657,10 +1657,11 @@ local function update_intermediate_data_for_new_inst(func, inst)
   end
 end
 
+---@generic T : ILInstruction
 ---@param func ILFunction
 ---@param inst ILInstruction?
----@param inserted_inst ILInstruction
----@return ILInstruction
+---@param inserted_inst T
+---@return T
 local function insert_after_inst(func, inst, inserted_inst)
   util.debug_assert(not func.is_compiling, "Cannot modify IL mid compilation, not all temp data would get updated.")
   if inst and inst.inst_group and inst ~= inst.inst_group.stop then
@@ -1678,10 +1679,11 @@ local function insert_after_inst(func, inst, inserted_inst)
   return inserted_inst
 end
 
+---@generic T : ILInstruction
 ---@param func ILFunction
 ---@param inst ILInstruction?
----@param inserted_inst ILInstruction
----@return ILInstruction
+---@param inserted_inst T
+---@return T
 local function insert_before_inst(func, inst, inserted_inst)
   util.debug_assert(not func.is_compiling, "Cannot modify IL mid compilation, not all temp data would get updated.")
   if inst and inst.inst_group and inst ~= inst.inst_group.start then
@@ -1697,16 +1699,18 @@ local function insert_before_inst(func, inst, inserted_inst)
   return inserted_inst
 end
 
+---@generic T : ILInstruction
 ---@param func ILFunction
----@param inserted_inst ILInstruction
----@return ILInstruction
+---@param inserted_inst T
+---@return T
 local function prepend_inst(func, inserted_inst)
   return insert_after_inst(func, nil, inserted_inst)
 end
 
+---@generic T : ILInstruction
 ---@param func ILFunction
----@param inserted_inst ILInstruction
----@return ILInstruction
+---@param inserted_inst T
+---@return T
 local function append_inst(func, inserted_inst)
   return insert_before_inst(func, nil, inserted_inst)
 end
