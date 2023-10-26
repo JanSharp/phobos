@@ -58,7 +58,8 @@ end
 local function equals(expected, got, msg)
   -- also test for nan
   if got ~= expected and (got == got or expected == expected) then
-    error(add_msg("expected "..pretty_print(expected)..", got "..pretty_print(got), msg))
+    -- TODO: Somehow give better control over how values get pretty printed. Best through some refactor of pretty printing in tests as a whole.
+    error(add_msg("expected "..pretty_print(expected, {no_serpent = true})..", got "..pretty_print(got, {no_serpent = true}), msg))
   end
 end
 
@@ -68,7 +69,8 @@ end
 local function not_equals(expected, got, msg)
   -- also tests for nan
   if got == expected or (got ~= got and expected ~= expected) then
-    error(add_msg("expected not "..pretty_print(got), msg))
+    -- TODO: Somehow give better control over how values get pretty printed. Best through some refactor of pretty printing in tests as a whole.
+    error(add_msg("expected not "..pretty_print(got, {no_serpent = true}), msg))
   end
 end
 

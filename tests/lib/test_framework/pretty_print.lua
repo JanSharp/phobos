@@ -29,6 +29,9 @@ local function pretty_print(value, serpent_opts)
       return "nil"
     end,
     ["table"] = function()
+      if serpent_opts and serpent_opts.no_serpent then
+        return tostring(value)
+      end
       return serpent.block(value, serpent_opts)
     end,
     ["function"] = function()
