@@ -67,6 +67,19 @@ local function get_label_label(label, context)
   return label_label
 end
 
+local function get_live_reg_range(reg_range, context)
+  if context.reg_range_label_lut[reg_range] then
+    return context.reg_range_label_lut[reg_range]
+  end
+  local id = context.next_reg_range_id
+  context.next_reg_range_id = id + 1
+  local reg_range_label = get_reg(reg_range.reg, context)
+    ..("i"..id)
+    ..(reg_range.color and ("=c"..reg_range.color) or "")
+  context.reg_range_label_lut[reg_range] = reg_range_label
+  return reg_range_label
+end
+
 local function get_list(getter, list, context, separator)
   local out = {}
   for i, ptr in ipairs(list) do
@@ -173,7 +186,7 @@ local function get_label(instruction, context)
   local function format_real_live_regs(regs)
     return "["..table.concat(
       linq(regs):select(function(reg_range)
-        return get_reg(reg_range.reg, context)..(reg_range.color and ("c"..reg_range.color) or "")
+        return get_live_reg_range(reg_range, context)
       end):to_array(), ", ").."]"
   end
 
@@ -202,6 +215,8 @@ local function new_context()
     next_upval_id = 1,
     label_label_lut = {},
     next_label_id = 1,
+    reg_range_label_lut = {},
+    next_reg_range_id = 1,
   }
 end
 
