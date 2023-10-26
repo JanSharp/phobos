@@ -1065,6 +1065,7 @@ function generate_il_func(functiondef, options, parent_func)
     has_blocks = false,
     has_borders = false,
     has_reg_liveliness = false,
+    has_real_reg_liveliness = false,
     has_types = false,
     is_compiling = false,
   }
