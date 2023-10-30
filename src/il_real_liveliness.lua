@@ -233,6 +233,11 @@ local function eval_live_regs_in_block(data, open_block)
           regs_lut[reg] = live_reg_range
           regs_waiting_for_set[#regs_waiting_for_set+1] = live_reg_range
         end
+
+        -- Keep track of which instructions use a register which is captured as an upvalue, get and set.
+        if open_block.is_first_pass and data.captured_reg_usage[reg] then
+          data.captured_reg_usage[reg][inst] = get_set
+        end
       end)
     end
 
@@ -299,6 +304,249 @@ local function rename_live_reg_ranges(data)
   end
 end
 
+---@param data ILRealLivelinessData
+---@param inst ILClosure
+---@return ILRegister[]
+local function get_captured_regs_for_inst(data, inst)
+  local regs = data.captured_regs_by_closure[inst]
+  if regs then return regs end
+  regs = linq(inst.func.upvals)
+    :where(function(upval) return upval.parent_type == "local" end)
+    :select(function(upval) return upval.reg_in_parent_func end)
+    :to_array()
+  data.captured_regs_by_closure[inst] = regs
+  return regs
+end
+
+---@param data ILRealLivelinessData
+local function upvals_are_extra_special(data)
+  -- Creating the live register ranges, which is done before this function, is pretty straight forward. One
+  -- big reason for that is that it is done from back to front, which means that as soon as it finds an inst
+  -- which is reading from a register, it knows that it must be alive before then. On the other hand, if it,
+  -- were done from front to back, a register being written to does not guarantee it actually becoming alive,
+  -- because when there's another write to the same register before it gets read from, the first write can be
+  -- ignored.
+  -- This logic can also create multiple live ranges for the same register, where it is not alive in between
+  -- those two ranges. This is correct and ultimately an optimization.
+  -- But then there are registers which get captured as upvalues by inner functions. These registers may
+  -- require to stay alive in that exact time frame.
+  -- The definition for when an upvalue register must be alive is that from the closure instruction which is
+  -- capturing it it must stay alive - as the same live range - up to every instruction which gets or sets the
+  -- register where said instructions are reachable from the closure instruction.
+  -- Think of this example:
+  --
+  -- local foo = 100
+  -- local _ = foo
+  -- -- foo can be dead at this border.
+  -- local bar = 200
+  -- -- As well as at this border.
+  -- foo = 300
+  -- local function f() return foo end
+  -- -- foo must be alive at this border.
+  -- bar = 400
+  -- -- And this border.
+  -- foo = 500 -- This must write to the same live range as the one that's captured as an upvalue.
+  -- return foo
+
+  ---@class ILRealLivelinessOpenCapturedReg
+  ---@field reg ILRegister
+  ---@field live_range ILLiveRegisterRange
+  ---@field checkpoints ILExecutionCheckpoint[]|{size: integer} @ A stack.
+
+  ---@type ILRealLivelinessOpenCapturedReg[]
+  local open_regs = {}
+  ---@type table<ILRegister, true>
+  local open_lut = {}
+
+  ---The value is the registers which have all been open at the time of entering a given block at some point.
+  ---It must keep track of this, because a block can be entered from multiple different blocks, each with
+  ---potentially different open registers. However if all of said registers have been visited in a block
+  ---before, it must not do so again otherwise it could turn into an infinite loop.
+  ---@type table<ILBlock, table<ILRegister, true>>
+  local visited_blocks = {}
+
+  local walk_block
+  ---@param link ILBlockLink
+  local function walk_link(link)
+    if link then
+      for _, open in ipairs(open_regs) do
+        stack.push(open.checkpoints, link)
+      end
+      walk_block(link.target_block)
+      for _, open in ipairs(open_regs) do
+        -- walk_block can clear the stack, only pop if it didn't do that.
+        if stack.get_top(open.checkpoints) == link then
+          stack.pop(open.checkpoints)
+        else
+          util.debug_assert(open.checkpoints.size == 0, "The only time the top checkpoint on the stack after calling \z
+            walk_block does not equal the link that was pushed onto the stack right before it is when \z
+            walk_block cleared the stack. Otherwise the link should be at top after leaving walk_block. \z
+            However it isn't, and the stack size is not 0. Something got pushed and popped incorrectly."
+          )
+        end
+      end
+    end
+  end
+
+  ---It is fine if a checkpoint exists multiple times in the checkpoints stack, it'll just be a bit less
+  ---performant. I'm fairly certain it can actually happen with loop blocks.
+  ---@param open ILRealLivelinessOpenCapturedReg
+  local function extend_reg_live_time(open)
+    for i = 1, open.checkpoints.size do
+      local checkpoint = open.checkpoints[i]
+      local existing_live_range = checkpoint.live_range_by_reg[open.reg]
+      if existing_live_range then
+        if existing_live_range.is_captured_as_upval then
+          open.live_range.set_insts = linq(open.live_range.set_insts)
+            :union(existing_live_range.set_insts)
+            :to_array()
+        end
+        util.remove_from_array_fast(checkpoint.real_live_regs, existing_live_range)
+      end
+      checkpoint.real_live_regs[#checkpoint.real_live_regs+1] = open.live_range
+      checkpoint.live_range_by_reg[open.reg] = open.live_range
+    end
+    open.checkpoints.size = 0
+  end
+
+  ---@param inst ILInstruction
+  ---@param reg ILRegister
+  local function get_live_range_for_reg(inst, reg)
+    if inst ~= inst.block.start_inst then
+      return inst.prev_border.live_range_by_reg[reg]
+    end
+    if inst.block.is_main_entry_block then
+      return data.func.param_live_reg_range_lut[reg]
+    end
+    -- All source links must have the given live range, otherwise it'd be malformed. Just use the first one.
+    return inst.block.source_links[1].live_range_by_reg[reg]
+  end
+
+  ---@param live_range ILLiveRegisterRange
+  ---@return ILLiveRegisterRange
+  local function to_captured_live_range(live_range)
+    if live_range.is_captured_as_upval then return live_range end
+    live_range.is_captured_as_upval = true
+    return live_range
+  end
+
+  ---@param already_open ILRealLivelinessOpenCapturedReg[]
+  local function restore_already_open(already_open)
+    for _, open in ipairs(already_open) do
+      open_regs[#open_regs+1] = open
+    end
+  end
+
+  ---@param block ILBlock
+  ---@param already_open ILRealLivelinessOpenCapturedReg
+  ---@return boolean
+  local function should_process_block(block, already_open)
+    if not visited_blocks[block] then
+      visited_blocks[block] = util.shallow_copy(open_lut)
+      return true
+    end
+
+    local visited_regs = visited_blocks[block]
+    local has_new_regs_to_visit = false
+    for i = #open_regs, 1, -1 do
+      local open = open_regs[i]
+      if not visited_regs[open.reg] then
+        visited_regs[open.reg] = true
+        has_new_regs_to_visit = true
+      else
+        already_open[#already_open+1] = open
+        open[i] = open_regs[#open_regs]
+        open_regs[#open_regs] = nil
+        -- This does not touch open_lut, as the job of open_lut isn't to match open_regs, but to indicate
+        -- that a given register should not be opened again. Since these registers here were already open
+        -- when entering this block at some point in the past, there's no reason to have it process all of
+        -- those again. Touching open_lut here would actually cause the same register to be opened twice in
+        -- loop blocks where a closure captures said register inside the loop block.
+      end
+    end
+    if has_new_regs_to_visit then
+      return true
+    end
+    restore_already_open(already_open)
+    return false
+  end
+
+  ---@param block ILBlock
+  function walk_block(block)
+    ---@type ILRealLivelinessOpenCapturedReg[]
+    local already_open = {}
+    if not should_process_block(block, already_open) then return end
+
+    local opened_by_this_block_count = 0
+    local checkpoint_sizes_before_this_block = linq(open_regs)
+      :to_dict(function(open) return open, open.checkpoints.size end)
+
+    for inst in il_blocks.iterate(data.func, block) do
+      for _, open in ipairs(open_regs) do
+        if inst ~= block.start_inst then
+          stack.push(open.checkpoints, inst.prev_border)
+        end
+
+        local get_set = data.captured_reg_usage[open.reg][inst]
+        if get_set then
+          -- Since blocks can be processed multiple times, only add it if it's not in the array already.
+          if bit32.band(get_set, set_flag) ~= 0 and not linq(open.live_range.set_insts):contains(inst) then
+            open.live_range.set_insts[#open.live_range.set_insts+1] = inst
+          end
+          extend_reg_live_time(open)
+          checkpoint_sizes_before_this_block[open] = 0
+        end
+      end
+
+      if inst.inst_type == "closure" then ---@cast inst ILClosure
+        for _, reg in ipairs(get_captured_regs_for_inst(data, inst)) do
+          if not open_lut[reg] then
+            open_regs[#open_regs+1] = {
+              reg = reg,
+              live_range = to_captured_live_range(get_live_range_for_reg(inst, reg)),
+              checkpoints = stack.new_stack(),
+            }
+            open_lut[reg] = true
+            opened_by_this_block_count = opened_by_this_block_count + 1
+          end
+        end
+      end
+    end
+
+    walk_link(block.straight_link)
+    walk_link(block.jump_link)
+
+    for i = #open_regs, #open_regs - opened_by_this_block_count + 1, -1 do
+      open_regs[i] = nil
+    end
+    for _, open in ipairs(open_regs) do
+      if open.checkpoints.size ~= 0 then
+        util.debug_assert(checkpoint_sizes_before_this_block[open] <= open.checkpoints.size)
+        open.checkpoints.size = checkpoint_sizes_before_this_block[open]
+      end
+    end
+    restore_already_open(already_open)
+  end
+
+  walk_block(data.func.blocks.first)
+end
+
+---@param data ILRealLivelinessData
+local function find_all_captured_regs(data)
+  local captured_regs = data.captured_reg_usage
+  local inst = data.func.instructions.first
+  while inst do
+    if inst.inst_type == "closure" then ---@cast inst ILClosure
+      for _, reg in ipairs(get_captured_regs_for_inst(data, inst)) do
+        if not captured_regs[reg] then
+          captured_regs[reg] = {}
+        end
+      end
+    end
+    inst = inst.next
+  end
+end
+
 ---@param func ILFunction
 ---@return ILRealLivelinessOpenBlock[]
 local function get_initial_open_blocks(func)
@@ -330,6 +578,10 @@ end
 ---@field open_blocks_lut table<ILBlock, ILRealLivelinessOpenBlock> @ Lookup table for blocks in open_blocks.
 ---@field finished_blocks table<ILBlock, true>
 ---@field renamed_live_reg_ranges table<ILLiveRegisterRange, ILLiveRegisterRange>
+---Regs which are captured as upvalues by closure insts.
+---@field captured_regs_by_closure table<ILInstruction, ILRegister[]>
+---Instructions which get or set a register captured as an upval. The integer is a get/set bit field.
+---@field captured_reg_usage table<ILRegister, table<ILInstruction, integer>>
 
 ---@param func ILFunction
 local function eval_real_reg_liveliness(func)
@@ -344,7 +596,10 @@ local function eval_real_reg_liveliness(func)
     open_blocks_lut = linq(open_blocks):to_dict(function(open_block) return open_block.block, open_block end),
     finished_blocks = {},
     renamed_live_reg_ranges = {},
+    captured_regs_by_closure = {},
+    captured_reg_usage = {},
   }
+  find_all_captured_regs(data)
 
   while true do
     while stack.get_top(data.open_blocks) do
@@ -387,6 +642,8 @@ local function eval_real_reg_liveliness(func)
     live_reg_range.set_insts = nil
     live_reg_range.is_param = true
   end
+
+  upvals_are_extra_special(data)
 end
 
 ---@param func ILFunction

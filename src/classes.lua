@@ -844,6 +844,8 @@
 ---Parameter live register ranges do not have an instruction which sets them initially.
 ---Keep in mind that a register can have multiple live ranges, but only one of them will have this flag set.
 ---@field is_param boolean?
+---Does this live register range get captured as an upvalue for an inner function?
+---@field is_captured_as_upval boolean?
 ---The instructions setting/writing to this live reg range, the beginning(s) of its lifetime.\
 ---`nil` when `is_param` is `true`.
 ---@field set_insts ILInstruction[]

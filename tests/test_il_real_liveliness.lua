@@ -66,6 +66,19 @@ local function get_inst(il_func, index)
   return inst
 end
 
+---@return fun(checkpoint: ILExecutionCheckpoint)
+local function assert_same_factory()
+  local live_range
+  ---@param checkpoint ILExecutionCheckpoint
+  return function(checkpoint)
+    if not live_range then
+      live_range = assert(checkpoint.real_live_regs[1])
+      return
+    end
+    assert.equals(live_range, checkpoint.real_live_regs[1])
+  end
+end
+
 ---@param source_code string
 ---@return ILFunction
 local function get_il(source_code)
@@ -204,20 +217,66 @@ do
         foo = 200
       end
     ]], function(func)
-      local live_range
-      ---@param checkpoint ILExecutionCheckpoint
-      local function assert_same(checkpoint)
-        if not live_range then
-          live_range = assert(checkpoint.real_live_regs[1])
-          return
-        end
-        assert.equals(live_range, checkpoint.real_live_regs[1])
-      end
+      local assert_same = assert_same_factory()
       assert_same(get_inst(func, 1).block.straight_link)
       assert_same(get_inst(func, 2).next_border)
       assert_same(get_inst(func, 3).block.straight_link)
       assert_same(get_inst(func, 5).next_border)
       assert_same(get_inst(func, 6).block.jump_link)
+    end
+  end)
+
+  add_test("Extended live reg range due to getting captured as an upval", function()
+    return [[
+      local foo = 100
+      local function bar()
+        return foo
+      end
+      local baz = 200
+      foo = 300
+      return foo
+    ]], function(func)
+      local assert_same = assert_same_factory()
+      assert_same(get_inst(func, 1).next_border)
+      assert_same(get_inst(func, 2).next_border)
+      assert_same(get_inst(func, 3).next_border)
+      assert_same(get_inst(func, 4).next_border)
+    end
+  end)
+
+  add_test("Extended live reg range due to getting captured as an upval inside a loop", function()
+    return [[
+      local foo = 100
+      local _ = foo
+      -- foo can be dead at this border.
+      local bar = 200
+      -- As well as this border.
+      foo = 300
+      while true do
+        local function f() return foo end
+        -- foo must be alive at this border.
+        bar = 400
+        -- And this border.
+        foo = 500
+      end
+      return foo
+    ]], function(func)
+      local assert_same = assert_same_factory()
+      assert_same(get_inst(func, 4).block.straight_link)
+      assert_same(get_inst(func, 5).next_border)
+      assert_same(get_inst(func, 6).block.straight_link)
+      assert_same(get_inst(func, 6).block.jump_link)
+      assert_same(get_inst(func, 7).next_border)
+      assert_same(get_inst(func, 8).next_border)
+      assert_same(get_inst(func, 9).next_border)
+      assert_same(get_inst(func, 10).block.jump_link)
+      assert_same(get_inst(func, 11).next_border)
+
+      assert.not_equals(
+        get_inst(func, 4).block.straight_link.real_live_regs[1],
+        get_inst(func, 1).next_border.real_live_regs[1],
+        "There should be 2 separate instances of live ranges for the register foo."
+      )
     end
   end)
 end
