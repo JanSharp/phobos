@@ -194,6 +194,8 @@ function setmetatable(table, metatable)
   return hook_internal(table, shallow_copy(metatable.values), metatable.break_definition)
 end
 
+-- TODO: Wrap `next` and all of the table functions.
+
 return {
   hook = hook,
   unhook = unhook,

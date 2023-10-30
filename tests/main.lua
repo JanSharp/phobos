@@ -5,6 +5,7 @@ local shell_util = require("shell_util")
 
 local arg_parser = require("lib.LuaArgParser.arg_parser")
 local util = require("util")
+db = require("debugging.data_breakpoint")
 
 local args = arg_parser.parse_and_print_on_error_or_help({...}, {
   options = {
