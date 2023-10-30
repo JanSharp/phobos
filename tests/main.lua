@@ -101,6 +101,7 @@ require("test_cache")
 require("test_profile_util")
 require("test_number_ranges")
 require("test_linq")
+require("test_il_real_liveliness")
 
 -- TODO: next ones to test:
 -- ast_util

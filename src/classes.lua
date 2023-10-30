@@ -844,9 +844,9 @@
 ---Parameter live register ranges do not have an instruction which sets them initially.
 ---Keep in mind that a register can have multiple live ranges, but only one of them will have this flag set.
 ---@field is_param boolean?
----The instruction setting/writing to this live reg range, the beginning of its lifetime.\
+---The instructions setting/writing to this live reg range, the beginning(s) of its lifetime.\
 ---`nil` when `is_param` is `true`.
----@field set_inst ILInstruction
+---@field set_insts ILInstruction[]
 
 ---@class ILState
 ---@field reg_types table<ILRegister, ILType>
