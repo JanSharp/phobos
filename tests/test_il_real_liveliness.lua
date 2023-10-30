@@ -178,7 +178,25 @@ do
     end
   end)
 
-  add_test("bug", function()
+  add_test("Multiple set_insts for one live reg range", function()
+    return [[
+      local foo
+      if true then
+        foo = 100
+      else
+        foo = 200
+      end
+      return foo
+    ]], function(func)
+      local reg_range = get_inst(func, 7).next_border.real_live_regs[1]
+      assert.not_equals(nil, reg_range.set_insts[1], "set_insts[1]")
+      assert.not_equals(nil, reg_range.set_insts[2], "set_insts[2]")
+      assert.equals(nil, reg_range.set_insts[3], "set_insts[3]")
+      assert.not_equals(reg_range.set_insts[1], reg_range.set_insts[2], "set_insts[1] ~= set_insts[2]")
+    end
+  end)
+
+  add_test("Continuous live range through links for loop blocks", function()
     return [[
       local foo = 100
       while true do
@@ -197,34 +215,9 @@ do
       end
       assert_same(get_inst(func, 1).block.straight_link)
       assert_same(get_inst(func, 2).next_border)
-      assert_same(get_inst(func, 3).block.straight_link) -- This is the only wrong one
+      assert_same(get_inst(func, 3).block.straight_link)
       assert_same(get_inst(func, 5).next_border)
       assert_same(get_inst(func, 6).block.jump_link)
-    end
-  end)
-
-  add_test("Continuous live range through links for loop blocks", function()
-    return [[
-      local foo = 100
-      local _ = foo
-      -- foo can be dead at this border.
-      local bar = 200
-      -- As well as this border.
-      foo = 300
-      while true do
-        local function f() return foo end
-        -- foo must be alive at this border.
-        bar = 400
-        -- And this border.
-        foo = 500
-      end
-      return foo
-    ]], function(func)
-      assert.equals(
-        func.blocks.first.next.stop_inst.prev_border.real_live_regs[1],
-        func.blocks.first.next.next.source_links[1].real_live_regs[1],
-        "The live range at the end of the first block and at the source link for the second block must be the same."
-      )
     end
   end)
 end
