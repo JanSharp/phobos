@@ -45,13 +45,40 @@ local function build_graph(func)
   return all_live_regs
 end
 
+---@param data ILRegColoringData
+local function set_forced_colors(data)
+  for i, reg in ipairs(data.func.param_regs) do
+    local live_reg_range = data.func.param_live_reg_range_lut[reg]
+    if live_reg_range then
+      live_reg_range.forced_color = i
+      live_reg_range.color = i
+    end
+  end
+end
+
+---@class ILRegColoringData
+---@field func ILFunction
+---@field all_live_regs ILLiveRegisterRange[]
+
 ---@param func ILFunction
 local function color_live_regs(func)
   il_real_liveliness.ensure_has_real_reg_liveliness(func)
-  local all_live_regs = build_graph(func)
+  ---@type ILRegColoringData
+  local data = {
+    func = func,
+    all_live_regs = build_graph(func),
+  }
+  set_forced_colors(data)
+
   local used_colors = {}
   local total_colors = 0
-  for i, live_reg in ipairs(all_live_regs) do
+  for i, live_reg in ipairs(data.all_live_regs) do
+    if live_reg.forced_color then
+      if live_reg.color > total_colors then
+        total_colors = live_reg.color
+      end
+      goto continue
+    end
     for _, adjacent_live_reg in ipairs(live_reg.adjacent_regs) do
       if adjacent_live_reg.color then
         used_colors[adjacent_live_reg.color] = i
@@ -65,6 +92,7 @@ local function color_live_regs(func)
       total_colors = free_color
     end
     live_reg.color = free_color
+    ::continue::
   end
 end
 
@@ -86,7 +114,7 @@ end
   has their actual color. When compiling, a move will be inserted right after the initial set
 - [ ] index for register groups, when compiling if a live range does not have a matching index, a move is
   inserted before the register list consuming instruction
-- [ ] somehow force the color of parameter registers
+- [x] somehow force the color of parameter registers
 - [x] remember the instruction which set a live reg range
 - [ ] maybe remember all instructions which get a live reg range
 - [ ] evaluate all live reg ranges which are not at top and not apart of register lists first

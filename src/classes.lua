@@ -849,6 +849,8 @@
 ---The instructions setting/writing to this live reg range, the beginning(s) of its lifetime.\
 ---`nil` when `is_param` is `true`.
 ---@field set_insts ILInstruction[]
+---
+---@field forced_color integer @ 1 based.
 
 ---@class ILState
 ---@field reg_types table<ILRegister, ILType>
