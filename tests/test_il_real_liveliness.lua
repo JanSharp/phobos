@@ -113,6 +113,28 @@ local il_instruction_line_format = util.parse_interpolated_string(
     {label:%-8s}  {block_id}  {description:%-26s}  {real_live_regs}"
 ) -- Add "[ {group_label:%-8s} ] " before "{label:%-8s}" if seeing instruction groups is desired.
 
+---@param il_func ILFunction
+local function pretty_print_il_func(il_func)
+  local block_ids = {}
+  local next_block_id = 0
+  return il_pretty_print(il_func, function(data)
+    data.line = data.inst.position and data.inst.position.line or 0
+    data.column = data.inst.position and data.inst.position.column or 0
+    data.func_id = 1--il_func_id
+    local block_id = block_ids[data.inst.block]
+    if not block_id then
+      block_id = next_block_id
+      next_block_id = next_block_id + 1
+      block_ids[data.inst.block] = block_id
+    end
+    data.block_id = block_id
+    if data.real_live_regs ~= "" then
+      data.real_live_regs = "live: "..data.real_live_regs
+    end
+    return util.format_interpolated(il_instruction_line_format, data)
+  end):sub(1, -2)
+end
+
 do
   local main_scope = framework.scope:new_scope("il_real_liveliness")
 
@@ -127,24 +149,17 @@ do
         end
         il.create_blocks_recursive(il_func)
         run(il_func)
-        local block_ids = {}
-        local next_block_id = 0
-        error("\n"..il_pretty_print(il_func, function(data)
-          data.line = data.inst.position and data.inst.position.line or 0
-          data.column = data.inst.position and data.inst.position.column or 0
-          data.func_id = 1--il_func_id
-          local block_id = block_ids[data.inst.block]
-          if not block_id then
-            block_id = next_block_id
-            next_block_id = next_block_id + 1
-            block_ids[data.inst.block] = block_id
+        ---@type string[]
+        local pretty_il_funcs = {}
+        ---@param func_func ILFunction
+        local function add_func_recursive(func_func)
+          pretty_il_funcs[#pretty_il_funcs+1] = pretty_print_il_func(func_func)
+          for _, inner_func_func in ipairs(func_func.inner_functions) do
+            add_func_recursive(inner_func_func)
           end
-          data.block_id = block_id
-          if data.real_live_regs ~= "" then
-            data.real_live_regs = "live: "..data.real_live_regs
-          end
-          return util.format_interpolated(il_instruction_line_format, data)
-        end):sub(1, -2))
+        end
+        add_func_recursive(il_func)
+        error("\n"..table.concat(pretty_il_funcs, "\n"..string.rep("-", 72).."\n"))
       end)
     end
 
