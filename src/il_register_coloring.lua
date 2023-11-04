@@ -48,12 +48,118 @@ end
 ---@param data ILRegColoringData
 local function set_forced_colors(data)
   for i, reg in ipairs(data.func.param_regs) do
-    local live_reg_range = data.func.param_live_reg_range_lut[reg]
+    local live_reg_range = data.func.param_execution_checkpoint.live_range_by_reg[reg]
     if live_reg_range then
       live_reg_range.forced_color = i
       live_reg_range.color = i
     end
   end
+end
+
+---Iterate key execution checkpoints this live reg range is alive at.\
+---Those are:
+---- Borders right after set_insts.
+---- Links between blocks this reg range is alive at.
+---- Borders right before get_insts.
+---
+---Does not return the save execution checkpoint twice.
+---@param data ILRegColoringData
+---@param live_reg ILLiveRegisterRange
+---@return ILExecutionCheckpoint[]
+local function get_crucial_checkpoints(data, live_reg)
+  ---@type ILExecutionCheckpoint[]
+  local checkpoints = {}
+  ---@type table<ILExecutionCheckpoint, true>
+  local checkpoints_lut = {}
+  local function add(checkpoint)
+    if checkpoints_lut[checkpoint] then return end
+    checkpoints_lut[checkpoint] = true
+    checkpoints[#checkpoints+1] = checkpoint
+  end
+
+  for _, get_inst in ipairs(live_reg.get_insts) do
+    if get_inst.block.start_inst ~= get_inst then
+      add(get_inst.prev_border)
+    elseif get_inst.block.is_main_entry_block then
+      add(data.func.param_execution_checkpoint)
+    else
+      for _, link in ipairs(get_inst.block.source_links) do
+        add(link)
+      end
+    end
+  end
+
+  for _, set_inst in ipairs(live_reg.set_insts) do
+    if set_inst.block.stop_inst ~= set_inst then
+      add(set_inst.next_border)
+    else
+      if set_inst.block.straight_link then
+        add(set_inst.block.straight_link)
+      end
+      if set_inst.block.jump_link then
+        add(set_inst.block.jump_link)
+      end
+    end
+  end
+
+  -- TODO: It may also have to include all links where the live reg range is alive to actually ensure these
+  -- lists of checkpoints are conclusive enough to determine which live ranges live longer than others
+
+  return checkpoints
+end
+
+---@param data ILRegColoringData
+local function sort_all_live_regs(data)
+  for i, live_reg in pairs(data.all_live_regs) do
+    ---@diagnostic disable-next-line: inject-field
+    live_reg.deterministic_index = i
+  end
+  ---@type table<ILLiveRegisterRange, table<ILLiveRegisterRange, boolean>>
+  local cache = {}
+  ---@param live_reg ILLiveRegisterRange
+  local function get_cache(live_reg)
+    local reg_cache = cache[live_reg]
+    if not reg_cache then
+      reg_cache = {}
+      cache[live_reg] = reg_cache
+    end
+    return reg_cache
+  end
+  table.sort(data.all_live_regs, function(left, right)
+    local left_cache = get_cache(left)
+    local result = left_cache[right]
+    if result ~= nil then return result end
+    for _, adjacent in ipairs(left.adjacent_regs) do
+      local adjacent_cache = get_cache(adjacent)
+      if adjacent_cache[left] ~= nil then goto continue end
+      local adjacent_is_alive_for_entire_left = true
+      local left_is_alive_for_entire_adjacent = true
+      for _, checkpoint in ipairs(get_crucial_checkpoints(data, left)) do
+        if checkpoint.live_range_by_reg[adjacent.reg] ~= adjacent then
+          adjacent_is_alive_for_entire_left = false
+          break
+        end
+      end
+      for _, checkpoint in ipairs(get_crucial_checkpoints(data, adjacent)) do
+        if checkpoint.live_range_by_reg[left.reg] ~= left then
+          left_is_alive_for_entire_adjacent = false
+          break
+        end
+      end
+      local left_comes_before_adjacent
+      if not adjacent_is_alive_for_entire_left and not left_is_alive_for_entire_adjacent then
+        -- Tie breaker for when they both outlive each other at different points in the code.
+        ---@diagnostic disable-next-line: undefined-field
+        left_comes_before_adjacent = left.deterministic_index < adjacent.deterministic_index
+      else
+        left_comes_before_adjacent = adjacent_is_alive_for_entire_left
+      end
+      left_cache[adjacent] = left_comes_before_adjacent
+      adjacent_cache[left] = not left_comes_before_adjacent
+      ::continue::
+    end
+    return left_cache[right]
+  end)
 end
 
 ---@class ILRegColoringData
@@ -69,6 +175,7 @@ local function color_live_regs(func)
     all_live_regs = build_graph(func),
   }
   set_forced_colors(data)
+  sort_all_live_regs(data)
 
   local used_colors = {}
   local total_colors = 0
