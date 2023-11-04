@@ -180,34 +180,39 @@ do
       end
       run(il_func)
 
-      local block = il_func.blocks.first
-      ---@param checkpoint ILExecutionCheckpoint
-      local function assert_set_and_get_insts(checkpoint)
-        for _, live_range in ipairs(checkpoint.real_live_regs) do
-          if live_range.is_param then
-            assert.equals(nil, live_range.set_insts, "set_insts when is_param")
-          else
-            assert.not_equals(nil, live_range.set_insts, "set_insts when not is_param")
-            assert.not_equals(nil, live_range.set_insts[1], "set_insts[1] when not is_param")
-          end
-          assert.not_equals(nil, live_range.get_insts, "get_insts")
-          assert.not_equals(nil, live_range.get_insts[1], "get_insts[1]")
-        end
-      end
-      while block do
-        for inst in il_blocks.iterate(il_func, block) do
-          if inst ~= block.start_inst then
-            assert_set_and_get_insts(inst.prev_border)
+      ---@param func_func ILFunction
+      local function walk_func(func_func)
+        local block = func_func.blocks.first
+        ---@param checkpoint ILExecutionCheckpoint
+        local function assert_set_and_get_insts(checkpoint)
+          for _, live_range in ipairs(checkpoint.real_live_regs) do
+            assert.not_equals(nil, live_range.set_insts, "set_insts")
+            if not live_range.is_param then
+              assert.not_equals(nil, live_range.set_insts[1], "set_insts[1] when not is_param")
+            end
+            assert.not_equals(nil, live_range.get_insts, "get_insts")
+            assert.not_equals(nil, live_range.get_insts[1], "get_insts[1]")
           end
         end
-        if block.straight_link then
-          assert_set_and_get_insts(block.straight_link)
+        while block do
+          for inst in il_blocks.iterate(func_func, block) do
+            if inst ~= block.start_inst then
+              assert_set_and_get_insts(inst.prev_border)
+            end
+          end
+          if block.straight_link then
+            assert_set_and_get_insts(block.straight_link)
+          end
+          if block.jump_link then
+            assert_set_and_get_insts(block.jump_link)
+          end
+          block = block.next
         end
-        if block.jump_link then
-          assert_set_and_get_insts(block.jump_link)
+        for _, inner_func in ipairs(func_func.inner_functions) do
+          walk_func(inner_func)
         end
-        block = block.next
       end
+      walk_func(il_func)
     end)
   end
 
