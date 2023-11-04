@@ -75,6 +75,19 @@ local function remove_from_array_fast(array, element)
 end
 
 ---@generic T
+---@param array T[]
+---@param old_element T
+---@param new_element T
+local function replace_in_array(array, old_element, new_element)
+  for i = 1, #array do
+    if array[i] == old_element then
+      array[i] = new_element
+      return
+    end
+  end
+end
+
+---@generic T
 ---@param target T
 ---@param new_data T
 local function replace_table(target, new_data)
@@ -417,6 +430,7 @@ return {
   clear_array = clear_array,
   remove_from_array = remove_from_array,
   remove_from_array_fast = remove_from_array_fast,
+  replace_in_array = replace_in_array,
   replace_table = replace_table,
   shallow_copy = shallow_copy,
   optional_shallow_copy = optional_shallow_copy,
