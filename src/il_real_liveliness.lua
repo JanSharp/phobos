@@ -47,9 +47,8 @@ local function merge_open_blocks(data, partially_open_block, regs_to_add)
     local visited_reg_range = visited_lut[reg_range.reg]
     if visited_reg_range then
       if reg_range ~= visited_reg_range then
-        reg_range.set_insts = linq(visited_reg_range.set_insts)
-          :union(reg_range.set_insts)
-          :to_array()
+        reg_range.set_insts = linq(visited_reg_range.set_insts):union(reg_range.set_insts):to_array()
+        reg_range.get_insts = linq(visited_reg_range.get_insts):union(reg_range.get_insts):to_array()
         data.renamed_live_reg_ranges[visited_reg_range] = reg_range
       end
     else
@@ -73,7 +72,9 @@ local function add_to_real_live_regs(execution_checkpoint, real_live_regs)
       list[#list+1] = live_reg
       lut[live_reg.reg] = live_reg
     else
-      util.debug_abort("Attempt to add a live reg range for the same register twice.")
+      util.debug_abort("Attempt to add a live reg range for the same register at the same execution \z
+        checkpoint twice."
+      )
     end
   end
 end
@@ -220,18 +221,26 @@ local function eval_live_regs_in_block(data, open_block)
       visit_regs_for_inst_deduplicated(data, inst, function(_, _, reg, get_set)
         if reg.is_internal then return end
         local live_reg_range = regs_lut[reg]
-        if bit32.band(get_set, set_flag) ~= 0 and regs_lut[reg] then
-          if not linq(live_reg_range.set_insts):contains(inst) then
-            live_reg_range.set_insts[#live_reg_range.set_insts+1] = inst
-          end
+        if bit32.band(get_set, set_flag) ~= 0 and live_reg_range then
+          live_reg_range.set_insts[#live_reg_range.set_insts+1] = inst
           regs_lut[reg] = nil
           util.remove_from_array_fast(regs_waiting_for_set, live_reg_range)
         end
-        if open_block.is_first_pass and bit32.band(get_set, get_flag) ~= 0 and not regs_lut[reg] then
-          -- Don't create new live reg ranges in additional passes, they'd be duplicates.
-          live_reg_range = {reg = reg, set_insts = {}}
-          regs_lut[reg] = live_reg_range
-          regs_waiting_for_set[#regs_waiting_for_set+1] = live_reg_range
+        if bit32.band(get_set, get_flag) ~= 0 then
+          if open_block.is_first_pass and not live_reg_range then
+            -- Don't create new live reg ranges in additional passes, they'd be duplicates.
+            live_reg_range = {reg = reg, set_insts = {}, get_insts = {}}
+            regs_lut[reg] = live_reg_range
+            regs_waiting_for_set[#regs_waiting_for_set+1] = live_reg_range
+          end
+          if not open_block.is_first_pass and live_reg_range then
+            regs_lut[reg] = nil
+            util.remove_from_array_fast(regs_waiting_for_set, live_reg_range)
+            live_reg_range = nil ---@diagnostic disable-line: cast-local-type
+          end
+          if live_reg_range then
+            live_reg_range.get_insts[#live_reg_range.get_insts+1] = inst
+          end
         end
 
         -- Keep track of which instructions use a register which is captured as an upvalue, get and set.
@@ -241,6 +250,9 @@ local function eval_live_regs_in_block(data, open_block)
       end)
     end
 
+    if not open_block.is_first_pass and not regs_waiting_for_set[1] then
+      break
+    end
     if inst ~= open_block.block.start_inst then
       add_to_real_live_regs(inst.prev_border, regs_waiting_for_set)
     end
@@ -396,11 +408,9 @@ local function upvals_are_extra_special(data)
       local checkpoint = open.checkpoints[i]
       local existing_live_range = checkpoint.live_range_by_reg[open.reg]
       if existing_live_range then
-        if existing_live_range.is_captured_as_upval then
-          open.live_range.set_insts = linq(open.live_range.set_insts)
-            :union(existing_live_range.set_insts)
-            :to_array()
-        end
+        local live_range = open.live_range
+        live_range.set_insts = linq(live_range.set_insts):union(existing_live_range.set_insts):to_array()
+        live_range.get_insts = linq(live_range.get_insts):union(existing_live_range.get_insts):to_array()
         util.remove_from_array_fast(checkpoint.real_live_regs, existing_live_range)
       end
       checkpoint.real_live_regs[#checkpoint.real_live_regs+1] = open.live_range

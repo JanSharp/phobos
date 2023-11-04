@@ -116,7 +116,7 @@ end
   inserted before the register list consuming instruction
 - [x] somehow force the color of parameter registers
 - [x] remember the instruction which set a live reg range
-- [ ] maybe remember all instructions which get a live reg range
+- [x] maybe remember all instructions which get a live reg range
 - [ ] evaluate all live reg ranges which are not at top and not apart of register lists first
 - [x] ignore internal regs
 - [ ] live reg ranges which outlive a register group in both directions must be below the register list

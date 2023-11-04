@@ -847,8 +847,13 @@
 ---Does this live register range get captured as an upvalue for an inner function?
 ---@field is_captured_as_upval boolean?
 ---The instructions setting/writing to this live reg range, the beginning(s) of its lifetime.\
----`nil` when `is_param` is `true`.
+---When `is_captured_as_upval` is `true` there can be multiple set_insts within the same block, otherwise not.\
+---`nil` when `is_param` is `true`, otherwise always contains at least 1 instruction.
 ---@field set_insts ILInstruction[]
+---The instructions getting/reading from this live reg range. All ends of the lifetime of the live reg range
+---are in `get_insts`, however not all `get_insts` are the end of its lifetime.\
+---Always contains at least 1 instruction.
+---@field get_insts ILInstruction[]
 ---
 ---@field forced_color integer @ 1 based.
 

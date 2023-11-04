@@ -10,8 +10,12 @@ local il_blocks = require("il_blocks")
 local ill = require("indexed_linked_list")
 local util = require("util")
 local il_pretty_print = require("il_pretty_print")
+local linq = require("linq")
 
 local il_real_liveliness = require("il_real_liveliness")
+
+-- NOTE: Using the tokenizer, parser and il generator to make ILFunctions for testing is bad. But this the
+-- easiest right now, because IL is still lacking utility functions to easily define the data structure.
 
 -- TODO: Add proper support for extra output to the test runner, or something.
 local output_pretty_printed = false
@@ -79,6 +83,17 @@ local function assert_same_factory()
   end
 end
 
+---@param checkpoint ILExecutionCheckpoint
+local function assert_no_live_regs(checkpoint)
+  assert.equals(nil, checkpoint.real_live_regs[1], "There should be 0 live reg ranges here.")
+end
+
+---@param insts ILInstruction[]
+---@return ILInstruction[]
+local function order_by_inst_index(insts)
+  return linq(insts):order_by(function(inst) return inst.index end):to_array()
+end
+
 ---@param source_code string
 ---@return ILFunction
 local function get_il(source_code)
@@ -142,7 +157,7 @@ do
       validate_result(il_func)
     end)
 
-    main_scope:add_test(name.." (has valid set_insts)", function()
+    main_scope:add_test(name.." (has valid set_insts and get_insts)", function()
       local il_func = func()
       if type(il_func) == "string" then
         il_func = get_il(il_func)
@@ -151,7 +166,7 @@ do
 
       local block = il_func.blocks.first
       ---@param checkpoint ILExecutionCheckpoint
-      local function assert_set_insts(checkpoint)
+      local function assert_set_and_get_insts(checkpoint)
         for _, live_range in ipairs(checkpoint.real_live_regs) do
           if live_range.is_param then
             assert.equals(nil, live_range.set_insts, "set_insts when is_param")
@@ -159,19 +174,21 @@ do
             assert.not_equals(nil, live_range.set_insts, "set_insts when not is_param")
             assert.not_equals(nil, live_range.set_insts[1], "set_insts[1] when not is_param")
           end
+          assert.not_equals(nil, live_range.get_insts, "get_insts")
+          assert.not_equals(nil, live_range.get_insts[1], "get_insts[1]")
         end
       end
       while block do
         for inst in il_blocks.iterate(il_func, block) do
           if inst ~= block.start_inst then
-            assert_set_insts(inst.prev_border)
+            assert_set_and_get_insts(inst.prev_border)
           end
         end
         if block.straight_link then
-          assert_set_insts(block.straight_link)
+          assert_set_and_get_insts(block.straight_link)
         end
         if block.jump_link then
-          assert_set_insts(block.jump_link)
+          assert_set_and_get_insts(block.jump_link)
         end
         block = block.next
       end
@@ -191,6 +208,37 @@ do
     end
   end)
 
+  add_test("The same reg gets a single live range in a loop block", function()
+    return [[
+      local foo = 100
+      while true do
+        local _ = foo
+      end
+    ]], function(func)
+      local assert_same = assert_same_factory()
+      assert_same(get_inst(func, 1).block.straight_link)
+      assert_same(get_inst(func, 2).next_border)
+      assert_same(get_inst(func, 3).block.straight_link)
+      assert_same(get_inst(func, 4).next_border)
+      assert_same(get_inst(func, 5).block.jump_link)
+      assert_no_live_regs(get_inst(func, 6).next_border)
+    end
+  end)
+
+  add_test("Multiple get_insts for one live reg range", function()
+    return [[
+      local foo = 100
+      local _ = foo
+      return foo
+    ]], function(func)
+      local reg_range = get_inst(func, 1).next_border.real_live_regs[1]
+      local get_insts = order_by_inst_index(reg_range.get_insts)
+      assert.equals(get_inst(func, 2), get_insts[1])
+      assert.equals(get_inst(func, 3), get_insts[2])
+      assert.equals(nil, get_insts[3], "get_insts[3] == nil")
+    end
+  end)
+
   add_test("Multiple set_insts for one live reg range", function()
     return [[
       local foo
@@ -201,11 +249,59 @@ do
       end
       return foo
     ]], function(func)
-      local reg_range = get_inst(func, 7).next_border.real_live_regs[1]
-      assert.not_equals(nil, reg_range.set_insts[1], "set_insts[1]")
-      assert.not_equals(nil, reg_range.set_insts[2], "set_insts[2]")
-      assert.equals(nil, reg_range.set_insts[3], "set_insts[3]")
-      assert.not_equals(reg_range.set_insts[1], reg_range.set_insts[2], "set_insts[1] ~= set_insts[2]")
+      local reg_range = get_inst(func, 3).next_border.real_live_regs[1]
+      local set_insts = order_by_inst_index(reg_range.set_insts)
+      assert.equals(get_inst(func, 3), set_insts[1], "set_insts[1] == inst 3")
+      assert.equals(get_inst(func, 6), set_insts[2], "set_insts[2] == inst 6")
+      assert.equals(nil, set_insts[3], "set_insts[3] == nil")
+    end
+  end)
+
+  add_test("Multiple get_insts for one live reg range with a loop", function()
+    return [[
+      local foo = 100
+      local _ = foo
+      local _ = foo
+      while true do
+        local _ = foo
+        local _ = foo
+      end
+    ]], function(func)
+      local reg_range = get_inst(func, 1).block.straight_link.real_live_regs[1]
+      local get_insts = order_by_inst_index(reg_range.get_insts)
+      assert.equals(get_inst(func, 2), get_insts[1], "get_insts[1] == inst 2")
+      assert.equals(get_inst(func, 3), get_insts[2], "get_insts[2] == inst 3")
+      assert.equals(get_inst(func, 6), get_insts[3], "get_insts[3] == inst 6")
+      assert.equals(get_inst(func, 7), get_insts[4], "get_insts[4] == inst 7")
+      assert.equals(nil, get_insts[5], "get_insts[5] == nil")
+    end
+  end)
+
+  add_test("Multiple set_insts for one live reg range with a loop", function()
+    return [[
+      local foo
+      if true then
+        foo = 100
+      else
+        foo = 200
+      end
+      while true do
+        if true then
+          foo = 300
+        end
+        if true then
+          foo = 400
+        end
+        local _ = foo
+      end
+    ]], function(func)
+      local reg_range = get_inst(func, 3).next_border.real_live_regs[1]
+      local set_insts = order_by_inst_index(reg_range.set_insts)
+      assert.equals(get_inst(func, 3), set_insts[1], "set_insts[1] == inst 3")
+      assert.equals(get_inst(func, 6), set_insts[2], "set_insts[2] == inst 6")
+      assert.equals(get_inst(func, 11), set_insts[3], "set_insts[3] == inst 11")
+      assert.equals(get_inst(func, 15), set_insts[4], "set_insts[4] == inst 15")
+      assert.equals(nil, set_insts[5], "set_insts[5] == nil")
     end
   end)
 
