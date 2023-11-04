@@ -192,7 +192,7 @@ end
 
 ---@param data ILRealLivelinessData
 ---@param real_live_regs ILLiveRegisterRange[]
-local function add_to_param_live_reg_range_lut(data, real_live_regs)
+local function add_to_param_execution_checkpoint(data, real_live_regs)
   local invalid_regs = linq(real_live_regs)
     :select(function(reg_range) return reg_range.reg end)
     :except(data.func.param_regs)
@@ -203,9 +203,8 @@ local function add_to_param_live_reg_range_lut(data, real_live_regs)
       ..table.concat(invalid_regs, ", ").."."
     )
   end
-  data.func.param_live_reg_range_lut = data.func.param_live_reg_range_lut or {}
   for _, reg_range in ipairs(real_live_regs) do
-    data.func.param_live_reg_range_lut[reg_range.reg] = reg_range
+    data.func.param_execution_checkpoint.live_range_by_reg[reg_range.reg] = reg_range
   end
 end
 
@@ -261,7 +260,7 @@ local function eval_live_regs_in_block(data, open_block)
   -- Ensure the live regs before the main entry block are just the ones for parameters, anything else
   -- indicates that there are regs used before they are written to, which is invalid.
   if open_block.block.is_main_entry_block then
-    add_to_param_live_reg_range_lut(data, regs_waiting_for_set)
+    add_to_param_execution_checkpoint(data, regs_waiting_for_set)
   end
 
   mark_as_finished(data, open_block)
@@ -309,9 +308,12 @@ local function rename_live_reg_ranges(data)
     block = block.next
   end
 
-  for reg, reg_range in pairs(data.func.param_live_reg_range_lut) do
-    if renamed_lut[reg_range] then
-      data.func.param_live_reg_range_lut[reg] = renamed_lut[reg_range]
+  for i, prev_reg_range in ipairs(data.func.param_execution_checkpoint.real_live_regs) do
+    local renamed_reg_range = renamed_lut[prev_reg_range]
+    if renamed_reg_range then
+      renamed_reg_range.is_param = true
+      data.func.param_execution_checkpoint.real_live_regs[i] = renamed_reg_range
+      data.func.param_execution_checkpoint.live_range_by_reg[prev_reg_range.reg] = renamed_reg_range
     end
   end
 end
@@ -412,6 +414,15 @@ local function upvals_are_extra_special(data)
         live_range.set_insts = linq(live_range.set_insts):union(existing_live_range.set_insts):to_array()
         live_range.get_insts = linq(live_range.get_insts):union(existing_live_range.get_insts):to_array()
         util.remove_from_array_fast(checkpoint.real_live_regs, existing_live_range)
+        -- I don't know if the following condition can actually happen, but it seems reasonable.
+        local param_cp = data.func.param_execution_checkpoint
+        if existing_live_range.is_param
+          and param_cp.live_range_by_reg[existing_live_range.reg] == existing_live_range
+        then
+          live_range.is_param = true
+          param_cp.live_range_by_reg[live_range.reg] = live_range
+          util.replace_in_array(param_cp.real_live_regs, existing_live_range, live_range)
+        end
       end
       checkpoint.real_live_regs[#checkpoint.real_live_regs+1] = open.live_range
       checkpoint.live_range_by_reg[open.reg] = open.live_range
@@ -426,7 +437,7 @@ local function upvals_are_extra_special(data)
       return inst.prev_border.live_range_by_reg[reg]
     end
     if inst.block.is_main_entry_block then
-      return data.func.param_live_reg_range_lut[reg]
+      return data.func.param_execution_checkpoint.live_range_by_reg[reg]
     end
     -- All source links must have the given live range, otherwise it'd be malformed. Just use the first one.
     return inst.block.source_links[1].live_range_by_reg[reg]
@@ -595,6 +606,11 @@ end
 
 ---@param func ILFunction
 local function eval_real_reg_liveliness(func)
+  func.param_execution_checkpoint = {
+    real_live_regs = {},
+    live_range_by_reg = {},
+  }
+
   local open_blocks = get_initial_open_blocks(func)
   ---@type ILRealLivelinessData
   local data = {
@@ -645,12 +661,13 @@ local function eval_real_reg_liveliness(func)
 
   rename_live_reg_ranges(data)
 
-  for _, live_reg_range in pairs(func.param_live_reg_range_lut) do
-    util.debug_assert(not live_reg_range.set_insts[1], "A live register range for a parameter should be \z
-      impossible to have instructions that supposedly set the live register range."
-    )
-    live_reg_range.set_insts = nil
-    live_reg_range.is_param = true
+  local param_cp = func.param_execution_checkpoint
+  for _, param_reg in ipairs(func.param_regs) do
+    local live_reg_range = param_cp.live_range_by_reg[param_reg]
+    if live_reg_range then
+      live_reg_range.is_param = true
+      param_cp.real_live_regs[#param_cp.real_live_regs+1] = live_reg_range
+    end
   end
 
   upvals_are_extra_special(data)

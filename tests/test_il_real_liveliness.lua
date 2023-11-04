@@ -70,9 +70,10 @@ local function get_inst(il_func, index)
   return inst
 end
 
+---@param live_range ILLiveRegisterRange? @
+---When `nil` it will use the first assert as an initialization of which reference to compare to
 ---@return fun(checkpoint: ILExecutionCheckpoint)
-local function assert_same_factory()
-  local live_range
+local function assert_same_factory(live_range)
   ---@param checkpoint ILExecutionCheckpoint
   return function(checkpoint)
     if not live_range then
@@ -320,6 +321,24 @@ do
     end
   end)
 
+  add_test("Parameter live reg range with one set_insts", function()
+    return [[
+      local function foo(bar)
+        if true then
+          bar = 100
+        end
+        return bar
+      end
+    ]], function(func)
+      ---@type ILFunction
+      func = func.inner_functions[1]
+      local reg_range = func.param_execution_checkpoint.real_live_regs[1]
+      local set_insts = order_by_inst_index(reg_range.set_insts)
+      assert.equals(get_inst(func, 2), set_insts[1], "set_insts[1] == inst 2")
+      assert.equals(nil, set_insts[2], "set_insts[2] == nil")
+    end
+  end)
+
   add_test("Continuous live range through links for loop blocks", function()
     return [[
       local foo = 100
@@ -388,6 +407,25 @@ do
         get_inst(func, 1).next_border.real_live_regs[1],
         "There should be 2 separate instances of live ranges for the register foo."
       )
+    end
+  end)
+
+  add_test("Merged live reg range which is captured as an upvalue and a parameter has the same references everywhere", function()
+    return [[
+      local function foo(bar)
+        local function f() return bar end
+        local baz = 100
+        bar = 200
+        return bar
+      end
+    ]], function(func)
+      ---@type ILFunction
+      func = func.inner_functions[1]
+      local reg_range = func.param_execution_checkpoint.real_live_regs[1]
+      local assert_same = assert_same_factory(reg_range)
+      assert_same(get_inst(func, 1).next_border)
+      assert_same(get_inst(func, 2).next_border)
+      assert_same(get_inst(func, 3).next_border)
     end
   end)
 end
