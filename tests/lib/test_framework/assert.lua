@@ -54,12 +54,23 @@ end
 
 ---@param expected any
 ---@param got any
+local function get_serpent_opts(expected, got)
+  local serpent_opts = {maxlevel = 2, comment = true}
+  if type(expected) == "table" and type(got) == "table" then
+    serpent_opts.no_serpent = true
+  end
+  return serpent_opts
+end
+
+---@param expected any
+---@param got any
 ---@param msg string? @ optional additional msg
 local function equals(expected, got, msg)
   -- also test for nan
   if got ~= expected and (got == got or expected == expected) then
     -- TODO: Somehow give better control over how values get pretty printed. Best through some refactor of pretty printing in tests as a whole.
-    error(add_msg("expected "..pretty_print(expected, {no_serpent = true})..", got "..pretty_print(got, {no_serpent = true}), msg))
+    local serpent_opts = get_serpent_opts(expected, got)
+    error(add_msg("expected "..pretty_print(expected, serpent_opts)..", got "..pretty_print(got, serpent_opts), msg))
   end
 end
 
@@ -70,7 +81,8 @@ local function not_equals(expected, got, msg)
   -- also tests for nan
   if got == expected or (got ~= got and expected ~= expected) then
     -- TODO: Somehow give better control over how values get pretty printed. Best through some refactor of pretty printing in tests as a whole.
-    error(add_msg("expected not "..pretty_print(got, {no_serpent = true}), msg))
+    local serpent_opts = get_serpent_opts(expected, got)
+    error(add_msg("expected not "..pretty_print(got, serpent_opts), msg))
   end
 end
 
