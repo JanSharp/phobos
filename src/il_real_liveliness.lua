@@ -269,6 +269,7 @@ local function eval_live_regs_in_block(data, open_block)
           live_reg_range.set_insts[#live_reg_range.set_insts+1] = inst
           regs_lut[reg] = nil
           util.remove_from_array_fast(regs_waiting_for_set, live_reg_range)
+          live_reg_range = nil ---@diagnostic disable-line: cast-local-type
         end
         if bit32.band(get_set, get_flag) ~= 0 then
           if open_block.is_first_pass and not live_reg_range then
