@@ -310,10 +310,10 @@ do
         if true then
           foo = 300
         end
+        local _ = foo
         if true then
           foo = 400
         end
-        local _ = foo
       end
     ]], function(func)
       local reg_range = get_inst(func, 3).next_border.real_live_regs[1]
@@ -321,7 +321,7 @@ do
       assert.equals(get_inst(func, 3), set_insts[1], "set_insts[1] == inst 3")
       assert.equals(get_inst(func, 6), set_insts[2], "set_insts[2] == inst 6")
       assert.equals(get_inst(func, 11), set_insts[3], "set_insts[3] == inst 11")
-      assert.equals(get_inst(func, 15), set_insts[4], "set_insts[4] == inst 15")
+      assert.equals(get_inst(func, 16), set_insts[4], "set_insts[4] == inst 16")
       assert.equals(nil, set_insts[5], "set_insts[5] == nil")
     end
   end)
