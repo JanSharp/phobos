@@ -568,7 +568,7 @@ local function upvals_are_extra_special(data)
     local already_open = {}
     if not should_process_block(block, already_open) then return end
 
-    local opened_by_this_block_count = 0
+    local opened_by_this_block
     local checkpoint_sizes_before_this_block = linq(open_regs)
       :to_dict(function(open) return open, open.checkpoints.size end)
 
@@ -594,24 +594,28 @@ local function upvals_are_extra_special(data)
           if not open_lut[reg] then
             local live_range = get_live_range_for_reg(inst, reg)
             if live_range then
-              open_regs[#open_regs+1] = {
+              ---@type ILRealLivelinessOpenCapturedReg
+              local open = {
                 reg = reg,
                 live_range = to_captured_live_range(live_range),
                 checkpoints = stack.new_stack(),
               }
+              open_regs[#open_regs+1] = open
               open_lut[reg] = true
-              opened_by_this_block_count = opened_by_this_block_count + 1
+              opened_by_this_block = opened_by_this_block or {}
+              opened_by_this_block[open] = true
             end
           end
         end
       end
     end
 
+    -- These can change the order of regs in open_regs.
     walk_link(block.straight_link)
     walk_link(block.jump_link)
 
-    for i = #open_regs, #open_regs - opened_by_this_block_count + 1, -1 do
-      open_regs[i] = nil
+    if opened_by_this_block then
+      util.remove_from_array_by_lut(open_regs, opened_by_this_block)
     end
     for _, open in ipairs(open_regs) do
       if open.checkpoints.size ~= 0 then

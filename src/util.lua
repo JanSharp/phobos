@@ -76,6 +76,21 @@ end
 
 ---@generic T
 ---@param array T[]
+---@param elements_to_remove_lut table<T, true|any>
+local function remove_from_array_by_lut(array, elements_to_remove_lut)
+  local j = 0
+  for i = 1, #array do
+    local elem = array[i]
+    array[i] = nil
+    if not elements_to_remove_lut[elem] then
+      j = j + 1
+      array[j] = elem
+    end
+  end
+end
+
+---@generic T
+---@param array T[]
 ---@param old_element T
 ---@param new_element T
 local function replace_in_array(array, old_element, new_element)
@@ -430,6 +445,7 @@ return {
   clear_array = clear_array,
   remove_from_array = remove_from_array,
   remove_from_array_fast = remove_from_array_fast,
+  remove_from_array_by_lut = remove_from_array_by_lut,
   replace_in_array = replace_in_array,
   replace_table = replace_table,
   shallow_copy = shallow_copy,
