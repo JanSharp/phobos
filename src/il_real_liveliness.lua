@@ -35,6 +35,51 @@ local function new_open_block(block)
 end
 
 ---@param data ILRealLivelinessData
+---@param left ILLiveRegisterRange
+---@param right ILLiveRegisterRange
+local function mark_as_same(data, left, right)
+  -- NOTE: The conditions here are intentionally redundant to make it clear when each block gets executed.
+  local left_combined = data.combined_live_reg_ranges[left]
+  local right_combined = data.combined_live_reg_ranges[right]
+  if left_combined and right_combined and left_combined == right_combined then
+    return -- Already marked as the same, nothing to do.
+  end
+  if not left_combined and not right_combined then
+    ---@type ILCombinedLiveRegisterRange
+    local result = {
+      main_reg_range = left,
+      other_reg_ranges = {right},
+    }
+    data.combined_live_reg_ranges[left] = result
+    data.combined_live_reg_ranges[right] = result
+    return
+  end
+  if left_combined and not right_combined then
+    local result = left_combined
+    left_combined.other_reg_ranges[#left_combined.other_reg_ranges+1] = right
+    data.combined_live_reg_ranges[right] = result
+    return
+  end
+  if not left_combined and right_combined then
+    local result = right_combined
+    right_combined.other_reg_ranges[#right_combined.other_reg_ranges+1] = left
+    data.combined_live_reg_ranges[left] = result
+    return
+  end
+  if left_combined and right_combined and left_combined ~= right_combined then
+    local result = left_combined
+    left_combined.other_reg_ranges[#left_combined.other_reg_ranges+1] = right_combined.main_reg_range
+    data.combined_live_reg_ranges[right_combined.main_reg_range] = result
+    for _, other in ipairs(right_combined.other_reg_ranges) do
+      left_combined.other_reg_ranges[#left_combined.other_reg_ranges+1] = other
+      data.combined_live_reg_ranges[other] = result
+    end
+    return
+  end
+  util.debug_abort("This is unreachable.")
+end
+
+---@param data ILRealLivelinessData
 ---@param partially_open_block ILRealLivelinessOpenBlock
 ---@param regs_to_add ILLiveRegisterRange[]
 ---@return boolean anything_actually_changed
@@ -47,14 +92,14 @@ local function merge_open_blocks(data, partially_open_block, regs_to_add)
     local visited_reg_range = visited_lut[reg_range.reg]
     if visited_reg_range then
       if reg_range ~= visited_reg_range then
-        reg_range.set_insts = linq(visited_reg_range.set_insts):union(reg_range.set_insts):to_array()
-        reg_range.get_insts = linq(visited_reg_range.get_insts):union(reg_range.get_insts):to_array()
-        data.renamed_live_reg_ranges[visited_reg_range] = reg_range
+        mark_as_same(data, reg_range, visited_reg_range)
       end
-    else
+    elseif not regs_lut[reg_range.reg] then
       regs_lut[reg_range.reg] = reg_range
       regs_waiting_for_set[#regs_waiting_for_set+1] = reg_range
       anything_actually_changed = true
+    elseif regs_lut[reg_range.reg] ~= reg_range then
+      mark_as_same(data, reg_range, regs_lut[reg_range.reg])
     end
   end
   return anything_actually_changed
@@ -82,6 +127,8 @@ end
 ---@param data ILRealLivelinessData
 ---@param open_block ILRealLivelinessOpenBlock
 local function push_open_block(data, open_block)
+  util.debug_assert(not linq(data.open_blocks):contains(open_block))
+  util.debug_assert(not data.open_blocks_lut[open_block.block])
   stack.push(data.open_blocks, open_block)
   data.open_blocks_lut[open_block.block] = open_block
 end
@@ -123,13 +170,13 @@ local function add_to_waiting_regs(data, block, real_live_regs, regs_lut)
   end
 
   local partially_open_block = data.partially_open_blocks_lut[block]
-  if not partially_open_block then
+  if partially_open_block then
+    merge_open_blocks(data, partially_open_block, real_live_regs)
+  else
     partially_open_block = new_open_block(block)
     partially_open_block.regs_waiting_for_set = util.shallow_copy(real_live_regs)
     partially_open_block.regs_lut = util.shallow_copy(regs_lut)
     add_partially_open_block(data, partially_open_block)
-  else
-    merge_open_blocks(data, partially_open_block, real_live_regs)
   end
   return partially_open_block
 end
@@ -145,8 +192,8 @@ end
 ---@param open_block ILRealLivelinessOpenBlock
 local function mark_as_finished(data, open_block)
   util.debug_assert(not data.partially_open_blocks_lut[open_block.block])
+  util.debug_assert(data.previously_open_blocks[open_block.block])
   data.finished_blocks[open_block.block] = true
-  open_block.is_first_pass = false
 
   for _, link in ipairs(open_block.block.source_links) do
     add_to_real_live_regs(link, open_block.regs_waiting_for_set)
@@ -166,13 +213,7 @@ local function mark_as_finished(data, open_block)
     end
   end
 
-  -- Mark as visited and clear waiting.
-  for i = 1, #open_block.regs_waiting_for_set do
-    local live_reg = open_block.regs_waiting_for_set[i]
-    open_block.previously_visited_regs[live_reg.reg] = live_reg
-    open_block.regs_waiting_for_set[i] = nil
-    open_block.regs_lut[live_reg.reg] = nil
-  end
+  -- This instance of `open_block` is not used anymore past this point, no need to clean it up.
 end
 
 ---@param data ILRealLivelinessData
@@ -211,6 +252,10 @@ end
 ---@param data ILRealLivelinessData
 ---@param open_block ILRealLivelinessOpenBlock
 local function eval_live_regs_in_block(data, open_block)
+  if open_block.is_first_pass then
+    util.debug_assert(not data.first_passes[open_block.block])
+    data.first_passes[open_block.block] = true
+  end
   save_in_previously_open_blocks(data, open_block)
 
   local regs_waiting_for_set = open_block.regs_waiting_for_set
@@ -266,30 +311,35 @@ local function eval_live_regs_in_block(data, open_block)
   mark_as_finished(data, open_block)
 end
 
----@param lut table<ILLiveRegisterRange, ILLiveRegisterRange>
----@return table<ILLiveRegisterRange, ILLiveRegisterRange>
-local function normalize_renamed_lut(lut)
-  for from, to in pairs(lut) do
-    while lut[to] do
-      to = lut[to]
-    end
-    lut[from] = to
-  end
-  return lut
+---@param combined ILCombinedLiveRegisterRange
+local function normalize_combined_reg_range(combined)
+  if combined.has_been_normalized then return end
+  combined.has_been_normalized = true
+  local main_reg_range = combined.main_reg_range
+  util.debug_assert(linq(combined.other_reg_ranges):all(function(r) return r.reg == main_reg_range.reg end))
+  main_reg_range.get_insts = linq(main_reg_range.get_insts)
+    :union(linq(combined.other_reg_ranges):select_many(function(r) return r.get_insts end))
+    :to_array()
+  main_reg_range.set_insts = linq(main_reg_range.set_insts)
+    :union(linq(combined.other_reg_ranges):select_many(function(r) return r.set_insts end))
+    :to_array()
+  main_reg_range.is_param = main_reg_range.is_param
+    or linq(combined.other_reg_ranges):any(function(r) return r.is_param end)
+    or nil
 end
 
 ---@param data ILRealLivelinessData
 local function rename_live_reg_ranges(data)
-  local renamed_lut = normalize_renamed_lut(data.renamed_live_reg_ranges)
   ---@param checkpoint ILExecutionCheckpoint
   local function replace_in_checkpoint(checkpoint)
     local list = checkpoint.real_live_regs
     local lut = checkpoint.live_range_by_reg
     for i, reg_range in ipairs(list) do
-      local renamed = renamed_lut[reg_range]
-      if renamed then
-        list[i] = renamed
-        lut[renamed.reg] = renamed
+      local combined = data.combined_live_reg_ranges[reg_range]
+      if combined and reg_range ~= combined.main_reg_range then
+        normalize_combined_reg_range(combined)
+        list[i] = combined.main_reg_range
+        lut[reg_range.reg] = combined.main_reg_range
       end
     end
   end
@@ -308,14 +358,7 @@ local function rename_live_reg_ranges(data)
     block = block.next
   end
 
-  for i, prev_reg_range in ipairs(data.func.param_execution_checkpoint.real_live_regs) do
-    local renamed_reg_range = renamed_lut[prev_reg_range]
-    if renamed_reg_range then
-      renamed_reg_range.is_param = true
-      data.func.param_execution_checkpoint.real_live_regs[i] = renamed_reg_range
-      data.func.param_execution_checkpoint.live_range_by_reg[prev_reg_range.reg] = renamed_reg_range
-    end
-  end
+  replace_in_checkpoint(data.func.param_execution_checkpoint)
 end
 
 ---@param data ILRealLivelinessData
@@ -590,6 +633,11 @@ end
 ---@field first ILRealLivelinessOpenBlock?
 ---@field last ILRealLivelinessOpenBlock?
 
+---@class ILCombinedLiveRegisterRange
+---@field main_reg_range ILLiveRegisterRange
+---@field other_reg_ranges ILLiveRegisterRange[]
+---@field has_been_normalized boolean?
+
 ---@class ILRealLivelinessData
 ---@field func ILFunction
 ---@field partially_open_blocks_lut table<ILBlock, ILRealLivelinessOpenBlock>
@@ -598,11 +646,12 @@ end
 ---@field open_blocks ILRealLivelinessOpenBlock[] @ This is a stack.
 ---@field open_blocks_lut table<ILBlock, ILRealLivelinessOpenBlock> @ Lookup table for blocks in open_blocks.
 ---@field finished_blocks table<ILBlock, true>
----@field renamed_live_reg_ranges table<ILLiveRegisterRange, ILLiveRegisterRange>
+---@field combined_live_reg_ranges table<ILLiveRegisterRange, ILCombinedLiveRegisterRange>
 ---Regs which are captured as upvalues by closure insts.
 ---@field captured_regs_by_closure table<ILInstruction, ILRegister[]>
 ---Instructions which get or set a register captured as an upval. The integer is a get/set bit field.
 ---@field captured_reg_usage table<ILRegister, table<ILInstruction, integer>>
+---@field first_passes table<ILBlock, true> @ This exists purely for a debug assert, it's not actually used.
 
 ---@param func ILFunction
 local function eval_real_reg_liveliness(func)
@@ -621,15 +670,17 @@ local function eval_real_reg_liveliness(func)
     open_blocks = open_blocks,
     open_blocks_lut = linq(open_blocks):to_dict(function(open_block) return open_block.block, open_block end),
     finished_blocks = {},
-    renamed_live_reg_ranges = {},
+    combined_live_reg_ranges = {},
     captured_regs_by_closure = {},
     captured_reg_usage = {},
+    first_passes = {},
   }
   find_all_captured_regs(data)
 
   while true do
     while stack.get_top(data.open_blocks) do
       local open_block = stack.pop(data.open_blocks)
+      data.open_blocks_lut[open_block.block] = nil
       eval_live_regs_in_block(data, open_block)
       -- data.open_blocks_lut[open_block.block] = open_block
     end
