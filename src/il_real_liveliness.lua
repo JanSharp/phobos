@@ -271,7 +271,10 @@ local function eval_live_regs_in_block(data, open_block)
           util.remove_from_array_fast(regs_waiting_for_set, live_reg_range)
           live_reg_range = nil ---@diagnostic disable-line: cast-local-type
         end
-        if bit32.band(get_set, get_flag) ~= 0 then
+        if bit32.band(get_set, get_flag) ~= 0
+          -- Closures are the only instructions where getting and setting a reg means it is not alive before.
+          and (inst.inst_type ~= "closure" or bit32.band(get_set, set_flag) == 0)
+        then
           if open_block.is_first_pass and not live_reg_range then
             -- Don't create new live reg ranges in additional passes, they'd be duplicates.
             live_reg_range = {reg = reg, set_insts = {}, get_insts = {}}
@@ -476,7 +479,8 @@ local function upvals_are_extra_special(data)
 
   ---@param inst ILInstruction
   ---@param reg ILRegister
-  local function get_live_range_for_reg(inst, reg)
+  ---@return ILLiveRegisterRange?
+  local function get_live_range_for_reg_on_prev(inst, reg)
     if inst ~= inst.block.start_inst then
       return inst.prev_border.live_range_by_reg[reg]
     end
@@ -485,6 +489,28 @@ local function upvals_are_extra_special(data)
     end
     -- All source links must have the given live range, otherwise it'd be malformed. Just use the first one.
     return inst.block.source_links[1].live_range_by_reg[reg]
+  end
+
+  ---@param inst ILInstruction
+  ---@param reg ILRegister
+  ---@return ILLiveRegisterRange?
+  local function get_live_range_for_reg_on_next(inst, reg)
+    if inst ~= inst.block.stop_inst then
+      return inst.next_border.live_range_by_reg[reg]
+    end
+    local straight_link = inst.block.straight_link
+    local jump_link = inst.block.jump_link
+    return straight_link and straight_link.live_range_by_reg[reg]
+      or jump_link and jump_link.live_range_by_reg[reg]
+  end
+
+  ---@param inst ILInstruction
+  ---@param reg ILRegister
+  ---@return ILLiveRegisterRange?
+  local function get_live_range_for_reg(inst, reg)
+    local reg_range = get_live_range_for_reg_on_prev(inst, reg)
+    if reg_range or inst.inst_type ~= "closure" then return reg_range end
+    return get_live_range_for_reg_on_next(inst, reg)
   end
 
   ---@param live_range ILLiveRegisterRange
@@ -566,13 +592,16 @@ local function upvals_are_extra_special(data)
       if inst.inst_type == "closure" then ---@cast inst ILClosure
         for _, reg in ipairs(get_captured_regs_for_inst(data, inst)) do
           if not open_lut[reg] then
-            open_regs[#open_regs+1] = {
-              reg = reg,
-              live_range = to_captured_live_range(get_live_range_for_reg(inst, reg)),
-              checkpoints = stack.new_stack(),
-            }
-            open_lut[reg] = true
-            opened_by_this_block_count = opened_by_this_block_count + 1
+            local live_range = get_live_range_for_reg(inst, reg)
+            if live_range then
+              open_regs[#open_regs+1] = {
+                reg = reg,
+                live_range = to_captured_live_range(live_range),
+                checkpoints = stack.new_stack(),
+              }
+              open_lut[reg] = true
+              opened_by_this_block_count = opened_by_this_block_count + 1
+            end
           end
         end
       end
