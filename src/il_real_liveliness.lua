@@ -546,7 +546,7 @@ local function upvals_are_extra_special(data)
         has_new_regs_to_visit = true
       else
         already_open[#already_open+1] = open
-        open[i] = open_regs[#open_regs]
+        open_regs[i] = open_regs[#open_regs]
         open_regs[#open_regs] = nil
         -- This does not touch open_lut, as the job of open_lut isn't to match open_regs, but to indicate
         -- that a given register should not be opened again. Since these registers here were already open
