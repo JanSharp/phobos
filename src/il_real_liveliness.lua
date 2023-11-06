@@ -734,7 +734,6 @@ local function eval_real_reg_liveliness(func)
     for block in ll.iterate_reverse(func.blocks) do
       if not data.finished_blocks[block] then
         local partially_open_block = new_open_block(block)
-        add_partially_open_block(data, partially_open_block)
         eval_live_regs_in_block(data, partially_open_block)
         goto continue -- Go back to processing open blocks and new partially open blocks.
       end
