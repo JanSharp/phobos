@@ -172,7 +172,7 @@ do
     end,
     [opcodes["return"]] = function()
       return "RETURN", "return "..(current.b ~= 0 and (current.b - 1) or "var")
-        .." results starting at "..get_register_label("a")
+        .." results "..(current.b ~= 1 and ("starting at "..get_register_label("a")) or "")
     end,
 
     [opcodes.forloop] = function()
