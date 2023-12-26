@@ -550,11 +550,19 @@ end
 ---gets called for every instruction. instruction_index is 1-based
 ---@param instruction_callback fun(line?: integer, column?: integer, instruction_index: integer, padded_opcode: string, description: string, description_with_keys: string, raw_values: string)
 local function get_disassembly(func, func_description_callback, instruction_callback)
-  func_description_callback("function at "..get_function_label(func).."\n"
+  local description = "function at "..get_function_label(func).."\n"
     ..(func.is_vararg and "vararg" or (func.num_params.." params")).." | "
     ..(#func.upvals).." upvals | "..func.max_stack_size.." max stack\n"
     ..(#func.instructions).." instructions | "..(#func.constants)
-    .." constants | "..(#func.inner_functions).." functions")
+    .." constants | "..(#func.inner_functions).." functions"
+
+  for i, upval in pairs(func.upvals) do
+    description = description.."\nUp("..(i - 1)..(upval.name and ("|"..upval.name) or "")..") of parent "
+      ..(upval.in_stack and "local" or "upval")..", index: "
+      ..string.format("%d", upval.in_stack and upval.local_idx or upval.upval_idx)
+  end
+
+  func_description_callback(description)
 
   local constant_labels = {}
   for i, constant in ipairs(func.constants) do

@@ -2,6 +2,7 @@
 Version: 0.1.6
   Changes:
     - Remove "return results starting at" for return disassembly when there are no return values
+    - Add list of upvals to disassembly function description header
 ---------------------------------------------------------------------------------------------------
 Version: 0.1.5
 Date: 2023-10-03
