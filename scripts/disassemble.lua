@@ -16,7 +16,36 @@ local instruction_line_format = util.parse_interpolated_string(
 )
 
 local function disassemble_file(filename, output_postfix)
+  local contents = io_util.read_file(filename)
+
+  -- TODO: make a proper function for getting bytecode from a potentially phobos compiled file
+  local bytecode
+  local is_text_source = false
+  if contents:sub(1, 4) == constants.lua_signature_str then
+    bytecode = contents
+  else -- not a bytecode file? It might have been generated with `--use-load`
+    -- check string constants in main chunk for a bytecode string
+    local chunk = assert(load(contents, "@"..filename, "t"))
+    bytecode = string.dump(chunk)
+    local disassembled = disassembler.disassemble(string.dump(chunk))
+    for _, constant in ipairs(disassembled.constants) do
+      if constant.node_type == "string" and constant.value:find("^"..constants.lua_signature_str) then
+        bytecode = constant.value
+        goto found_bytecode
+      end
+    end
+    is_text_source = true
+    ::found_bytecode::
+  end
+
   local lines = {}
+  if is_text_source then
+    local file = assert(io.open(filename, "r"))
+    for line in file:lines() do
+      lines[#lines+1] = {line = line}
+    end
+    file:close()
+  end
   if not lines[1] then -- empty file edge case
     lines[1] = {}
   end
@@ -56,26 +85,6 @@ local function disassemble_file(filename, output_postfix)
     for _, inner_func in ipairs(func.inner_functions) do
       add_func_to_lines_recursive(inner_func)
     end
-  end
-
-  local contents = io_util.read_file(filename)
-
-  -- TODO: make a proper function for getting bytecode from a potentially phobos compiled file
-  local bytecode
-  if contents:sub(1, 4) == constants.lua_signature_str then
-    bytecode = contents
-  else -- not a bytecode file? It might have been generated with `--use-load`
-    -- check string constants in main chunk for a bytecode string
-    local chunk = assert(load(contents, nil, "t"))
-    local disassembled = disassembler.disassemble(string.dump(chunk))
-    for _, constant in ipairs(disassembled.constants) do
-      if constant.node_type == "string" and constant.value:find("^"..constants.lua_signature_str) then
-        bytecode = constant.value
-        goto found_bytecode
-      end
-    end
-    error("Unable to find bytecode in file '"..filename.."'")
-    ::found_bytecode::
   end
 
   local func = disassembler.disassemble(bytecode)
