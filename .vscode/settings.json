@@ -23,7 +23,7 @@
     "lowercase-global",
     "missing-fields",
   ],
-  "Lua.workspace.checkThirdParty": false,
+  "Lua.workspace.checkThirdParty": "ApplyInMemory",
   "cSpell.flagWords": [
     "colum",
   ],
@@ -158,5 +158,10 @@
     // custom
     "**/debugging/minimal-no-base-mod",
   ],
-  "editor.rulers": [110],
+  "editor.rulers": [
+    110
+  ],
+  "Lua.workspace.userThirdParty": [
+    "/home/jmpc4/.config/VSCodium/User/workspaceStorage/ff1784a4c1d58505d26b40728ec597be/justarandomgeek.factoriomod-debug/sumneko-3rd"
+  ],
 }
