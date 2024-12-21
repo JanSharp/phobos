@@ -1,10 +1,11 @@
 
 -- everything is in **little endian**
--- if we ever support big endian builds of Lua make sure to flip doubles,
--- since those are using Lua bytecode to save and load
 
 local util = require("util")
 local nodes = require("nodes")
+
+---@type table<number, string>
+local serialized_double_cache = {}
 
 local serializer = {}
 serializer.__index = serializer
@@ -134,32 +135,78 @@ function serializer:write_uint_space_optimized(value)
   until value == 0
 end
 
-do
-  local double_start, double_end = string.dump(load("return 523123.123145345")--[[@as function]])
-    :find("\54\208\25\126\204\237\31\65")
-  if not double_start then
-    util.debug_abort("Unable to set up double to bytes conversion.")
+function serializer:write_double(value)
+  -- Little endian reminder.
+  if value == 0 then
+    self:write_raw(((1 / value) < 0)
+      and "\x00\x00\x00\x00\x00\x00\x00\x80"
+      or "\x00\x00\x00\x00\x00\x00\x00\x00", 8)
+    return
   end
-  ---@cast double_start -nil
-  ---@cast double_end -nil
-  local double_cache = {
-    -- these two don't print %a correctly, so preload the cache with them
-    -- **little endian** reminder
-    [1/0] = "\0\0\0\0\0\0\xf0\x7f",
-    [-1/0] = "\0\0\0\0\0\0\xf0\xff",
-  }
-  function serializer:write_double(value)
-    if value ~= value then -- nan also also doesn't print %a correctly
-      self:write_raw("\xff\xff\xff\xff\xff\xff\xff\xff", 8)
-    elseif double_cache[value] then
-      self:write_raw(double_cache[value], 8)
+  if value ~= value then
+    self:write_raw("\xff\xff\xff\xff\xff\xff\xff\xff", 8)
+    return
+  end
+  if value == (1/0) then
+    self:write_raw("\x00\x00\x00\x00\x00\x00\xf0\x7f", 8)
+    return
+  end
+  if value == (-1/0) then
+    self:write_raw("\x00\x00\x00\x00\x00\x00\xf0\xff", 8)
+    return
+  end
+
+  if serialized_double_cache[value] then
+    self:write_raw(serialized_double_cache[value], 8)
+    return
+  end
+
+  local signed = value < 0
+  if signed then
+    value = value * -1 -- Remove sign.
+  end
+
+  local exponentOffset = 0
+  if value < 1 then -- Exponent in range [-1023, -1].
+    exponentOffset = -1023
+    value = value * (2 ^ 1023) -- Move exponent range from [-1023, -1] to [0, 1022].
+    -- Moving it up and using an offset not only reduces code duplication but it is
+    -- also required because we can only check for infinity when going too big, not
+    -- too small. Checking for precision loss when going too small would not reasonably
+    -- be doable, if at all.
+  end
+  -- Binary search for the exponent in range [0, 1023].
+  local lower_bound = 1 -- Inclusive.
+  local upper_bound = 1024 -- Inclusive.
+  while lower_bound ~= upper_bound do
+    local i = math.floor((lower_bound + upper_bound) / 2);
+    if (value / (2 ^ -i)) == (1/0) then -- `i` can go up to 1024, so divide.
+      upper_bound = i
     else
-      local double_str = string.dump(load(string.format("return %a", value))--[[@as function]])
-        :sub(double_start, double_end)
-      double_cache[value] = double_str
-      self:write_raw(double_str, 8)
+      lower_bound = i + 1
     end
   end
+  local exponent = 1024 - lower_bound + exponentOffset -- In range [-1023, 1023].
+  -- An exponent of -1023 is actually treated as -1022, except that the implied leading 1 becomes a 0.
+
+  value = value * (2 ^ (52 - (math.max(-1022, exponent) - exponentOffset)))
+
+  exponent = exponent + 1023 -- Move it into the range [0, 2046] just for the final write.
+  -- for explanations behind this logic see write_uint_space_optimized
+  -- the reason it is needed is because bit32 does accept values greater than uint32
+  local double_str = string.char(
+    value % 0x100,
+    math.floor(value / 2 ^ (8 * 1)) % 0x100,
+    math.floor(value / 2 ^ (8 * 2)) % 0x100,
+    math.floor(value / 2 ^ (8 * 3)) % 0x100,
+    math.floor(value / 2 ^ (8 * 4)) % 0x100,
+    math.floor(value / 2 ^ (8 * 5)) % 0x100,
+    (math.floor(value / 2 ^ (8 * 6)) % 0x10) -- Removes 4 bits, including the implied leading 1 bit.
+      + bit32.lshift((exponent % 0x10), 4),
+    (signed and 0x80 or 0) + bit32.rshift(exponent, 4)
+  )
+  serialized_double_cache[value] = double_str
+  self:write_raw(double_str, 8)
 end
 
 function serializer:write_string(value)
@@ -343,33 +390,29 @@ function deserializer:read_uint_space_optimized()
   return result
 end
 
-do
-  local dumped = string.dump(load("return 523123.123145345")--[[@as function]])
-  local double_start, double_end = dumped:find("\54\208\25\126\204\237\31\65")
-  if double_start == nil then
-    util.debug_abort("Unable to set up bytes to double conversion")
-  end
-  local prefix = dumped:sub(1, double_start - 1) -- excludes first double byte (\54)
-  local postfix = dumped:sub(double_end + 1) -- excludes the last byte of the found sequence (\65)
-  local double_cache = {}
+function deserializer:read_double()
+  local one, two, three, four, five, six, seven, eight = self:read_bytes(8)
+  local sign = (bit32.band(eight, 0x80) ~= 0) and -1 or 1
+  local exponent = bit32.lshift(bit32.band(eight, 0x7f), 4) + bit32.rshift(bit32.band(seven, 0xf0), 4)
+  -- using multiplication instead of lshift because we are exceeding the 32 bit limit of bit32
+  local mantissa = one
+    + two * 2 ^ (8 * 1)
+    + three * 2 ^ (8 * 2)
+    + four * 2 ^ (8 * 3)
+    + five * 2 ^ (8 * 4)
+    + six * 2 ^ (8 * 5)
+    + bit32.band(seven, 0x0f) * 2 ^ (8 * 6)
 
-  function deserializer:read_double()
-    local double_bytes = self:read_raw(8)
-    if double_cache[double_bytes] then
-      return double_cache[double_bytes]
-    else
-      local double_func, err = load(prefix..double_bytes..postfix, "=(double deserializer)", "b")
-      if not double_func then
-        util.debug_abort("Unable to deserialize double, see inner error: "..err)
-      end
-      ---@cast double_func -?
-      local success, result = pcall(double_func)
-      if not success then
-        util.debug_abort("Unable to deserialize double, see inner error: "..result)
-      end
-      return result
-    end
+  if exponent == 2047 then
+    return mantissa ~= 0 and (0/0) or (sign * (1/0))
   end
+  if exponent == 0 then
+    exponent = -1022
+  else
+    exponent = exponent - 1023
+    mantissa = mantissa + 0x0010000000000000
+  end
+  return sign * (mantissa * (2 ^ (exponent - 52)))
 end
 
 function deserializer:read_string()

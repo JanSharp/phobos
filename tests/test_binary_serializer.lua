@@ -220,13 +220,20 @@ do
       -- the comments use big endian, the actual strings are written in little endian
       -- 0 is all 0s. Thank you IEEE754 <3
       {label = "zero", value = 0, serialized = "\x00\x00\x00\x00\x00\x00\x00\x00"},
+      {label = "negative zero", value = -0, serialized = "\x00\x00\x00\x00\x00\x00\x00\x80"},
       -- the next 3 use an exponent of 0, which is achieved by setting the entire exponent to 1s,
       -- except the highest bit to 0. for example: 0011 1111  1111 0000 ... 0000 0000
       {label = "one", value = 1, serialized = "\x00\x00\x00\x00\x00\x00\xf0\x3f"},
       {label = "one and one quarter", value = 1.25, serialized = "\x00\x00\x00\x00\x00\x00\xf4\x3f"},
       {label = "negative one", value = -1, serialized = "\x00\x00\x00\x00\x00\x00\xf0\xbf"},
       -- the first 2 bytes: 0100 0011  0011 0000 - to make an exponent of 52
-      {label = "huge number", value = 2 ^ 52 + 1, serialized = "\x01\x00\x00\x00\x00\x00\x30\x43"},
+      {label = "large number", value = 2 ^ 52 + 1, serialized = "\x01\x00\x00\x00\x00\x00\x30\x43"},
+      {label = "almost max exponent and highest bits in mantissa", value = 2 ^ 1022 + 2 ^ 1021 + 2 ^ 1020, serialized = "\x00\x00\x00\x00\x00\x00\xdc\x7f"},
+      {label = "max exponent and highest bits in mantissa", value = 2 ^ 1023 + 2 ^ 1022 + 2 ^ 1021, serialized = "\x00\x00\x00\x00\x00\x00\xec\x7f"},
+      {label = "almost smallest exponent and no bits in mantissa", value = 2 ^ -1022, serialized = "\x00\x00\x00\x00\x00\x00\x10\x00"},
+      {label = "smallest exponent and highest bit in mantissa", value = 2 ^ -1023, serialized = "\x00\x00\x00\x00\x00\x00\x08\x00"},
+      {label = "smallest exponent and second highest bit in mantissa", value = 2 ^ -1024, serialized = "\x00\x00\x00\x00\x00\x00\x04\x00"},
+      {label = "smallest value", value = 2 ^ (-1022 - 52), serialized = "\x01\x00\x00\x00\x00\x00\x00\x00"},
       -- the entire exponent set to 1s and at least 1 bit in the mantissa is a 1...
       -- or for simplicity just set all of them to 1s, including the sign bit
       {label = "nan", value = 0/0, serialized = "\xff\xff\xff\xff\xff\xff\xff\xff"},
