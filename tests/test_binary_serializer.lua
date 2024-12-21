@@ -68,19 +68,6 @@ do
       return "foobar", 6
     end)
 
-    serializer_scope:add_test("initial binary_string", function()
-      local serializer = binary.new_serializer("foo")
-      assert.equals(3, serializer:get_length(), "for get_length()")
-      assert.equals("foo", serializer:tostring())
-    end)
-
-    serializer_scope:add_test("initial binary_string and write raw", function()
-      local serializer = binary.new_serializer("foo")
-      serializer:write_raw("bar")
-      assert.equals(6, serializer:get_length(), "for get_length()")
-      assert.equals("foobar", serializer:tostring())
-    end)
-
     add_test("uint8", function(serializer)
       serializer:write_uint8(100)
       return "\100", 1

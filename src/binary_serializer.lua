@@ -325,11 +325,11 @@ function serializer:get_length()
   return self.locked_length or self.length
 end
 
-local function new_serializer(initial_binary_string)
+local function new_serializer()
   return setmetatable({
-    out = {initial_binary_string},
-    out_c = initial_binary_string and 1 or 0,
-    length = initial_binary_string and #initial_binary_string or 0,
+    out = {},
+    out_c = 0,
+    length = 0,
     locked_length = nil,
     reserved_count = 0,
   }, serializer)
