@@ -319,6 +319,126 @@ do
       )
       return ""
     end)
+
+    add_test("reserve and write to reserve", function(serializer)
+      serializer:write_uint8(1)
+      local reserved = serializer:reserve{length = 2}
+      serializer:write_uint8(3)
+      serializer:write_to_reserved(reserved, function()
+        serializer:write_raw("\2\2")
+      end)
+      return "\1\2\2\3"
+    end)
+
+    add_test("reserve multiple and write to reserve", function(serializer)
+      serializer:write_uint8(1)
+      local reserved = serializer:reserve{slots = 2, length = 3}
+      serializer:write_uint8(4)
+      serializer:write_to_reserved(reserved, function()
+        serializer:write_raw("\2\2")
+        serializer:write_uint8(3)
+      end)
+      return "\1\2\2\3\4"
+    end)
+
+    serializer_scope:add_test("reserve already adjust length", function()
+      local serializer = binary.new_serializer()
+      serializer:write_uint8(1)
+      serializer:reserve{length = 2}
+      assert.equals(3, serializer:get_length(), "get_length after reserve")
+    end)
+
+    serializer_scope:add_test("get_length inside of write_to_reserved remains unchanged", function()
+      local serializer = binary.new_serializer()
+      serializer:write_uint8(1)
+      local reserved = serializer:reserve{length = 2}
+      serializer:write_uint8(3)
+      local expected_length = serializer:get_length()
+      serializer:write_to_reserved(reserved, function()
+        assert.equals(expected_length, serializer:get_length(), "get_length inside of write_to_reserved, before write")
+        serializer:write_raw("\2\2")
+        assert.equals(expected_length, serializer:get_length(), "get_length inside of write_to_reserved, after write")
+      end)
+    end)
+
+    serializer_scope:add_test("get_length after write_to_reserved remains unchanged", function()
+      local serializer = binary.new_serializer()
+      serializer:write_uint8(1)
+      local reserved = serializer:reserve{length = 2}
+      serializer:write_uint8(3)
+      local expected_length = serializer:get_length()
+      serializer:write_to_reserved(reserved, function()
+        serializer:write_raw("\2\2")
+      end)
+      assert.equals(expected_length, serializer:get_length(), "get_length after write_to_reserved")
+    end)
+
+    serializer_scope:add_test("get_length after another write call after write_to_reserved does change again", function()
+      local serializer = binary.new_serializer()
+      serializer:write_uint8(1)
+      local reserved = serializer:reserve{length = 2}
+      serializer:write_uint8(3)
+      serializer:write_to_reserved(reserved, function()
+        serializer:write_raw("\2\2")
+      end)
+      local expected_length = serializer:get_length() + 1
+      serializer:write_uint8(4)
+      assert.equals(expected_length, serializer:get_length(), "get_length after another write call after write_to_reserved")
+    end)
+
+    serializer_scope:add_test("reserve and writing incorrect length in callback errors", function()
+      local serializer = binary.new_serializer()
+      local reserved = serializer:reserve{slots = 2, length = 5}
+      assert.errors("Expected 'write_callback' to write 5 bytes to the serializer, got 3.", function()
+        serializer:write_to_reserved(reserved, function()
+          serializer:write_raw("\2\2")
+          serializer:write_uint8(3)
+        end)
+      end)
+    end)
+
+    serializer_scope:add_test("reserve and calling write an incorrect amount of times in callback errors", function()
+      local serializer = binary.new_serializer()
+      local reserved = serializer:reserve{slots = 2, length = 3}
+      assert.errors("Expected 'write_callback' to make 2 write function calls, got 1.", function()
+        serializer:write_to_reserved(reserved, function()
+          serializer:write_raw("\2\2\2")
+        end)
+      end)
+    end)
+
+    serializer_scope:add_test("reserve without matching write_to_reserved call errors", function()
+      local serializer = binary.new_serializer()
+      serializer:reserve{length = 1}
+      assert.errors_with_pattern("'reserve' was called 1 more times than 'write_to_reserved'%.", function()
+        serializer:tostring()
+      end)
+    end)
+
+    serializer_scope:add_test("write_to_reserved without matching reserve call errors", function()
+      local serializer = binary.new_serializer()
+      local reserved = serializer:reserve{length = 1}
+      serializer = binary.new_serializer()
+      serializer:write_to_reserved(reserved, function()
+        serializer:write_uint8(0)
+      end)
+      assert.errors_with_pattern("'write_to_reserved' was called 1 more times than 'reserve'%.", function()
+        serializer:tostring()
+      end)
+    end)
+
+    serializer_scope:add_test("multiple write_to_reserved with the same reserve_definition errors", function()
+      local serializer = binary.new_serializer()
+      local reserved = serializer:reserve{length = 1}
+      serializer:write_to_reserved(reserved, function()
+        serializer:write_uint8(0)
+      end)
+      assert.errors("Attempt to use the same 'reserve_definition' for multiple 'write_to_reserved' calls.", function()
+        serializer:write_to_reserved(reserved, function()
+          serializer:write_uint8(0)
+        end)
+      end)
+    end)
   end
 
   do

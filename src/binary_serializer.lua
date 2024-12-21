@@ -266,12 +266,63 @@ do
   end
 end
 
+---@class ReserveDefinition
+
+---@param reserve_definition {length: integer, slots: integer?} @ `slots` default to `1`.
+---@return ReserveDefinition
+function serializer:reserve(reserve_definition)
+  local out_c = self.out_c
+  ---@diagnostic disable-next-line: inject-field
+  reserve_definition.out_c = out_c
+  self.out_c = out_c + (reserve_definition.slots or 1)
+  self.length = self.length + reserve_definition.length
+  self.reserved_count = self.reserved_count + 1
+  return reserve_definition
+end
+
+---@param reserve_definition ReserveDefinition
+---@param write_callback fun() @ Must write the amount of bytes as defined by `length` in the `reserve` call.
+function serializer:write_to_reserved(reserve_definition, write_callback)
+  ---@cast reserve_definition {out_c: integer, length: integer, slots: integer?, done: boolean?}
+  if reserve_definition.done then
+    util.debug_abort("Attempt to use the same 'reserve_definition' for multiple 'write_to_reserved' calls.")
+  end
+  reserve_definition.done = true
+  self.reserved_count = self.reserved_count - 1
+  local out_c = self.out_c
+  local expected_length = self.length
+  self.out_c = reserve_definition.out_c
+  self.locked_length = self.length
+  write_callback()
+  self.locked_length = nil
+  local got_slots = self.out_c - reserve_definition.out_c
+  self.out_c = out_c
+  local got_length = self.length - reserve_definition.length
+  self.length = got_length
+  local expected_slots = reserve_definition.slots or 1
+  if expected_slots ~= got_slots then
+    util.debug_abort("Expected 'write_callback' to make "..expected_slots.." write function calls, got "..got_slots..".")
+  end
+  if expected_length ~= got_length then
+    util.debug_abort("Expected 'write_callback' to write "..reserve_definition.length
+      .." bytes to the serializer, got "..(reserve_definition.length + (got_length - expected_length))..".")
+  end
+end
+
 function serializer:tostring()
+  if self.reserved_count > 0 then
+    util.debug_abort("Attempt to call 'serializer.tostring' when 'reserve' was called "..self.reserved_count
+      .." more times than 'write_to_reserved'. 'reserve' and 'write_to_reserved' calls must come in pairs.")
+  end
+  if self.reserved_count < 0 then
+    util.debug_abort("Attempt to call 'serializer.tostring' when 'write_to_reserved' was called "..(-self.reserved_count)
+      .." more times than 'reserve'. 'reserve' and 'write_to_reserved' calls must come in pairs.")
+  end
   return table.concat(self.out)
 end
 
 function serializer:get_length()
-  return self.length
+  return self.locked_length or self.length
 end
 
 local function new_serializer(initial_binary_string)
@@ -279,6 +330,8 @@ local function new_serializer(initial_binary_string)
     out = {initial_binary_string},
     out_c = initial_binary_string and 1 or 0,
     length = initial_binary_string and #initial_binary_string or 0,
+    locked_length = nil,
+    reserved_count = 0,
   }, serializer)
 end
 
