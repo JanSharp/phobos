@@ -1,6 +1,7 @@
 
 local deep_compare = require("deep_compare")
 local pretty_print = require("pretty_print").pretty_print
+local default_pretty_print = require("pretty_print").default_pretty_print
 
 local print_full_data_on_error_default = false
 ---@param value boolean
@@ -195,7 +196,7 @@ local function errors_internal(err_msg_prefix, got_func, msg, is_msg_valid)
     error(add_msg(err_msg_prefix..", got success", msg))
   end
   if not is_msg_valid(err) then
-    error(add_msg(err_msg_prefix..", got error "..pretty_print(err).."\n"..stacktrace, msg))
+    error(add_msg(err_msg_prefix..", got error "..default_pretty_print(err).."\n"..stacktrace, msg))
   end
 end
 
@@ -209,7 +210,7 @@ end
 ---@param msg string? @ optional additional msg
 local function errors(expected_error_msg, got_func, msg)
   errors_internal(
-    "expected error "..pretty_print(expected_error_msg),
+    "expected error "..default_pretty_print(expected_error_msg),
     got_func,
     msg,
     function(got_msg)
@@ -229,7 +230,7 @@ local function errors_with_pattern(expected_error_msg_pattern, got_func, msg)
     error("The expected pattern for 'assert.errors_with_pattern' must not be nil. Use 'assert.errors' instead.")
   end
   errors_internal(
-    "expected error matching the pattern "..pretty_print(expected_error_msg_pattern),
+    "expected error matching the pattern "..default_pretty_print(expected_error_msg_pattern),
     got_func,
     msg,
     function(got_msg) return got_msg ~= nil and got_msg:find(expected_error_msg_pattern)--[[@as boolean]] end
