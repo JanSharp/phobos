@@ -331,7 +331,7 @@ do
       deserializer_scope:add_test(label, function()
         local deserializer = binary.new_deserializer(binary_string)
         local data = func(deserializer) or {}
-        if data[1] ~= nil and not data[3] ~= nil then
+        if data[1] ~= nil and data[3] == nil then
           assert.equals(data[1], data[2])
         else
           for i = 1, #data, 2 do
