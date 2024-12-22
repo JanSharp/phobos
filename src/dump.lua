@@ -1,165 +1,57 @@
 
 local phobos_consts = require("constants")
+local binary = require("binary_serializer")
+---@type BinarySerializer
+local serializer
 
-local currently_using_int32
-
----@return string dumped_integer
----@return integer byte_count
-local function dump_uint32(i)
-  if i < 0 or i > 0xffffffff or (i % 1) ~= 0 then
-    assert(false, string.format("Attempt to dump value '%f' as a 32 bit unsigned integer.", i))
-  end
-  -- int is 4 bytes
-  -- **little endian**
-  return string.char(
-    bit32.band(             i    ,0xff),
-    bit32.band(bit32.rshift(i,8 ),0xff),
-    bit32.band(bit32.rshift(i,16),0xff),
-    bit32.band(bit32.rshift(i,24),0xff)
-  ), 4
-end
-
-local function dump_signed_int32(i)
-  if i < -0x80000000 or i > 0x7fffffff or (i % 1) ~= 0 then
-    assert(false, string.format("Attempt to dump value '%f' as a 32 bit signed integer.", i))
-  end
-  if i < 0 then
-    -- think about it, -1 should become 0xffffffff, the lowest negative number should become 0x8000000
-    -- so the explanation for the line below is "it just works"
-    i = 0x100000000 + i -- i is always negative, addition is always subtraction
-    -- and then after it's converted to a positive number, just dump it as unsigned
-  end
-  return dump_uint32(i)
-end
-
----@return string dumped_size
----@return integer byte_count
-local function dump_size(s)
-  if currently_using_int32 then
-    return dump_uint32(s)
-  end
-  -- size_t is 8 bytes
-  -- but i really only support 32bit for now, so just write four extra zeros
-  -- maybe expand this one day to 48bit? maybe all the way to 53?
-  -- If i'm compiling a program with >4gb strings, something has gone horribly wrong anyway
-  return dump_uint32(s) .. "\0\0\0\0", 8
-end
-
-local dump_double
-do
-  local s , e = string.dump(load([[return 523123.123145345]])--[[@as function]])
-                      :find("\3\54\208\25\126\204\237\31\65")
-  if s == nil then
-    error("Unable to set up double to bytes conversion")
-  end
-  local double_cache = {
-    -- these two don't print %a correctly, so preload the cache with them
-    -- **little endian**
-    [1/0] = "\3\0\0\0\0\0\0\xf0\x7f",
-    [-1/0] = "\3\0\0\0\0\0\0\xf0\xff",
-  }
-  function dump_double(d)
-    if d ~= d then
-      -- nan
-      return "\3\xff\xff\xff\xff\xff\xff\xff\xff"
-    elseif double_cache[d] then
-      return double_cache[d]
-    else
-      local double_str = string.dump(load(([[return %a]]):format(d))--[[@as function]]):sub(s,e)
-      double_cache[d] = double_str
-      return double_str
-    end
-  end
-end
-
----all strings can be nil, except in the constant table and local variable names (debug)
----@return string dumped_string
----@return integer byte_count
-local function dump_string(str)
-  -- typedef string:
-  -- size_t length (including trailing \0, 0 for nil)
-  -- char[] value (not present for nil)
-  if not str then
-    return dump_size(0)
-  else
-    local size_str, byte_count = dump_size(#str + 1)
-    return size_str..str.."\0", byte_count + #str + 1
-  end
-end
-
---   byte type={nil=0,boolean=1,number=3,string=4}
-local dump_constant_by_type = {
-  ["nil"] = function() return "\0" end,
---   <boolean> byte value
-  ["boolean"] = function(val) return val and "\1\1" or "\1\0" end,
---   <number> double value
-  ["number"] = function(value)
-    if currently_using_int32 then
-      return "\3"..dump_signed_int32(value)
-    else
-      -- dump_double has the \3 type tag already
-      return dump_double(value)
-    end
-  end,
---   <string> string value
-  ["string"] = function(val) return "\4" .. dump_string(val) end,
-}
-local function dump_constant(constant)
-  return dump_constant_by_type[type(constant.value)](constant.value)
-end
-
-local function dump_phobos_debug_symbols(dump, func)
+local function dump_phobos_debug_symbols(func)
   -- open string constant
-  dump[#dump+1] = "\4" -- a "string" constant
-  local i = #dump + 1 -- + 1 to reserve a slot for the string size
-  local size_entry_index = i
-  local byte_count = 0
-  local function add(entry, entry_byte_count)
-    i = i + 1
-    byte_count = byte_count + entry_byte_count
-    dump[i] = entry
-  end
+  serializer:write_raw("\4") -- a "string" constant
+  local string_size_reserve = serializer:reserve{length = serializer.use_int32 and 4 or 8}
+  local start_length = serializer:get_length()
 
   -- signature
-  add(phobos_consts.phobos_signature, 7)
+  serializer:write_raw(phobos_consts.phobos_signature)
 
   -- version
   do
     local version = phobos_consts.phobos_debug_symbol_version
     while true do
       if version >= 255 then
-        add("\xff", 1)
+        serializer:write_raw("\xff")
         version = version - 255
       else
-        add(string.char(version), 1)
+        serializer:write_uint8(version)
         break
       end
     end
   end
 
   -- uint32 column_defined (0 for unknown or main chunk)
-  add(dump_uint32(func.column_defined or 0))
+  serializer:write_uint32(func.column_defined or 0)
   -- uint32 last_column_defined (0 for unknown or main chunk)
-  add(dump_uint32(func.last_column_defined or 0))
+  serializer:write_uint32(func.last_column_defined or 0)
 
   -- uint32 num_instruction_positions (always same as num_instructions)
   -- uint32[] column (columns of each instruction)
-  add(dump_uint32(#func.instructions))
+  serializer:write_uint32(#func.instructions)
   for _, inst in ipairs(func.instructions) do
-    add(dump_uint32(inst.column or 0)) -- 0 for unknown
+    serializer:write_uint32(inst.column or 0) -- 0 for unknown
   end
 
   -- uint32 num_sources
-  add(dump_uint32(0))
+  serializer:write_uint32(0)
   -- string[] source (all sources used in this function)
 
   -- uint32 num_sections
-  add(dump_uint32(0))
+  serializer:write_uint32(0)
   -- (uint32 instruction_index, uint32 file_index)[]
 
   -- close string constant
-  add("\0", 1)
-  dump[size_entry_index] = dump_size(byte_count)
+  serializer:write_raw("\0")
+  serializer:write_to_reserved(string_size_reserve, function()
+    serializer:write_size_t(serializer:get_length() - start_length)
+  end)
 end
 
 ---outputs locals that start after they end.
@@ -282,22 +174,21 @@ end
 
 ---@param func CompiledFunc
 local function dump_function(func)
-  local dump = {}
   -- int line_defined (0 for unknown or main chunk)
-  dump[#dump+1] = dump_uint32(func.line_defined or 0)
+  serializer:write_uint32(func.line_defined or 0)
   -- int last_line_defined (0 for unknown or main chunk)
-  dump[#dump+1] = dump_uint32(func.last_line_defined or 0)
+  serializer:write_uint32(func.last_line_defined or 0)
   assert(func.num_params)
   assert(func.max_stack_size >= 2)
-  dump[#dump+1] = string.char(
+  serializer:write_raw(string.char(
     func.num_params,           -- byte num_params
     func.is_vararg and 1 or 0, -- byte is_vararg
     func.max_stack_size        -- byte max_stack_size, min of 2, reg0/1 always valid
-  )
+  ))
 
   -- [code]
   -- int num_instructions
-  dump[#dump+1] = dump_uint32(#func.instructions)
+  serializer:write_uint32(#func.instructions)
   -- Instruction[] instructions
   for _,instruction in ipairs(func.instructions) do
     local inst_int = instruction.op.id
@@ -320,54 +211,54 @@ local function dump_function(func)
         end
       end
     end
-    dump[#dump+1] = dump_uint32(inst_int)
+    serializer:write_uint32(inst_int)
   end
 
 
   -- [constants]
   -- int num_consts
-  dump[#dump+1] = dump_uint32(#func.constants + 1) -- + 1 for Phobos debug symbols
+  serializer:write_uint32(#func.constants + 1) -- + 1 for Phobos debug symbols
   -- TValue[] consts
   for _,constant in ipairs(func.constants) do
-    dump[#dump+1] = dump_constant(constant)
+    serializer:write_lua_constant(constant)
   end
 
   -- when adding an option to disable these ensure to add an extra unused `nil` constant
   -- instead if the last constant happens to look just like Phobos debug symbols
-  dump_phobos_debug_symbols(dump, func)
+  dump_phobos_debug_symbols(func)
 
   -- [func_protos]
   -- int num_funcs
-  dump[#dump+1] = dump_uint32(#func.inner_functions)
+  serializer:write_uint32(#func.inner_functions)
   -- dump_function[] funcs
   for _,f in ipairs(func.inner_functions) do
-    dump[#dump+1] = dump_function(f)
+    dump_function(f)
   end
 
   -- [upvals]
   -- int num_upvals
-  dump[#dump+1] = dump_uint32(#func.upvals)
+  serializer:write_uint32(#func.upvals)
   -- upvals[] upvals
   for _,upval in ipairs(func.upvals) do
     -- byte in_stack (is a local in parent scope, else upvalue in parent scope)
     -- byte idx
-    dump[#dump+1] = string.char(
+    serializer:write_raw(string.char(
       upval.in_stack and 1 or 0,
       upval.in_stack and upval.local_idx or upval.upval_idx
-    )
+    ))
   end
 
   -- [debug]
   -- string source
   -- considering stripped Lua bytecode has `null` source
   -- we don't need to have some default for when `func.source` is `nil`
-  dump[#dump+1] = dump_string(func.source)
+  serializer:write_lua_string(func.source)
 
   -- int num_lines (always same as num_instructions)
   -- int[] lines (line number per instruction)
-  dump[#dump+1] = dump_uint32(#func.instructions)
+  serializer:write_uint32(#func.instructions)
   for i, instruction in ipairs(func.instructions) do
-    dump[#dump+1] = dump_uint32(instruction.line or 0)
+    serializer:write_uint32(instruction.line or 0)
   end
 
   -- int num_locals
@@ -376,48 +267,51 @@ local function dump_function(func)
   --   int start_pc
   --   int end_pc
   do
-    dump[#dump+1] = 0 -- set later
-    local num_locals_index = #dump
+    local num_locals_reserve = serializer:reserve{length = 4}
     local num_locals = 0
-    local temp = {}
     for _, loc in ipairs(get_local_debug_symbols(func)) do
       if loc.start_at <= loc.stop_at then
-        temp[#temp+1] = loc
         num_locals = num_locals + 1
         ---cSpell:ignore getlocalname
         -- these must not be null. get_local_debug_symbols ensures that already
         -- Lua blindly dereferences this pointer when getting local names in `luaF_getlocalname`
-        dump[#dump+1] = dump_string(loc.name)
+        serializer:write_lua_string(loc.name)
         -- convert from one based including including
         -- to zero based including excluding
-        dump[#dump+1] = dump_uint32(loc.start_at - 1)
-        dump[#dump+1] = dump_uint32(loc.stop_at)
+        serializer:write_uint32(loc.start_at - 1)
+        serializer:write_uint32(loc.stop_at)
       end
     end
-    dump[num_locals_index] = dump_uint32(num_locals)
+    serializer:write_to_reserved(num_locals_reserve, function()
+      serializer:write_uint32(num_locals)
+    end)
   end
 
   -- int num_upvals
-  dump[#dump+1] = dump_uint32(#func.upvals)
+  serializer:write_uint32(#func.upvals)
   -- string[] upvals
   for _,u in ipairs(func.upvals) do
     -- stripped Lua bytecode ultimately also ends up loading `null` for upval names
     -- so dumping `null` (`nil`) as the name should be fine
-    dump[#dump+1] = dump_string(u.name)
+    serializer:write_lua_string(u.name)
   end
-
-  return table.concat(dump)
 end
 
 local function dump_lua_header()
-  return currently_using_int32 and phobos_consts.lua_header_str_int32 or phobos_consts.lua_header_str
+  serializer:write_raw(serializer.use_int32
+    and phobos_consts.lua_header_str_int32
+    or phobos_consts.lua_header_str)
 end
 
 ---@param main CompiledFunc
 ---@param options Options?
 local function dump_main(main, options)
-  currently_using_int32 = options and options.use_int32
-  return dump_lua_header()..dump_function(main)
+  serializer = binary.new_serializer(options)
+  dump_lua_header()
+  dump_function(main)
+  local result = serializer:tostring()
+  serializer = (nil)--[[@as BinarySerializer]] -- Free memory.
+  return result
 end
 
 return dump_main
