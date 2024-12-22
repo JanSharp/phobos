@@ -53,27 +53,27 @@ do
       end)
     end
 
-    add_test("nothing", function() return "", 0 end)
+    add_test("nothing", function() return "" end)
 
     add_test("write raw", function(serializer)
       serializer:write_raw("foo")
-      return "foo", 3
+      return "foo"
     end)
 
     add_test("write raw with explicit length", function(serializer)
       serializer:write_raw("foo", 3)
-      return "foo", 3
+      return "foo"
     end)
 
     add_test("write twice", function(serializer)
       serializer:write_raw("foo")
       serializer:write_raw("bar")
-      return "foobar", 6
+      return "foobar"
     end)
 
     add_test("uint8", function(serializer)
       serializer:write_uint8(100)
-      return "\100", 1
+      return "\100"
     end)
 
     serializer_scope:add_test("uint8 non integer", function()
@@ -97,12 +97,12 @@ do
 
     add_test("smallest uint8", function(serializer)
       serializer:write_uint8(0)
-      return "\0", 1
+      return "\0"
     end)
 
     add_test("biggest uint8", function(serializer)
       serializer:write_uint8(2 ^ 8 - 1)
-      return "\xff", 1
+      return "\xff"
     end)
 
     -- Tested the out of bounds function, at this point it's just a matter of
@@ -164,12 +164,12 @@ do
 
     add_test("biggest uint64", function(serializer)
       serializer:write_uint64(2 ^ 53 - 1)
-      return "\xff\xff\xff\xff\xff\xff\x1f\x00", 8
+      return "\xff\xff\xff\xff\xff\xff\x1f\x00"
     end)
 
     add_test("size_t", function(serializer)
       serializer:write_size_t(0x001ff1f2f3f4f5f6)
-      return "\xf6\xf5\xf4\xf3\xf2\xf1\x1f\x00", 8
+      return "\xf6\xf5\xf4\xf3\xf2\xf1\x1f\x00"
     end)
 
     add_test("size_t using int32", function(serializer)
@@ -197,7 +197,7 @@ do
     for _, data in ipairs(space_optimized_uint_test_dataset) do
       add_test("space optimized uint "..data.label, function(serializer)
         serializer:write_uint_space_optimized(data.value)
-        return data.serialized, #data.serialized
+        return data.serialized
       end)
     end
 
@@ -225,22 +225,22 @@ do
 
       add_test(name.." one", function(serializer)
         serializer[func_name](serializer, 1)
-        return "\1"..string.rep("\0", byte_count - 1), byte_count
+        return "\1"..string.rep("\0", byte_count - 1)
       end)
 
       add_test(name.." negative one", function(serializer)
         serializer[func_name](serializer, -1)
-        return string.rep("\xff", byte_count), byte_count
+        return string.rep("\xff", byte_count)
       end)
 
       add_test("smallest "..name, function(serializer)
         serializer[func_name](serializer, -cap)
-        return string.rep("\0", byte_count - 1).."\x80", byte_count
+        return string.rep("\0", byte_count - 1).."\x80"
       end)
 
       add_test("biggest "..name, function(serializer)
         serializer[func_name](serializer, cap - 1)
-        return string.rep("\xff", byte_count - 1).."\x7f", byte_count
+        return string.rep("\xff", byte_count - 1).."\x7f"
       end)
     end
 
@@ -277,73 +277,73 @@ do
     for _, data in ipairs(double_test_dataset) do
       add_test("double "..data.label, function(serializer)
         serializer:write_double(data.value)
-        return data.serialized, 8
+        return data.serialized
       end)
     end
 
     add_test("nil string", function(serializer)
       serializer:write_string(nil)
-      return "\0\0", 1
+      return "\0\0"
     end)
 
     add_test("empty string", function(serializer)
       serializer:write_string("")
-      return "\1\0", 1
+      return "\1\0"
     end)
 
     add_test("foo string", function(serializer)
       serializer:write_string("foo")
-      return "\4\0foo", 4
+      return "\4\0foo"
     end)
 
     add_test("nil lua string", function(serializer)
       serializer:write_lua_string(nil)
-      return "\0\0\0\0\0\0\0\0", 8
+      return "\0\0\0\0\0\0\0\0"
     end)
 
     add_test("empty lua string", function(serializer)
       serializer:write_lua_string("")
-      return "\1\0\0\0\0\0\0\0\0", 8 + 1
+      return "\1\0\0\0\0\0\0\0\0"
     end)
 
     add_test("foo lua string", function(serializer)
       serializer:write_lua_string("foo")
-      return "\4\0\0\0\0\0\0\0foo\0", 8 + 4
+      return "\4\0\0\0\0\0\0\0foo\0"
     end)
 
     add_test("boolean true", function(serializer)
       serializer:write_boolean(true)
-      return "\1", 1
+      return "\1"
     end)
 
     add_test("boolean false", function(serializer)
       serializer:write_boolean(false)
-      return "\0", 1
+      return "\0"
     end)
 
     add_test("nil constant", function(serializer)
       serializer:write_lua_constant(nodes.new_nil{})
-      return "\0", 1
+      return "\0"
     end)
 
     add_test("boolean constant", function(serializer)
       serializer:write_lua_constant(nodes.new_boolean{value = true})
-      return "\1\1", 2
+      return "\1\1"
     end)
 
     add_test("number constant", function(serializer)
       serializer:write_lua_constant(nodes.new_number{value = 0})
-      return "\3\0\0\0\0\0\0\0\0", 1 + 8
+      return "\3\0\0\0\0\0\0\0\0"
     end)
 
     add_test("number constant using int32", function(serializer)
       serializer:write_lua_constant(nodes.new_number{value = -1})
-      return "\3\xff\xff\xff\xff", 1 + 4
+      return "\3\xff\xff\xff\xff"
     end, {use_int32 = true})
 
     add_test("string constant", function(serializer)
       serializer:write_lua_constant(nodes.new_string{value = "hi"})
-      return "\4\3\0\0\0\0\0\0\0hi\0", 1 + 8 + 3
+      return "\4\3\0\0\0\0\0\0\0hi\0"
     end)
 
     add_test("invalid constant", function(serializer)
