@@ -200,6 +200,42 @@ do
       end
     )
 
+    -- signed tests
+    for _, bit_count in ipairs{8, 16, 32} do
+      local name = "int"..bit_count
+      local func_name = "write_"..name
+      local cap = 2 ^ (bit_count - 1)
+      local byte_count = bit_count / 8
+
+      add_out_of_bounds_test(name.." too small", name, -cap, -cap - 1, cap, function(serializer)
+        serializer[func_name](serializer, -cap - 1)
+      end)
+
+      add_out_of_bounds_test(name.." too large", name, -cap, cap, cap, function(serializer)
+        serializer[func_name](serializer, cap)
+      end)
+
+      add_test(name.." one", function(serializer)
+        serializer[func_name](serializer, 1)
+        return "\1"..string.rep("\0", byte_count - 1), byte_count
+      end)
+
+      add_test(name.." negative one", function(serializer)
+        serializer[func_name](serializer, -1)
+        return string.rep("\xff", byte_count), byte_count
+      end)
+
+      add_test("smallest "..name, function(serializer)
+        serializer[func_name](serializer, -cap)
+        return string.rep("\0", byte_count - 1).."\x80", byte_count
+      end)
+
+      add_test("biggest "..name, function(serializer)
+        serializer[func_name](serializer, cap - 1)
+        return string.rep("\xff", byte_count - 1).."\x7f", byte_count
+      end)
+    end
+
     -- this dataset is also used for deserializer tests
     double_test_dataset = {
       -- site used for learning, even if it's just 32 bit floats:
@@ -611,6 +647,30 @@ do
     for _, data in ipairs(space_optimized_uint_test_dataset) do
       add_test("space optimized uint "..data.label, data.serialized, function(deserializer)
         return {data.value, deserializer:read_uint_space_optimized()}
+      end)
+    end
+
+    -- signed tests
+    for _, bit_count in ipairs{8, 16, 32} do
+      local name = "int"..bit_count
+      local func_name = "read_"..name
+      local cap = 2 ^ (bit_count - 1)
+      local byte_count = bit_count / 8
+
+      add_test(name.." one", "\1"..string.rep("\0", byte_count - 1), function(deserializer)
+        return {1, deserializer[func_name](deserializer)}
+      end)
+
+      add_test(name.." negative one", string.rep("\xff", byte_count), function(deserializer)
+        return {-1, deserializer[func_name](deserializer)}
+      end)
+
+      add_test("smallest "..name, string.rep("\0", byte_count - 1).."\x80", function(deserializer)
+        return {-cap, deserializer[func_name](deserializer)}
+      end)
+
+      add_test("biggest "..name, string.rep("\xff", byte_count - 1).."\x7f", function(deserializer)
+        return {cap - 1, deserializer[func_name](deserializer)}
       end)
     end
 

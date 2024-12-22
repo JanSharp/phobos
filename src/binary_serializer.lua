@@ -34,8 +34,27 @@ function serializer:write_uint8(value)
   self:write_raw(string.char(value), 1)
 end
 
+function serializer:write_int8(value)
+  check_bounds(value, -2 ^ 7, 2 ^ 7, "int8")
+  if value < 0 then
+    value = 0x100 + value
+  end
+  self:write_raw(string.char(value), 1)
+end
+
 function serializer:write_uint16(value)
   check_bounds(value, 0, 2 ^ 16, "uint16")
+  self:write_raw(string.char(
+    bit32.band(             value,     0xff),
+    bit32.band(bit32.rshift(value, 8), 0xff)
+  ), 2)
+end
+
+function serializer:write_int16(value)
+  check_bounds(value, -2 ^ 15, 2 ^ 15, "int16")
+  if value < 0 then
+    value = 0x10000 + value
+  end
   self:write_raw(string.char(
     bit32.band(             value,     0xff),
     bit32.band(bit32.rshift(value, 8), 0xff)
@@ -66,6 +85,19 @@ end
 
 function serializer:write_uint32(value)
   check_bounds(value, 0, 2 ^ 32, "uint32")
+  self:write_raw(string.char(
+    bit32.band(             value,         0xff),
+    bit32.band(bit32.rshift(value, 8 * 1), 0xff),
+    bit32.band(bit32.rshift(value, 8 * 2), 0xff),
+    bit32.band(bit32.rshift(value, 8 * 3), 0xff)
+  ), 4)
+end
+
+function serializer:write_int32(value)
+  check_bounds(value, -2 ^ 31, 2 ^ 31, "int32")
+  if value < 0 then
+    value = 0x100000000 + value
+  end
   self:write_raw(string.char(
     bit32.band(             value,         0xff),
     bit32.band(bit32.rshift(value, 8 * 1), 0xff),
@@ -366,9 +398,26 @@ function deserializer:read_uint8()
   return self:read_bytes(1)
 end
 
+function deserializer:read_int8()
+  local value = self:read_bytes(1)
+  if value >= 0x80 then
+    value = value - 0x100
+  end
+  return value
+end
+
 function deserializer:read_uint16()
   local one, two = self:read_bytes(2)
   return one + bit32.lshift(two, 8)
+end
+
+function deserializer:read_int16()
+  local one, two = self:read_bytes(2)
+  local value = one + bit32.lshift(two, 8)
+  if value >= 0x8000 then
+    value = value - 0x10000
+  end
+  return value
 end
 
 local function read_small(self, read_big)
@@ -391,6 +440,18 @@ function deserializer:read_uint32()
     + bit32.lshift(two, 8 * 1)
     + bit32.lshift(three, 8 * 2)
     + bit32.lshift(four, 8 * 3)
+end
+
+function deserializer:read_int32()
+  local one, two, three, four = self:read_bytes(4)
+  local value = one
+    + bit32.lshift(two, 8 * 1)
+    + bit32.lshift(three, 8 * 2)
+    + bit32.lshift(four, 8 * 3)
+  if value >= 0x80000000 then
+    value = value - 0x100000000
+  end
+  return value
 end
 
 function deserializer:read_small_uint32()
