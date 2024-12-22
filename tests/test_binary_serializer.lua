@@ -28,7 +28,7 @@ do
     local serializer_scope = main_scope:new_scope("serializer")
 
     ---@param label string
-    ---@param func fun(serializer): string
+    ---@param func fun(serializer: BinarySerializer): string
     ---@param options Options?
     local function add_test(label, func, options)
       serializer_scope:add_test(label, function()
@@ -492,7 +492,7 @@ do
 
     ---@param label string
     ---@param binary_string string
-    ---@param func fun(deserializer): (table?)
+    ---@param func fun(deserializer: BinaryDeserializer): (table?)
     ---@param options Options?
     local function add_test(label, binary_string, func, options)
       deserializer_scope:add_test(label, function()

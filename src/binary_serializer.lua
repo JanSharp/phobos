@@ -7,6 +7,13 @@ local nodes = require("nodes")
 ---@type table<number, string>
 local serialized_double_cache = {}
 
+---@class BinarySerializer
+---@field use_int32 boolean @ read only
+---@field out string[] @ internal
+---@field out_c integer @ internal
+---@field length integer @ internal
+---@field locked_length integer? @ internal
+---@field reserved_count integer @ internal
 local serializer = {}
 serializer.__index = serializer
 
@@ -367,6 +374,7 @@ function serializer:get_length()
 end
 
 ---@param options Options?
+---@return BinarySerializer
 local function new_serializer(options)
   return setmetatable({
     use_int32 = options and options.use_int32 or false,
@@ -380,6 +388,12 @@ end
 
 
 
+---@class BinaryDeserializer
+---@field use_int32 boolean @ read only
+---@field binary_string string @ internal
+---@field length integer @ internal
+---@field index integer @ internal
+---@field allow_reading_past_end boolean @ internal
 local deserializer = {}
 deserializer.__index = deserializer
 
@@ -628,6 +642,7 @@ end
 ---@param binary_string string
 ---@param start_index integer?
 ---@param options Options?
+---@return BinaryDeserializer
 local function new_deserializer(binary_string, start_index, options)
   return setmetatable({
     use_int32 = options and options.use_int32 or false,
