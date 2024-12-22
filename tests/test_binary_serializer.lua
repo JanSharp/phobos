@@ -27,9 +27,12 @@ do
   do
     local serializer_scope = main_scope:new_scope("serializer")
 
-    local function add_test(label, func)
+    ---@param label string
+    ---@param func fun(serializer): string
+    ---@param options Options?
+    local function add_test(label, func, options)
       serializer_scope:add_test(label, function()
-        local serializer = binary.new_serializer()
+        local serializer = binary.new_serializer(options)
         local expected = func(serializer)
         assert.equals(expected, serializer:tostring())
         assert.equals(#expected, serializer:get_length(), "for get_length()")
@@ -168,6 +171,11 @@ do
       serializer:write_size_t(0x001ff1f2f3f4f5f6)
       return "\xf6\xf5\xf4\xf3\xf2\xf1\x1f\x00", 8
     end)
+
+    add_test("size_t using int32", function(serializer)
+      serializer:write_size_t(0xf1f2f3f4)
+      return "\xf4\xf3\xf2\xf1"
+    end, {use_int32 = true})
 
     add_out_of_bounds_test("size_t out of bounds",
       "uint64 (actually uint53)", 0, -1, 2 ^ 53,
@@ -328,6 +336,11 @@ do
       return "\3\0\0\0\0\0\0\0\0", 1 + 8
     end)
 
+    add_test("number constant using int32", function(serializer)
+      serializer:write_lua_constant(nodes.new_number{value = -1})
+      return "\3\xff\xff\xff\xff", 1 + 4
+    end, {use_int32 = true})
+
     add_test("string constant", function(serializer)
       serializer:write_lua_constant(nodes.new_string{value = "hi"})
       return "\4\3\0\0\0\0\0\0\0hi\0", 1 + 8 + 3
@@ -477,9 +490,13 @@ do
       pretty_print.custom_pretty_printers["number"] = prev_custom_number_pretty_printer
     end
 
-    local function add_test(label, binary_string, func)
+    ---@param label string
+    ---@param binary_string string
+    ---@param func fun(deserializer): (table?)
+    ---@param options Options?
+    local function add_test(label, binary_string, func, options)
       deserializer_scope:add_test(label, function()
-        local deserializer = binary.new_deserializer(binary_string)
+        local deserializer = binary.new_deserializer(binary_string, nil, options)
         local data = func(deserializer) or {}
         if data[1] ~= nil and data[3] == nil then
           assert.equals(data[1], data[2])
@@ -643,6 +660,10 @@ do
       return {0x0000010000000000, deserializer:read_size_t()}
     end)
 
+    add_test("size_t using int32", "\x00\x01\x00\x00", function(deserializer)
+      return {0x00000100, deserializer:read_size_t()}
+    end, {use_int32 = true})
+
     -- reusing the dataset that was also used in serializer tests
     for _, data in ipairs(space_optimized_uint_test_dataset) do
       add_test("space optimized uint "..data.label, data.serialized, function(deserializer)
@@ -724,6 +745,10 @@ do
     add_test("number constant", "\3\0\0\0\0\0\0\0\0", function(deserializer)
       assert.contents_equals(nodes.new_number{value = 0}, deserializer:read_lua_constant())
     end)
+
+    add_test("number constant using int32", "\3\xff\xff\xff\xff", function(deserializer)
+      assert.contents_equals(nodes.new_number{value = -1}, deserializer:read_lua_constant())
+    end, {use_int32 = true})
 
     add_test("string constant", "\4\3\0\0\0\0\0\0\0hi\0", function(deserializer)
       assert.contents_equals(nodes.new_string{value = "hi"}, deserializer:read_lua_constant())

@@ -150,8 +150,13 @@ end
 -- (note: -2 because 2 ^ 53 itself is excluded for consistency,
 -- and every string is 1 byte longer because of the trailing \0)
 
----It's just an alias, but might be useful to know all uses cases of size_t in the future
-serializer.write_size_t = serializer.write_uint64
+function serializer:write_size_t(value)
+  if self.use_int32 then
+    self:write_uint32(value)
+  else
+    self:write_uint64(value)
+  end
+end
 
 function serializer:write_uint_space_optimized(value)
   check_bounds(value, 0, 2 ^ 53, "space optimized uint (up to 53 bits)")
@@ -280,7 +285,11 @@ do
     end,
     ["number"] = function(self, value)
       self:write_raw("\3", 1)
-      self:write_double(value)
+      if self.use_int32 then
+        self:write_int32(value)
+      else
+        self:write_double(value)
+      end
     end,
     ["string"] = function(self, value)
       self:write_raw("\4", 1)
@@ -357,8 +366,10 @@ function serializer:get_length()
   return self.locked_length or self.length
 end
 
-local function new_serializer()
+---@param options Options?
+local function new_serializer(options)
   return setmetatable({
+    use_int32 = options and options.use_int32 or false,
     out = {},
     out_c = 0,
     length = 0,
@@ -486,8 +497,9 @@ function deserializer:read_medium_uint64()
   return read_medium(self, self.read_uint64)
 end
 
----It's just an alias, but might be useful to know all uses cases of size_t in the future
-deserializer.read_size_t = deserializer.read_uint64
+function deserializer:read_size_t()
+  return self.use_int32 and self:read_uint32() or self:read_uint64()
+end
 
 function deserializer:read_uint_space_optimized()
   local shift = 0
@@ -562,7 +574,7 @@ do
       return nodes.new_boolean{value = self:read_boolean()}
     end,
     [3] = function(self)
-      return nodes.new_number{value = self:read_double()}
+      return nodes.new_number{value = self.use_int32 and self:read_int32() or self:read_double()}
     end,
     [4] = function(self)
       local value = self:read_lua_string()
@@ -613,8 +625,12 @@ function deserializer:get_allow_reading_past_end()
   return self.allow_reading_past_end
 end
 
-local function new_deserializer(binary_string, start_index)
+---@param binary_string string
+---@param start_index integer?
+---@param options Options?
+local function new_deserializer(binary_string, start_index, options)
   return setmetatable({
+    use_int32 = options and options.use_int32 or false,
     binary_string = binary_string,
     length = #binary_string,
     index = start_index or 1,

@@ -12,7 +12,8 @@
 ---- parser.lua: pass it along to the tokenizer
 ---- optimize/fold_const.lua: throw not supported error, because emulating an int32 machine is difficult
 ---- il_generator.lua: throw not supported error
----- dump.lua: should the int32 signature be used, size_t be uint32 and Lua numbers be signed int32?
+---- dump.lua: should the int32 signature be used?
+---- binary_serializer: should size_t be uint32 and Lua numbers be signed int32?
 ---@field use_int32 boolean?
 ---checked in several different parts during compilation
 ---@field optimizations Optimizations
