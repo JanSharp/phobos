@@ -7,7 +7,7 @@ local serializer
 local function dump_phobos_debug_symbols(func)
   -- open string constant
   serializer:write_raw("\4") -- a "string" constant
-  local string_size_reserve = serializer:reserve{length = serializer.use_int32 and 4 or 8}
+  local string_size_reserve = serializer:reserve{length = serializer:get_use_int32() and 4 or 8}
   local start_length = serializer:get_length()
 
   -- signature
@@ -298,7 +298,7 @@ local function dump_function(func)
 end
 
 local function dump_lua_header()
-  serializer:write_raw(serializer.use_int32
+  serializer:write_raw(serializer:get_use_int32()
     and phobos_consts.lua_header_str_int32
     or phobos_consts.lua_header_str)
 end

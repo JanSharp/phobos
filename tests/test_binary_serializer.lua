@@ -8,6 +8,43 @@ local nodes = require("nodes")
 
 local tutil = require("testing_util")
 
+---@param scope TestScope
+---@param new_de_serializer fun(options: Options?): (BinarySerializer|BinaryDeserializer)
+local function add_use_int32_getter_and_setter_tests(scope, new_de_serializer)
+  scope:add_test("get_use_int32 defaults to false", function()
+    local de_serializer = new_de_serializer()
+    assert.equals(false, de_serializer:get_use_int32())
+  end)
+
+  scope:add_test("get_use_int32 defaults to false when nil inside of options", function()
+    local de_serializer = new_de_serializer{use_int32 = nil}
+    assert.equals(false, de_serializer:get_use_int32())
+  end)
+
+  for _, value in ipairs{false, true} do
+    scope:add_test("get_use_int32 is "..tostring(value).." when "..tostring(value).." in options", function()
+      local de_serializer = new_de_serializer{use_int32 = value}
+      assert.equals(value, de_serializer:get_use_int32())
+    end)
+  end
+
+  for _, value in ipairs{false, true} do
+    scope:add_test("set_use_int32 to "..tostring(value).." updates get_use_int32", function()
+      local de_serializer = new_de_serializer{use_int32 = not value}
+      assert.equals(not value, de_serializer:get_use_int32())
+      de_serializer:set_use_int32(value)
+      assert.equals(value, de_serializer:get_use_int32())
+    end)
+  end
+
+  scope:add_test("set_use_int32 with non boolean errors", function()
+    local de_serializer = new_de_serializer()
+    assert.errors_with_pattern("Expected boolean for use_int32, got.*", function()
+      de_serializer:set_use_int32()
+    end)
+  end)
+end
+
 do
   local main_scope = framework.scope:new_scope("binary_serializer")
   local prev_custom_string_pretty_printer
@@ -54,6 +91,10 @@ do
     end
 
     add_test("nothing", function() return "" end)
+
+    add_use_int32_getter_and_setter_tests(serializer_scope, function(options)
+      return binary.new_serializer(options)
+    end)
 
     add_test("write raw", function(serializer)
       serializer:write_raw("foo")
@@ -511,6 +552,10 @@ do
     end
 
     add_test("nothing", "", function() end)
+
+    add_use_int32_getter_and_setter_tests(deserializer_scope, function(options)
+      return binary.new_deserializer("", nil, options)
+    end)
 
     deserializer_scope:add_test("get_length", function()
       local deserializer = binary.new_deserializer("foo bar baz")

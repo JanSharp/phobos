@@ -8,7 +8,7 @@ local nodes = require("nodes")
 local serialized_double_cache = {}
 
 ---@class BinarySerializer
----@field use_int32 boolean @ read only
+---@field use_int32 boolean @ internal
 ---@field out string[] @ internal
 ---@field out_c integer @ internal
 ---@field length integer @ internal
@@ -373,6 +373,17 @@ function serializer:get_length()
   return self.locked_length or self.length
 end
 
+function serializer:get_use_int32()
+  return self.use_int32
+end
+
+function serializer:set_use_int32(use_int32)
+  util.debug_assert(type(use_int32) == "boolean",
+    "Expected boolean for use_int32, got '"..tostring(use_int32).."'."
+  )
+  self.use_int32 = use_int32
+end
+
 ---@param options Options?
 ---@return BinarySerializer
 local function new_serializer(options)
@@ -389,7 +400,7 @@ end
 
 
 ---@class BinaryDeserializer
----@field use_int32 boolean @ read only
+---@field use_int32 boolean @ internal
 ---@field binary_string string @ internal
 ---@field length integer @ internal
 ---@field index integer @ internal
@@ -637,6 +648,17 @@ end
 
 function deserializer:get_allow_reading_past_end()
   return self.allow_reading_past_end
+end
+
+function deserializer:get_use_int32()
+  return self.use_int32
+end
+
+function deserializer:set_use_int32(use_int32)
+  util.debug_assert(type(use_int32) == "boolean",
+    "Expected boolean for use_int32, got '"..tostring(use_int32).."'."
+  )
+  self.use_int32 = use_int32
 end
 
 ---@param binary_string string
