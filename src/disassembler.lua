@@ -185,7 +185,7 @@ do
     end,
     [opcodes["return"]] = function()
       return "return "..(current.b ~= 0 and (current.b - 1) or "var")
-        .." results starting at "..get_register_label("a")
+        .." results "..(current.b ~= 1 and ("starting at "..get_register_label("a")) or "")
     end,
 
     [opcodes.forloop] = function()
@@ -574,11 +574,19 @@ end
 ---gets called for every instruction. The instance of this table gets reused every iteration\
 ---intended to be used in combination with `util.format_interpolated`
 local function get_disassembly(func, func_description_callback, instruction_callback, display_keys)
-  func_description_callback("function at "..get_function_label(func).."\n"
+  local description = "function at "..get_function_label(func).."\n"
     ..(func.is_vararg and "vararg" or (func.num_params.." params")).." | "
     ..(#func.upvals).." upvals | "..func.max_stack_size.." max stack\n"
     ..(#func.instructions).." instructions | "..(#func.constants)
-    .." constants | "..(#func.inner_functions).." functions")
+    .." constants | "..(#func.inner_functions).." functions"
+
+  for i, upval in pairs(func.upvals) do
+    description = description.."\nUp("..(i - 1)..(upval.name and ("|"..upval.name) or "")..") of parent "
+      ..(upval.in_stack and "local" or "upval")..", index: "
+      ..string.format("%d", upval.in_stack and upval.local_idx or upval.upval_idx)
+  end
+
+  func_description_callback(description)
 
   local constant_labels = {}
   for i, constant in ipairs(func.constants) do
