@@ -2,6 +2,7 @@
 local opcode_util = require("opcode_util")
 local opcodes = opcode_util.opcodes
 local phobos_consts = require("constants")
+local binary = require("binary_serializer")
 local util = require("util")
 
 local get_function_label
@@ -271,285 +272,200 @@ end
 
 local header_length = #phobos_consts.lua_header_str
 
-local to_double
-do
-  local dumped = string.dump(load([[return 523123.123145345]])--[[@as function]])
-  local s, e = dumped:find("\3\54\208\25\126\204\237\31\65")
-  if s == nil then
-    error("Unable to set up bytes to double conversion")
-  end
-  local prefix = dumped:sub(1, s) -- includes number prefix (\3)
-  local postfix = dumped:sub(e + 1) -- excludes the last byte of the found sequence (\65)
-  local double_cache = {}
+---@type BinaryDeserializer
+local deserializer
 
-  function to_double(double_bytes)
-    if double_cache[double_bytes] then
-      return double_cache[double_bytes]
-    else
-      local double_func, err = load(prefix..double_bytes..postfix, "=(double loader)", "b")
-      if not double_func then
-        error("Unable to load double, see inner error: "..err)
+local function read_header()
+  local header = deserializer:read_raw(header_length)
+  if header == phobos_consts.lua_header_str then
+    return
+  end
+  if header == phobos_consts.lua_header_str_int32 then
+    deserializer:set_use_int32(true)
+    return
+  end
+  util.abort("Invalid or Unknown Lua Header.")
+end
+
+local function nil_if_zero(number)
+  return number ~= 0 and number or nil
+end
+
+---@param func CompiledFunc
+local function try_read_phobos_debug_symbols(func)
+  -- check if the last constant is Phobos debug symbols
+  local last_type = deserializer:read_uint8()
+  local are_phobos_debug_symbols = false
+  local phobos_debug_symbol_version = 0
+  local phobos_debug_symbols_must_end_at
+  if last_type == 4 then
+    local size = deserializer:read_size_t()
+    phobos_debug_symbols_must_end_at = deserializer:get_index() + size
+    if deserializer:read_raw(#phobos_consts.phobos_signature) == phobos_consts.phobos_signature then
+      size = size - #phobos_consts.phobos_signature
+      while size > 2 do
+        local byte = deserializer:read_uint8()
+        phobos_debug_symbol_version = phobos_debug_symbol_version + byte
+        size = size - 1
+        if byte ~= 0xff then
+          are_phobos_debug_symbols = true
+          break
+        end
       end
-      local success, result = pcall(double_func)
-      if not success then
-        error("Unable to load double, see inner error: "..result)
-      end
-      return result
     end
   end
+
+  if not are_phobos_debug_symbols then return false end
+
+  if phobos_debug_symbol_version ~= phobos_consts.phobos_debug_symbol_version then
+    -- TODO: somehow warn that reading Phobos debug symbols was skipped [...]
+    -- because of a version mismatch
+    deserializer:set_index(phobos_debug_symbols_must_end_at)
+    return true
+  end
+
+  -- column_defined
+  func.column_defined = nil_if_zero(deserializer:read_uint32())
+  -- last_column_defined
+  func.last_column_defined = nil_if_zero(deserializer:read_uint32())
+
+  -- instruction_columns
+  for k = 1, deserializer:read_uint32() do
+    func.instructions[k].column = nil_if_zero(deserializer:read_uint32())
+  end
+
+  -- sources
+  local sources = {}
+  for k = 1, deserializer:read_uint32() do
+    sources[k] = deserializer:read_lua_string()
+  end
+
+  -- sections
+  do
+    local current_source = nil -- nil stands for the main `source`
+    local current_index = 1
+    for _ = 1, deserializer:read_uint32() do
+      local instruction_index = deserializer:read_uint32()
+      local source_index = deserializer:read_uint32()
+      for k = current_index, (instruction_index + 1) - 1 do
+        func.instructions[k].source = current_source
+      end
+      if source_index == 0 then
+        current_source = nil
+      else
+        current_source = sources[source_index]
+      end
+    end
+    for k = current_index, #func.instructions do
+      func.instructions[k].source = current_source
+    end
+  end
+
+  deserializer:read_uint8() -- trailing \0
+  if deserializer:get_index() ~= phobos_debug_symbols_must_end_at then
+    util.abort("Invalid Phobos debug symbol size.")
+  end
+
+  return true
+end
+
+local function disassemble_func()
+  ---@type CompiledFunc
+  local func = {
+    instructions = {},
+    constants = {},
+    inner_functions = {},
+    upvals = {},
+    debug_registers = {},
+  }
+
+  func.line_defined = nil_if_zero(deserializer:read_uint32())
+  func.last_line_defined = nil_if_zero(deserializer:read_uint32())
+  func.num_params = deserializer:read_uint8()
+  func.is_vararg = deserializer:read_uint8() ~= 0
+  func.max_stack_size = deserializer:read_uint8()
+
+  for i = 1, deserializer:read_uint32() do
+    local raw = deserializer:read_uint32()
+    func.instructions[i] = create_instruction(raw)
+  end
+
+  local constant_count = deserializer:read_uint32()
+  if constant_count > 0 then
+    for i = 1, constant_count - 1 do
+      func.constants[i] = deserializer:read_lua_constant()
+    end
+    local original_index = deserializer:get_index()
+    if not try_read_phobos_debug_symbols(func) then
+      -- wasn't Phobos debug symbols
+      deserializer:set_index(original_index)
+      func.constants[constant_count] = deserializer:read_lua_constant()
+    end
+  end
+
+  for i = 1, deserializer:read_uint32() do
+    func.inner_functions[i] = disassemble_func()
+  end
+
+  for i = 1, deserializer:read_uint32() do
+    local in_stack = deserializer:read_uint8() ~= 0
+    func.upvals[i] = {
+      in_stack = in_stack,
+      [in_stack and "local_idx" or "upval_idx"] = deserializer:read_uint8(),
+    }
+  end
+
+  func.source = deserializer:read_lua_string()
+
+  for i = 1, deserializer:read_uint32() do
+    func.instructions[i].line = nil_if_zero(deserializer:read_uint32())
+  end
+
+  for i = 1, deserializer:read_uint32() do
+    func.debug_registers[i] = {
+      name = deserializer:read_lua_string()--[[@as string]],
+      -- convert from zero based including excluding
+      -- to one based including including
+      start_at = deserializer:read_uint32() + 1,
+      stop_at = deserializer:read_uint32(),
+    }
+  end
+
+  local top = -1 -- **zero based**
+  for i = 1, #func.instructions do
+    local stopped = 0
+    for _, reg_name in ipairs(func.debug_registers) do
+      if reg_name.start_at == i then
+        top = top + 1
+        reg_name.index = top
+      end
+      if reg_name.stop_at == i then
+        stopped = stopped + 1
+      end
+    end
+    top = top - stopped
+  end
+
+  for i = #func.debug_registers, 1, -1 do
+    if func.debug_registers[i].name == phobos_consts.unnamed_register_name then
+      table.remove(func.debug_registers, i)
+    end
+  end
+
+  for i = 1, deserializer:read_uint32() do
+    func.upvals[i].name = deserializer:read_lua_string()--[[@as string]]
+  end
+
+  return func
 end
 
 ---@param bytecode string
 local function disassemble(bytecode)
-  local i = 1
-
-  local function read_bytes_as_str(amount)
-    local result = bytecode:sub(i, i + amount - 1)
-    i = i + amount
-    return result
-  end
-
-  local function read_bytes(amount)
-    i = i + amount -- do this first because :byte() returns var results
-    return bytecode:byte(i - amount, i - 1)
-  end
-
-  local function read_header()
-    if bytecode:sub(i, i + header_length - 1) ~= phobos_consts.lua_header_str then
-      error("Invalid Lua Header.");
-    end
-    i = i + header_length
-  end
-
-  local function read_uint8()
-    return read_bytes(1)
-  end
-
-  local function read_uint32()
-    local one, two, three, four = read_bytes(4)
-    return one
-      + bit32.lshift(two, 8)
-      + bit32.lshift(three, 16)
-      + bit32.lshift(four, 24)
-  end
-
-  local function read_size()
-    -- string length is defined with a UInt64, but we only support UInt32
-    -- because Lua numbers are doubles making it annoying/complicated
-    local size = read_uint32()
-    if bytecode:sub(i, i + 4 - 1) ~= "\0\0\0\0" then
-      -- error includes string because that's the only thing using size_t
-      error("Unsupported to read (string) size greater than `UInt32.max_value`.")
-    end
-    i = i + 4
-    return size
-  end
-
-  local function read_string()
-    local size = read_size()
-    if size == 0 then -- 0 means nil
-      return nil
-    else
-      local result = bytecode:sub(i, i + size - 1 - 1) -- an extra -1 for the trailing \0
-      i = i + size
-      return result
-    end
-  end
-
-  local const_lut = {
-    [0] = function()
-      return {node_type = "nil", value = nil}
-    end,
-    [1] = function()
-      local value = read_uint8() ~= 0
-      return {node_type = "boolean", value = value}
-    end,
-    [3] = function()
-      local value = to_double(read_bytes_as_str(8))
-      return {node_type = "number", value = value}
-    end,
-    [4] = function()
-      local value = read_string()
-      if not value then
-        error("Strings in the constant table must not be `nil`.")
-      end
-      return {node_type = "string", value = value}
-    end,
-  }
-  setmetatable(const_lut, {
-    __index = function(_, k)
-      return function()
-        error("Invalid Lua constant type `"..k.."`.")
-      end
-    end,
-  })
-
-  local function nil_if_zero(number)
-    return number ~= 0 and number or nil
-  end
-
-  local function disassemble_func()
-    local func = {
-      instructions = {},
-      constants = {},
-      inner_functions = {},
-      upvals = {},
-      debug_registers = {},
-    }
-
-    func.line_defined = nil_if_zero(read_uint32())
-    func.last_line_defined = nil_if_zero(read_uint32())
-    func.num_params = read_uint8()
-    func.is_vararg = read_uint8() ~= 0
-    func.max_stack_size = read_uint8()
-
-    for j = 1, read_uint32() do
-      local raw = read_uint32()
-      func.instructions[j] = create_instruction(raw)
-    end
-
-    local constant_count = read_uint32()
-    if constant_count > 0 then
-      for j = 1, constant_count - 1 do
-        func.constants[j] = const_lut[read_uint8()]()
-      end
-
-      -- check if the last constant is Phobos debug symbols
-      local last_type = read_uint8()
-      local original_i = i
-      local are_phobos_debug_symbols = false
-      local phobos_debug_symbol_version = 0
-      local phobos_debug_symbols_must_end_at
-      if last_type == 4 then
-        local size = read_size()
-        phobos_debug_symbols_must_end_at = i + size
-        if read_bytes_as_str(#phobos_consts.phobos_signature) == phobos_consts.phobos_signature then
-          size = size - #phobos_consts.phobos_signature
-          while size > 2 do
-            local byte = read_uint8()
-            phobos_debug_symbol_version = phobos_debug_symbol_version + byte
-            size = size - 1
-            if byte ~= 0xff then
-              are_phobos_debug_symbols = true
-              break
-            end
-          end
-        end
-      end
-
-      if are_phobos_debug_symbols then
-        if phobos_debug_symbol_version ~= phobos_consts.phobos_debug_symbol_version then
-          -- TODO: somehow warn that reading Phobos debug symbols was skipped [...]
-          -- because of a version mismatch
-          i = phobos_debug_symbols_must_end_at
-        else
-          -- column_defined
-          func.column_defined = nil_if_zero(read_uint32())
-          -- last_column_defined
-          func.last_column_defined = nil_if_zero(read_uint32())
-
-          -- instruction_columns
-          for k = 1, read_uint32() do
-            func.instructions[k].column = nil_if_zero(read_uint32())
-          end
-
-          -- sources
-          local sources = {}
-          for k = 1, read_uint32() do
-            sources[k] = read_string()
-          end
-
-          -- sections
-          do
-            local current_source = nil -- nil stands for the main `source`
-            local current_index = 1
-            for _ = 1, read_uint32() do
-              local instruction_index = read_uint32()
-              local source_index = read_uint32()
-              for k = current_index, (instruction_index + 1) - 1 do
-                func.instructions[k].source = current_source
-              end
-              if source_index == 0 then
-                current_source = nil
-              else
-                current_source = sources[source_index]
-              end
-            end
-            for k = current_index, #func.instructions do
-              func.instructions[k].source = current_source
-            end
-          end
-
-          read_uint8() -- trailing \0
-          if i ~= phobos_debug_symbols_must_end_at then
-            error("Invalid Phobos debug symbol size.")
-          end
-        end
-      else
-        -- wasn't Phobos debug symbols
-        i = original_i
-        func.constants[constant_count] = const_lut[last_type]()
-      end
-    end
-
-    for j = 1, read_uint32() do
-      func.inner_functions[j] = disassemble_func()
-    end
-
-    for j = 1, read_uint32() do
-      local in_stack = read_uint8() ~= 0
-      func.upvals[j] = {
-        in_stack = in_stack,
-        [in_stack and "local_idx" or "upval_idx"] = read_uint8(),
-      }
-    end
-
-    func.source = read_string()
-
-    for j = 1, read_uint32() do
-      func.instructions[j].line = nil_if_zero(read_uint32())
-    end
-
-    for j = 1, read_uint32() do
-      func.debug_registers[j] = {
-        name = read_string(),
-        -- convert from zero based including excluding
-        -- to one based including including
-        start_at = read_uint32() + 1,
-        stop_at = read_uint32(),
-      }
-    end
-
-    local top = -1 -- **zero based**
-    for j = 1, #func.instructions do
-      local stopped = 0
-      for _, reg_name in ipairs(func.debug_registers) do
-        if reg_name.start_at == j then
-          top = top + 1
-          reg_name.index = top
-        end
-        if reg_name.stop_at == j then
-          stopped = stopped + 1
-        end
-      end
-      top = top - stopped
-    end
-
-    for j = #func.debug_registers, 1, -1 do
-      if func.debug_registers[j].name == phobos_consts.unnamed_register_name then
-        table.remove(func.debug_registers, j)
-      end
-    end
-
-    for j = 1, read_uint32() do
-      func.upvals[j].name = read_string()
-    end
-
-    return func
-  end
-
+  deserializer = binary.new_deserializer(bytecode)
   read_header()
-  return disassemble_func()
+  local result = disassemble_func()
+  deserializer = (nil)--[[@as BinaryDeserializer]] -- Free memory.
+  return result
 end
 
 local max_opcode_name_length = 0
