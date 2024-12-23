@@ -632,6 +632,11 @@ function deserializer:get_index()
   return self.index
 end
 
+function deserializer:set_index(index)
+  util.debug_assert(type(index) == "number", "Expected number arg for set_index, got '"..tostring(index).."'.")
+  self.index = index
+end
+
 function deserializer:is_done()
   return self.index > self.length
 end

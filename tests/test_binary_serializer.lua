@@ -612,6 +612,14 @@ do
       assert.equals(7, deserializer:get_index(), "for get_index()")
     end)
 
+    deserializer_scope:add_test("set_index to read the same thing again", function()
+      local deserializer = binary.new_deserializer("a")
+      local expected = deserializer:read_raw(1)
+      deserializer:set_index(1)
+      local got = deserializer:read_raw(1)
+      assert.equals(expected, got, "read after set_index")
+    end)
+
     add_test("set and get allow_reading_past_end", "", function(deserializer)
       assert.equals(false, deserializer:get_allow_reading_past_end(), "as default value")
       deserializer:set_allow_reading_past_end(false)
@@ -648,6 +656,14 @@ do
         end)
       end)
     end
+
+    deserializer_scope:add_test("set_index past does not error, only reading does afterwards does", function()
+      local deserializer = binary.new_deserializer("foo")
+      deserializer:set_index(10)
+      assert.errors("Attempt to read 1 bytes starting at index 10 where binary_string length is 3.", function()
+        deserializer:read_raw(1)
+      end)
+    end)
 
     add_test("uint8", "\xf1", function(deserializer)
       return {0xf1, deserializer:read_uint8()}
