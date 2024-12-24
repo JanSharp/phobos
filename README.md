@@ -5,12 +5,17 @@
 
 # Phobos
 
-Phobos's goal is to be an optimizing bytecode compiler for Lua with some language extensions and a type system.\
-At the moment it compiles regular Lua with the result being nearly identical to Lua itself, however it contains some more utilities than just compiling, the vast majority of which are currently only usable as a library.
+Phobos's initial goal was to be an optimizing bytecode compiler for Lua with some language extensions and a type system.
+
+This goal is no longer achievable because Factorio no longer supports loading Lua bytecode, only text, therefore any optimizations Phobos could make Factorio could not actually use. That leaves Phobos without a clear goal, so it simply exists as a fun little project containing tools for analyzing Lua code, for example.
+
+That said, the furthest Phobos got in actually compiling was incredibly similar to how Lua itself compiles, just with AST (abstract syntax tree) as a step in between. Attempts at adding another step into the compile chain - intermediate language - failed at register coloring which is the process of assigning register indexes to variables (named and temporary), with the deal breaker always being Lua instructions which take a list of registers which must be adjacent to each other. Lining them up and making efficient use of registers without constant and needless MOVE instructions, while also ensuing that there aren't many gaps in register indexes since that could lead to running out of stack space in larger functions (max stack of each function is 250). I've made a few attempts, but was never able to meet all of the described requirements.
 
 Phobos supports bytecode with the default Lua 5.2 signature.
 
 # Table of Contents
+
+Before going through these pages, take big note of the effective "deprecation" notes in the section above. I've not gone through and updated each of the pages, but rather I've left them more as an archive of the state of the project before it lost it's ability to fulfill its goal. And I won't lie, I was too ambitions.
 
 - [Getting Started](docs/getting_started.md)
 - [Factorio Support](docs/factorio_support.md)
